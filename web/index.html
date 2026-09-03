@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenBot · Local Org.</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
-  <link rel="stylesheet" href="/styles.css?v=53" />
+  <link rel="stylesheet" href="/styles.css?v=55" />
 </head>
 <body>
   <div id="firstRun" class="overlay hidden" role="dialog" aria-labelledby="firstRunTitle">
@@ -131,6 +131,11 @@
           <span class="reply-chip-text" id="replyChipText"></span>
           <button type="button" class="reply-chip-clear" id="replyChipClear" aria-label="Clear reply">×</button>
         </div>
+        <div class="reply-chip hidden" id="queueChip">
+          <span class="reply-chip-kicker">Queued</span>
+          <span class="reply-chip-text" id="queueChipText"></span>
+          <button type="button" class="reply-chip-clear" id="queueChipClear" aria-label="Clear queue">×</button>
+        </div>
         <nav class="route" id="routeToggle" aria-label="Direct this send">
           <button type="button" class="route-btn on" data-preset="cos" title="Auto: this chat talks, and routes Code or Hermes when the message is work.">Auto</button>
           <button type="button" class="route-btn" data-preset="builder" title="Pin this send to OpenCode in this folder.">Code</button>
@@ -218,6 +223,7 @@
             <div class="field">
               <label for="settingsFolder">Default folder</label>
               <input id="settingsFolder" type="text" placeholder="OpenCode uses this when a CEO has no folder" autocomplete="off" />
+              <p class="muted hidden" id="hostedFolderNote">This Railway instance already uses /app. Do not paste a path from your laptop.</p>
             </div>
             <div class="actions">
               <button type="button" class="send" id="saveWorkspace">Save</button>
@@ -340,7 +346,7 @@
           </section>
           <section class="drawer-panel" id="panel-channels">
             <p class="lede">One brain per CEO. Two doors into it.</p>
-            <p class="muted">OpenBot Chat is the local operator surface. Think, Research, and Ops resume the imported Hermes Telegram session so the agent keeps the same memory. Telegram on Railway still owns the live bot — messages you send here do not post to Telegram until you cut that gateway over.</p>
+            <p class="muted">OpenBot Chat is the operator surface. Think, Research, and Ops resume the imported Hermes Telegram session. CEO Chat gets a short Telegram slice for context (fresh oneshot — does not --resume). Telegram is live on this instance. Replies here do not post into Telegram.</p>
             <p class="muted" id="channelStatus">Select a CEO to see its Telegram session.</p>
             <div id="channelCard" class="usage-card hidden"></div>
           </section>
@@ -453,6 +459,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=53"></script>
+  <script src="/app.js?v=55"></script>
 </body>
 </html>

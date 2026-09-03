@@ -23,6 +23,10 @@ let hermesFailed = false;
 let liveRunId = "";
 let liveLane = "";
 let liveAbort = null;
+/** @type {Map<string, { runId: string, abort: AbortController | null, lane: string, projectId: string, workerId: string }>} */
+const lives = new Map();
+/** @type {Map<string, Array<{ message: string, preset: string, quote: string }>>} */
+const messageQueues = new Map();
 let focusedLane = "";
 let unreadLanes = new Set();
 let hydratingHistory = false;
@@ -31,6 +35,30 @@ let seenJobIds = new Set();
 let replyQuote = "";
 let lastOcFolder = "";
 let lastHermesHome = "";
+
+function aimKey(pid, wid) {
+  return `${pid == null ? projectId : pid}::${wid == null ? workerId : wid}`;
+}
+
+function liveFor(key) {
+  return lives.get(key || aimKey()) || null;
+}
+
+function queueFor(key) {
+  const id = key || aimKey();
+  if (!messageQueues.has(id)) messageQueues.set(id, []);
+  return messageQueues.get(id);
+}
+
+function syncLiveFromAim() {
+  const live = liveFor(aimKey());
+  liveRunId = live ? live.runId : "";
+  liveLane = live ? (live.lane || "") : "";
+  liveAbort = live ? live.abort : null;
+  lockComposer(Boolean(cfg.has_key));
+  paintLanes();
+  paintQueueChip();
+}
 const PANEL_TITLES = {
   you: "You",
   account: "You",
@@ -533,18 +561,41 @@ function lockComposer(hasKey) {
   const send = $("sendBtn");
   const hint = $("workHint");
   const live = Boolean(liveRunId);
+  const typed = Boolean(msg && msg.value.trim());
+  const queued = queueFor().length;
   if (msg) msg.disabled = !hasKey;
   if (send) {
     send.disabled = !hasKey && !live;
-    send.textContent = live ? "Stop" : "Send";
-    send.type = live ? "button" : "submit";
-    send.classList.toggle("stop", live);
-    send.setAttribute("aria-label", live ? "Stop" : "Send");
+    if (live && typed) {
+      send.textContent = "Queue";
+      send.type = "submit";
+      send.classList.remove("stop");
+      send.setAttribute("aria-label", "Queue message");
+    } else if (live) {
+      send.textContent = "Stop";
+      send.type = "button";
+      send.classList.add("stop");
+      send.setAttribute("aria-label", "Stop");
+    } else {
+      send.textContent = "Send";
+      send.type = "submit";
+      send.classList.remove("stop");
+      send.setAttribute("aria-label", "Send");
+    }
   }
   if (hint) {
     if (live) {
       const lane = liveLane ? jobLabel(liveLane) : "";
-      hint.textContent = `${talkName()}${lane ? ` · ${lane}` : ""} is working…`;
+      const bits = [
+        `${talkName()}${lane ? ` · ${lane}` : ""} is working…`,
+        "Enter queues another message",
+        "Stop cancels"
+      ];
+      if (queued) bits.splice(1, 0, `${queued} queued`);
+      hint.textContent = bits.join(" · ");
+      hint.classList.remove("hidden");
+    } else if (queued) {
+      hint.textContent = `${queued} queued — sending next…`;
       hint.classList.remove("hidden");
     } else if (preset !== "cos") {
       hint.textContent = routeHintText(preset);
@@ -555,6 +606,24 @@ function lockComposer(hasKey) {
     }
   }
   paintLanes();
+  paintQueueChip();
+}
+
+function paintQueueChip() {
+  const chip = $("queueChip");
+  const text = $("queueChipText");
+  if (!chip || !text) return;
+  const rows = queueFor();
+  if (!rows.length) {
+    chip.classList.add("hidden");
+    text.textContent = "";
+    return;
+  }
+  const preview = rows[0].message.slice(0, 80);
+  text.textContent = rows.length === 1
+    ? `Next: ${preview}`
+    : `${rows.length} waiting · next: ${preview}`;
+  chip.classList.remove("hidden");
 }
 
 function sizeComposer() {
@@ -562,26 +631,84 @@ function sizeComposer() {
   if (!msg) return;
   msg.style.height = "auto";
   msg.style.height = `${Math.min(160, Math.max(44, msg.scrollHeight))}px`;
+  if (liveRunId) lockComposer(Boolean(cfg.has_key));
 }
 
-function setLive(runId) {
-  liveRunId = runId || "";
-  if (!liveRunId) liveLane = "";
-  lockComposer(Boolean(cfg.has_key));
-}
-
-async function stopLive() {
-  if (liveAbort) {
-    try { liveAbort.abort(); } catch (_err) { /* already aborted */ }
+function setLive(runId, meta) {
+  const key = (meta && meta.key) || aimKey();
+  const pid = (meta && meta.projectId != null) ? meta.projectId : (key.split("::")[0] || "");
+  const wid = (meta && meta.workerId != null) ? meta.workerId : (key.split("::")[1] || "");
+  if (!runId) {
+    lives.delete(key);
+  } else {
+    const prev = lives.get(key) || {};
+    lives.set(key, {
+      runId,
+      abort: meta && "abort" in meta ? meta.abort : prev.abort || null,
+      lane: (meta && meta.lane != null) ? meta.lane : (prev.lane || ""),
+      projectId: pid,
+      workerId: wid
+    });
   }
-  const id = liveRunId && liveRunId !== "pending" ? liveRunId : "";
-  setLive("");
+  if (key === aimKey()) syncLiveFromAim();
+  else {
+    paintLanes();
+    renderOrg(org);
+  }
+}
+
+async function stopLive(key) {
+  const idKey = key || aimKey();
+  const live = liveFor(idKey);
+  if (!live) return;
+  if (live.abort) {
+    try { live.abort.abort(); } catch (_err) { /* already aborted */ }
+  }
+  const id = live.runId && live.runId !== "pending" ? live.runId : "";
+  setLive("", { key: idKey, projectId: live.projectId, workerId: live.workerId });
   if (!id) return;
   await fetch(`/api/runs/${id}/stop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}"
   });
+}
+
+function enqueueMessage(message, opts) {
+  const text = String(message || "").trim();
+  if (!text) return;
+  const key = aimKey();
+  const quote = (opts && opts.quote != null) ? opts.quote : (replyQuote || "");
+  queueFor(key).push({
+    message: text,
+    preset: (opts && opts.preset) || preset || "cos",
+    quote: quote || ""
+  });
+  if (!(opts && opts.keepQuote)) clearReply();
+  paintQueueChip();
+  lockComposer(Boolean(cfg.has_key));
+}
+
+async function drainQueue() {
+  if (liveRunId) return;
+  const key = aimKey();
+  const rows = queueFor(key);
+  if (!rows.length) {
+    paintQueueChip();
+    return;
+  }
+  const next = rows.shift();
+  paintQueueChip();
+  if (next.quote) {
+    replyQuote = next.quote;
+    const chip = $("replyChip");
+    const text = $("replyChipText");
+    if (chip && text) {
+      text.textContent = next.quote;
+      chip.classList.remove("hidden");
+    }
+  }
+  await sendMessage(next.message, { preset: next.preset, allowSecret: false });
 }
 
 async function loadSpend() {
@@ -1188,13 +1315,13 @@ function fillChannels() {
   const tools = project.tools || {};
   const sid = tools.hermes_session_id || "";
   status.textContent = sid
-    ? `${project.name}: Think / Research / Ops resume the imported Telegram session. Chat here is local and does not post to Railway.`
+    ? `${project.name}: Chat / Think / Ops resume the imported Telegram session. Replies here do not post into Telegram.`
     : `${project.name}: no Telegram session bound yet. Chat still works locally.`;
   card.classList.remove("hidden");
   card.innerHTML = `
     <div><dt>Hermes home</dt><dd>${escapeHtml(tools.hermes_home || "—")}</dd></div>
     <div><dt>Session</dt><dd>${escapeHtml(sid || "—")}</dd></div>
-    <div><dt>Live Telegram</dt><dd>Railway still owns the bot until you cut over. Do not start a local gateway.</dd></div>
+    <div><dt>Live Telegram</dt><dd>This OpenBot instance owns the bots. Reply in Telegram for that thread.</dd></div>
   `;
 }
 
@@ -1253,12 +1380,13 @@ function renderOrg(data) {
           <span class="org-role">helper</span>
         </div>`).join("");
     const wire = ceoWire(project);
-    const ping = projectNeedsYou(project.id) ? " ping" : "";
+    const busy = lives.has(aimKey(project.id, ""));
+    const ping = (projectNeedsYou(project.id) || busy) ? " ping" : "";
     return `
       <div class="org-project${open ? " open" : ""}" data-project-wrap="${escapeHtml(project.id)}">
         <div class="org-row">
           <button type="button" class="org-twist" data-toggle="${escapeHtml(project.id)}" aria-label="${open ? "Collapse" : "Expand"} ${escapeHtml(project.name)}">${open ? "▾" : "▸"}</button>
-          <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}">
+          <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}${busy ? " · working" : ""}">
             <b>${escapeHtml(project.name)}</b>
             ${wire ? `<span class="org-now">${escapeHtml(wire)}</span>` : ""}
           </button>
@@ -1267,8 +1395,9 @@ function renderOrg(data) {
         ${workers ? `<div class="org-workers">${workers}</div>` : ""}
       </div>`;
   }).join("");
+  const staffBusy = lives.has(aimKey("", ""));
   tree.innerHTML = `
-    <button type="button" class="org-btn org-staff${!projectId ? " on" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff">
+    <button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
       <b>Chief of Staff</b>
       <span class="org-now">runs the CEOs</span>
     </button>
@@ -1411,6 +1540,7 @@ function fillProfile(data) {
 function fillSettings(data) {
   fillProfile(data);
   if ($("settingsFolder")) $("settingsFolder").value = data.work_dir || "";
+  if ($("hostedFolderNote")) $("hostedFolderNote").classList.toggle("hidden", !data.hosted);
   if ($("spendCap")) $("spendCap").value = data.spend_cap_usd || 5;
   if ($("spendPeriod")) $("spendPeriod").value = data.spend_cap_period || "week";
   const policy = data.spend_policy || (data.spend && data.spend.policy) || {};
@@ -1702,15 +1832,17 @@ async function setOrgNode(project, worker) {
   focusedLane = "";
   unreadLanes = new Set();
   if (projectId) expanded.add(projectId);
+  syncLiveFromAim();
   renderOrg(org);
   renderBotMeta();
-  if (!liveRunId) await loadThread();
+  await loadThread();
   syncComposerWho();
   scrollChatBottom();
   if (projectId) {
     startOpenCode();
     startHermes();
   }
+  if (!liveRunId) await drainQueue();
 }
 
 function setRoute(name) {
@@ -1800,6 +1932,7 @@ function settleLive(live, job) {
 function thinkingBubble() {
   const el = document.createElement("article");
   el.className = "bubble bot live";
+  el.dataset.liveKey = aimKey();
   const think = document.createElement("div");
   think.className = "thinking";
   think.innerHTML = `<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="thinking-label">${escapeHtml(talkName())} is working…</span>`;
@@ -1810,6 +1943,11 @@ function thinkingBubble() {
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
   return el;
+}
+
+function liveBubbleFor(key) {
+  if (!stream) return null;
+  return stream.querySelector(`.bubble.live[data-live-key="${CSS.escape(key)}"]`);
 }
 
 function jobMeta(job) {
@@ -2097,7 +2235,7 @@ function renderTurns(turns, extras) {
   if (telegram.length) {
     const banner = document.createElement("p");
     banner.className = "channel-banner";
-    banner.textContent = note || "Hermes Telegram history. Railway still owns the live bot.";
+    banner.textContent = note || "Hermes Telegram history. This instance owns the live bots.";
     stream.appendChild(banner);
     telegram.forEach((turn) => {
       const el = bubble(turn.role === "user" ? "user" : "bot", turn.text || "");
@@ -2133,7 +2271,7 @@ function renderTurns(turns, extras) {
 }
 
 async function loadThread() {
-  if (liveRunId) return;
+  const key = aimKey();
   const params = new URLSearchParams();
   if (projectId) {
     params.set("project_id", projectId);
@@ -2155,10 +2293,14 @@ async function loadThread() {
     }
   }
   renderTurns(turns, { telegram, note });
+  if (liveFor(key)) {
+    const el = thinkingBubble();
+    el.dataset.liveKey = key;
+  }
 }
 
 async function refreshThreadTail() {
-  if (liveRunId) return;
+  if (liveFor(aimKey())) return;
   const params = new URLSearchParams();
   if (projectId) {
     params.set("project_id", projectId);
@@ -2416,7 +2558,7 @@ function setWizardStep(name) {
 function showWizard(data) {
   const overlay = $("firstRun");
   if (!overlay) return;
-  const needsFolder = !data.first_run_done;
+  const needsFolder = !data.first_run_done && !data.hosted;
   const needsKey = !data.has_key;
   if (!needsFolder && !needsKey) {
     overlay.classList.add("hidden");
@@ -2658,7 +2800,14 @@ $("saveWork").addEventListener("click", async () => {
   else $("firstRun").classList.add("hidden");
 });
 
-$("wizardEnginesNext").addEventListener("click", () => setWizardStep("folder"));
+$("wizardEnginesNext").addEventListener("click", () => {
+  if (cfg.hosted || cfg.first_run_done) {
+    if (!cfg.has_key) setWizardStep("key");
+    else $("firstRun").classList.add("hidden");
+    return;
+  }
+  setWizardStep("folder");
+});
 if ($("keyProvider")) {
   $("keyProvider").addEventListener("change", () => syncProviderHint("keyProvider", "keyProviderHint"));
 }
@@ -2932,11 +3081,17 @@ if ($("replyChipClear")) {
 }
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const message = $("msg").value.trim();
   if (liveRunId) {
+    if (message) {
+      $("msg").value = "";
+      sizeComposer();
+      enqueueMessage(message);
+      return;
+    }
     await stopLive();
     return;
   }
-  const message = $("msg").value.trim();
   if (!message) return;
   $("msg").value = "";
   sizeComposer();
@@ -2947,52 +3102,81 @@ if ($("msg")) {
   $("msg").addEventListener("keydown", (event) => {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
-    if (liveRunId) return;
     const message = $("msg").value.trim();
     if (!message || $("msg").disabled) return;
     $("msg").value = "";
     sizeComposer();
+    if (liveRunId) {
+      enqueueMessage(message);
+      return;
+    }
     sendMessage(message);
   });
 }
 if ($("sendBtn")) {
   $("sendBtn").addEventListener("click", async (event) => {
     if (!liveRunId) return;
+    const message = $("msg") ? $("msg").value.trim() : "";
+    if (message) return; // submit handler queues
     event.preventDefault();
     await stopLive();
   });
 }
+if ($("queueChipClear")) {
+  $("queueChipClear").addEventListener("click", (event) => {
+    event.preventDefault();
+    messageQueues.set(aimKey(), []);
+    paintQueueChip();
+    lockComposer(Boolean(cfg.has_key));
+  });
+}
 
 async function sendMessage(message, opts) {
-  if (!message || liveRunId) return;
+  if (!message) return;
+  if (liveRunId) {
+    enqueueMessage(message, opts);
+    return;
+  }
   const parsed = (!opts || !opts.allowSecret) ? parseComposerLogin(message) : null;
   if (parsed) {
     fillLoginOffer(parsed);
     return;
   }
+  const aim = aimKey();
+  const sendProjectId = projectId || "";
+  const sendWorkerId = workerId || "";
   const folder = $("folder").value.trim() || null;
   const empty = $("streamEmpty");
   if (empty) empty.remove();
-  const pendingQuote = replyQuote;
+  const pendingQuote = (opts && opts.quote != null) ? opts.quote : replyQuote;
   clearReply();
   const userEl = bubble("user", message);
   if (pendingQuote) attachQuotePreview(userEl, pendingQuote);
-  const live = thinkingBubble();
-  const textEl = live.querySelector(".bubble-text");
-  const thinkEl = live.querySelector(".thinking");
-  let liveText = "";
+  let liveBubble = thinkingBubble();
+  liveBubble.dataset.liveKey = aim;
   const ac = new AbortController();
-  liveAbort = ac;
-  setLive("pending");
   const lane = (opts && opts.preset) || preset || "cos";
-  liveLane = (lane && lane !== "cos") ? lane : "";
-  userEl.dataset.lane = liveLane || "cos";
-  if (liveLane) live.dataset.lane = liveLane;
-  paintLanes();
+  const laneTag = (lane && lane !== "cos") ? lane : "";
+  userEl.dataset.lane = laneTag || "cos";
+  if (laneTag) liveBubble.dataset.lane = laneTag;
+  setLive("pending", {
+    key: aim,
+    projectId: sendProjectId,
+    workerId: sendWorkerId,
+    abort: ac,
+    lane: laneTag
+  });
   const watchdog = setTimeout(() => {
     try { ac.abort(); } catch (_err) { /* already aborted */ }
   }, 720000);
   let job = null;
+  let liveText = "";
+  const stillHere = () => aimKey() === aim;
+
+  function activeBubble() {
+    return liveBubbleFor(aim) || (stillHere() && liveBubble && liveBubble.isConnected ? liveBubble : null);
+  }
+
   try {
     const res = await fetch("/api/chat/stream", {
       method: "POST",
@@ -3001,8 +3185,8 @@ async function sendMessage(message, opts) {
         message,
         folder,
         preset: lane,
-        project_id: projectId || null,
-        worker_id: workerId || null,
+        project_id: sendProjectId || null,
+        worker_id: sendWorkerId || null,
         quote: pendingQuote || ""
       }),
       signal: ac.signal
@@ -3010,15 +3194,18 @@ async function sendMessage(message, opts) {
     const ctype = (res.headers.get("content-type") || "").toLowerCase();
     if (!res.ok || !res.body || !ctype.includes("event-stream")) {
       const fallback = await res.text().catch(() => "");
-      live.remove();
-      renderJob({
-        id: "err",
-        text: fallback.slice(0, 800) || `Chat stream failed (${res.status || 0}). Try again.`,
-        keep_going: false,
-        talk: true,
-        engine: "board",
-        preset: "cos"
-      });
+      if (stillHere()) {
+        const el = activeBubble();
+        if (el) el.remove();
+        renderJob({
+          id: "err",
+          text: fallback.slice(0, 800) || `Chat stream failed (${res.status || 0}). Try again.`,
+          keep_going: false,
+          talk: true,
+          engine: "board",
+          preset: "cos"
+        });
+      }
       return;
     }
     const reader = res.body.getReader();
@@ -3040,17 +3227,30 @@ async function sendMessage(message, opts) {
         if (!payload) continue;
         let data = {};
         try { data = JSON.parse(payload); } catch (_err) { continue; }
-        if (event === "start" && data.id) setLive(data.id);
+        if (event === "start" && data.id) {
+          setLive(data.id, {
+            key: aim,
+            projectId: sendProjectId,
+            workerId: sendWorkerId,
+            abort: ac,
+            lane: laneTag
+          });
+        }
         if (event === "progress" && (data.text || data.lane)) {
           if (data.lane) {
-            liveLane = data.lane;
-            paintLanes();
-            const liveBubble = live;
-            if (liveBubble) liveBubble.dataset.lane = data.lane;
-            scrollChatBottom();
+            const cur = liveFor(aim);
+            if (cur) cur.lane = data.lane;
+            if (stillHere()) {
+              liveLane = data.lane;
+              paintLanes();
+              const el = activeBubble();
+              if (el) el.dataset.lane = data.lane;
+              scrollChatBottom();
+            }
           }
-          if (data.text) {
-            const label = live.querySelector(".thinking-label");
+          if (data.text && stillHere()) {
+            const el = activeBubble();
+            const label = el && el.querySelector(".thinking-label");
             if (label) label.textContent = data.text;
             const hint = $("workHint");
             if (hint) {
@@ -3062,59 +3262,90 @@ async function sendMessage(message, opts) {
         if (event === "delta" && data.text) {
           liveText += data.text;
           if (liveText.length > 16000) liveText = liveText.slice(-10000);
-          textEl.textContent = liveText;
-          if (thinkEl) thinkEl.classList.add("hidden");
-          stream.scrollTop = stream.scrollHeight;
+          if (stillHere()) {
+            const el = activeBubble();
+            const textEl = el && el.querySelector(".bubble-text");
+            const thinkEl = el && el.querySelector(".thinking");
+            if (textEl) textEl.textContent = liveText;
+            if (thinkEl) thinkEl.classList.add("hidden");
+            stream.scrollTop = stream.scrollHeight;
+          }
         }
         if (event === "done") job = data;
-        if (event === "error") {
-          textEl.textContent = data.error || "error";
+        if (event === "error" && stillHere()) {
+          const el = activeBubble();
+          const textEl = el && el.querySelector(".bubble-text");
+          const thinkEl = el && el.querySelector(".thinking");
+          if (textEl) textEl.textContent = data.error || "error";
           if (thinkEl) thinkEl.classList.add("hidden");
         }
       }
       if (job) break;
     }
-    if (job) {
-      settleLive(live, job);
-      if (job.activity) renderActivity(job.activity);
-      if (job.spend) renderSpend(job.spend);
-      if (job.index) renderIndex(job.index);
-      fetch("/api/org").then((r) => r.json()).then(applyOrg);
-    } else if (liveText) {
-      settleLive(live, { id: "live", text: liveText, keep_going: false, talk: true, engine: "board", preset: "cos" });
-    } else {
-      live.remove();
-      renderJob({
-        id: "empty",
-        text: "I didn't get a reply that time. Try again, or open Hermes / OpenCode from the tabs.",
-        keep_going: false,
-        talk: true,
-        engine: "board",
-        preset: "cos"
-      });
+    if (stillHere()) {
+      const el = activeBubble();
+      if (job) {
+        settleLive(el, job);
+        if (job.activity) renderActivity(job.activity);
+        if (job.spend) renderSpend(job.spend);
+        if (job.index) renderIndex(job.index);
+        fetch("/api/org").then((r) => r.json()).then(applyOrg);
+      } else if (liveText) {
+        settleLive(el, { id: "live", text: liveText, keep_going: false, talk: true, engine: "board", preset: "cos" });
+      } else if (el) {
+        el.remove();
+        renderJob({
+          id: "empty",
+          text: "I didn't get a reply that time. Try again, or open Hermes / OpenCode from the tabs.",
+          keep_going: false,
+          talk: true,
+          engine: "board",
+          preset: "cos"
+        });
+      }
+    } else if (job && job.id) {
+      seenJobIds.add(job.id);
     }
   } catch (err) {
     const stopped = err && (err.name === "AbortError" || /abort/i.test(String(err)));
-    if (thinkEl) thinkEl.classList.add("hidden");
-    textEl.textContent = stopped
-      ? "Still working on the board — pulling the latest turn…"
-      : String(err);
-    if (!stopped) {
-      settleLive(live, {
-        id: "err",
-        text: String(err),
-        keep_going: true,
-        talk: true,
-        engine: "board",
-        preset: lane || "cos"
-      });
+    if (stillHere()) {
+      const el = activeBubble();
+      const textEl = el && el.querySelector(".bubble-text");
+      const thinkEl = el && el.querySelector(".thinking");
+      if (thinkEl) thinkEl.classList.add("hidden");
+      if (stopped) {
+        if (textEl) textEl.textContent = "Stopped.";
+        settleLive(el, {
+          id: "stopped",
+          text: "Stopped.",
+          keep_going: false,
+          talk: true,
+          engine: "board",
+          preset: lane || "cos",
+          stopped: true
+        });
+      } else {
+        if (textEl) textEl.textContent = String(err);
+        settleLive(el, {
+          id: "err",
+          text: String(err),
+          keep_going: true,
+          talk: true,
+          engine: "board",
+          preset: lane || "cos"
+        });
+      }
     }
   } finally {
     clearTimeout(watchdog);
-    liveAbort = null;
-    setLive("");
-    if (!job) {
-      try { await refreshThreadTail(); } catch (_load) { /* already painted */ }
+    setLive("", { key: aim, projectId: sendProjectId, workerId: sendWorkerId });
+    if (stillHere()) {
+      if (!job) {
+        try { await refreshThreadTail(); } catch (_load) { /* already painted */ }
+      }
+      await drainQueue();
+    } else {
+      renderOrg(org);
     }
   }
 }

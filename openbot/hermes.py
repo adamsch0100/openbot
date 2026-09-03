@@ -15,6 +15,7 @@ from .detect import hermes_home, which
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 HERMES_TIMEOUT = 600
 TALK_TIMEOUT = 45
+TALK_RESUME_TIMEOUT = 180
 HERMES_MAX_TURNS = "16"
 USAGE_KEYS = (
     "estimated_cost_usd",
@@ -55,6 +56,12 @@ SESSION_NOISE = re.compile(
     r"Warning: Unknown toolsets:.*|"
     r"No usable credentials found.*|"
     r".*OPENCODE_ZEN_API_KEY.*)$",
+    re.I,
+)
+TOOL_MARKUP = re.compile(
+    r"(?:<\|?(?:DSML|tool_?calls?|invoke|parameter)\|?[^>]*>|"
+    r"</\|?(?:DSML|tool_?calls?|invoke|parameter)\|?[^>]*>|"
+    r"function\s*calls?\s*begin|function\s*calls?\s*end)",
     re.I,
 )
 
@@ -111,8 +118,14 @@ def clean_hermes_text(text: str) -> str:
         stripped = ANSI.sub("", line).strip()
         if SESSION_NOISE.match(stripped) or stripped.lower().startswith("session_id:"):
             continue
+        if TOOL_MARKUP.search(stripped):
+            continue
+        if stripped.startswith("```") and "tool" in stripped.lower():
+            continue
         lines.append(ANSI.sub("", line))
-    return "\n".join(lines).strip()
+    cleaned = "\n".join(lines).strip()
+    cleaned = TOOL_MARKUP.sub("", cleaned).strip()
+    return cleaned
 
 
 def chat_packet(name: str, status: str, task: str) -> str:
@@ -124,6 +137,8 @@ def chat_packet(name: str, status: str, task: str) -> str:
         "No RESULT. No tickets. No job cards. No session logs. No INDEX dump.",
         "Do not mention Now, Last, Next, Blocker, or Ticket unless they asked for status.",
         "Do not print session_id or Resumed session.",
+        "If RECENT TELEGRAM is included, it is background only — answer the new board message, not an old thread.",
+        "Never ask the operator to paste passwords, TOTP, API keys, or browser cookies into chat. Site logins go through the board vault (Keys → Site logins).",
     ]
     if as_staff:
         parts = [
@@ -205,7 +220,7 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
     for name, value in _dotenv(install / ".env").items():
-        env.setdefault(name, value)
+        env[name] = value
     if root.resolve() != install.resolve():
         for name, value in _dotenv(root / ".env").items():
             env[name] = value
@@ -285,7 +300,7 @@ def chat(
         }
     provider, model_id = split_model(model)
     if talk:
-        timeout = min(timeout or TALK_TIMEOUT, TALK_TIMEOUT)
+        timeout = TALK_RESUME_TIMEOUT if resume else min(timeout or TALK_TIMEOUT, TALK_TIMEOUT)
         if not provider or not model_id:
             return {
                 "ok": False,
@@ -317,10 +332,10 @@ def chat(
                 cmd.extend(["--toolsets", toolsets])
             if skills:
                 cmd.extend(["--skills", skills])
-            if resume:
-                cmd.extend(["--resume", resume])
-            elif session:
-                cmd.extend(["--continue", session, "--create-if-missing"])
+        if resume:
+            cmd.extend(["--resume", resume])
+        elif session and not talk:
+            cmd.extend(["--continue", session, "--create-if-missing"])
         if provider and model_id:
             cmd.extend(["--provider", provider, "-m", model_id])
         elif model_id:
@@ -388,11 +403,17 @@ def chat(
         except OSError as err:
             return {"ok": False, "code": 1, "text": str(err), "usage": {}}
         raw = "".join(chunks).strip() or "(no output)"
-        text = clean_hermes_text(raw) or raw[-24000:]
+        cleaned = clean_hermes_text(raw)
+        if cleaned:
+            text = cleaned
+        elif TOOL_MARKUP.search(raw) or raw == "(no output)":
+            text = ""
+        else:
+            text = raw[-24000:]
         return {
-            "ok": code == 0,
-            "code": code,
-            "text": text[-24000:],
+            "ok": code == 0 and bool(text.strip()),
+            "code": code if text.strip() else (code or 1),
+            "text": (text or "(no output)")[-24000:],
             "usage": {},
             "engine": "Hermes Agent",
             "session": resume or session,

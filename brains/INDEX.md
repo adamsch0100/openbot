@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: OpenBot board is live on Railway. Local git has the repo. Railway Hermes still runs Telegram and cron.
-Last: Pulled today's Hermes state into SAA / ListLogic / Nadia homes. Deployed the board (no Hermes/OpenCode binaries on that box yet).
-Next: Create GitHub remote adamsch0100/openbot if push failed. Pause Railway Hermes gateways only when you want cron to move.
-Blocker: Do not start a local Hermes gateway while Railway Telegram is live. Railway OpenBot has no hermes/opencode binaries yet.
+Now: OpenBot owns Telegram. Think/Ops resume that Hermes session; CEO Chat is a fresh oneshot with a short Telegram slice (no --resume) so board replies do not bleed mid-tool junk.
+Last: board · Chat was resuming the Telegram Hermes session, which dumped an unrelated Greptile/fub-hermes turn into Nadia chat; composer also blocked CEO switch while pending.
+Next: Restart the board, retry the FB watch ask on Nadia Chat. Use Keys → Site logins for Facebook — do not paste cookies into chat. Confirm CEO switch + message queue while a turn is live.
+Blocker: ListLogic SQLite history is gone. Do not `railway scale` old Hermes boxes — use `railway down -y`. Public PIN still empty.
 
 ## Vault
 

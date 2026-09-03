@@ -1,8 +1,9 @@
 """Telegram / Hermes session cohesion for a CEO home.
 
-OpenBot Chat is the local operator surface. Think / Ops resume the imported
-Hermes session so the brain stays one conversation. Telegram on Railway stays
-live until cutover — this module does not start a second gateway.
+OpenBot Chat is the operator surface. Think, Research, and Ops resume the
+imported Hermes Telegram session. CEO Chat gets a short Telegram slice for
+context (fresh oneshot — does not --resume). Replies on the board do not
+post into Telegram.
 """
 
 from __future__ import annotations
@@ -25,6 +26,50 @@ def _home(path: str | Path | None) -> Path | None:
     return home if db.is_file() else None
 
 
+def _sid_from_routing(con: sqlite3.Connection) -> str:
+    try:
+        rows = con.execute(
+            "SELECT session_key, entry_json FROM gateway_routing ORDER BY updated_at DESC"
+        ).fetchall()
+    except sqlite3.Error:
+        return ""
+    for key, blob in rows:
+        try:
+            entry = json.loads(blob or "{}")
+        except json.JSONDecodeError:
+            entry = {}
+        hay = f"{key or ''} {blob or ''}".lower()
+        if "telegram" not in hay:
+            continue
+        sid = str(entry.get("session_id") or "").strip()
+        if sid:
+            return sid
+    return ""
+
+
+def _sid_from_sessions(con: sqlite3.Connection) -> str:
+    try:
+        cols = {str(row[1]) for row in con.execute("PRAGMA table_info(sessions)")}
+    except sqlite3.Error:
+        return ""
+    if "id" not in cols or "source" not in cols:
+        return ""
+    if "message_count" in cols:
+        order = "message_count DESC"
+    elif "started_at" in cols:
+        order = "started_at DESC"
+    else:
+        order = "id DESC"
+    try:
+        row = con.execute(
+            f"SELECT id FROM sessions WHERE lower(ifnull(source,'')) LIKE '%telegram%' "
+            f"ORDER BY {order} LIMIT 1"
+        ).fetchone()
+    except sqlite3.Error:
+        return ""
+    return str(row[0] or "").strip() if row else ""
+
+
 def telegram_session_id(home: str | Path | None) -> str:
     root = _home(home)
     if root is None:
@@ -34,24 +79,9 @@ def telegram_session_id(home: str | Path | None) -> str:
     except sqlite3.Error:
         return ""
     try:
-        rows = con.execute(
-            "SELECT session_key, entry_json FROM gateway_routing ORDER BY updated_at DESC"
-        ).fetchall()
-    except sqlite3.Error:
-        return ""
+        return _sid_from_routing(con) or _sid_from_sessions(con)
     finally:
         con.close()
-    for key, blob in rows:
-        if "telegram" not in str(key or "").lower():
-            continue
-        try:
-            entry = json.loads(blob or "{}")
-        except json.JSONDecodeError:
-            continue
-        sid = str(entry.get("session_id") or "").strip()
-        if sid:
-            return sid
-    return ""
 
 
 def _message_text(raw) -> str:
@@ -137,8 +167,45 @@ def session_hint(home: str | Path | None, session_id: str | None = None, limit: 
     if not lines:
         return ""
     return (
-        "RECENT TELEGRAM (same Hermes brain. Railway still owns the live bot):\n"
+        "RECENT TELEGRAM (same CEO — context only, answer the new board message):\n"
         + "\n".join(lines)
+    )
+
+
+def cron_roster(home: str | Path | None, limit: int = 16) -> str:
+    """Enabled Hermes cron names from this CEO home. Files, not chat."""
+    raw = str(home or "").strip()
+    if not raw:
+        return ""
+    path = Path(raw).expanduser() / "cron" / "jobs.json"
+    if not path.is_file():
+        return ""
+    try:
+        blob = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    items = blob.get("jobs") if isinstance(blob, dict) else blob
+    if not isinstance(items, list):
+        return ""
+    names: list[str] = []
+    enabled = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or item.get("id") or "").strip()
+        if item.get("enabled", True):
+            enabled += 1
+            if name:
+                names.append(name)
+    if not items:
+        return ""
+    shown = names[: max(1, min(int(limit), 24))]
+    extra = f" (+{len(names) - len(shown)} more)" if len(names) > len(shown) else ""
+    return (
+        f"CRON (this Hermes home): {enabled} enabled / {len(items)} — "
+        + ", ".join(shown)
+        + extra
+        + ". These fire here, deliver to Telegram when origin is set, and land in this CEO's Ops lane."
     )
 
 
@@ -193,8 +260,9 @@ def public_channel(home: str | Path | None, session_id: str | None = None) -> di
         "source": "telegram" if sid else "",
         "turns": turns,
         "note": (
-            "Think, Research, and Ops resume this Hermes session. "
-            "Telegram on Railway still owns the live bot until you cut over."
+            "Think, Research, and Ops resume this Hermes Telegram session. "
+            "CEO Chat gets a short Telegram slice for context (fresh oneshot — does not --resume). "
+            "Telegram is live on this OpenBot instance. Board replies do not post into Telegram."
             if sid
             else "No Telegram session in this Hermes home yet."
         ),

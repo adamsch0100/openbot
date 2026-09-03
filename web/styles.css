@@ -256,6 +256,7 @@ body {
   color: var(--bronze);
 }
 .org-btn.ping { box-shadow: inset 3px 0 0 var(--bronze); }
+.org-btn.working { color: var(--bronze); }
 .org-inbox {
   display: grid;
   gap: 6px;
@@ -668,7 +669,7 @@ body {
   background: var(--panel);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "who who" "reply reply" "route route" "msg send" "hint hint";
+  grid-template-areas: "who who" "reply reply" "queue queue" "route route" "msg send" "hint hint";
   gap: 8px 10px;
   align-items: end;
   border-radius: 16px;
@@ -680,6 +681,7 @@ body {
 .composer .route { grid-area: route; }
 .composer .composer-who { grid-area: who; }
 .composer .reply-chip { grid-area: reply; }
+.composer #queueChip { grid-area: queue; }
 .composer textarea { grid-area: msg; }
 .composer .send { grid-area: send; }
 .composer-who {

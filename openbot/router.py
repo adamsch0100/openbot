@@ -111,7 +111,7 @@ LANE_LABEL = {
     "research": "Research",
     "ops": "Ops",
 }
-OPENCODE_TIMEOUT = 180
+OPENCODE_TIMEOUT = 600
 DEFAULT_CODE_MODEL = "opencode/deepseek-v4-flash"
 OPENROUTER_CODE_MODEL = "openrouter/deepseek/deepseek-v4-flash-0731"
 
@@ -970,12 +970,20 @@ def _handle_preset(
                     status = f"{status}\n\n{hint}"
             else:
                 status = staff_status_reply()
+            # Chat is a fresh oneshot. Do NOT --resume the Telegram Hermes
+            # session here — that replays mid-tool / unrelated turns into this
+            # reply. Recent Telegram is already in status via session_hint.
             packet = chat_packet(who, status, message if not quote else f"{message}\n\nReplying to this earlier turn:\n{quote}")
             ran: dict = {}
             attempts = _chat_attempts(tools, chosen_model)
             if not attempts:
                 _activate("Hermes Agent", tools, chosen_model)
                 attempts = [({}, chosen_model)]
+            if on_progress:
+                try:
+                    _call_progress(on_progress, f"{who} · Chat", "cos")
+                except Exception:
+                    pass
             for account, model in attempts:
                 if account.get("id"):
                     activate_account(str(account["id"]))
