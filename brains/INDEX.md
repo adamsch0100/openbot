@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Pulled today's Railway Hermes state into local CEO homes. Board still local. Railway OpenBot deploy next.
-Last: Slim-pulled ListLogic, SAA Homes, and Nadia memory/cron/sessions from Railway. Did not start a local Telegram gateway.
-Next: OpenBot git remote + Railway project URL. Pause Railway Hermes gateways before local cron.
-Blocker: Do not start a local Hermes gateway while Railway Telegram is live. SAA state.db was locked on extract.
+Now: OpenBot board is live on Railway. Local git has the repo. Railway Hermes still runs Telegram and cron.
+Last: Pulled today's Hermes state into SAA / ListLogic / Nadia homes. Deployed the board (no Hermes/OpenCode binaries on that box yet).
+Next: Create GitHub remote adamsch0100/openbot if push failed. Pause Railway Hermes gateways only when you want cron to move.
+Blocker: Do not start a local Hermes gateway while Railway Telegram is live. Railway OpenBot has no hermes/opencode binaries yet.
 
 ## Vault
 
