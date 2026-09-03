@@ -28,9 +28,8 @@ from .keyring import (
     staged_logins_ready,
     wallet_marked_empty,
 )
-from .models import cheap_chat_for_provider, hermes_chat_model_for_provider, model_provider, recommended_chat_id
+from .models import cheap_chat_for_provider, model_provider, recommended_chat_id
 from .auto import seated_or_auto
-from .pickers import SKIP_HERMES_PROVIDERS
 from .providers import nous_portal_connected
 from .ops import write_ops_ticket
 from .bus import (
@@ -197,38 +196,24 @@ def _live_accounts(rows: list[dict]) -> list[dict]:
     return live or rows
 
 
-def _hermes_talk_model(seated_model: str | None, provider: str) -> str | None:
-    """Chat talk runs on Hermes CLI. Never hand it OpenCode Muse / Zen seat IDs."""
-    seated = str(seated_model or "").strip()
-    seated_provider = model_provider(seated) if seated else ""
-    if provider in SKIP_HERMES_PROVIDERS:
-        return None
-    if seated and seated_provider == provider and seated_provider not in SKIP_HERMES_PROVIDERS:
-        low = seated.lower()
-        if "muse-spark" in low or "contributor-free" in low:
-            return hermes_chat_model_for_provider(provider) or None
-        return seated
-    return hermes_chat_model_for_provider(provider) or None
-
-
 def _chat_attempts(tools: dict | None, seated_model: str | None) -> list[tuple[dict, str]]:
-    """Walk Hermes-capable wallets. OpenCode Go keys are for Code, not Cos talk."""
+    """Walk keyring order. Same provider keeps the seated model; later providers get their own cheap Chat."""
     attempts: list[tuple[dict, str]] = []
     seen: set[tuple[str, str]] = set()
-    rows = _live_accounts(list(ordered_accounts(prefer=_prefer_accounts(tools), engine="Hermes Agent")))
     seated_provider = model_provider(seated_model) if seated_model else ""
+    rows = _live_accounts(list(ordered_accounts(prefer=_prefer_accounts(tools), engine="Hermes Agent")))
     if seated_provider == "nous":
         nous_rows = [row for row in rows if str(row.get("provider") or "") == "nous"]
         rest = [row for row in rows if str(row.get("provider") or "") != "nous"]
         if not nous_rows and nous_portal_connected():
             nous_rows = [{"id": "", "provider": "nous"}]
         rows = nous_rows + rest
-    preferred = [row for row in rows if str(row.get("provider") or "") not in SKIP_HERMES_PROVIDERS]
-    if preferred:
-        rows = preferred
     for row in rows:
         provider = str(row.get("provider") or "")
-        model = _hermes_talk_model(seated_model, provider)
+        if seated_model and seated_provider == provider:
+            model = seated_model
+        else:
+            model = cheap_chat_for_provider(provider)
         if not model:
             continue
         key = (str(row.get("id") or ""), model)
@@ -236,13 +221,6 @@ def _chat_attempts(tools: dict | None, seated_model: str | None) -> list[tuple[d
             continue
         seen.add(key)
         attempts.append((row, model))
-    if not attempts:
-        for provider in ("nous", "openrouter", "anthropic", "openai"):
-            model = hermes_chat_model_for_provider(provider) or None
-            if not model:
-                continue
-            attempts.append(({}, model))
-            break
     return attempts
 
 
@@ -334,13 +312,19 @@ def clean_hermes_fail_hint(ran: dict | None) -> str:
     blob = ran or {}
     code = blob.get("code")
     raw = str(blob.get("text") or "").strip()
+    low = raw.lower()
+    if "use this model for this invocation" in low or "allow_data_training_tiers_noninteractive" in low:
+        return (
+            "Hermes blocked a contributor-tier model in non-interactive mode. "
+            "OpenBot now sets security.allow_data_training_tiers_noninteractive on the Hermes home — retry."
+        )
     if code == 127:
         return "Hermes Agent binary missing on this box — answered from the brief."
     if code == 2:
-        return "Chat needs a Hermes-capable model (OpenRouter/Nous). Muse Spark is OpenCode-only."
+        return "Chat needs a seated model with a provider prefix. Open Models and pick Chat."
     if code == 124:
         return "Hermes chat timed out — answered from the brief."
-    if raw and raw not in {"(no output)", "Stopped.", "hermes timed out"} and len(raw) < 240:
+    if raw and raw not in {"(no output)", "Stopped.", "hermes timed out"} and len(raw) < 280:
         return f"Hermes chat failed ({code}): {raw}"
     return f"Hermes chat exited {code} — answered from the brief."
 
@@ -991,16 +975,6 @@ def _handle_preset(
         talk = True
         settings = load_settings()
         chosen_model = seated_or_auto(settings, "chat", seats) or recommended_chat_id() or None
-        # Cos talk is Hermes. Muse Spark / OpenCode seat IDs are for Code — remap.
-        if model_provider(chosen_model) in SKIP_HERMES_PROVIDERS or (
-            chosen_model and ("muse-spark" in chosen_model.lower() or "contributor-free" in chosen_model.lower())
-        ):
-            chosen_model = (
-                hermes_chat_model_for_provider("nous")
-                or hermes_chat_model_for_provider("openrouter")
-                or hermes_chat_model_for_provider("anthropic")
-                or None
-            )
         provider, model_id = split_model(chosen_model)
         status_ask = bool(STATUS.search(message or ""))
         skill_ask = bool(SKILL.search(message or ""))
@@ -1060,13 +1034,8 @@ def _handle_preset(
             ran: dict = {}
             attempts = _chat_attempts(tools, chosen_model)
             if not attempts:
-                fallback_model = (
-                    hermes_chat_model_for_provider("openrouter")
-                    or hermes_chat_model_for_provider("nous")
-                    or chosen_model
-                )
-                _activate("Hermes Agent", tools, fallback_model)
-                attempts = [({}, fallback_model)] if fallback_model else []
+                _activate("Hermes Agent", tools, chosen_model)
+                attempts = [({}, chosen_model)] if chosen_model else []
             if on_progress:
                 try:
                     _call_progress(on_progress, f"{who} · Chat", "cos")

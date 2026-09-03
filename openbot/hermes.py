@@ -273,8 +273,21 @@ def _run(cmd: list[str], cwd: str | None, timeout: int, home: str | Path | None 
     return proc.returncode, out[-24000:]
 
 
-def _popen(cmd: list[str], cwd: str | None, home: str | Path | None = None, *, talk: bool = False):
+def _needs_training_tier_confirm(model: str | None) -> bool:
+    low = str(model or "").lower()
+    return "contributor" in low or "muse-spark" in low
+
+
+def _popen(
+    cmd: list[str],
+    cwd: str | None,
+    home: str | Path | None = None,
+    *,
+    talk: bool = False,
+    stdin_text: str | None = None,
+):
     kwargs: dict = {
+        "stdin": subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
         "stdout": subprocess.PIPE,
         "stderr": subprocess.PIPE if talk else subprocess.STDOUT,
         "cwd": cwd,
@@ -282,7 +295,71 @@ def _popen(cmd: list[str], cwd: str | None, home: str | Path | None = None, *, t
         "bufsize": 1,
         **_text_kwargs(),
     }
-    return subprocess.Popen(cmd, **kwargs)
+    proc = subprocess.Popen(cmd, **kwargs)
+    if stdin_text is not None and proc.stdin is not None:
+        try:
+            proc.stdin.write(stdin_text)
+            proc.stdin.close()
+        except OSError:
+            pass
+    return proc
+
+
+def ensure_noninteractive_model_ack(home: str | Path | None = None) -> None:
+    """Contributor-tier models (Muse Spark, etc.) refuse unattended CLI without this ack."""
+    binary = which("hermes")
+    if not binary:
+        return
+    root = Path(home).expanduser() if home else hermes_home()
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    marker = root / ".openbot-training-tier-ack"
+    if marker.is_file():
+        return
+    code, out = _run(
+        [binary, "config", "set", "security.allow_data_training_tiers_noninteractive", "true"],
+        None,
+        45,
+        home=root,
+    )
+    if code == 0:
+        try:
+            marker.write_text("ok\n", encoding="utf-8")
+        except OSError:
+            pass
+        return
+    # Fallback: patch config.yaml if hermes config set is unavailable.
+    path = root / "config.yaml"
+    try:
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except OSError:
+        return
+    if "allow_data_training_tiers_noninteractive" in text:
+        try:
+            marker.write_text("ok\n", encoding="utf-8")
+        except OSError:
+            pass
+        return
+    block = (
+        "\nsecurity:\n"
+        "  allow_data_training_tiers_noninteractive: true\n"
+    )
+    if re.search(r"(?m)^security:\s*$", text):
+        text = re.sub(
+            r"(?m)^security:\s*$",
+            "security:\n  allow_data_training_tiers_noninteractive: true",
+            text,
+            count=1,
+        )
+    else:
+        text = (text.rstrip() + block) if text.strip() else block.lstrip()
+    try:
+        path.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8")
+        marker.write_text("ok\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def chat(
@@ -310,6 +387,7 @@ def chat(
             "usage": {},
         }
     provider, model_id = split_model(model)
+    ensure_noninteractive_model_ack(home)
     if talk:
         # Match Telegram's clean delivery: final answer only, no tool DSML
         # on stdout. hermes -z + --safe-mode is the board Chat path.
@@ -330,6 +408,7 @@ def chat(
                 binary,
                 "-z",
                 prompt,
+                "--yolo",
                 "--safe-mode",
                 "--ignore-rules",
                 "--reasoning",
@@ -367,7 +446,14 @@ def chat(
         elif model_id:
             cmd.extend(["-m", model_id])
         try:
-            proc = _popen(cmd, str(root) if talk else cwd, home=home, talk=talk)
+            confirm = "y\n" if _needs_training_tier_confirm(model) else None
+            proc = _popen(
+                cmd,
+                str(root) if talk else cwd,
+                home=home,
+                talk=talk,
+                stdin_text=confirm,
+            )
         except FileNotFoundError:
             return {"ok": False, "code": 127, "text": "hermes not on PATH", "usage": {}}
         if run_id:

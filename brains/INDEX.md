@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Cos Chat remaps Muse Spark (OpenCode-only) to a Hermes-capable OpenRouter/Nous model; Hermes failure falls back to the brief instead of "send it again."
-Last: board · Auto Chat seated Muse Spark then Cos handed it to Hermes, which failed instantly with "Chat didn't come back."
-Next: Redeploy/restart board. Retry Cos browser-login question — should get vault instructions. Pin Think/Research on Nadia for real browser work.
+Now: Cos/Hermes Chat auto-acks contributor-tier model confirms (Muse Spark) for non-interactive board runs — seating on the board is the operator choice.
+Last: board · Instant "Chat didn't come back" was Hermes prompting `Use this model… [y/N]` with no stdin answer, not a Muse capability limit.
+Next: Restart the board and retry Cos chat with Muse seated. Browser work still on Nadia Think/Research + vault logins.
 Blocker: ListLogic SQLite history is gone. Do not `railway scale` old Hermes boxes — use `railway down -y`. Public PIN still empty.
 
 ## Vault
