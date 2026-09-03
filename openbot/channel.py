@@ -114,6 +114,8 @@ def _message_text(raw) -> str:
 
 
 def recent_turns(home: str | Path | None, session_id: str | None = None, limit: int = MAX_TURNS) -> list[dict]:
+    from .hermes import clean_hermes_text
+
     root = _home(home)
     sid = (session_id or "").strip() or telegram_session_id(root)
     if root is None or not sid:
@@ -136,7 +138,7 @@ def recent_turns(home: str | Path | None, session_id: str | None = None, limit: 
         con.close()
     newest = []
     for role, content, ts in rows:
-        text = _message_text(content)
+        text = clean_hermes_text(_message_text(content))
         if not text:
             continue
         newest.append(
@@ -162,7 +164,7 @@ def session_hint(home: str | Path | None, session_id: str | None = None, limit: 
     for turn in turns:
         who = "operator" if turn.get("role") == "user" else "this CEO"
         text = re.sub(r"\s+", " ", str(turn.get("text") or "")).strip()[:320]
-        if text:
+        if text and not re.search(r"DSML|tool_calls|</\|", text, re.I):
             lines.append(f"{who}: {text}")
     if not lines:
         return ""

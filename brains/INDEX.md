@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: OpenBot owns Telegram. Think/Ops resume that Hermes session; CEO Chat is a fresh oneshot with a short Telegram slice (no --resume) so board replies do not bleed mid-tool junk.
-Last: board · Chat was resuming the Telegram Hermes session, which dumped an unrelated Greptile/fub-hermes turn into Nadia chat; composer also blocked CEO switch while pending.
-Next: Restart the board, retry the FB watch ask on Nadia Chat. Use Keys → Site logins for Facebook — do not paste cookies into chat. Confirm CEO switch + message queue while a turn is live.
+Now: Cos Chat remaps Muse Spark (OpenCode-only) to a Hermes-capable OpenRouter/Nous model; Hermes failure falls back to the brief instead of "send it again."
+Last: board · Auto Chat seated Muse Spark then Cos handed it to Hermes, which failed instantly with "Chat didn't come back."
+Next: Redeploy/restart board. Retry Cos browser-login question — should get vault instructions. Pin Think/Research on Nadia for real browser work.
 Blocker: ListLogic SQLite history is gone. Do not `railway scale` old Hermes boxes — use `railway down -y`. Public PIN still empty.
 
 ## Vault
@@ -13,7 +13,7 @@ Blocker: ListLogic SQLite history is gone. Do not `railway scale` old Hermes box
 - Site logins live in that same vault. You → Keys → Site logins, or approve them on a login card when a job hits a wall.
 - Unlock PIN in You → Settings gates the board. Do not paste keys or passwords into chat.
 - OpenCode (three Go wallets, same catalog): shared pool first, then SAA Homes / Conversion, then ListLogic. OpenRouter PAYG last.
-- Seats are Auto unless you pin: Chat flash, Think/Code Fable-class, Research Sol, Ops a cheap Go model. Empty Chat can still be Board (INDEX) for free status.
+- Seats are Auto unless you pin: Auto uses Muse Spark Contributor Free while OpenCode lists it, then Chat flash / Think-Code Arena / Ops cheap Go. Empty Chat can still be Board (INDEX) for free status.
 - CEO pins: openbot + Nadia → shared pool. SAA Homes → SAA Go. ListLogic → ListLogic Go. If that wallet is empty the instance chain is next.
 - Hermes native: Nous Portal subscription. Subscribe at portal.nousresearch.com/r/adam-schwartz. Connect with `hermes portal` or paste `NOUS_API_KEY`. Not in this vault yet, so Auto is Go then OpenRouter.
 - PAYG: OpenRouter after the three Go wallets are empty, plus OpenCode Zen after Go quota

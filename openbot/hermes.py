@@ -14,7 +14,7 @@ from .detect import hermes_home, which
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 HERMES_TIMEOUT = 600
-TALK_TIMEOUT = 45
+TALK_TIMEOUT = 90
 TALK_RESUME_TIMEOUT = 180
 HERMES_MAX_TURNS = "16"
 USAGE_KEYS = (
@@ -114,17 +114,28 @@ def parse_session_id(text: str) -> str:
 
 def clean_hermes_text(text: str) -> str:
     lines: list[str] = []
+    in_tool_block = False
     for line in (text or "").splitlines():
         stripped = ANSI.sub("", line).strip()
         if SESSION_NOISE.match(stripped) or stripped.lower().startswith("session_id:"):
             continue
-        if TOOL_MARKUP.search(stripped):
+        if re.search(r"<\|?DSML\|?tool_?calls?>", stripped, re.I):
+            in_tool_block = True
+            continue
+        if in_tool_block:
+            if re.search(r"</\|?DSML\|?tool_?calls?>", stripped, re.I):
+                in_tool_block = False
+            continue
+        if TOOL_MARKUP.search(stripped) or re.search(r"<\|?/?DSML", stripped, re.I):
             continue
         if stripped.startswith("```") and "tool" in stripped.lower():
+            continue
+        if re.match(r"^(run\s+terminal|command\s+is\b|tool\s*call)", stripped, re.I):
             continue
         lines.append(ANSI.sub("", line))
     cleaned = "\n".join(lines).strip()
     cleaned = TOOL_MARKUP.sub("", cleaned).strip()
+    cleaned = re.sub(r"<\|?/?DSML[^>]*>", "", cleaned, flags=re.I).strip()
     return cleaned
 
 
@@ -265,7 +276,7 @@ def _run(cmd: list[str], cwd: str | None, timeout: int, home: str | Path | None 
 def _popen(cmd: list[str], cwd: str | None, home: str | Path | None = None, *, talk: bool = False):
     kwargs: dict = {
         "stdout": subprocess.PIPE,
-        "stderr": subprocess.DEVNULL if talk else subprocess.STDOUT,
+        "stderr": subprocess.PIPE if talk else subprocess.STDOUT,
         "cwd": cwd,
         "env": _hermes_env(home),
         "bufsize": 1,
@@ -300,6 +311,8 @@ def chat(
         }
     provider, model_id = split_model(model)
     if talk:
+        # Match Telegram's clean delivery: final answer only, no tool DSML
+        # on stdout. hermes -z + --safe-mode is the board Chat path.
         timeout = TALK_RESUME_TIMEOUT if resume else min(timeout or TALK_TIMEOUT, TALK_TIMEOUT)
         if not provider or not model_id:
             return {
@@ -310,32 +323,45 @@ def chat(
             }
     with tempfile.TemporaryDirectory(prefix="openbot-hermes-") as tmp:
         root = Path(tmp)
-        query = root / "query.txt"
-        query.write_text(prompt, encoding="utf-8")
-        cmd = [
-            binary,
-            "chat",
-            "--oneshot",
-            "--quiet",
-            "--source",
-            "openbot",
-            "--max-turns",
-            "1" if talk else HERMES_MAX_TURNS,
-            "--query-file",
-            str(query),
-        ]
+        usage_path = root / "usage.json"
         if talk:
-            cmd.extend(["--ignore-rules", "--reasoning", "none", "--toolsets", "bot_room"])
+            # -z: single prompt in, final reply text out (no banners / tool previews).
+            cmd = [
+                binary,
+                "-z",
+                prompt,
+                "--safe-mode",
+                "--ignore-rules",
+                "--reasoning",
+                "none",
+                "--usage-file",
+                str(usage_path),
+            ]
         else:
-            cmd.append("--yolo")
+            query = root / "query.txt"
+            query.write_text(prompt, encoding="utf-8")
+            cmd = [
+                binary,
+                "chat",
+                "--oneshot",
+                "--quiet",
+                "--source",
+                "openbot",
+                "--max-turns",
+                HERMES_MAX_TURNS,
+                "--query-file",
+                str(query),
+                "--yolo",
+            ]
             if toolsets:
                 cmd.extend(["--toolsets", toolsets])
             if skills:
                 cmd.extend(["--skills", skills])
-        if resume:
-            cmd.extend(["--resume", resume])
-        elif session and not talk:
-            cmd.extend(["--continue", session, "--create-if-missing"])
+            if resume:
+                cmd.extend(["--resume", resume])
+            elif session:
+                cmd.extend(["--continue", session, "--create-if-missing"])
+            cmd.extend(["--usage-file", str(usage_path)])
         if provider and model_id:
             cmd.extend(["--provider", provider, "-m", model_id])
         elif model_id:
@@ -358,7 +384,7 @@ def chat(
                         "ok": False,
                         "code": 130,
                         "text": clean_hermes_text("".join(chunks)) or "Stopped.",
-                        "usage": {},
+                        "usage": parse_usage_file(usage_path),
                         "stopped": True,
                     }
                 if deadline and time.time() > deadline:
@@ -367,7 +393,7 @@ def chat(
                         "ok": False,
                         "code": 124,
                         "text": clean_hermes_text("".join(chunks)) or "hermes timed out",
-                        "usage": {},
+                        "usage": parse_usage_file(usage_path),
                     }
                 try:
                     line = proc.stdout.readline() if proc.stdout else ""
@@ -402,22 +428,31 @@ def chat(
             code = proc.returncode or 0
         except OSError as err:
             return {"ok": False, "code": 1, "text": str(err), "usage": {}}
+        err_text = ""
+        if talk and proc.stderr:
+            try:
+                err_text = (proc.stderr.read() or "").strip()
+            except (OSError, ValueError):
+                err_text = ""
         raw = "".join(chunks).strip() or "(no output)"
         cleaned = clean_hermes_text(raw)
         if cleaned:
             text = cleaned
-        elif TOOL_MARKUP.search(raw) or raw == "(no output)":
+        elif TOOL_MARKUP.search(raw) or re.search(r"<\|?/?DSML", raw or "", re.I) or raw == "(no output)":
             text = ""
         else:
             text = raw[-24000:]
+        if not text.strip() and err_text:
+            text = clean_hermes_text(err_text) or err_text[-1200:]
+        usage = parse_usage_file(usage_path)
         return {
-            "ok": code == 0 and bool(text.strip()),
-            "code": code if text.strip() else (code or 1),
+            "ok": code == 0 and bool((cleaned or "").strip()),
+            "code": code if (cleaned or "").strip() else (code or 1),
             "text": (text or "(no output)")[-24000:],
-            "usage": {},
+            "usage": usage,
             "engine": "Hermes Agent",
             "session": resume or session,
-            "session_id": parse_session_id(raw) or resume or "",
+            "session_id": str(usage.get("session_id") or parse_session_id(raw) or resume or ""),
         }
 
 

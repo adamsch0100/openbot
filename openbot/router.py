@@ -28,8 +28,9 @@ from .keyring import (
     staged_logins_ready,
     wallet_marked_empty,
 )
-from .models import cheap_chat_for_provider, model_provider, recommended_chat_id
+from .models import cheap_chat_for_provider, hermes_chat_model_for_provider, model_provider, recommended_chat_id
 from .auto import seated_or_auto
+from .pickers import SKIP_HERMES_PROVIDERS
 from .providers import nous_portal_connected
 from .ops import write_ops_ticket
 from .bus import (
@@ -85,6 +86,12 @@ URL = re.compile(r"https?://", re.I)
 CRON = re.compile(r"\b(every morning|every day|schedule|cron|remind|watch this)\b", re.I)
 THINK = re.compile(r"\b(think hard|reason (about|through)|make a plan|deep think)\b", re.I)
 LOOK = re.compile(r"\b(look at this site|open (the )?browser)\b", re.I)
+BROWSER_LOGIN = re.compile(
+    r"\b(browser\s+login|login\s+(to\s+)?(the\s+)?browser|site\s+login|vault\s+login|"
+    r"cookies?\s+for\s+(facebook|fb|chrome)|did\s+the\s+browser\s+login|"
+    r"whatever you need for the browser)\b",
+    re.I,
+)
 PROGRAM = re.compile(
     r"\b(\d{1,3})\s+tasks?\b|\balways\b.{0,48}\bimprov|\bbuild (me )?(a )?full\b",
     re.I,
@@ -190,24 +197,38 @@ def _live_accounts(rows: list[dict]) -> list[dict]:
     return live or rows
 
 
+def _hermes_talk_model(seated_model: str | None, provider: str) -> str | None:
+    """Chat talk runs on Hermes CLI. Never hand it OpenCode Muse / Zen seat IDs."""
+    seated = str(seated_model or "").strip()
+    seated_provider = model_provider(seated) if seated else ""
+    if provider in SKIP_HERMES_PROVIDERS:
+        return None
+    if seated and seated_provider == provider and seated_provider not in SKIP_HERMES_PROVIDERS:
+        low = seated.lower()
+        if "muse-spark" in low or "contributor-free" in low:
+            return hermes_chat_model_for_provider(provider) or None
+        return seated
+    return hermes_chat_model_for_provider(provider) or None
+
+
 def _chat_attempts(tools: dict | None, seated_model: str | None) -> list[tuple[dict, str]]:
-    """Walk keyring order. Same provider keeps the seated model; later providers get their own cheap Chat."""
+    """Walk Hermes-capable wallets. OpenCode Go keys are for Code, not Cos talk."""
     attempts: list[tuple[dict, str]] = []
     seen: set[tuple[str, str]] = set()
-    seated_provider = model_provider(seated_model) if seated_model else ""
     rows = _live_accounts(list(ordered_accounts(prefer=_prefer_accounts(tools), engine="Hermes Agent")))
+    seated_provider = model_provider(seated_model) if seated_model else ""
     if seated_provider == "nous":
         nous_rows = [row for row in rows if str(row.get("provider") or "") == "nous"]
         rest = [row for row in rows if str(row.get("provider") or "") != "nous"]
         if not nous_rows and nous_portal_connected():
             nous_rows = [{"id": "", "provider": "nous"}]
         rows = nous_rows + rest
+    preferred = [row for row in rows if str(row.get("provider") or "") not in SKIP_HERMES_PROVIDERS]
+    if preferred:
+        rows = preferred
     for row in rows:
         provider = str(row.get("provider") or "")
-        if seated_model and seated_provider == provider:
-            model = seated_model
-        else:
-            model = cheap_chat_for_provider(provider)
+        model = _hermes_talk_model(seated_model, provider)
         if not model:
             continue
         key = (str(row.get("id") or ""), model)
@@ -215,7 +236,31 @@ def _chat_attempts(tools: dict | None, seated_model: str | None) -> list[tuple[d
             continue
         seen.add(key)
         attempts.append((row, model))
+    if not attempts:
+        for provider in ("nous", "openrouter", "anthropic", "openai"):
+            model = hermes_chat_model_for_provider(provider) or None
+            if not model:
+                continue
+            attempts.append(({}, model))
+            break
     return attempts
+
+
+def _cos_chat_fallback(project_id: str | None, worker_id: str | None, message: str, why: str) -> str:
+    """Cos is files-first. Never leave the operator with only 'send it again'."""
+    if project_id:
+        brief = status_reply(
+            read_project_index(project_id) if project_id else read_index(),
+            message,
+            node_label(project_id, worker_id) or "Chief of Staff",
+            wiring=wiring_brief(project_id),
+        )
+    else:
+        brief = staff_status_reply()
+    tip = (why or "").strip()
+    if tip:
+        return f"{brief}\n\n({tip})"
+    return brief
 
 
 def _code_model_for_provider(provider: str, seated_model: str | None) -> str:
@@ -272,6 +317,32 @@ def wallet_empty_reply() -> str:
         "Top up any of those wallets from Keys, or pick a Chat model on a provider that still has credit. "
         "Do not paste keys here."
     )
+
+
+def cos_browser_login_reply() -> str:
+    return (
+        "Cos has no browser. Site logins stay in the board vault — never paste cookies or passwords into chat.\n"
+        "1. You → Keys → Site logins — add facebook.com (or the site) with user/pass there.\n"
+        "2. Open the CEO that owns the work (Nadia), pin Research or Think.\n"
+        "3. Ask that CEO to open the group; if a login wall hits, Approve the vault login on the card.\n"
+        "I cannot see whether a browser login already worked from this Staff chat — check the CEO thread "
+        "or the last Research/Think card for a login wall vs success."
+    )
+
+
+def clean_hermes_fail_hint(ran: dict | None) -> str:
+    blob = ran or {}
+    code = blob.get("code")
+    raw = str(blob.get("text") or "").strip()
+    if code == 127:
+        return "Hermes Agent binary missing on this box — answered from the brief."
+    if code == 2:
+        return "Chat needs a Hermes-capable model (OpenRouter/Nous). Muse Spark is OpenCode-only."
+    if code == 124:
+        return "Hermes chat timed out — answered from the brief."
+    if raw and raw not in {"(no output)", "Stopped.", "hermes timed out"} and len(raw) < 240:
+        return f"Hermes chat failed ({code}): {raw}"
+    return f"Hermes chat exited {code} — answered from the brief."
 
 
 def _work_folder(folder: str | None, project_id: str | None = None) -> str:
@@ -920,10 +991,22 @@ def _handle_preset(
         talk = True
         settings = load_settings()
         chosen_model = seated_or_auto(settings, "chat", seats) or recommended_chat_id() or None
+        # Cos talk is Hermes. Muse Spark / OpenCode seat IDs are for Code — remap.
+        if model_provider(chosen_model) in SKIP_HERMES_PROVIDERS or (
+            chosen_model and ("muse-spark" in chosen_model.lower() or "contributor-free" in chosen_model.lower())
+        ):
+            chosen_model = (
+                hermes_chat_model_for_provider("nous")
+                or hermes_chat_model_for_provider("openrouter")
+                or hermes_chat_model_for_provider("anthropic")
+                or None
+            )
         provider, model_id = split_model(chosen_model)
         status_ask = bool(STATUS.search(message or ""))
         skill_ask = bool(SKILL.search(message or ""))
         file_reply = "" if skill_ask or status_ask else (cos_file_reply(message or "") or "")
+        if not file_reply and BROWSER_LOGIN.search(message or ""):
+            file_reply = cos_browser_login_reply()
         use_llm = (
             bool(chosen_model)
             and bool(provider)
@@ -977,8 +1060,13 @@ def _handle_preset(
             ran: dict = {}
             attempts = _chat_attempts(tools, chosen_model)
             if not attempts:
-                _activate("Hermes Agent", tools, chosen_model)
-                attempts = [({}, chosen_model)]
+                fallback_model = (
+                    hermes_chat_model_for_provider("openrouter")
+                    or hermes_chat_model_for_provider("nous")
+                    or chosen_model
+                )
+                _activate("Hermes Agent", tools, fallback_model)
+                attempts = [({}, fallback_model)] if fallback_model else []
             if on_progress:
                 try:
                     _call_progress(on_progress, f"{who} · Chat", "cos")
@@ -1010,7 +1098,9 @@ def _handle_preset(
                     if account.get("id"):
                         mark_wallet_empty(str(account["id"]))
                     continue
-                break
+                if ran.get("ok") and (ran.get("text") or "").strip() and ran.get("text") != "(no output)":
+                    break
+                continue
             text = ran.get("text") or "(no output)"
             usage = ran.get("usage") or {}
             prompt_tokens = int(usage.get("input_tokens") or 0)
@@ -1030,8 +1120,9 @@ def _handle_preset(
                 engine = "board"
             elif not ran.get("ok") or not (ran.get("text") or "").strip() or text == "(no output)":
                 blocker = f"hermes chat exited {ran.get('code')}"
-                text = "Chat didn't come back that time. Send it again — this path is a short reply, no tools."
-                engine = "Hermes Agent"
+                detail = clean_hermes_fail_hint(ran)
+                text = _cos_chat_fallback(project_id, worker_id, message, detail)
+                engine = "board"
         elif not use_llm and not text:
             engine = "board"
             if not project_id and status_ask:

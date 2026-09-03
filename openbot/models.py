@@ -188,6 +188,30 @@ def recommended_chat_id(models: list[dict] | None = None, provider: str | None =
             talk.sort(key=lambda row: (price(row), str(row.get("id") or "")))
             return str(talk[0]["id"])
 
+    muse = [row for row in rows if "muse-spark" in blob(row) and "contributor" in blob(row)]
+    if muse:
+        def muse_version(row: dict) -> tuple[int, ...]:
+            text = blob(row)
+            marker = "muse-spark-"
+            start = text.find(marker)
+            rest = text[start + len(marker) :] if start >= 0 else ""
+            parts: list[int] = []
+            token = ""
+            for char in rest:
+                if char.isdigit():
+                    token += char
+                elif char == "." and token:
+                    parts.append(int(token))
+                    token = ""
+                else:
+                    break
+            if token:
+                parts.append(int(token))
+            return tuple(parts) if parts else (0,)
+
+        muse.sort(key=muse_version, reverse=True)
+        return str(muse[0]["id"])
+
     flash = [row for row in rows if "deepseek" in blob(row) and "flash" in blob(row)]
     if flash:
         flash.sort(key=lambda row: (price(row), str(row.get("id") or "")))
@@ -209,6 +233,41 @@ def recommended_chat_id(models: list[dict] | None = None, provider: str | None =
 
 def cheap_chat_for_provider(provider: str, models: list[dict] | None = None) -> str:
     return recommended_chat_id(models, provider=provider)
+
+
+def hermes_chat_model_for_provider(provider: str, models: list[dict] | None = None) -> str:
+    """Chat model Hermes CLI can actually run — skip OpenCode Muse promo seats."""
+    source = models if models is not None else all_models()
+    rows = [
+        row
+        for row in source
+        if row.get("id")
+        and row.get("connected") is not False
+        and model_provider(row) == provider
+    ]
+    rows = [
+        row
+        for row in rows
+        if "muse-spark" not in f"{row.get('id', '')} {row.get('label', '')}".lower()
+        and "contributor-free" not in f"{row.get('id', '')} {row.get('label', '')}".lower()
+    ]
+    if not rows:
+        return ""
+
+    def blob(row: dict) -> str:
+        return f"{row.get('id', '')} {row.get('label', '')}".lower()
+
+    def price(row: dict) -> float:
+        return float(row.get("in_usd") or 0) + float(row.get("out_usd") or 0)
+
+    cheap = [
+        row
+        for row in rows
+        if any(token in blob(row) for token in ("flash", "mini", "nano", "haiku", "lite", "small"))
+    ]
+    pool = cheap or rows
+    pool.sort(key=lambda row: (price(row), str(row.get("id") or "")))
+    return str(pool[0]["id"])
 
 
 def allowed_for_seat(seat_id: str, model_id: str) -> bool:
