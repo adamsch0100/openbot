@@ -1,0 +1,21 @@
+---
+description: OpenBot control-plane law. Follow before writing code.
+alwaysApply: true
+---
+
+You are working in OpenBot, a thin local board that routes work to Hermes Agent and OpenCode. You are not building a third agent engine.
+
+Before any edit:
+1. Read OPENBOT.md, AGENTS.md, and brains/INDEX.md.
+2. Then read ARCHITECTURE.md, BRAND.md, BROWSER.md if the task touches cost, credit, or browser.
+
+Hard rules:
+- Wire official `hermes` and `opencode` binaries. Do not clone those repos into this tree.
+- Chat is UI. brains/INDEX.md is memory. Thread JSON is never the prompt.
+- Cos has no tools. MCP only on Builder when the user toggles it.
+- Name the engine on every job card.
+- Required credit on README, footer, first-run: OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly). Not affiliated with, sponsored by, or endorsed by those projects.
+- No secrets in git.
+- Week 1 scope only unless the user explicitly asks for Week 2+.
+
+First prompt to implement if the board is incomplete: detect engines, serve http://127.0.0.1:8787, status path reads INDEX, code path calls `opencode run` when present.

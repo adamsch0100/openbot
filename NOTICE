@@ -1,0 +1,30 @@
+OpenBot
+Copyright (c) 2026 OpenBot Local Org.
+
+OpenBot is a control plane. It is not Hermes Agent and it is not OpenCode.
+
+OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
+Not affiliated with, sponsored by, or endorsed by those projects.
+
+You must install those engines separately from their official sources.
+This repository does not vendor their source trees.
+
+Hermes Agent
+  Copyright Nous Research
+  License: MIT
+  https://github.com/NousResearch/hermes-agent
+
+OpenCode
+  Copyright Anomaly
+  License: MIT
+  https://github.com/anomalyco/opencode
+
+When you ship a binary or container that launches those engines, keep
+their copyright notices and MIT license texts alongside this NOTICE.
+
+Trademarks (Hermes, Hermes Agent, Nous, OpenCode, Anomaly, Grok, Grok Bot)
+are not licensed by the MIT grants above. Do not use those marks as the
+OpenBot product name or in the OpenBot logo.
+
+Model providers (Nous Portal, OpenRouter, xAI, OpenAI, Anthropic, and
+others) have separate terms. API keys stay on the operator's machine.

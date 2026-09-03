@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenBot · Local Org.</title>
+  <link rel="icon" type="image/png" href="/favicon.png?v=2" />
+  <link rel="stylesheet" href="/styles.css?v=53" />
+</head>
+<body>
+  <div id="firstRun" class="overlay hidden" role="dialog" aria-labelledby="firstRunTitle">
+    <div class="panel">
+      <div class="mark">
+        <img class="mark-lockup" src="/logo.png?v=2" alt="OPENBOT LOCAL ORG." width="240" height="182" />
+      </div>
+      <h2 id="firstRunTitle">Setup</h2>
+      <p class="credit">
+        OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
+        Not affiliated with, sponsored by, or endorsed by those projects.
+      </p>
+      <p class="muted" id="wizardStepLabel">Engines</p>
+      <section class="wizard-step" data-step="engines">
+        <section class="engines" id="firstEngines">…</section>
+        <div class="actions">
+          <button type="button" class="send" id="wizardEnginesNext">Continue</button>
+        </div>
+      </section>
+      <section class="wizard-step hidden" data-step="folder">
+        <label for="workDir">Folder</label>
+        <input id="workDir" type="text" placeholder="C:\path\to\a\repo" autocomplete="off" />
+        <div class="actions">
+          <button type="button" class="send" id="saveWork">Continue</button>
+        </div>
+      </section>
+      <section class="wizard-step hidden" data-step="key">
+        <label for="wizardProvider">Provider</label>
+        <select id="wizardProvider"></select>
+        <p class="muted" id="wizardKeyHint"></p>
+        <p class="muted">Hermes native: <a href="https://portal.nousresearch.com/r/adam-schwartz" target="_blank" rel="noreferrer">subscribe to Nous Portal</a>, then paste the API key or skip and connect in the Hermes tab.</p>
+        <label for="wizardKey">API key</label>
+        <input id="wizardKey" type="password" autocomplete="off" />
+        <div class="actions">
+          <button type="button" class="send" id="saveWizardKey">Open</button>
+          <button type="button" class="ghost-btn" id="skipWizardKey">Skip</button>
+        </div>
+      </section>
+      <p class="muted" id="firstRunError"></p>
+    </div>
+  </div>
+
+  <div id="unlockGate" class="overlay hidden" role="dialog" aria-labelledby="unlockTitle">
+    <div class="panel">
+      <h2 id="unlockTitle">Unlock</h2>
+      <p class="muted">This instance has a PIN. Enter it to open the board.</p>
+      <label for="unlockPin">PIN</label>
+      <input id="unlockPin" type="password" autocomplete="off" />
+      <div class="actions">
+        <button type="button" class="send" id="unlockBtn">Open</button>
+      </div>
+      <p class="muted" id="unlockError"></p>
+    </div>
+  </div>
+
+  <header class="bar">
+    <div class="mark-row">
+      <img class="mark-gem" src="/favicon.png?v=2" alt="" width="36" height="36" />
+      <div>
+        <div class="word">OPENBOT</div>
+        <div class="sub">LOCAL ORG.</div>
+      </div>
+    </div>
+    <nav class="stages" aria-label="Workspace">
+      <button type="button" class="stage-btn on" data-stage="chat">Chat</button>
+      <button type="button" class="stage-btn" data-stage="opencode">OpenCode</button>
+      <button type="button" class="stage-btn" data-stage="hermes">Hermes</button>
+    </nav>
+    <div class="bar-right">
+      <div class="engine-hint hidden" id="hermesHint">
+        <p class="muted" id="hermesStatus"></p>
+        <button type="button" class="ghost-btn hidden" id="retryHermes">Retry</button>
+      </div>
+      <button type="button" class="meter" id="openSpend" data-panel="usage" title="Spend this period">
+        <span class="meter-total" id="spend">$0.00 / $5 week</span>
+        <span class="meter-line">
+          <span>Chat <i id="spendChat">$0.00</i></span>
+          <span>Code <i id="spendOpenCode">$0.00</i></span>
+          <span>Hermes <i id="spendHermes">$0.00</i></span>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <section id="stage-chat" class="workspace on">
+    <aside class="rail">
+      <nav class="org" id="orgTree" aria-label="Projects"></nav>
+      <p class="sr-only" id="orgStatus" aria-live="polite"></p>
+      <div class="profile-dock" id="profileDock">
+        <button type="button" class="profile-card" id="openSettings" data-panel="you">
+          <span class="profile-mark" aria-hidden="true"></span>
+          <span class="profile-copy">
+            <b id="profileName">You</b>
+            <small>Settings</small>
+          </span>
+        </button>
+      </div>
+    </aside>
+    <div class="chat-col">
+      <div class="chat-shell">
+      <div class="chat-head">
+        <div class="chat-where" id="chatWhere">Chief of Staff</div>
+        <div class="chat-folder" id="chatFolder">You → Chief of Staff → CEOs</div>
+        <nav class="lanes" id="laneStatus" aria-label="Work in this chat">
+          <button type="button" class="lane on" data-lane="all" title="Show every turn in this chat">All</button>
+          <button type="button" class="lane" data-lane="builder" title="Show only Code jobs in this chat">Code</button>
+          <button type="button" class="lane" data-lane="think" title="Show only Think jobs in this chat">Think</button>
+          <button type="button" class="lane" data-lane="research" title="Show only Research jobs in this chat">Research</button>
+          <button type="button" class="lane" data-lane="ops" title="Show only Ops jobs in this chat">Ops</button>
+        </nav>
+      </div>
+      <details class="index" id="indexWrap">
+        <summary id="indexSummary">Brief</summary>
+        <pre id="indexCard"></pre>
+        <div id="scheduleList" class="schedule" hidden></div>
+      </details>
+      <section class="stream" id="stream"></section>
+      <form class="composer" id="form">
+        <input id="folder" type="hidden" />
+        <p class="composer-who" id="composerWho">Talking to Chief of Staff</p>
+        <div class="reply-chip hidden" id="replyChip">
+          <span class="reply-chip-kicker">Replying to</span>
+          <span class="reply-chip-text" id="replyChipText"></span>
+          <button type="button" class="reply-chip-clear" id="replyChipClear" aria-label="Clear reply">×</button>
+        </div>
+        <nav class="route" id="routeToggle" aria-label="Direct this send">
+          <button type="button" class="route-btn on" data-preset="cos" title="Auto: this chat talks, and routes Code or Hermes when the message is work.">Auto</button>
+          <button type="button" class="route-btn" data-preset="builder" title="Pin this send to OpenCode in this folder.">Code</button>
+          <button type="button" class="route-btn" data-preset="think" title="Pin this send to Hermes Think.">Think</button>
+          <button type="button" class="route-btn" data-preset="research" title="Pin this send to a URL fetch.">Research</button>
+          <button type="button" class="route-btn" data-preset="ops" title="Pin this send to a schedule.">Ops</button>
+        </nav>
+        <textarea id="msg" rows="1" placeholder="Message Chief of Staff" required></textarea>
+        <button class="send" type="submit" id="sendBtn">Send</button>
+        <p class="composer-hint hidden" id="workHint" aria-live="polite"></p>
+      </form>
+      </div>
+    </div>
+  </section>
+
+  <section id="stage-opencode" class="workspace">
+    <div class="embed-head">
+      <h1 id="ocTitle">OpenCode</h1>
+      <p class="muted" id="ocStatus"></p>
+    </div>
+    <iframe id="ocFrame" class="embed" title="OpenCode"></iframe>
+  </section>
+
+  <section id="stage-hermes" class="workspace">
+    <div class="embed-head">
+      <h1 id="hermesTitle">Hermes</h1>
+      <p class="muted" id="hermesAim"></p>
+    </div>
+    <iframe id="hermesFrame" class="embed" title="Hermes Agent"></iframe>
+  </section>
+
+  <div id="settings" class="drawer hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="drawer-scrim" id="settingsScrim"></div>
+    <aside class="drawer-card">
+      <div class="drawer-top">
+        <div>
+          <div class="eyebrow">SETTINGS</div>
+          <h2 id="settingsTitle">You</h2>
+        </div>
+        <button type="button" class="ghost-btn" id="closeSettings">Close</button>
+      </div>
+      <div class="drawer-grid">
+        <nav class="drawer-nav" aria-label="Settings sections">
+          <button type="button" class="drawer-tab on" data-panel="you">You</button>
+          <button type="button" class="drawer-tab" data-panel="folder">Folder</button>
+          <button type="button" class="drawer-tab" data-panel="keys">Keys</button>
+          <button type="button" class="drawer-tab" data-panel="ceo">This CEO</button>
+          <button type="button" class="drawer-tab" data-panel="import">Import</button>
+          <button type="button" class="drawer-tab" data-panel="channels">Channels</button>
+          <button type="button" class="drawer-tab" data-panel="models">Models</button>
+          <button type="button" class="drawer-tab" data-panel="git">Git</button>
+          <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
+          <button type="button" class="drawer-tab" data-panel="about">About</button>
+        </nav>
+        <div class="drawer-body">
+          <section class="drawer-panel on" id="panel-you">
+            <div class="field">
+              <label for="operatorName">Display name</label>
+              <input id="operatorName" type="text" placeholder="You" autocomplete="off" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="operatorPin">PIN</label>
+                <input id="operatorPin" type="password" autocomplete="new-password" placeholder="optional" />
+              </div>
+              <div class="field">
+                <label for="operatorPinConfirm">Confirm PIN</label>
+                <input id="operatorPinConfirm" type="password" autocomplete="new-password" />
+              </div>
+            </div>
+            <p class="muted" id="pinNote">Leave blank to keep the current PIN. Unlock is once per board session.</p>
+            <div class="field">
+              <label for="licenseKey">License key</label>
+              <input id="licenseKey" type="password" autocomplete="off" placeholder="stored on this machine" />
+            </div>
+            <p class="muted" id="licenseNote"></p>
+            <div class="actions">
+              <button type="button" class="send" id="saveYou">Save</button>
+              <button type="button" class="ghost-btn" id="clearPin">Clear PIN</button>
+              <button type="button" class="ghost-btn" id="clearLicense">Clear license</button>
+              <p class="muted" id="youStatus"></p>
+            </div>
+          </section>
+          <section class="drawer-panel" id="panel-folder">
+            <div class="field">
+              <label for="settingsFolder">Default folder</label>
+              <input id="settingsFolder" type="text" placeholder="OpenCode uses this when a CEO has no folder" autocomplete="off" />
+            </div>
+            <div class="actions">
+              <button type="button" class="send" id="saveWorkspace">Save</button>
+              <p class="muted" id="workspaceStatus"></p>
+            </div>
+          </section>
+          <section class="drawer-panel" id="panel-keys">
+            <div class="field-row">
+              <div class="field">
+                <label for="keyProvider">Provider</label>
+                <select id="keyProvider"></select>
+              </div>
+              <div class="field">
+                <label for="keyLabel">Label</label>
+                <input id="keyLabel" type="text" autocomplete="off" />
+              </div>
+            </div>
+            <p class="muted" id="keyProviderHint"></p>
+            <p class="muted" id="nousPortalStatus"></p>
+            <div class="field">
+              <label for="keyValue">API key</label>
+              <input id="keyValue" type="password" autocomplete="off" />
+            </div>
+            <div class="actions">
+              <button type="button" class="send" id="saveKey">Save</button>
+              <p class="muted" id="keyStatus"></p>
+            </div>
+            <div id="keyList"></div>
+            <h3 class="drawer-sub">Site logins</h3>
+            <p class="lede">Usernames and passwords stay on this machine. Chat never keeps them. When Think, Research, or Ops hits a login wall, a card asks you to approve a saved login or type one for that job.</p>
+            <div class="field-row">
+              <div class="field">
+                <label for="loginLabel">Label</label>
+                <input id="loginLabel" type="text" autocomplete="off" placeholder="Google Business Profile" />
+              </div>
+              <div class="field">
+                <label for="loginSite">Site</label>
+                <input id="loginSite" type="text" autocomplete="off" placeholder="https://business.google.com" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="loginUser">Username</label>
+                <input id="loginUser" type="text" autocomplete="username" />
+              </div>
+              <div class="field">
+                <label for="loginPass">Password</label>
+                <input id="loginPass" type="password" autocomplete="new-password" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="loginCeo">CEO</label>
+              <select id="loginCeo"></select>
+            </div>
+            <label class="check-line" for="loginAuto">
+              <input id="loginAuto" type="checkbox" />
+              Let Think, Research, and Ops fill this site without asking again
+            </label>
+            <div class="actions">
+              <button type="button" class="send" id="saveLogin">Save login</button>
+              <p class="muted" id="loginStatus"></p>
+            </div>
+            <div id="loginList"></div>
+            <p class="lede">Wallet chain. Nous Portal is the standard Hermes subscription. OpenCode keys stay for Builder and as Chat backup. OpenRouter only runs when the ones above fail. <a href="https://portal.nousresearch.com/r/adam-schwartz" target="_blank" rel="noreferrer">Subscribe to Nous Portal</a>.</p>
+            <div id="blockedList"></div>
+            <div class="field">
+              <label for="defaultProvider">Default</label>
+              <select id="defaultProvider"></select>
+              <p class="muted" id="providerStatus"></p>
+            </div>
+            <div id="providerList"></div>
+          </section>
+          <section class="drawer-panel" id="panel-ceo">
+            <p class="lede" id="ceoPanelHint">Select a CEO in the sidebar. Keys, spend, and seats for that project live here — not in the right-click menu.</p>
+            <div id="ceoPanelBody"></div>
+          </section>
+          <section class="drawer-panel" id="panel-import">
+            <p class="lede">On the old Hermes, run <code>hermes backup</code>. Paste the zip here. OpenBot runs official <code>hermes import</code> into a private home for that CEO. It does not overwrite this machine’s default Hermes.</p>
+            <div class="field">
+              <label for="hermesZip">Backup zip</label>
+              <input id="hermesZip" type="text" autocomplete="off" placeholder="C:\path\hermes-backup-2026-08-31.zip" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="hermesImportName">CEO name</label>
+                <input id="hermesImportName" type="text" autocomplete="off" placeholder="from SOUL.md if blank" />
+              </div>
+              <div class="field">
+                <label for="hermesImportFolder">Project folder</label>
+                <input id="hermesImportFolder" type="text" autocomplete="off" placeholder="optional git repo" />
+              </div>
+            </div>
+            <div class="actions">
+              <button type="button" class="ghost-btn" id="peekHermesZip">Peek</button>
+              <button type="button" class="send" id="importHermesZip">Import CEO</button>
+              <p class="muted" id="importZipStatus"></p>
+            </div>
+            <div id="hermesZipPreview" class="usage-card hidden"></div>
+            <p class="lede">No zip yet? Paste the public instance URL and <code>API_SERVER_KEY</code>. The board lists session titles and can copy a brief into a CEO. That is not the volume — SEO memory still needs the backup zip.</p>
+            <div class="field">
+              <label for="hermesInstanceUrl">Instance URL</label>
+              <input id="hermesInstanceUrl" type="text" autocomplete="off" placeholder="https://….up.railway.app" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="hermesInstanceLabel">Label</label>
+                <input id="hermesInstanceLabel" type="text" autocomplete="off" placeholder="SAA Homes Hermes" />
+              </div>
+              <div class="field">
+                <label for="hermesInstanceKey">API server key</label>
+                <input id="hermesInstanceKey" type="password" autocomplete="off" />
+              </div>
+            </div>
+            <div class="actions">
+              <button type="button" class="send" id="saveHermesInstance">Save instance</button>
+              <p class="muted" id="importInstanceStatus"></p>
+            </div>
+            <div id="hermesInstanceList"></div>
+            <div id="hermesSessionList"></div>
+          </section>
+          <section class="drawer-panel" id="panel-channels">
+            <p class="lede">One brain per CEO. Two doors into it.</p>
+            <p class="muted">OpenBot Chat is the local operator surface. Think, Research, and Ops resume the imported Hermes Telegram session so the agent keeps the same memory. Telegram on Railway still owns the live bot — messages you send here do not post to Telegram until you cut that gateway over.</p>
+            <p class="muted" id="channelStatus">Select a CEO to see its Telegram session.</p>
+            <div id="channelCard" class="usage-card hidden"></div>
+          </section>
+          <section class="drawer-panel" id="panel-models">
+            <p class="lede">Connect wallets on Keys. Chat is everyday talk. Auto picks the best quality per dollar on OpenCode Go, then OpenRouter. Empty means Auto. A saved model is a pin. Status questions still read the brief, no tools.</p>
+            <div id="assignmentMap" class="assign-map"></div>
+            <div class="field">
+              <label for="profileAccount">Key</label>
+              <select id="profileAccount"></select>
+            </div>
+            <div class="field">
+              <label for="modelSearch">Find</label>
+              <input id="modelSearch" type="search" autocomplete="off" />
+            </div>
+            <div id="seatList" class="seat-list"></div>
+            <div class="field">
+              <label for="hermesSkills">Hermes skills</label>
+              <input id="hermesSkills" type="text" list="skillHints" placeholder="blank = all installed skills · github,github-pr-workflow" autocomplete="off" />
+              <p class="muted">For Think, Research, and Ops on every bot. Chat never loads skills or tools. Ask Chat to walk you through adding one.</p>
+            </div>
+            <p class="muted" id="rankCite">Work-seat hints: Arena (arena.ai) via Hugging Face. Blind human votes, not OpenRouter rankings.</p>
+            <div class="actions">
+              <button type="button" class="send" id="saveModels">Save</button>
+              <p class="muted" id="modelStatus"></p>
+            </div>
+            <div class="usage-card">
+              <h4>Zen / Go</h4>
+              <div id="zenUsage" class="kv"></div>
+            </div>
+            <pre id="localStats" class="stats"></pre>
+          </section>
+          <section class="drawer-panel" id="panel-git">
+            <div id="gitStatus" class="git-card muted">Git of the selected CEO’s Code folder.</div>
+            <label class="check">
+              <input id="mcpGithub" type="checkbox" />
+              GitHub MCP on Code (instance default)
+            </label>
+            <div class="actions">
+              <button type="button" class="send" id="saveGit">Save git access</button>
+              <button type="button" class="ghost-btn" id="gotoOpenCode">Open OpenCode</button>
+              <p class="muted" id="gitStatusNote"></p>
+            </div>
+          </section>
+          <section class="drawer-panel" id="panel-usage">
+            <div class="field-row">
+              <div class="field">
+                <label for="spendCap">Cap USD</label>
+                <input id="spendCap" type="number" min="0" step="0.5" />
+              </div>
+              <div class="field">
+                <label for="spendPeriod">Period</label>
+                <select id="spendPeriod">
+                  <option value="week">Week</option>
+                  <option value="day">Day</option>
+                  <option value="month">Month</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="spendBind">Cap binds</label>
+                <select id="spendBind">
+                  <option value="payg">PAYG only</option>
+                  <option value="all">All known spend</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="spendMode">When cap hits</label>
+                <select id="spendMode">
+                  <option value="hard">Hard — brief only</option>
+                  <option value="warn">Warn only</option>
+                </select>
+              </div>
+            </div>
+            <label class="check">
+              <input id="spendFallback" type="checkbox" />
+              When OpenCode Go is empty, allow Zen PAYG
+            </label>
+            <div class="actions">
+              <button type="button" class="send" id="saveUsage">Save policy</button>
+              <p class="muted" id="usageStatus"></p>
+            </div>
+            <div id="walletList" class="spend-break"></div>
+            <div id="spendBreak" class="spend-break"></div>
+            <div id="jobLog" class="job-log"></div>
+          </section>
+          <section class="drawer-panel" id="panel-about">
+            <p class="credit">
+              OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
+              Not affiliated with, sponsored by, or endorsed by those projects.
+            </p>
+            <p class="muted">OPENBOT · LOCAL ORG. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.</p>
+            <div class="actions">
+              <button type="button" class="ghost-btn" id="aboutOpenCode">Open OpenCode</button>
+              <button type="button" class="ghost-btn" id="gotoHermes">Open Hermes</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    OPENBOT · LOCAL ORG.
+    · Engines: <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>
+    · <a href="https://github.com/anomalyco/opencode">OpenCode</a>
+    · OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
+    Not affiliated with, sponsored by, or endorsed by those projects.
+  </footer>
+  <datalist id="skillHints"></datalist>
+  <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
+  <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
+  <script src="/app.js?v=53"></script>
+</body>
+</html>

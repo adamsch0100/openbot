@@ -1,0 +1,12 @@
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+COPY . /app
+
+ENV PYTHONUNBUFFERED=1
+ENV OPENBOT_OPEN_BROWSER=0
+ENV OPENBOT_HOST=0.0.0.0
+
+EXPOSE 8787
+
+CMD ["python", "bin/openbot"]
