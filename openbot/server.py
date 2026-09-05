@@ -509,6 +509,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, skills_list())
         if path == "/api/mcp/catalog":
             return self._json(200, mcp_catalog())
+        if path == "/api/connectors/catalog":
+            skills = skills_list()
+            mcp = mcp_catalog()
+            return self._json(200, {
+                "skills": skills.get("skills") or [],
+                "skills_ok": skills.get("ok", False),
+                "mcp": mcp.get("items") or [],
+                "mcp_ok": mcp.get("ok", False)
+            })
         if path == "/api/engines/opencode/web":
             return self._json(200, opencode_web_status())
         if path == "/api/engines/hermes/dashboard":
@@ -685,6 +694,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "seats",
                     "profile_account_id",
                     "hermes_skills",
+                    "connectors",
                     "operator_name",
                     "pin",
                     "clear_pin",
@@ -758,6 +768,7 @@ class Handler(SimpleHTTPRequestHandler):
                     for key in (
                         "mcp_github",
                         "skills",
+                        "connectors",
                         "spend_cap_usd",
                         "seats",
                         "hermes_home",

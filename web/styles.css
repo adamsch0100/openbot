@@ -851,6 +851,66 @@ body {
 .attachment-remove:hover {
   color: var(--danger);
 }
+
+.connector-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+
+.connector-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  background: var(--page);
+}
+
+.connector-row-header {
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.connector-name {
+  font-weight: 500;
+}
+
+.connector-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.5rem;
+}
+
+.connector-cell label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.connector-cell input[type="checkbox"] {
+  margin: 0;
+}
+
+.connector-cell-disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.connector-cell-disabled label {
+  cursor: not-allowed;
+}
+
 .composer.drag-over {
   border-color: var(--bronze);
   background: var(--bronze-soft);

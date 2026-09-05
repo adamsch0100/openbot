@@ -191,6 +191,7 @@
           <button type="button" class="drawer-tab" data-panel="import">Import</button>
           <button type="button" class="drawer-tab" data-panel="channels">Channels</button>
           <button type="button" class="drawer-tab" data-panel="models">Models</button>
+          <button type="button" class="drawer-tab" data-panel="connectors">Connectors</button>
           <button type="button" class="drawer-tab" data-panel="git">Git</button>
           <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
           <button type="button" class="drawer-tab" data-panel="about">About</button>
@@ -383,12 +384,23 @@
             </div>
             <pre id="localStats" class="stats"></pre>
           </section>
+          <section class="drawer-panel" id="panel-connectors">
+            <p class="lede">Tools and MCP servers available to each seat. Chat never has tools (explains + routes only). Think, Research, and Ops use configured Hermes skills. Code uses selected MCPs.</p>
+            <h3 class="drawer-sub">Hermes Skills</h3>
+            <p class="muted">Skills from <code>hermes skills list</code>. Toggle per seat. Leave all unchecked to allow every installed skill.</p>
+            <div id="skillMatrix" class="connector-matrix"></div>
+            <h3 class="drawer-sub">MCP Servers</h3>
+            <p class="muted">MCP catalog from <code>hermes mcp catalog</code>. Select which seats can use each server. GitHub MCP defaults to Code only.</p>
+            <div id="mcpMatrix" class="connector-matrix"></div>
+            <p class="muted" id="connectorNote">Per-CEO overrides: select a CEO in the sidebar, then use This CEO panel.</p>
+            <div class="actions">
+              <button type="button" class="send" id="saveConnectors">Save</button>
+              <button type="button" class="ghost-btn" id="refreshConnectors">Refresh catalog</button>
+              <p class="muted" id="connectorStatus"></p>
+            </div>
+          </section>
           <section class="drawer-panel" id="panel-git">
             <div id="gitStatus" class="git-card muted">Git of the selected CEO’s Code folder.</div>
-            <label class="check">
-              <input id="mcpGithub" type="checkbox" />
-              GitHub MCP on Code (instance default)
-            </label>
             <div class="actions">
               <button type="button" class="send" id="saveGit">Save git access</button>
               <button type="button" class="ghost-btn" id="gotoOpenCode">Open OpenCode</button>

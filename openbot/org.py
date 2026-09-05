@@ -94,6 +94,7 @@ def _carry_tools(row: dict) -> dict:
         "skills",
         "spend_cap_usd",
         "seats",
+        "connectors",
         "hermes_home",
         "hermes_instance_id",
         "hermes_session_id",
@@ -320,6 +321,7 @@ def _public_tools(row: dict) -> dict:
     except (TypeError, ValueError):
         cap_val = None
     summary = home_summary(row.get("hermes_home"))
+    connectors = row.get("connectors") if isinstance(row.get("connectors"), dict) else {}
     return {
         "mcp_github": bool(row.get("mcp_github")),
         "skills": str(row.get("skills") or ""),
@@ -333,9 +335,13 @@ def _public_tools(row: dict) -> dict:
         "account_id": str(row.get("account_id") or ""),
         "fallback": [str(item) for item in (row.get("fallback") or []) if str(item).strip()],
         "site_url": str(row.get("site_url") or "").strip(),
+        "connectors": {
+            "skills": connectors.get("skills") if isinstance(connectors.get("skills"), dict) else {},
+            "mcp": connectors.get("mcp") if isinstance(connectors.get("mcp"), dict) else {}
+        },
         "seats": {
             key: {"model": str((seats.get(key) or {}).get("model") or "")}
-            for key in ("think", "code", "research", "ops")
+            for key in ("chat", "think", "code", "research", "ops")
             if isinstance(seats.get(key), dict) or key in seats
         },
     }
@@ -712,6 +718,14 @@ def patch_project_tools(project_id: str, patch: dict) -> dict:
             row["mcp_github"] = bool(patch.get("mcp_github"))
         if "skills" in patch:
             row["skills"] = str(patch.get("skills") or "").strip()
+        if "connectors" in patch and isinstance(patch.get("connectors"), dict):
+            if "connectors" not in row:
+                row["connectors"] = {}
+            connectors = patch["connectors"]
+            if isinstance(connectors.get("skills"), dict):
+                row["connectors"]["skills"] = connectors["skills"]
+            if isinstance(connectors.get("mcp"), dict):
+                row["connectors"]["mcp"] = connectors["mcp"]
         if "spend_cap_usd" in patch:
             raw = patch.get("spend_cap_usd")
             if raw in (None, ""):

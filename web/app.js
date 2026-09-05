@@ -137,6 +137,7 @@ const PANEL_TITLES = {
   keys: "Keys",
   ceo: "This CEO",
   models: "Models",
+  connectors: "Connectors",
   git: "Git",
   usage: "Usage",
   import: "Import",
@@ -1255,25 +1256,46 @@ async function saveStaffIndex(text) {
 
 async function saveCeoTools(pid) {
   if (!pid) return;
+  
+  // Collect seats
   const seats = {};
-  document.querySelectorAll("#ceoSeatList [data-profile-seat], #menuCeoSeatList [data-profile-seat]").forEach((input) => {
-    seats[input.dataset.profileSeat] = { model: input.value };
+  document.querySelectorAll("[data-ceo-seat]").forEach((input) => {
+    seats[input.dataset.ceoSeat] = { model: input.value };
   });
+  
+  // Collect connectors
+  const connectors = { skills: {}, mcp: {} };
+  document.querySelectorAll("[data-ceo-skill][data-seat]").forEach((input) => {
+    const skill = input.dataset.ceoSkill;
+    const seat = input.dataset.seat;
+    if (!connectors.skills[skill]) connectors.skills[skill] = {};
+    connectors.skills[skill][seat] = input.checked;
+  });
+  document.querySelectorAll("[data-ceo-mcp][data-seat]").forEach((input) => {
+    const mcpId = input.dataset.ceoMcp;
+    const seat = input.dataset.seat;
+    if (!connectors.mcp[mcpId]) connectors.mcp[mcpId] = {};
+    connectors.mcp[mcpId][seat] = input.checked;
+  });
+  
   const capInput = $("ceoSpendCap");
   const capRaw = capInput ? capInput.value.trim() : "";
-  const mcp = $("ceoMcpGithub");
-  const account = $("ceoAccount");
+  const account = $("ceoAccountId");
   const site = $("ceoSiteUrl");
-  const fallback = Array.from(document.querySelectorAll("[data-ceo-backup]:checked")).map((el) => el.value);
+  const folder = $("ceoFolder");
+  const fallbackInput = $("ceoFallback");
+  const fallback = fallbackInput ? fallbackInput.value.split(",").map(s => s.trim()).filter(Boolean) : [];
+  
   const res = await fetch(`/api/org/projects/${pid}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      mcp_github: mcp ? mcp.checked : false,
+      folder: folder ? folder.value.trim() : undefined,
       spend_cap_usd: capRaw === "" ? "" : Number(capRaw),
       account_id: account ? account.value : "",
       fallback,
       site_url: site ? site.value.trim() : "",
+      connectors,
       seats
     })
   });
@@ -1282,7 +1304,6 @@ async function saveCeoTools(pid) {
   if (res.ok) {
     applyOrg(data);
     loadSpend();
-    hideNodeMenu();
   }
 }
 
@@ -1332,56 +1353,212 @@ function fillCeoPanel() {
   if (!body) return;
   const project = currentProject();
   if (!project) {
-    if (hint) hint.textContent = "Select a CEO in the sidebar. Keys, spend, seats, git, and Hermes home live here.";
+    if (hint) hint.textContent = "Select a CEO in the sidebar. Keys, spend, seats, connectors, and Hermes home live here.";
     body.innerHTML = "";
     return;
   }
   const tools = project.tools || {};
   const git = project.git || {};
   const remote = git.remote || (git.is_repo ? "local git, no origin" : "not a git folder");
-  if (hint) hint.textContent = `${project.name} — Code folder is OpenCode. Hermes home is this CEO’s brain. Handoffs are files on the bus, not chat.`;
+  const folder = project.folder || "";
+  const mcp = tools.mcp_github;
+  const spend = tools.spend_cap_usd;
+  const hermesHome = tools.hermes_home || "";
+  const hermesSessionId = tools.hermes_session_id || "";
+  const sessionCount = tools.session_count || 0;
+  const sessionTitle = tools.session_title || "";
+  const accountId = tools.account_id || "";
+  const fallback = (tools.fallback || []).join(", ") || "—";
+  const siteUrl = tools.site_url || "";
+  const seats = tools.seats || {};
+  const connectors = tools.connectors || { skills: {}, mcp: {} };
+  
+  // Compute Available tools strip
+  const globalConnectors = cfg.connectors || { skills: {}, mcp: {} };
+  const mergedSkills = {...(globalConnectors.skills || {}), ...(connectors.skills || {})};
+  const mergedMcp = {...(globalConnectors.mcp || {}), ...(connectors.mcp || {})};
+  
+  const availableSkills = {
+    think: [],
+    research: [],
+    ops: []
+  };
+  const availableMcp = {
+    think: [],
+    research: [],
+    ops: [],
+    code: []
+  };
+  
+  // Collect enabled skills per seat
+  for (const [skill, seatToggles] of Object.entries(mergedSkills)) {
+    if (seatToggles.think) availableSkills.think.push(skill);
+    if (seatToggles.research) availableSkills.research.push(skill);
+    if (seatToggles.ops) availableSkills.ops.push(skill);
+  }
+  
+  // Collect enabled MCP per seat
+  for (const [mcpId, seatToggles] of Object.entries(mergedMcp)) {
+    if (seatToggles.think) availableMcp.think.push(mcpId);
+    if (seatToggles.research) availableMcp.research.push(mcpId);
+    if (seatToggles.ops) availableMcp.ops.push(mcpId);
+    if (seatToggles.code) availableMcp.code.push(mcpId);
+  }
+  
+  const toolsStrip = `
+    <div class="usage-card">
+      <h4>Available Tools (Effective)</h4>
+      <div class="kv">
+        <div><dt>Chat</dt><dd>Tools off (explains + routes only)</dd></div>
+        <div><dt>Think</dt><dd>Skills: ${availableSkills.think.join(", ") || "none"}</dd></div>
+        <div><dt>Research</dt><dd>Skills: ${availableSkills.research.join(", ") || "none"}</dd></div>
+        <div><dt>Ops</dt><dd>Skills: ${availableSkills.ops.join(", ") || "none"}</dd></div>
+        <div><dt>Code</dt><dd>MCP: ${availableMcp.code.join(", ") || "none"}</dd></div>
+      </div>
+      <p class="muted">Configure in Settings → Connectors (global) or below (CEO overrides)</p>
+    </div>
+  `;
+  
+  if (hint) hint.textContent = `${project.name} — Keys, spend, seats, connectors, and Hermes home`;
   body.innerHTML = `
-    <div class="usage-card wire-card">
-      <div><dt>Code folder</dt><dd>${escapeHtml(project.folder || "—")}</dd></div>
-      <div><dt>Git</dt><dd>${escapeHtml(git.branch ? `${git.branch} · ${remote}` : remote)}</dd></div>
-      <div><dt>Hermes home</dt><dd>${escapeHtml(tools.hermes_home || "—")}</dd></div>
-      <div><dt>Telegram session</dt><dd>${escapeHtml(tools.hermes_session_id || "none bound")}</dd></div>
+    ${toolsStrip}
+    <div class="usage-card">
+      <h4>Code</h4>
+      <div class="kv">
+        <div><dt>Folder</dt><dd>${escapeHtml(folder)}</dd></div>
+        <div><dt>Git</dt><dd>${escapeHtml(remote)}</dd></div>
+      </div>
+    </div>
+    <div class="usage-card">
+      <h4>Hermes</h4>
+      <div class="kv">
+        <div><dt>Home</dt><dd>${escapeHtml(hermesHome)}</dd></div>
+        <div><dt>Telegram ID</dt><dd>${escapeHtml(hermesSessionId)}</dd></div>
+        <div><dt>Sessions</dt><dd>${sessionCount}</dd></div>
+        ${sessionTitle ? `<div><dt>Last</dt><dd>${escapeHtml(sessionTitle)}</dd></div>` : ""}
+      </div>
     </div>
     <div class="field">
-      <label for="ceoSiteUrl">Website</label>
-      <input id="ceoSiteUrl" type="text" value="${escapeHtml(project.site_url || tools.site_url || "")}" placeholder="https://…" autocomplete="off" />
+      <label for="ceoFolder">Code folder</label>
+      <input id="ceoFolder" type="text" value="${escapeHtml(folder)}" placeholder="C:\\path\\to\\repo" />
     </div>
     <div class="field">
-      <label for="ceoAccount">Key</label>
-      <select id="ceoAccount">${accountSelectOptions(tools.account_id, "inherit Chief of Staff")}</select>
+      <label for="ceoSiteUrl">Site URL</label>
+      <input id="ceoSiteUrl" type="text" value="${escapeHtml(siteUrl)}" placeholder="https://example.com" />
+      <p class="muted">For Research snapshot jobs</p>
     </div>
-    <div class="field" id="ceoBackupBox">
-      <label>Backup keys</label>
-      ${accountBackupChecks(tools.account_id, tools.fallback || [])}
-    </div>
-    <label class="check">
-      <input id="ceoMcpGithub" type="checkbox"${tools.mcp_github ? " checked" : ""} />
-      GitHub MCP for Code on this CEO
-    </label>
     <div class="field">
-      <label for="ceoSpendCap">CEO spend cap USD</label>
-      <input id="ceoSpendCap" type="number" min="0" step="0.5" placeholder="inherit" value="${tools.spend_cap_usd == null ? "" : escapeHtml(String(tools.spend_cap_usd))}" />
+      <label for="ceoSpendCap">Spend cap USD (per ${cfg.spend_cap_period || "week"})</label>
+      <input id="ceoSpendCap" type="number" min="0" step="0.5" value="${spend || ""}" placeholder="empty = use instance cap" />
     </div>
-    <div id="ceoSeatList" class="menu-field ceo-seats"></div>
+    <div class="field">
+      <label for="ceoAccountId">Preferred account</label>
+      <select id="ceoAccountId">
+        <option value="">Auto (instance default)</option>
+        ${(cfg.keys || []).map(k => `<option value="${escapeHtml(k.id)}"${k.id === accountId ? " selected" : ""}>${escapeHtml(k.label || k.id)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field">
+      <label for="ceoFallback">Fallback chain</label>
+      <input id="ceoFallback" type="text" value="${escapeHtml(fallback)}" placeholder="id1, id2" />
+      <p class="muted">Comma-separated account IDs. Auto walks full keyring if empty.</p>
+    </div>
+    <h3 class="drawer-sub">Seats (per-CEO model pins)</h3>
+    ${["chat", "think", "code", "research", "ops"].map(seat => {
+      const seatData = seats[seat] || {};
+      const seatModel = seatData.model || "";
+      return `
+        <div class="field">
+          <label for="ceoSeat-${seat}">${seat.charAt(0).toUpperCase() + seat.slice(1)}</label>
+          <select id="ceoSeat-${seat}" data-ceo-seat="${seat}">
+            <option value="">Auto</option>
+            ${(cfg.catalog?.models || []).map(m => `<option value="${escapeHtml(m.id)}"${m.id === seatModel ? " selected" : ""}>${escapeHtml(m.name || m.id)}</option>`).join("")}
+          </select>
+        </div>
+      `;
+    }).join("")}
+    <h3 class="drawer-sub">Connectors (CEO overrides)</h3>
+    <p class="muted">Leave unconfigured to use global Settings → Connectors. Toggle here to override for this CEO only.</p>
+    <div id="ceoConnectorsMatrix"></div>
     <div class="actions">
-      <button type="button" class="send" id="saveCeoPanel">Save CEO</button>
-      <button type="button" class="ghost-btn" id="ceoOpenCode">Open OpenCode</button>
-      <button type="button" class="ghost-btn" id="ceoOpenHermes">Open Hermes</button>
+      <button type="button" class="send" id="saveCeoTools">Save</button>
       <p class="muted" id="ceoToolsStatus"></p>
     </div>
   `;
-  renderProfileSeats("ceoSeatList", tools.seats || {}, "inherit Chief of Staff");
-  const save = $("saveCeoPanel");
+  
+  paintCeoConnectorsMatrix(connectors);
+  
+  // Set up event listeners
+  const save = $("saveCeoTools");
   if (save) save.addEventListener("click", () => saveCeoTools(project.id));
-  const oc = $("ceoOpenCode");
-  if (oc) oc.addEventListener("click", () => openWorkspace("opencode"));
-  const hermes = $("ceoOpenHermes");
-  if (hermes) hermes.addEventListener("click", () => openWorkspace("hermes"));
+}
+
+function paintCeoConnectorsMatrix(connectors) {
+  const matrix = $("ceoConnectorsMatrix");
+  if (!matrix || !connectorsCatalog) return;
+  
+  const skills = connectors.skills || {};
+  const mcp = connectors.mcp || {};
+  
+  let html = `<p class="muted">Skills:</p>`;
+  if (connectorsCatalog.skills && connectorsCatalog.skills.length > 0) {
+    html += `<div class="connector-matrix">`;
+    html += `<div class="connector-row connector-row-header">
+      <div class="connector-name">Skill</div>
+      <div class="connector-cell">Think</div>
+      <div class="connector-cell">Research</div>
+      <div class="connector-cell">Ops</div>
+    </div>`;
+    connectorsCatalog.skills.forEach(skill => {
+      const skillConfig = skills[skill] || {};
+      html += `<div class="connector-row">
+        <div class="connector-name">${escapeHtml(skill)}</div>`;
+      ["think", "research", "ops"].forEach(seat => {
+        const checked = skillConfig[seat] === true ? " checked" : "";
+        html += `<div class="connector-cell">
+          <label>
+            <input type="checkbox" data-ceo-skill="${escapeHtml(skill)}" data-seat="${seat}"${checked} />
+          </label>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<p class="muted">No skills available.</p>`;
+  }
+  
+  html += `<p class="muted">MCP:</p>`;
+  if (connectorsCatalog.mcp && connectorsCatalog.mcp.length > 0) {
+    html += `<div class="connector-matrix">`;
+    html += `<div class="connector-row connector-row-header">
+      <div class="connector-name">MCP</div>
+      <div class="connector-cell">Think</div>
+      <div class="connector-cell">Research</div>
+      <div class="connector-cell">Ops</div>
+      <div class="connector-cell">Code</div>
+    </div>`;
+    connectorsCatalog.mcp.forEach(item => {
+      const mcpId = item.id || "";
+      const mcpConfig = mcp[mcpId] || {};
+      html += `<div class="connector-row">
+        <div class="connector-name">${escapeHtml(mcpId)}</div>`;
+      ["think", "research", "ops", "code"].forEach(seat => {
+        const checked = mcpConfig[seat] === true ? " checked" : "";
+        html += `<div class="connector-cell">
+          <label>
+            <input type="checkbox" data-ceo-mcp="${escapeHtml(mcpId)}" data-seat="${seat}"${checked} />
+          </label>
+        </div>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<p class="muted">No MCP servers available.</p>`;
+  }
+  
+  matrix.innerHTML = html;
 }
 
 function fillChannels() {
@@ -1667,7 +1844,6 @@ function fillSettings(data) {
   if ($("spendBind")) $("spendBind").value = policy.bind || "payg";
   if ($("spendMode")) $("spendMode").value = policy.mode || "hard";
   if ($("spendFallback")) $("spendFallback").checked = policy.allow_zen_fallback !== false;
-  if ($("mcpGithub")) $("mcpGithub").checked = Boolean(data.mcp_github);
   if ($("hermesSkills") && document.activeElement !== $("hermesSkills")) {
     $("hermesSkills").value = data.hermes_skills || "";
   }
@@ -1920,6 +2096,7 @@ function setSettingsPanel(name) {
     el.classList.toggle("on", el.id === `panel-${name}`);
   });
   if (name === "models") refreshCatalog();
+  if (name === "connectors") loadConnectorsCatalog();
   if (name === "git") loadGit();
   if (name === "keys") refreshProviders();
   if (name === "import") fillImport(cfg.hermes_instances || []);
@@ -3022,7 +3199,7 @@ if ($("saveGit")) {
     const res = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mcp_github: $("mcpGithub").checked })
+      body: JSON.stringify({})
     });
     const data = await res.json();
     if ($("gitStatusNote")) $("gitStatusNote").textContent = res.ok ? "git access saved" : (data.error || "save failed");
@@ -3049,6 +3226,137 @@ $("saveModels").addEventListener("click", async () => {
   const data = await res.json();
   $("modelStatus").textContent = res.ok ? "models saved" : (data.error || "save failed");
   if (res.ok) applyConfig(data);
+});
+
+let connectorsCatalog = { skills: [], mcp: [] };
+
+async function loadConnectorsCatalog() {
+  try {
+    const res = await fetch("/api/connectors/catalog");
+    const data = await res.json();
+    connectorsCatalog = {
+      skills: data.skills || [],
+      mcp: data.mcp || []
+    };
+    paintConnectorsPanel();
+  } catch (err) {
+    console.error("Failed to load connectors catalog:", err);
+  }
+}
+
+function paintConnectorsPanel() {
+  const skillMatrix = $("skillMatrix");
+  const mcpMatrix = $("mcpMatrix");
+  if (!skillMatrix || !mcpMatrix) return;
+
+  const globalConnectors = cfg.connectors || { skills: {}, mcp: {} };
+  const seats = ["think", "research", "ops"];
+
+  // Hermes Skills Matrix
+  if (connectorsCatalog.skills.length === 0) {
+    skillMatrix.innerHTML = `<p class="muted">No Hermes skills found. Run <code>hermes skills list</code> to see available skills.</p>`;
+  } else {
+    let skillHtml = `<div class="connector-row connector-row-header">
+      <div class="connector-name">Skill</div>
+      <div class="connector-cell">Think</div>
+      <div class="connector-cell">Research</div>
+      <div class="connector-cell">Ops</div>
+      <div class="connector-cell">Chat</div>
+    </div>`;
+    
+    connectorsCatalog.skills.forEach((skill) => {
+      const skillConfig = globalConnectors.skills[skill] || {};
+      skillHtml += `<div class="connector-row">
+        <div class="connector-name">${escapeHtml(skill)}</div>`;
+      
+      seats.forEach((seat) => {
+        const checked = skillConfig[seat] === true ? " checked" : "";
+        skillHtml += `<div class="connector-cell">
+          <label>
+            <input type="checkbox" data-skill="${escapeHtml(skill)}" data-seat="${seat}"${checked} />
+          </label>
+        </div>`;
+      });
+      
+      skillHtml += `<div class="connector-cell connector-cell-disabled">
+        <label title="Chat never has tools">
+          <input type="checkbox" disabled />
+        </label>
+      </div>`;
+      skillHtml += `</div>`;
+    });
+    skillMatrix.innerHTML = skillHtml;
+  }
+
+  // MCP Matrix
+  if (connectorsCatalog.mcp.length === 0) {
+    mcpMatrix.innerHTML = `<p class="muted">No MCP servers found. Run <code>hermes mcp catalog</code> to see available servers.</p>`;
+  } else {
+    let mcpHtml = `<div class="connector-row connector-row-header">
+      <div class="connector-name">MCP Server</div>
+      <div class="connector-cell">Think</div>
+      <div class="connector-cell">Research</div>
+      <div class="connector-cell">Ops</div>
+      <div class="connector-cell">Code</div>
+    </div>`;
+    
+    connectorsCatalog.mcp.forEach((item) => {
+      const mcpId = item.id || "";
+      const mcpConfig = globalConnectors.mcp[mcpId] || {};
+      mcpHtml += `<div class="connector-row">
+        <div class="connector-name" title="${escapeHtml(item.label || mcpId)}">${escapeHtml(mcpId)}</div>`;
+      
+      ["think", "research", "ops", "code"].forEach((seat) => {
+        const checked = mcpConfig[seat] === true ? " checked" : "";
+        mcpHtml += `<div class="connector-cell">
+          <label>
+            <input type="checkbox" data-mcp="${escapeHtml(mcpId)}" data-seat="${seat}"${checked} />
+          </label>
+        </div>`;
+      });
+      
+      mcpHtml += `</div>`;
+    });
+    mcpMatrix.innerHTML = mcpHtml;
+  }
+}
+
+$("saveConnectors").addEventListener("click", async () => {
+  const connectors = { skills: {}, mcp: {} };
+  
+  // Collect skill settings
+  document.querySelectorAll("#skillMatrix input[data-skill][data-seat]").forEach((input) => {
+    const skill = input.dataset.skill;
+    const seat = input.dataset.seat;
+    if (!connectors.skills[skill]) connectors.skills[skill] = {};
+    connectors.skills[skill][seat] = input.checked;
+  });
+  
+  // Collect MCP settings
+  document.querySelectorAll("#mcpMatrix input[data-mcp][data-seat]").forEach((input) => {
+    const mcp = input.dataset.mcp;
+    const seat = input.dataset.seat;
+    if (!connectors.mcp[mcp]) connectors.mcp[mcp] = {};
+    connectors.mcp[mcp][seat] = input.checked;
+  });
+  
+  const res = await fetch("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ connectors })
+  });
+  const data = await res.json();
+  if ($("connectorStatus")) {
+    $("connectorStatus").textContent = res.ok ? "connectors saved" : (data.error || "save failed");
+  }
+  if (res.ok) applyConfig(data);
+});
+
+$("refreshConnectors").addEventListener("click", () => {
+  loadConnectorsCatalog();
+  if ($("connectorStatus")) {
+    $("connectorStatus").textContent = "refreshing catalog...";
+  }
 });
 
 $("saveWork").addEventListener("click", async () => {
