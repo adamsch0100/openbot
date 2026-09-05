@@ -41,6 +41,7 @@ OpenBot is **shipping at https://openbot-production-9334.up.railway.app** with r
 - **Model picker** — seat config (Chat/Think/Code/Research/Ops) with Auto ladder, per-CEO pins
 - **Live streaming** — SSE-based `chat/stream` with delta, progress, stop button
 - **Activity feed** — job cards, pending approvals (diff/login), Hermes cron ingestion
+- **Composer attachments** — attach button, drag-drop, paste images; thumbnails in thread; paths in job packets for Hermes/OpenCode
 
 ### Advanced ✓
 - **MCP toggles** — GitHub MCP on Builder (per-CEO), OAuth credential flow

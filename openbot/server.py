@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import re
 import secrets
+import shutil
 import sys
 import threading
 import time
 import uuid
+from email.parser import BytesParser
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 from urllib.parse import parse_qs, urlparse
 
 from .channel import public_channel
@@ -145,7 +149,43 @@ def _has_key(keyring: dict | None = None) -> bool:
     return any(row.get("has_key") for row in ring.get("accounts") or [])
 
 
-def _chat_context(data: dict) -> tuple:
+def _save_attachments(files: list, project_id: str | None) -> list[dict]:
+    if not files:
+        return []
+    from .store import ROOT
+    if project_id:
+        org = ensure_org()
+        match = next((row for row in org["projects"] if row.get("id") == project_id), None)
+        if match:
+            attach_dir = ROOT / "org" / "projects" / project_id / "attachments"
+        else:
+            attach_dir = ROOT / "attachments"
+    else:
+        attach_dir = ROOT / "attachments"
+    attach_dir.mkdir(parents=True, exist_ok=True)
+    saved = []
+    for file_data in files:
+        filename = file_data.get("filename", "")
+        if not filename:
+            continue
+        safe_name = re.sub(r"[^\w\s.-]", "_", filename)
+        base, ext = os.path.splitext(safe_name)
+        counter = 0
+        dest_name = safe_name
+        dest_path = attach_dir / dest_name
+        while dest_path.exists():
+            counter += 1
+            dest_name = f"{base}_{counter}{ext}"
+            dest_path = attach_dir / dest_name
+        try:
+            dest_path.write_bytes(file_data["content"])
+            saved.append({"filename": filename, "path": str(dest_path), "size": len(file_data["content"])})
+        except (OSError, IOError):
+            pass
+    return saved
+
+
+def _chat_context(data: dict, files: list | None = None) -> tuple:
     message = str(data.get("message") or "").strip()
     folder = data.get("folder")
     preset = data.get("preset")
@@ -159,16 +199,19 @@ def _chat_context(data: dict) -> tuple:
     worker_id = worker_raw.strip() if isinstance(worker_raw, str) and worker_raw.strip() else None
     pid = project_id.strip() if isinstance(project_id, str) and project_id.strip() else None
     requested = preset if isinstance(preset, str) and preset in PRESET_ENGINE else None
-    return message, folder, requested, pid, worker_id
+    attachments = _save_attachments(files or [], pid)
+    return message, folder, requested, pid, worker_id, attachments
 
 
-def _record_job(job: dict, message: str, project_id: str | None, worker_id: str | None, quote: str = "") -> None:
+def _record_job(job: dict, message: str, project_id: str | None, worker_id: str | None, quote: str = "", attachments: list | None = None) -> None:
     key = thread_key(project_id, worker_id)
     turn = {"role": "user", "text": redact_chat_login(message)}
     cleaned = redact_chat_login(str(quote or "").strip())
     cleaned = " ".join(cleaned.split())[:400]
     if cleaned:
         turn["quote"] = cleaned
+    if attachments:
+        turn["attachments"] = [{"filename": a["filename"], "path": a["path"], "size": a["size"]} for a in attachments]
     append_turn(key, turn)
     append_turn(key, {"role": "bot", "job": job})
 
@@ -305,6 +348,52 @@ class Handler(SimpleHTTPRequestHandler):
             raise json.JSONDecodeError("object required", "", 0)
         return data
 
+    def _parse_multipart(self) -> tuple[dict, list]:
+        ctype = self.headers.get("Content-Type", "")
+        if not ctype.startswith("multipart/form-data"):
+            return {}, []
+        boundary = None
+        for part in ctype.split(";"):
+            if "boundary=" in part:
+                boundary = part.split("=", 1)[1].strip()
+                break
+        if not boundary:
+            return {}, []
+        length = int(self.headers.get("Content-Length") or 0)
+        if not length:
+            return {}, []
+        body = self.rfile.read(length)
+        fields = {}
+        files = []
+        boundary_bytes = ("--" + boundary).encode()
+        parts = body.split(boundary_bytes)
+        for part in parts:
+            if not part or part == b"--\r\n" or part == b"--":
+                continue
+            if b"\r\n\r\n" not in part:
+                continue
+            headers_raw, content = part.split(b"\r\n\r\n", 1)
+            content = content.rstrip(b"\r\n")
+            headers_str = headers_raw.decode("utf-8", errors="ignore")
+            disp_line = ""
+            for line in headers_str.split("\r\n"):
+                if line.lower().startswith("content-disposition:"):
+                    disp_line = line
+                    break
+            if not disp_line:
+                continue
+            name_match = re.search(r'name="([^"]+)"', disp_line)
+            if not name_match:
+                continue
+            field_name = name_match.group(1)
+            filename_match = re.search(r'filename="([^"]+)"', disp_line)
+            if filename_match:
+                filename = filename_match.group(1)
+                files.append({"name": field_name, "filename": filename, "content": content})
+            else:
+                fields[field_name] = content.decode("utf-8", errors="ignore")
+        return fields, files
+
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health":
@@ -403,24 +492,33 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        ctype = self.headers.get("Content-Type", "")
+        is_multipart = ctype.startswith("multipart/form-data")
+        
         try:
-            data = self._read_json()
-        except json.JSONDecodeError:
-            return self._json(400, {"error": "invalid json"})
+            if is_multipart:
+                data, files = self._parse_multipart()
+            else:
+                data = self._read_json()
+                files = []
+        except (json.JSONDecodeError, ValueError):
+            return self._json(400, {"error": "invalid request"})
 
         if path == "/api/chat":
-            message, folder, requested, pid, worker_id = _chat_context(data)
-            if not message:
-                return self._json(400, {"error": "empty message"})
+            try:
+                message, folder, requested, pid, worker_id, attachments = _chat_context(data, files)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
             chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
-            job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx)
-            _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""))
+            job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx, attachments=attachments)
+            _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
             job["activity"] = _activity()
             return self._json(200, job)
         if path == "/api/chat/stream":
-            message, folder, requested, pid, worker_id = _chat_context(data)
-            if not message:
-                return self._json(400, {"error": "empty message"})
+            try:
+                message, folder, requested, pid, worker_id, attachments = _chat_context(data, files)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
             run_id = uuid.uuid4().hex[:12]
             live_start(run_id)
             self.send_response(200)
@@ -456,6 +554,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             try:
                 chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
+                chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
                 job = handle(
                     message,
                     folder,
@@ -467,8 +566,9 @@ class Handler(SimpleHTTPRequestHandler):
                     run_id=run_id,
                     quote=str(data.get("quote") or ""),
                     chain_context=chain_ctx,
+                    attachments=attachments,
                 )
-                _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""))
+                _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
                 job["activity"] = _activity()
                 emit("done", job)
             except Exception as err:
