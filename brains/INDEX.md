@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Cos/Hermes Chat auto-acks contributor-tier model confirms (Muse Spark) for non-interactive board runs — seating on the board is the operator choice.
-Last: board · Instant "Chat didn't come back" was Hermes prompting `Use this model… [y/N]` with no stdin answer, not a Muse capability limit.
-Next: Restart the board and retry Cos chat with Muse seated. Browser work still on Nadia Think/Research + vault logins.
-Blocker: ListLogic SQLite history is gone. Do not `railway scale` old Hermes boxes — use `railway down -y`. Public PIN still empty.
+Now: ROADMAP.md shipped. Week 1 complete + reliability fixes (Muse auto-ack, CEO chat bleed, composer lock). Next: handoff bus or validation gate.
+Last: cloud agent · Investigated repo + product surface, documented what works vs gaps, ranked next 5 PRs by user impact.
+Next: Implement PR #1 (Handoff Bus Protocol) or PR #2 (Builder Validation Gate). Both are high-leverage, single-turn scope.
+Blocker: —
 
 ## Vault
 
