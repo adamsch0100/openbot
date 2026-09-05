@@ -570,22 +570,25 @@ def handoff_summary(project_id: str | None) -> str:
     return "\n".join(parts)
 
 
-def log_approval(job: dict, accepted: bool) -> None:
-    append_action_log(
-        {
-            "at": now_iso(),
-            "id": job.get("id"),
-            "bot": job.get("worker_id") or job.get("project_id") or "staff",
-            "engine": job.get("engine"),
-            "preset": job.get("preset"),
-            "trigger": "diff-card",
-            "status": "accepted" if accepted else "rejected",
-            "gate": "approval",
-            "files": job.get("handoff_path") or "diff",
-            "external": "none",
-            "approval": "received" if accepted else "denied",
-        }
-    )
+def log_approval(job: dict, accepted: bool, force: bool = False) -> None:
+    log_entry = {
+        "at": now_iso(),
+        "id": job.get("id"),
+        "bot": job.get("worker_id") or job.get("project_id") or "staff",
+        "engine": job.get("engine"),
+        "preset": job.get("preset"),
+        "trigger": "diff-card",
+        "status": "accepted" if accepted else "rejected",
+        "gate": "approval",
+        "files": job.get("handoff_path") or "diff",
+        "external": "none",
+        "approval": "received" if accepted else "denied",
+    }
+    if force:
+        log_entry["force_accepted"] = True
+        if job.get("validation_error"):
+            log_entry["validation_bypassed"] = job.get("validation_error")[:200]  # Cap for logs
+    append_action_log(log_entry)
 
 
 def append_rule(note: str) -> str:

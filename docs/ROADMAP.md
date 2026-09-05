@@ -459,7 +459,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next PR: **Builder Validation Gate** — syntax/lint check before Accept to prevent broken diffs from landing.
+Next PR: **Routines** — multi-step scheduled flows for recurring work.
 
 ---
 

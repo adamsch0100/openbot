@@ -135,22 +135,44 @@ def _run_repo_linters(folder: str, changed_files: list[str]) -> list[str]:
 
 def _has_ruff(root: Path) -> bool:
     """Check if repo has ruff configured."""
-    return (
-        (root / "ruff.toml").is_file()
-        or (root / ".ruff.toml").is_file()
-        or (root / "pyproject.toml").is_file()
-    )
+    # Explicit ruff config files
+    if (root / "ruff.toml").is_file() or (root / ".ruff.toml").is_file():
+        return True
+    
+    # Check pyproject.toml for [tool.ruff] section
+    pyproject = root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            content = pyproject.read_text(encoding="utf-8")
+            return "[tool.ruff]" in content
+        except Exception:
+            pass
+    
+    return False
 
 
 def _has_eslint(root: Path) -> bool:
     """Check if repo has eslint configured."""
-    return (
+    # Explicit eslint config files
+    if (
         (root / ".eslintrc").is_file()
         or (root / ".eslintrc.json").is_file()
         or (root / ".eslintrc.js").is_file()
         or (root / "eslint.config.js").is_file()
-        or (root / "package.json").is_file()
-    )
+    ):
+        return True
+    
+    # Check package.json for eslintConfig key
+    package_json = root / "package.json"
+    if package_json.is_file():
+        try:
+            import json
+            data = json.loads(package_json.read_text(encoding="utf-8"))
+            return "eslintConfig" in data
+        except Exception:
+            pass
+    
+    return False
 
 
 def _run_ruff(root: Path, files: list[str]) -> tuple[bool, str]:
