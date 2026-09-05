@@ -1560,50 +1560,6 @@ function paintCeoConnectorsMatrix(connectors) {
   
   matrix.innerHTML = html;
 }
-  if (hint) hint.textContent = `${project.name} — Code folder is OpenCode. Hermes home is this CEO’s brain. Handoffs are files on the bus, not chat.`;
-  body.innerHTML = `
-    <div class="usage-card wire-card">
-      <div><dt>Code folder</dt><dd>${escapeHtml(project.folder || "—")}</dd></div>
-      <div><dt>Git</dt><dd>${escapeHtml(git.branch ? `${git.branch} · ${remote}` : remote)}</dd></div>
-      <div><dt>Hermes home</dt><dd>${escapeHtml(tools.hermes_home || "—")}</dd></div>
-      <div><dt>Telegram session</dt><dd>${escapeHtml(tools.hermes_session_id || "none bound")}</dd></div>
-    </div>
-    <div class="field">
-      <label for="ceoSiteUrl">Website</label>
-      <input id="ceoSiteUrl" type="text" value="${escapeHtml(project.site_url || tools.site_url || "")}" placeholder="https://…" autocomplete="off" />
-    </div>
-    <div class="field">
-      <label for="ceoAccount">Key</label>
-      <select id="ceoAccount">${accountSelectOptions(tools.account_id, "inherit Chief of Staff")}</select>
-    </div>
-    <div class="field" id="ceoBackupBox">
-      <label>Backup keys</label>
-      ${accountBackupChecks(tools.account_id, tools.fallback || [])}
-    </div>
-    <label class="check">
-      <input id="ceoMcpGithub" type="checkbox"${tools.mcp_github ? " checked" : ""} />
-      GitHub MCP for Code on this CEO
-    </label>
-    <div class="field">
-      <label for="ceoSpendCap">CEO spend cap USD</label>
-      <input id="ceoSpendCap" type="number" min="0" step="0.5" placeholder="inherit" value="${tools.spend_cap_usd == null ? "" : escapeHtml(String(tools.spend_cap_usd))}" />
-    </div>
-    <div id="ceoSeatList" class="menu-field ceo-seats"></div>
-    <div class="actions">
-      <button type="button" class="send" id="saveCeoPanel">Save CEO</button>
-      <button type="button" class="ghost-btn" id="ceoOpenCode">Open OpenCode</button>
-      <button type="button" class="ghost-btn" id="ceoOpenHermes">Open Hermes</button>
-      <p class="muted" id="ceoToolsStatus"></p>
-    </div>
-  `;
-  renderProfileSeats("ceoSeatList", tools.seats || {}, "inherit Chief of Staff");
-  const save = $("saveCeoPanel");
-  if (save) save.addEventListener("click", () => saveCeoTools(project.id));
-  const oc = $("ceoOpenCode");
-  if (oc) oc.addEventListener("click", () => openWorkspace("opencode"));
-  const hermes = $("ceoOpenHermes");
-  if (hermes) hermes.addEventListener("click", () => openWorkspace("hermes"));
-}
 
 function fillChannels() {
   const status = $("channelStatus");
@@ -1888,7 +1844,6 @@ function fillSettings(data) {
   if ($("spendBind")) $("spendBind").value = policy.bind || "payg";
   if ($("spendMode")) $("spendMode").value = policy.mode || "hard";
   if ($("spendFallback")) $("spendFallback").checked = policy.allow_zen_fallback !== false;
-  if ($("mcpGithub")) $("mcpGithub").checked = Boolean(data.mcp_github);
   if ($("hermesSkills") && document.activeElement !== $("hermesSkills")) {
     $("hermesSkills").value = data.hermes_skills || "";
   }
@@ -3244,7 +3199,7 @@ if ($("saveGit")) {
     const res = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mcp_github: $("mcpGithub").checked })
+      body: JSON.stringify({})
     });
     const data = await res.json();
     if ($("gitStatusNote")) $("gitStatusNote").textContent = res.ok ? "git access saved" : (data.error || "save failed");
