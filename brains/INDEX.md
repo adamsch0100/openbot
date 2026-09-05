@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: ROADMAP PR #3 Sidebar Agent OS — avatars, Now/Blocker chips, visual states implemented. Draft PR #4 open for OpenBot CEO manual verification.
-Last: cloud agent · Implemented sidebar avatars (initials), INDEX Now/Blocker extraction, busy/working pulsing animation, ping/unread states. CSS enhancements for teammate panel feel.
-Next: OpenBot CEO manual verification checklist (PR_MANUAL_VERIFY.md) → screenshots → mark PR ready for review.
+Now: ROADMAP PR #3 Sidebar Agent OS — PR #4 fix pushed (removed PR_MANUAL_VERIFY.md). OpenBot CEO UI accepted, ready for merge.
+Last: cloud agent · Removed testing checklist doc per CEO NACK. Kept only feature code (web/app.js, web/styles.css) and INDEX updates.
+Next: OpenBot CEO merge PR #4 when ready.
 Blocker: —
 
 ## Vault

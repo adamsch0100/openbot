@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: ROADMAP PR #3 Sidebar Agent OS — PR #4 open with avatars, Now/Blocker chips, visual states. Awaiting manual verification.
-Last: cloud agent · Implemented sidebar teammate panel: initials avatars, INDEX status extraction, busy pulsing, ping states, enhanced CSS.
-Next: Manual verification per PR_MANUAL_VERIFY.md checklist, capture screenshots, mark PR #4 ready for merge.
+Now: ROADMAP PR #3 Sidebar Agent OS — PR #4 fix pushed (removed doc per CEO NACK). UI accepted, ready for merge.
+Last: cloud agent · Removed PR_MANUAL_VERIFY.md. Kept feature code (web/app.js, web/styles.css) and INDEX updates only.
+Next: OpenBot CEO merge PR #4 when ready.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
