@@ -315,7 +315,7 @@ def execute_routine(
             # Skip steps before resume point
             continue
         
-        seat = step.get("seat", "code")
+        seat = step.get("seat", "builder")
         instruction = step.get("instruction", "")
         
         # Build prompt: include prior RESULT if available

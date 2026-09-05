@@ -248,5 +248,40 @@ class RoutineResumeTests(unittest.TestCase):
         self.assertEqual(result.get("total_steps"), 3)
 
 
+class RoutineCronNameTests(unittest.TestCase):
+    def test_cron_name_regex_staff(self):
+        """ROUTINE_CRON regex parses staff scope correctly."""
+        import re
+        from openbot.cronwatch import ROUTINE_CRON
+        
+        cron_name = "openbot-routine-staff-routine-deadbeef"
+        match = ROUTINE_CRON.match(cron_name)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "staff")
+        self.assertEqual(match.group(2), "routine-deadbeef")
+
+    def test_cron_name_regex_hyphenated_scope(self):
+        """ROUTINE_CRON regex parses hyphenated project scope correctly."""
+        import re
+        from openbot.cronwatch import ROUTINE_CRON
+        
+        cron_name = "openbot-routine-saa-homes-routine-deadbeef"
+        match = ROUTINE_CRON.match(cron_name)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "saa-homes")
+        self.assertEqual(match.group(2), "routine-deadbeef")
+
+    def test_cron_name_regex_multi_hyphen_scope(self):
+        """ROUTINE_CRON regex parses multi-hyphen project scope correctly."""
+        import re
+        from openbot.cronwatch import ROUTINE_CRON
+        
+        cron_name = "openbot-routine-saa-conversion-test-routine-abc12345"
+        match = ROUTINE_CRON.match(cron_name)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "saa-conversion-test")
+        self.assertEqual(match.group(2), "routine-abc12345")
+
+
 if __name__ == "__main__":
     unittest.main()

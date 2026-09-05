@@ -489,7 +489,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: Memory pane polish, spend dashboard, or skills catalog (pick one deferred item) — or queue complete, operator directs next.
+Next: Queue complete — operator directs next.
 
 ---
 

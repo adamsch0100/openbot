@@ -13,7 +13,7 @@ from .threadstore import append_turn, thread_key
 
 SEEN = ORG / "cron_seen.json"
 OPENBOT_JOB = re.compile(r"openbot-([a-z0-9-]{1,40})-(?:ceo|[a-z0-9-]+)", re.I)
-ROUTINE_CRON = re.compile(r"^openbot-routine-([^-]+)-(.+)$")
+ROUTINE_CRON = re.compile(r"^openbot-routine-(.+)-(routine-[a-f0-9]{8})$")
 
 
 def _load_seen() -> dict:
