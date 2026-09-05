@@ -169,21 +169,6 @@ def resolve_preset(message: str, requested: str | None) -> str:
     return classify(message)
 
 
-def _prefer_accounts(tools: dict | None) -> list[str]:
-    prefer = []
-    blob = tools or {}
-    account_id = str(blob.get("account_id") or "").strip()
-    if not account_id:
-        account_id = str(load_settings().get("profile_account_id") or "").strip()
-    if account_id:
-        prefer.append(account_id)
-    for item in blob.get("fallback") or []:
-        value = str(item or "").strip()
-        if value:
-            prefer.append(value)
-    return prefer
-
-
 def _effective_skills(preset: str, tools: dict | None) -> str | None:
     """Compute effective skills for a preset based on connector configuration.
     
@@ -220,6 +205,32 @@ def _effective_skills(preset: str, tools: dict | None) -> str | None:
         return str(settings.get("hermes_skills") or "").strip() or None
     
     return ",".join(allowed)
+
+
+def _effective_mcp_github(tools: dict | None) -> bool:
+    """Compute effective GitHub MCP status from connector configuration.
+    
+    Returns True if GitHub MCP is enabled for Code seat in connectors (global or CEO).
+    Falls back to legacy mcp_github bool if no connector config exists.
+    """
+    settings = load_settings()
+    
+    # Get global and CEO-specific connectors
+    global_connectors = settings.get("connectors") or {}
+    ceo_connectors = (tools or {}).get("connectors") or {} if tools else {}
+    
+    # Merge: CEO overrides global
+    mcp_config = {**(global_connectors.get("mcp") or {}), **(ceo_connectors.get("mcp") or {})}
+    
+    # Check if GitHub MCP is enabled for code seat
+    github_config = mcp_config.get("github") or {}
+    if isinstance(github_config, dict) and "code" in github_config:
+        return bool(github_config.get("code"))
+    
+    # Fall back to legacy mcp_github setting
+    if tools and "mcp_github" in tools:
+        return bool(tools.get("mcp_github"))
+    return bool(settings.get("mcp_github"))
 
 
 def _prefer_accounts(tools: dict | None) -> list[str]:
@@ -1245,7 +1256,7 @@ def _handle_preset(
                     on_delta=_quiet_delta(on_delta),
                     cancel=cancel,
                     run_id=run_id,
-                    mcp_github=bool(tools.get("mcp_github")),
+                    mcp_github=_effective_mcp_github(tools),
                     on_progress=on_progress,
                 )
                 parsed = parse_opencode_events(out)

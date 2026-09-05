@@ -340,27 +340,10 @@ def _public_tools(row: dict) -> dict:
             "mcp": connectors.get("mcp") if isinstance(connectors.get("mcp"), dict) else {}
         },
         "seats": {
-            "chat": {
-                "model": str(seats.get("chat", {}).get("model") or ""),
-                "account_id": str(seats.get("chat", {}).get("account_id") or "")
-            },
-            "think": {
-                "model": str(seats.get("think", {}).get("model") or ""),
-                "account_id": str(seats.get("think", {}).get("account_id") or "")
-            },
-            "code": {
-                "model": str(seats.get("code", {}).get("model") or ""),
-                "account_id": str(seats.get("code", {}).get("account_id") or "")
-            },
-            "research": {
-                "model": str(seats.get("research", {}).get("model") or ""),
-                "account_id": str(seats.get("research", {}).get("account_id") or "")
-            },
-            "ops": {
-                "model": str(seats.get("ops", {}).get("model") or ""),
-                "account_id": str(seats.get("ops", {}).get("account_id") or "")
-            }
-        }
+            key: {"model": str((seats.get(key) or {}).get("model") or "")}
+            for key in ("chat", "think", "code", "research", "ops")
+            if isinstance(seats.get(key), dict) or key in seats
+        },
     }
 
 
