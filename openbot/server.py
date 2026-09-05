@@ -256,19 +256,22 @@ def _parse_index_fields(text: str) -> dict:
 
 def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -> dict:
     """Search across INDEX text and recent job RESULT snippets."""
-    query_lower = query.lower().strip()
-    if not query_lower:
-        return {"results": [], "index_fields": {}}
-    
-    results = []
-    
-    # Search INDEX
+    # Always parse INDEX fields, even for empty query
     if project_id:
         from .org import read_project_index
         index_text = read_project_index(project_id)
     else:
         index_text = read_index()
     
+    index_fields = _parse_index_fields(index_text)
+    
+    query_lower = query.lower().strip()
+    if not query_lower:
+        return {"results": [], "index_fields": index_fields, "query": ""}
+    
+    results = []
+    
+    # Search INDEX
     if query_lower in index_text.lower():
         results.append({
             "type": "index",
@@ -296,8 +299,6 @@ def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -
                 "worker_id": job.get("worker_id"),
                 "project_id": job.get("project_id")
             })
-    
-    index_fields = _parse_index_fields(index_text)
     
     return {
         "results": results[:30],
@@ -595,6 +596,15 @@ class Handler(SimpleHTTPRequestHandler):
             query = (qs.get("q") or [""])[0].strip()
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             return self._json(200, _search_memory(query, project_id))
+        if path == "/api/memory/fields":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            if project_id:
+                from .org import read_project_index
+                index_text = read_project_index(project_id)
+            else:
+                index_text = read_index()
+            return self._json(200, {"index_fields": _parse_index_fields(index_text)})
         channel = PROJECT_CHANNEL.match(path)
         if channel:
             pid = channel.group(1)
@@ -818,6 +828,24 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+        
+        if path == "/api/memory/fields":
+            project_id = str(data.get("project_id") or "").strip() or None
+            label = str(data.get("label") or "").strip()
+            value = str(data.get("value") or "").strip()
+            if label not in ("Now", "Last", "Next", "Blocker"):
+                return self._json(400, {"error": "invalid label"})
+            try:
+                patch_scope(project_id, None, label, value)
+                if project_id:
+                    from .org import read_project_index
+                    index_text = read_project_index(project_id)
+                else:
+                    index_text = read_index()
+                return self._json(200, {"index_fields": _parse_index_fields(index_text)})
+            except Exception as err:
+                return self._json(400, {"error": str(err)})
+        
         project_patch = PROJECT_ID.match(path)
         if project_patch:
             pid = project_patch.group(1)

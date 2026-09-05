@@ -4275,9 +4275,10 @@ function renderMemoryCards(fields) {
   el.innerHTML = entries.map(([label, value]) => {
     const isBlocked = label === "Blocker" && value !== "—";
     const className = isBlocked ? "memory-card blocked" : "memory-card";
+    const fieldId = `memory${label}`;
     return `<div class="${className}">
-      <dt>${escapeHtml(label)}</dt>
-      <dd>${escapeHtml(value)}</dd>
+      <label for="${fieldId}">${escapeHtml(label)}</label>
+      <textarea id="${fieldId}" rows="2" data-label="${label}">${escapeHtml(value)}</textarea>
     </div>`;
   }).join("");
 }
@@ -4307,6 +4308,38 @@ if ($("memorySearch")) {
   $("memorySearch").addEventListener("input", () => {
     if (memorySearchTimeout) clearTimeout(memorySearchTimeout);
     memorySearchTimeout = setTimeout(() => loadMemory(), 300);
+  });
+}
+
+if ($("saveMemory")) {
+  $("saveMemory").addEventListener("click", async () => {
+    const labels = ["Now", "Last", "Next", "Blocker"];
+    const updates = [];
+    for (const label of labels) {
+      const field = $(`memory${label}`);
+      if (field) {
+        const value = field.value.trim();
+        updates.push({ label, value });
+      }
+    }
+    const status = $("memoryStatus");
+    try {
+      for (const { label, value } of updates) {
+        const res = await fetch("/api/memory/fields", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label, value, project_id: projectId || null })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "save failed");
+        }
+      }
+      if (status) status.textContent = "INDEX saved";
+      await loadMemory();
+    } catch (err) {
+      if (status) status.textContent = String(err);
+    }
   });
 }
 

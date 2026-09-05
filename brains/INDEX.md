@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Memory pane shipped (PR #12). Memory tab in Settings: Now/Last/Next/Blocker cards + search across INDEX and job results.
-Last: @seat mentions + handoff cards shipped (PR #11). Connector UX merged (PR #10).
-Next: Handoff bus protocol (standardized bus/ file schema for agent → agent async handoffs).
+Now: Memory pane with editable INDEX fields (PR #12). Settings → Memory: edit Now/Last/Next/Blocker cards + Save to patch INDEX. Search across job results.
+Last: @seat mentions + handoff cards shipped (PR #11). Connector UX merged (PR #10). Composer attachments shipped (PR #9).
+Next: Handoff bus protocol (standardized bus/ schema for agent → agent async handoffs).
 Blocker: —
 
 ## Vault

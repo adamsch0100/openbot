@@ -14,9 +14,10 @@ from pathlib import Path
 from openbot.config import DEFAULT_SPEND_CAP_USD, load_config, save_settings, save_work_dir, verify_pin
 from openbot.gitutil import diff_against_head, restore_snapshot, snapshot
 from openbot.router import classify, resolve_preset
-from openbot.store import in_spend_period, spend_summary, write_job
+from openbot.store import in_spend_period, spend_summary, write_job, patch_index_line
 from openbot.usage import parse_opencode_events
 from openbot.server import _parse_index_fields, _search_memory
+from openbot.org import patch_scope
 import openbot.config as config_mod
 import openbot.store as store_mod
 
@@ -60,10 +61,18 @@ Next: More"""
         self.assertEqual(fields["now"], "Working")
         self.assertEqual(fields["blocker"], "—")
 
-    def test_search_memory_empty_query(self):
-        result = _search_memory("")
-        self.assertEqual(result["results"], [])
-        self.assertIn("index_fields", result)
+    def test_search_memory_empty_query_returns_fields(self):
+        with unittest.mock.patch("openbot.server.read_index") as mock_read:
+            mock_read.return_value = "Now: Testing\nLast: Done\nNext: More\nBlocker: —"
+            with unittest.mock.patch("openbot.server.list_jobs") as mock_jobs:
+                mock_jobs.return_value = []
+                result = _search_memory("")
+                self.assertEqual(result["results"], [])
+                self.assertIn("index_fields", result)
+                self.assertEqual(result["index_fields"]["now"], "Testing")
+                self.assertEqual(result["index_fields"]["last"], "Done")
+                self.assertEqual(result["index_fields"]["next"], "More")
+                self.assertEqual(result["index_fields"]["blocker"], "—")
 
     def test_search_memory_finds_in_index(self):
         with unittest.mock.patch("openbot.server.read_index") as mock_read:
@@ -90,6 +99,16 @@ Next: More"""
                 job_results = [r for r in result["results"] if r["type"] == "job"]
                 self.assertEqual(len(job_results), 1)
                 self.assertIn("search", job_results[0]["snippet"].lower())
+
+    def test_patch_index_line_updates_field(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_path = Path(tmp) / "INDEX.md"
+            index_path.write_text("Now: Old value\nLast: Done\n", encoding="utf-8")
+            with unittest.mock.patch("openbot.store.INDEX", index_path):
+                patch_index_line("Now", "New value")
+                text = index_path.read_text(encoding="utf-8")
+                self.assertIn("Now: New value", text)
+                self.assertNotIn("Old value", text)
 
 
 class UsageTests(unittest.TestCase):

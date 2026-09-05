@@ -1537,7 +1537,8 @@ footer a { color: var(--bronze); }
   background: var(--bg-1);
 }
 
-.memory-card dt {
+.memory-card label {
+  display: block;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1546,15 +1547,32 @@ footer a { color: var(--bronze); }
   margin-bottom: 0.375rem;
 }
 
-.memory-card dd {
+.memory-card textarea {
+  width: 100%;
+  min-height: 3rem;
   margin: 0;
+  padding: 0.5rem;
   color: var(--text-1);
+  background: var(--bg-1);
+  border: 1px solid var(--bg-4);
+  border-radius: 0.25rem;
   font-size: 0.875rem;
   line-height: 1.4;
+  font-family: var(--ui);
+  resize: vertical;
 }
 
-.memory-card.blocked dt {
+.memory-card textarea:focus {
+  outline: none;
+  border-color: var(--bronze);
+}
+
+.memory-card.blocked label {
   color: var(--warn);
+}
+
+.memory-card.blocked textarea {
+  border-color: var(--warn);
 }
 
 .memory-results {
