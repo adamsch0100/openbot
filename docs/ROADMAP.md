@@ -459,7 +459,37 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next PR: **Routines** — multi-step scheduled flows for recurring work.
+### **Routines** ✅
+**Shipped in PR #15** — multi-step scheduled flows for recurring work. Routines run ordered steps (e.g., morning: Code status → Think summarize → Ops note), owned by one cron job, with resume capability for failed steps.
+
+**What shipped:**
+- File-based routine schema: `bus/routines/{id}.md` with name, schedule, enabled flag, ordered steps (seat + instruction)
+- `routines.py` module: create/read/update/delete/list routines, parse/format markdown
+- `execute_routine()`: runs steps in order, carries RESULT forward to next step (like Keep-going chainContext)
+- Resume capability: on failure, returns `resume_step` and `resume_result` for Continue from failed step
+- Hermes cron integration: `attach_routine_cron()` calls `hermes cron create` (no second scheduler invented)
+- Server endpoints: `GET /api/routines`, `POST /api/routines`, `POST /api/routines/{id}/execute`, `POST /api/routines/{id}/resume`, `PATCH /api/routines/{id}`, `DELETE /api/routines/{id}`
+- Settings → Routines panel: create routine form (name, schedule, steps), list saved routines with Run Now / Delete buttons
+- Comprehensive tests: 15 test cases with real assertions (parse, format, create, update, delete, execute, resume, history)
+
+**Acceptance:**
+1. Routine definition stored in files (`bus/routines/`) ✓
+2. Schedule attaches or updates Hermes cron (no second scheduler) ✓
+3. Run executes steps in order, carries RESULT forward ✓
+4. Resume from failed step (reuse Keep-going UX) ✓
+5. Minimal Settings UI for routine management ✓
+6. Focused tests with real assertions ✓
+7. ROADMAP + INDEX updated ✓
+
+**Impact:**
+- Ops cron now supports multi-step flows instead of single jobs
+- Operators can define recurring multi-agent workflows (Code → Think → Research → Ops chains)
+- Failed routines can be resumed from the failed step, not restarted from scratch
+- Hermes remains the scheduler (OpenBot just creates cron jobs that execute routines)
+
+---
+
+Next: Queue complete — operator directs next.
 
 ---
 

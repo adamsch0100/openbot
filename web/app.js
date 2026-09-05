@@ -4510,6 +4510,208 @@ if ($("saveMemory")) {
   });
   
   $("createHandoff").addEventListener("click", createHandoff);
+  
+  // Routines management
+  let routineSteps = [];
+  
+  async function loadRoutines() {
+    try {
+      const res = await fetch(`/api/routines?project_id=${projectId || ""}`);
+      if (!res.ok) throw new Error("load failed");
+      const data = await res.json();
+      renderRoutineList(data.routines || []);
+    } catch (err) {
+      console.error("load routines failed:", err);
+    }
+  }
+  
+  let lastRoutineResult = null;
+  
+  function renderRoutineList(routines) {
+    const el = $("routineList");
+    if (!el) return;
+    if (routines.length === 0) {
+      el.innerHTML = `<p class="muted">No routines yet</p>`;
+      return;
+    }
+    el.innerHTML = routines.map((r) => {
+      const stepCount = (r.steps || []).length;
+      const enabledBadge = r.enabled ? `<span class="badge">enabled</span>` : `<span class="badge muted">disabled</span>`;
+      return `<div class="routine-item" data-routine-id="${escapeHtml(r.id)}">
+        <div class="routine-item-header">
+          <strong>${escapeHtml(r.name)}</strong>
+          ${enabledBadge}
+        </div>
+        <div class="routine-item-meta muted">
+          ${escapeHtml(r.schedule)} · ${stepCount} step${stepCount !== 1 ? "s" : ""}
+        </div>
+        <button type="button" class="ghost-btn execute-routine" data-routine-id="${escapeHtml(r.id)}">Run Now</button>
+        <button type="button" class="ghost-btn delete-routine" data-routine-id="${escapeHtml(r.id)}">Delete</button>
+        <div class="routine-resume hidden" data-routine-id="${escapeHtml(r.id)}"></div>
+      </div>`;
+    }).join("");
+    
+    el.querySelectorAll(".execute-routine").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const routineId = btn.dataset.routineId;
+        if (!routineId) return;
+        btn.disabled = true;
+        btn.textContent = "Running...";
+        const resumeEl = el.querySelector(`.routine-resume[data-routine-id="${routineId}"]`);
+        if (resumeEl) resumeEl.classList.add("hidden");
+        try {
+          const res = await fetch(`/api/routines/${routineId}/execute`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ project_id: projectId || null }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            showHint(`Routine completed (${data.completed_steps}/${data.total_steps} steps)`);
+            lastRoutineResult = null;
+          } else {
+            const failedStep = data.failed_at_step || "?";
+            const blocker = data.blocker || data.error || "failed";
+            showHint(`Routine failed at step ${failedStep}: ${blocker}`);
+            lastRoutineResult = data;
+            if (resumeEl && data.resume_step) {
+              resumeEl.innerHTML = `<p class="muted">Failed at step ${data.resume_step}/${data.total_steps}: ${escapeHtml(blocker)}</p>
+<button type="button" class="ghost-btn resume-routine" data-routine-id="${routineId}">Resume from Step ${data.resume_step}</button>`;
+              resumeEl.classList.remove("hidden");
+              const resumeBtn = resumeEl.querySelector(".resume-routine");
+              if (resumeBtn) {
+                resumeBtn.addEventListener("click", async () => {
+                  resumeBtn.disabled = true;
+                  resumeBtn.textContent = "Resuming...";
+                  try {
+                    const resumeRes = await fetch(`/api/routines/${routineId}/resume`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        project_id: projectId || null,
+                        resume_step: data.resume_step,
+                        resume_result: (data.results || []).slice(-1)[0]?.text || "",
+                      }),
+                    });
+                    const resumeData = await resumeRes.json();
+                    if (resumeData.ok) {
+                      showHint(`Routine completed (${resumeData.completed_steps}/${resumeData.total_steps} steps)`);
+                      resumeEl.classList.add("hidden");
+                    } else {
+                      showHint(`Resume failed: ${resumeData.error || resumeData.blocker}`);
+                    }
+                  } catch (err) {
+                    showHint(String(err));
+                  }
+                  resumeBtn.disabled = false;
+                  resumeBtn.textContent = `Resume from Step ${data.resume_step}`;
+                });
+              }
+            }
+          }
+        } catch (err) {
+          showHint(String(err));
+        }
+        btn.disabled = false;
+        btn.textContent = "Run Now";
+      });
+    });
+    
+    el.querySelectorAll(".delete-routine").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const routineId = btn.dataset.routineId;
+        if (!routineId || !confirm("Delete this routine?")) return;
+        try {
+          const res = await fetch(`/api/routines/${routineId}?project_id=${projectId || ""}`, {
+            method: "DELETE",
+          });
+          if (res.ok) {
+            await loadRoutines();
+          } else {
+            showHint("Delete failed");
+          }
+        } catch (err) {
+          showHint(String(err));
+        }
+      });
+    });
+  }
+  
+  function renderRoutineSteps() {
+    const el = $("routineSteps");
+    if (!el) return;
+    if (routineSteps.length === 0) {
+      el.innerHTML = `<p class="muted">No steps yet. Add one below.</p>`;
+      return;
+    }
+    el.innerHTML = routineSteps.map((s, idx) => {
+      return `<div class="routine-step">
+        <span>${idx + 1}. <strong>${escapeHtml(s.seat)}</strong> - ${escapeHtml(s.instruction)}</span>
+        <button type="button" class="ghost-btn remove-step" data-idx="${idx}">Remove</button>
+      </div>`;
+    }).join("");
+    
+    el.querySelectorAll(".remove-step").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.idx, 10);
+        routineSteps.splice(idx, 1);
+        renderRoutineSteps();
+      });
+    });
+  }
+  
+  $("addRoutineStep").addEventListener("click", () => {
+    const seat = $("routineStepSeat").value.trim();
+    const instr = $("routineStepInstr").value.trim();
+    if (!seat || !instr) {
+      showHint("Select seat and enter instruction");
+      return;
+    }
+    routineSteps.push({ seat, instruction: instr });
+    $("routineStepInstr").value = "";
+    renderRoutineSteps();
+  });
+  
+  $("saveRoutine").addEventListener("click", async () => {
+    const name = $("routineName").value.trim();
+    const schedule = $("routineSchedule").value.trim();
+    const enabled = $("routineEnabled").checked;
+    const status = $("routineStatus");
+    
+    if (!name || !schedule || routineSteps.length === 0) {
+      if (status) status.textContent = "Name, schedule, and steps required";
+      return;
+    }
+    
+    try {
+      const res = await fetch("/api/routines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          schedule,
+          steps: routineSteps,
+          project_id: projectId || null,
+          enabled,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "save failed");
+      }
+      if (status) status.textContent = "Routine created";
+      $("routineName").value = "";
+      $("routineSchedule").value = "";
+      routineSteps = [];
+      renderRoutineSteps();
+      await loadRoutines();
+    } catch (err) {
+      if (status) status.textContent = String(err);
+    }
+  });
+  
+  renderRoutineSteps();
+  loadRoutines();
 }
 
 boot().catch((err) => {

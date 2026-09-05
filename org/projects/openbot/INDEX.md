@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Builder validation gate shipped (PR #14): syntax/lint checks before Accept, Force Accept escape, validation error card.
-Last: Handoff bus shipped (PR #13). Memory pane (PR #12). @seat mentions + handoff cards (PR #11). Connector UX (PR #10).
-Next: Routines (multi-step scheduled flows).
+Now: Routines (multi-step scheduled flows) shipped (PR #15): ordered steps, Hermes cron integration, resume capability, Settings UI.
+Last: Builder validation gate (PR #14). Handoff bus (PR #13). Memory pane (PR #12). @seat mentions + handoff cards (PR #11).
+Next: Queue complete — operator directs next.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
