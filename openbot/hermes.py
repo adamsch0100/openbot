@@ -64,6 +64,17 @@ TOOL_MARKUP = re.compile(
     r"function\s*calls?\s*begin|function\s*calls?\s*end)",
     re.I,
 )
+TOOL_ACTIVITY = re.compile(
+    r"(?:^|\n)(?:→|•|\*)\s*(?:"
+    r"run\s+terminal|"
+    r"command\s+is\b|"
+    r"tool\s*call|"
+    r"(?:browser|web)_(?:navigate|extract|click|type|screenshot)|"
+    r"file_(?:read|write|search)|"
+    r"thinking|researching|analyzing|planning"
+    r")",
+    re.I | re.M,
+)
 
 
 def split_model(spec: str | None) -> tuple[str | None, str | None]:
@@ -373,6 +384,7 @@ def chat(
     timeout: int = HERMES_TIMEOUT,
     skills: str | None = None,
     on_delta=None,
+    on_progress=None,
     cancel=None,
     run_id: str | None = None,
     home: str | Path | None = None,
@@ -462,6 +474,8 @@ def chat(
             attach(run_id, proc)
         chunks: list[str] = []
         deadline = time.time() + timeout if timeout else None
+        last_progress = time.time()
+        heartbeat_sent = False
         try:
             while True:
                 if cancel is not None and cancel.is_set():
@@ -481,6 +495,14 @@ def chat(
                         "text": clean_hermes_text("".join(chunks)) or "hermes timed out",
                         "usage": parse_usage_file(usage_path),
                     }
+                # Heartbeat: emit "working" chip if >5s without activity
+                now = time.time()
+                if on_progress and not talk and (now - last_progress) > 5.0 and not heartbeat_sent:
+                    try:
+                        on_progress("Hermes · working")
+                        heartbeat_sent = True
+                    except Exception:
+                        pass
                 try:
                     line = proc.stdout.readline() if proc.stdout else ""
                 except (UnicodeDecodeError, ValueError):
@@ -490,6 +512,29 @@ def chat(
                     continue
                 if line:
                     chunks.append(line)
+                    # Detect tool activity and emit progress
+                    stripped = ANSI.sub("", line).strip()
+                    if on_progress and not talk and stripped:
+                        tool_match = None
+                        if re.search(r"run\s+terminal", stripped, re.I):
+                            tool_match = "terminal"
+                        elif re.search(r"command\s+is\b", stripped, re.I):
+                            tool_match = "command"
+                        elif re.search(r"tool\s*call", stripped, re.I):
+                            tool_match = "tool"
+                        elif re.search(r"(?:browser|web)_(?:navigate|extract|click|type|screenshot)", stripped, re.I):
+                            tool_match = "browser"
+                        elif re.search(r"file_(?:read|write|search)", stripped, re.I):
+                            tool_match = "file"
+                        elif re.search(r"\b(?:thinking|researching|analyzing|planning)\b", stripped, re.I):
+                            tool_match = stripped.split()[0] if stripped else "working"
+                        if tool_match:
+                            try:
+                                on_progress(f"Hermes · {tool_match}")
+                                last_progress = now
+                                heartbeat_sent = False
+                            except Exception:
+                                pass
                     if on_delta:
                         visible = clean_hermes_text(line)
                         if visible:
