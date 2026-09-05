@@ -3350,8 +3350,9 @@ if ($("replyChipClear")) {
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const message = $("msg").value.trim();
+  const hasAttach = pendingAttachments.length > 0;
   if (liveRunId) {
-    if (message) {
+    if (message || hasAttach) {
       $("msg").value = "";
       sizeComposer();
       enqueueMessage(message);
@@ -3360,7 +3361,7 @@ $("form").addEventListener("submit", async (e) => {
     await stopLive();
     return;
   }
-  if (!message) return;
+  if (!message && !hasAttach) return;
   $("msg").value = "";
   sizeComposer();
   await sendMessage(message);
@@ -3371,7 +3372,8 @@ if ($("msg")) {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     const message = $("msg").value.trim();
-    if (!message || $("msg").disabled) return;
+    const hasAttach = pendingAttachments.length > 0;
+    if ((!message && !hasAttach) || $("msg").disabled) return;
     $("msg").value = "";
     sizeComposer();
     if (liveRunId) {

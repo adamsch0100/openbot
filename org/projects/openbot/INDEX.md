@@ -3,7 +3,7 @@
 CEO brief. Status on this project reads this file only.
 
 Now: Attachments shipped — attach button, drag-drop, paste-image, thumbnails, multipart transport, job context paths.
-Last: Composer attachments complete: UI + server + router + tests + docs. Server-side enforcement (50MB, type allowlist), /api/attachments serve endpoint, attach-only messages allowed.
+Last: Turn Report card + Hermes live tool progress + Keep-going chain shipped on master; then Composer attachments (UI + server + router + tests + docs + server-side enforcement).
 Next: Connector UX (per ROADMAP deferred items).
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.

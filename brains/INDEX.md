@@ -3,7 +3,7 @@
 Source of truth for this OpenBot instance. Status questions read this file only.
 
 Now: Attachments shipped — attach button, drag-drop, paste-image, thumbnails, multipart transport, job context paths.
-Last: Composer attachments complete: UI + server + router + tests + docs.
+Last: Turn Report card + Hermes live tool progress + Keep-going chain shipped on master; then Composer attachments (UI + server + router + tests + docs).
 Next: Connector UX (per ROADMAP deferred items).
 Blocker: —
 
