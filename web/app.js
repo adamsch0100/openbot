@@ -901,6 +901,25 @@ function jobLabel(name) {
   return ({ cos: "Auto", builder: "Code", think: "Think", research: "Research", ops: "Ops" })[name] || name || "";
 }
 
+function seatLabel(name) {
+  return ({ cos: "Cos / Auto", builder: "Code / Builder", think: "Think", research: "Research", ops: "Ops" })[name] || name || "";
+}
+
+function allSeats() {
+  const seats = [
+    { id: "cos", label: "Cos / Auto", description: "Chief of Staff (routing)" },
+    { id: "builder", label: "Code / Builder", description: "OpenCode in this folder" },
+    { id: "think", label: "Think", description: "Hermes reasoning" },
+    { id: "research", label: "Research", description: "Fetch + Hermes snapshot" },
+    { id: "ops", label: "Ops", description: "Hermes cron + schedule" }
+  ];
+  const project = currentProject();
+  if (project && project.name) {
+    seats.push({ id: `ceo:${project.id}`, label: project.name, description: "CEO" });
+  }
+  return seats;
+}
+
 function renderActivity(data) {
   const activity = data || {};
   lockComposer(Boolean(activity.has_key || cfg.has_key));
@@ -2510,6 +2529,43 @@ function renderReportCard(job) {
   return card;
 }
 
+function renderHandoffCard(job) {
+  if (!job.handoff_to || !job.handoff_from) return null;
+  const handoffCard = document.createElement("div");
+  handoffCard.className = "handoff-card";
+  const fromLabel = jobLabel(job.handoff_from) || job.handoff_from;
+  const toLabel = jobLabel(job.handoff_to) || job.handoff_to;
+  const status = job.handoff_status || "complete";
+  const task = job.handoff_task || job.message || "—";
+  const output = job.handoff_output || job.text || "—";
+  const nextOwner = job.handoff_next_owner || "operator";
+  handoffCard.innerHTML = `
+    <div class="handoff-header">
+      <b>Handoff</b>
+      <span class="handoff-route">${escapeHtml(fromLabel)} → ${escapeHtml(toLabel)}</span>
+    </div>
+    <div class="handoff-body">
+      <div class="handoff-row">
+        <div class="handoff-label">Task</div>
+        <div class="handoff-value">${escapeHtml(task.slice(0, 200))}</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-label">Status</div>
+        <div class="handoff-value status-${escapeHtml(status)}">${escapeHtml(status)}</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-label">Output</div>
+        <div class="handoff-value">${escapeHtml(output.slice(0, 300))}</div>
+      </div>
+      <div class="handoff-row">
+        <div class="handoff-label">Next Owner</div>
+        <div class="handoff-value">${escapeHtml(nextOwner)}</div>
+      </div>
+    </div>
+  `;
+  return handoffCard;
+}
+
 function renderJob(job) {
   if (job && job.id) {
     seenCron.add(job.id);
@@ -2581,6 +2637,8 @@ function renderJob(job) {
   }
   if (actions.childNodes.length) el.appendChild(actions);
   if (job.login_wall) mountLoginForm(el, job);
+  const handoffCard = renderHandoffCard(job);
+  if (handoffCard) el.appendChild(handoffCard);
   const gate = job.gate || {};
   if (gate.label || job.handoff_path) {
     const line = document.createElement("p");
@@ -3649,6 +3707,95 @@ if (stream) {
     showMsgMenu(event.clientX, event.clientY, article);
   });
 }
+let seatAutocompleteActive = false;
+let seatAutocompleteIndex = -1;
+let seatAutocompleteStart = -1;
+let seatAutocompleteQuery = "";
+
+function showSeatAutocomplete(query, start) {
+  const dropdown = $("seatAutocomplete");
+  if (!dropdown) return;
+  const seats = allSeats().filter(seat => 
+    seat.label.toLowerCase().includes(query.toLowerCase()) ||
+    seat.id.toLowerCase().includes(query.toLowerCase())
+  );
+  if (!seats.length) {
+    hideSeatAutocomplete();
+    return;
+  }
+  seatAutocompleteActive = true;
+  seatAutocompleteStart = start;
+  seatAutocompleteQuery = query;
+  seatAutocompleteIndex = 0;
+  dropdown.innerHTML = seats.map((seat, idx) => `
+    <div class="seat-option${idx === 0 ? " selected" : ""}" data-seat-id="${escapeHtml(seat.id)}" data-seat-label="${escapeHtml(seat.label)}">
+      <div class="seat-option-label">${escapeHtml(seat.label)}</div>
+      <div class="seat-option-desc">${escapeHtml(seat.description)}</div>
+    </div>
+  `).join("");
+  dropdown.classList.remove("hidden");
+}
+
+function hideSeatAutocomplete() {
+  const dropdown = $("seatAutocomplete");
+  if (!dropdown) return;
+  dropdown.classList.add("hidden");
+  dropdown.innerHTML = "";
+  seatAutocompleteActive = false;
+  seatAutocompleteIndex = -1;
+  seatAutocompleteStart = -1;
+  seatAutocompleteQuery = "";
+}
+
+function selectSeat(seatId, seatLabel) {
+  const msg = $("msg");
+  if (!msg || seatAutocompleteStart === -1) return;
+  const value = msg.value;
+  const before = value.slice(0, seatAutocompleteStart);
+  const after = value.slice(msg.selectionStart);
+  // Insert clean token (@builder, @think, etc.) not pretty label
+  const token = seatId.startsWith("ceo:") ? seatId.split(":")[1] : seatId;
+  msg.value = before + "@" + token + " " + after;
+  msg.selectionStart = msg.selectionEnd = before.length + token.length + 2;
+  hideSeatAutocomplete();
+  const preset = seatId.startsWith("ceo:") ? "cos" : seatId;
+  if (preset !== "cos" && PRESET_ENGINE[preset]) setRoute(preset);
+  msg.focus();
+  sizeComposer();
+}
+
+function moveSeatSelection(direction) {
+  const dropdown = $("seatAutocomplete");
+  if (!dropdown || !seatAutocompleteActive) return;
+  const options = dropdown.querySelectorAll(".seat-option");
+  if (!options.length) return;
+  options[seatAutocompleteIndex]?.classList.remove("selected");
+  seatAutocompleteIndex = (seatAutocompleteIndex + direction + options.length) % options.length;
+  options[seatAutocompleteIndex]?.classList.add("selected");
+  options[seatAutocompleteIndex]?.scrollIntoView({ block: "nearest" });
+}
+
+function acceptSeatSelection() {
+  const dropdown = $("seatAutocomplete");
+  if (!dropdown || !seatAutocompleteActive) return false;
+  const options = dropdown.querySelectorAll(".seat-option");
+  const selected = options[seatAutocompleteIndex];
+  if (selected) {
+    selectSeat(selected.dataset.seatId, selected.dataset.seatLabel);
+    return true;
+  }
+  return false;
+}
+
+if ($("seatAutocomplete")) {
+  $("seatAutocomplete").addEventListener("click", (event) => {
+    const option = event.target.closest(".seat-option");
+    if (option) {
+      selectSeat(option.dataset.seatId, option.dataset.seatLabel);
+    }
+  });
+}
+
 if ($("replyChipClear")) {
   $("replyChipClear").addEventListener("click", (event) => {
     event.preventDefault();
@@ -3675,8 +3822,45 @@ $("form").addEventListener("submit", async (e) => {
   await sendMessage(message);
 });
 if ($("msg")) {
-  $("msg").addEventListener("input", sizeComposer);
+  $("msg").addEventListener("input", (event) => {
+    sizeComposer();
+    const msg = event.target;
+    const value = msg.value;
+    const pos = msg.selectionStart;
+    const beforeCursor = value.slice(0, pos);
+    const atMatch = beforeCursor.match(/@(\w*)$/);
+    if (atMatch) {
+      const query = atMatch[1];
+      const start = pos - atMatch[0].length + 1;
+      showSeatAutocomplete(query, start);
+    } else {
+      hideSeatAutocomplete();
+    }
+  });
   $("msg").addEventListener("keydown", (event) => {
+    if (seatAutocompleteActive) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        moveSeatSelection(1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        moveSeatSelection(-1);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        if (acceptSeatSelection()) {
+          event.preventDefault();
+          return;
+        }
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        hideSeatAutocomplete();
+        return;
+      }
+    }
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     const message = $("msg").value.trim();
@@ -3689,6 +3873,9 @@ if ($("msg")) {
       return;
     }
     sendMessage(message);
+  });
+  $("msg").addEventListener("blur", () => {
+    setTimeout(() => hideSeatAutocomplete(), 200);
   });
 }
 if ($("sendBtn")) {
@@ -3764,6 +3951,8 @@ async function sendMessage(message, opts) {
     fillLoginOffer(parsed);
     return;
   }
+  // Strip leading @seat tokens (route already set, don't send junk to Hermes/OpenCode)
+  const cleanMessage = message.replace(/^@(builder|think|research|ops|cos|[\w-]+)\s+/i, "");
   const aim = aimKey();
   const sendProjectId = projectId || "";
   const sendWorkerId = workerId || "";
@@ -3843,7 +4032,7 @@ async function sendMessage(message, opts) {
     let body, headers;
     if (attachmentsToSend.length) {
       const formData = new FormData();
-      formData.append("message", message);
+      formData.append("message", cleanMessage);
       if (folder) formData.append("folder", folder);
       formData.append("preset", lane);
       if (sendProjectId) formData.append("project_id", sendProjectId);
@@ -3856,7 +4045,7 @@ async function sendMessage(message, opts) {
       headers = {};
     } else {
       body = JSON.stringify({
-        message,
+        message: cleanMessage,
         folder,
         preset: lane,
         project_id: sendProjectId || null,

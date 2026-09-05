@@ -1413,6 +1413,90 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .gate-line.blocked { color: #c45c4a; }
 .diff { max-height: 280px; overflow: auto; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); overflow-wrap: anywhere; }
 .diff-actions { display: flex; gap: 8px; margin-top: 8px; }
+.seat-autocomplete {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  max-height: 240px;
+  overflow: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+.seat-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+.seat-option:last-child { border-bottom: none; }
+.seat-option:hover, .seat-option.selected {
+  background: rgba(203, 159, 83, 0.1);
+}
+.seat-option-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.seat-option-desc {
+  font-size: 11px;
+  color: var(--muted);
+}
+.handoff-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  margin: 12px 0 0;
+  border: 1px solid var(--bronze);
+  background: rgba(203, 159, 83, 0.05);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.handoff-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(203, 159, 83, 0.2);
+}
+.handoff-header b {
+  color: var(--bronze);
+  font-weight: 500;
+  font-size: 13px;
+}
+.handoff-route {
+  font-size: 11px;
+  color: var(--muted);
+}
+.handoff-body {
+  display: grid;
+  gap: 6px;
+}
+.handoff-row {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+.handoff-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+}
+.handoff-value {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.handoff-value.status-complete { color: var(--bronze); }
+.handoff-value.status-blocked { color: var(--danger); }
 footer {
   padding: 8px 16px;
   color: var(--muted);

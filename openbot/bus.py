@@ -333,6 +333,10 @@ def close_work_job(receipt: dict, result: str) -> dict:
     status = "blocked" if receipt.get("blocker") else ("partial" if receipt.get("diff_pending") else "complete")
     sources = str(receipt.get("url") or "")
     next_owner = "operator (Accept / Reject)" if receipt.get("diff_pending") else str(receipt.get("next") or "")
+    
+    # Determine handoff routing (from previous → current preset)
+    handoff_list = receipt.get("handoff") or []
+    
     rel = write_handoff(
         job_id,
         preset,
@@ -346,6 +350,19 @@ def close_work_job(receipt: dict, result: str) -> dict:
         next_owner=next_owner,
         blocker=str(receipt.get("blocker") or "") or None,
     )
+    
+    # Add handoff metadata for UI card display ONLY on real multi-step chains
+    # (len >= 2 means Cos routed then agent ran, or agent→agent handoff)
+    if len(handoff_list) >= 2:
+        handoff_from = handoff_list[-2]
+        handoff_to = preset
+        if handoff_from != handoff_to and handoff_to not in {"cos", "ask"}:
+            receipt["handoff_from"] = handoff_from
+            receipt["handoff_to"] = handoff_to
+            receipt["handoff_status"] = status
+            receipt["handoff_task"] = str(receipt.get("message") or "")
+            receipt["handoff_output"] = result
+            receipt["handoff_next_owner"] = next_owner
     if preset == "research" and (sources or result):
         ev = ensure_bus(project_id) / "evidence" / f"{job_id}.md"
         ev.write_text(
