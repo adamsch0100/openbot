@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Chat OS Reliability PR #3 — production hardening complete: router progress for all Cos paths, keyring fallback visibility, watchdog improvements, enhanced error messages.
-Last: cloud agent · Implemented production changes in router.py (progress/errors), web/app.js (watchdog/empty handling), plus 23-test reliability suite.
-Next: Push updates to PR #3; OpenBot CEO review for MERGE-READY.
+Now: ROADMAP PR #3 Sidebar Agent OS — PR #4 fix pushed (removed PR_MANUAL_VERIFY.md). OpenBot CEO UI accepted, ready for merge.
+Last: cloud agent · Removed testing checklist doc per CEO NACK. Kept only feature code (web/app.js, web/styles.css) and INDEX updates.
+Next: OpenBot CEO merge PR #4 when ready.
 Blocker: —
 
 ## Vault

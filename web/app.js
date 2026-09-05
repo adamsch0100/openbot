@@ -1342,7 +1342,32 @@ function bindNodeMenu(el, kind, pid, wid) {
 }
 
 function ceoWire(project) {
-  return "";
+  const now = (project.index_now || "").trim();
+  const blocker = (project.index_blocker || "").trim();
+  const parts = [];
+  
+  if (now && now !== "source of truth" && now !== "—") {
+    const truncated = now.length > 50 ? now.substring(0, 47) + "..." : now;
+    parts.push(truncated);
+  }
+  
+  if (blocker && blocker !== "—") {
+    const truncated = blocker.length > 40 ? blocker.substring(0, 37) + "..." : blocker;
+    parts.push(`🚫 ${truncated}`);
+  }
+  
+  return parts.join(" · ");
+}
+
+function ceoInitials(name) {
+  if (!name) return "??";
+  const words = String(name).trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "??";
+  if (words.length === 1) {
+    const w = words[0].toUpperCase();
+    return w.length >= 2 ? w.substring(0, 2) : w;
+  }
+  return (words[0][0] + words[1][0]).toUpperCase();
 }
 
 function inboxHtml() {
@@ -1381,20 +1406,28 @@ function renderOrg(data) {
     const workers = (project.workers || []).map((worker) => `
         <div class="org-row worker-row">
           <button type="button" class="org-btn worker${projectId === project.id && workerId === worker.id ? " on" : ""}" data-project="${escapeHtml(project.id)}" data-worker="${escapeHtml(worker.id)}" data-kind="worker">
-            <b>${escapeHtml(worker.name)}</b>
+            <span class="org-avatar" aria-hidden="true">${escapeHtml(ceoInitials(worker.name))}</span>
+            <span class="org-btn-text">
+              <b>${escapeHtml(worker.name)}</b>
+            </span>
           </button>
           <span class="org-role">helper</span>
         </div>`).join("");
     const wire = ceoWire(project);
     const busy = lives.has(aimKey(project.id, ""));
     const ping = (projectNeedsYou(project.id) || busy) ? " ping" : "";
+    const initials = ceoInitials(project.name);
+    const hasBlocker = (project.index_blocker || "").trim() && (project.index_blocker || "").trim() !== "—";
     return `
       <div class="org-project${open ? " open" : ""}" data-project-wrap="${escapeHtml(project.id)}">
         <div class="org-row">
           <button type="button" class="org-twist" data-toggle="${escapeHtml(project.id)}" aria-label="${open ? "Collapse" : "Expand"} ${escapeHtml(project.name)}">${open ? "▾" : "▸"}</button>
-          <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}${busy ? " · working" : ""}">
-            <b>${escapeHtml(project.name)}</b>
-            ${wire ? `<span class="org-now">${escapeHtml(wire)}</span>` : ""}
+          <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}${hasBlocker ? " has-blocker" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}${busy ? " · working" : ""}">
+            <span class="org-avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+            <span class="org-btn-text">
+              <b>${escapeHtml(project.name)}</b>
+              ${wire ? `<span class="org-now">${escapeHtml(wire)}</span>` : ""}
+            </span>
           </button>
           <span class="org-role">CEO</span>
         </div>
@@ -1402,10 +1435,14 @@ function renderOrg(data) {
       </div>`;
   }).join("");
   const staffBusy = lives.has(aimKey("", ""));
+  const cosInitials = ceoInitials("Chief of Staff");
   tree.innerHTML = `
     <button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
-      <b>Chief of Staff</b>
-      <span class="org-now">runs the CEOs</span>
+      <span class="org-avatar" aria-hidden="true">${escapeHtml(cosInitials)}</span>
+      <span class="org-btn-text">
+        <b>Chief of Staff</b>
+        <span class="org-now">runs the CEOs</span>
+      </span>
     </button>
     ${inboxHtml()}
     ${projectBits}
