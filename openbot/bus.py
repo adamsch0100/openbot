@@ -270,6 +270,8 @@ def write_handoff(
     sources: str = "",
     next_owner: str = "",
     blocker: str | None = None,
+    from_seat: str = "",
+    to_seat: str = "",
 ) -> str:
     root = ensure_bus(project_id)
     path = root / "handoffs" / f"{job_id}.md"
@@ -281,10 +283,12 @@ def write_handoff(
         f"TASK: {redact(message)[:800] or '—'}\n"
         f"STATUS: {status}\n"
         f"OUTPUT: {redact(result)[:1600] or '—'}\n"
+        f"FROM: {from_seat or who}\n"
+        f"TO: {to_seat or (next_owner if next_owner not in {'operator', 'operator or Chief of Staff'} else '—')}\n"
+        f"NEXT OWNER: {next_owner or 'operator or Chief of Staff'}\n"
         f"SOURCES: {redact(sources)[:800] or 'this job packet / INDEX'}\n"
         f"DECISIONS: parked irreversible actions; specialist {preset} via {engine}\n"
         f"UNCERTAINTIES: {redact(blocker or '—')}\n"
-        f"NEXT OWNER: {next_owner or 'operator or Chief of Staff'}\n"
         f"DO NOT ASSUME: live prices, balances, logins, or anything not in SOURCES\n"
         f"SEAT: {who}\n"
         f"ENGINE: {engine}\n"
@@ -336,6 +340,8 @@ def close_work_job(receipt: dict, result: str) -> dict:
     
     # Determine handoff routing (from previous → current preset)
     handoff_list = receipt.get("handoff") or []
+    from_seat = handoff_list[-2] if len(handoff_list) >= 2 else ""
+    to_seat = preset
     
     rel = write_handoff(
         job_id,
@@ -349,6 +355,8 @@ def close_work_job(receipt: dict, result: str) -> dict:
         sources=sources,
         next_owner=next_owner,
         blocker=str(receipt.get("blocker") or "") or None,
+        from_seat=from_seat,
+        to_seat=to_seat,
     )
     
     # Add handoff metadata for UI card display ONLY on real multi-step chains
@@ -393,6 +401,173 @@ def close_work_job(receipt: dict, result: str) -> dict:
     )
     receipt["handoff_path"] = rel
     return receipt
+
+
+def load_open_handoffs(project_id: str | None, *, limit: int = 20) -> list[dict]:
+    """Load open handoffs (STATUS not complete/partial) for a CEO scope.
+    
+    Returns list of dicts with: id, task, status, output, from_seat, to_seat, 
+    next_owner, path. Sorted newest first.
+    """
+    root = ensure_bus(project_id)
+    handoffs_dir = root / "handoffs"
+    if not handoffs_dir.is_dir():
+        return []
+    
+    results = []
+    files = sorted(handoffs_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    
+    for path in files[:limit]:
+        try:
+            text = path.read_text(encoding="utf-8")
+            lines = text.splitlines()
+            
+            # Extract fields from structured format
+            fields = {}
+            for line in lines:
+                if line.startswith("TASK:"):
+                    fields["task"] = line[5:].strip()
+                elif line.startswith("STATUS:"):
+                    fields["status"] = line[7:].strip()
+                elif line.startswith("OUTPUT:"):
+                    fields["output"] = line[7:].strip()
+                elif line.startswith("FROM:"):
+                    fields["from_seat"] = line[5:].strip()
+                elif line.startswith("TO:"):
+                    fields["to_seat"] = line[3:].strip()
+                elif line.startswith("NEXT OWNER:"):
+                    fields["next_owner"] = line[11:].strip()
+            
+            status = fields.get("status", "").lower()
+            # Only include open/claimed/blocked handoffs, not complete/partial
+            if status not in {"complete", "partial"}:
+                # Try relative_to(ROOT), fallback to absolute path
+                try:
+                    rel_path = str(path.relative_to(ROOT)).replace("\\", "/")
+                except ValueError:
+                    rel_path = str(path)
+                    
+                results.append({
+                    "id": path.stem,
+                    "task": fields.get("task", "—"),
+                    "status": status or "open",
+                    "output": fields.get("output", "—"),
+                    "from_seat": fields.get("from_seat", "—"),
+                    "to_seat": fields.get("to_seat", "—"),
+                    "next_owner": fields.get("next_owner", "—"),
+                    "path": rel_path,
+                })
+        except (OSError, UnicodeDecodeError):
+            continue
+    
+    return results
+
+
+def create_handoff(
+    task: str,
+    project_id: str | None,
+    from_seat: str,
+    to_seat: str,
+    next_owner: str = "",
+    output: str = "",
+) -> dict:
+    """Create an open handoff for async work.
+    
+    Returns {"ok": bool, "message": str, "handoff_id": str|None, "path": str|None}
+    """
+    if not task or not to_seat:
+        return {"ok": False, "message": "task and to_seat required", "handoff_id": None, "path": None}
+    
+    import uuid
+    handoff_id = f"handoff-{uuid.uuid4().hex[:8]}"
+    
+    try:
+        path_str = write_handoff(
+            job_id=handoff_id,
+            preset=to_seat,
+            message=task,
+            result=output or "—",
+            project_id=project_id,
+            status="open",
+            next_owner=next_owner or to_seat,
+            from_seat=from_seat,
+            to_seat=to_seat,
+            engine="board",
+        )
+        return {
+            "ok": True,
+            "message": f"Handoff {handoff_id} created",
+            "handoff_id": handoff_id,
+            "path": path_str,
+        }
+    except (OSError, ValueError) as err:
+        return {"ok": False, "message": f"Failed to create: {err}", "handoff_id": None, "path": None}
+
+
+def claim_handoff(handoff_id: str, project_id: str | None, claimant: str) -> dict:
+    """Claim an open handoff by changing STATUS to claimed and setting NEXT OWNER.
+    
+    Returns {"ok": bool, "message": str, "handoff": dict|None}
+    """
+    root = ensure_bus(project_id)
+    path = root / "handoffs" / f"{handoff_id}.md"
+    
+    if not path.is_file():
+        return {"ok": False, "message": "Handoff not found", "handoff": None}
+    
+    try:
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        
+        # Check current status
+        current_status = ""
+        for line in lines:
+            if line.startswith("STATUS:"):
+                current_status = line[7:].strip().lower()
+                break
+        
+        if current_status in {"complete", "partial"}:
+            return {"ok": False, "message": f"Handoff already {current_status}", "handoff": None}
+        
+        # Update STATUS and NEXT OWNER
+        updated_lines = []
+        for line in lines:
+            if line.startswith("STATUS:"):
+                updated_lines.append("STATUS: claimed")
+            elif line.startswith("NEXT OWNER:"):
+                updated_lines.append(f"NEXT OWNER: {claimant}")
+            else:
+                updated_lines.append(line)
+        
+        path.write_text("\n".join(updated_lines), encoding="utf-8")
+        
+        return {
+            "ok": True,
+            "message": f"Handoff {handoff_id} claimed by {claimant}",
+            "handoff": {"id": handoff_id, "status": "claimed", "next_owner": claimant}
+        }
+    except (OSError, UnicodeDecodeError) as err:
+        return {"ok": False, "message": f"Failed to claim: {err}", "handoff": None}
+
+
+def handoff_summary(project_id: str | None) -> str:
+    """Generate a brief summary of open handoffs for job packets.
+    
+    Format: 'N open handoffs: [id: task → next_owner], ...'
+    """
+    handoffs = load_open_handoffs(project_id, limit=10)
+    if not handoffs:
+        return ""
+    
+    parts = [f"{len(handoffs)} open handoff{'s' if len(handoffs) != 1 else ''}:"]
+    for h in handoffs[:5]:
+        task_brief = h["task"][:60].replace("\n", " ")
+        parts.append(f"  {h['id']}: {task_brief} → {h['next_owner']}")
+    
+    if len(handoffs) > 5:
+        parts.append(f"  ... and {len(handoffs) - 5} more")
+    
+    return "\n".join(parts)
 
 
 def log_approval(job: dict, accepted: bool) -> None:

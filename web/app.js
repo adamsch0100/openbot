@@ -2116,6 +2116,7 @@ function setSettingsPanel(name) {
   });
   if (name === "models") refreshCatalog();
   if (name === "connectors") loadConnectorsCatalog();
+  if (name === "memory") fetchOpenHandoffs();
   if (name === "git") loadGit();
   if (name === "keys") refreshProviders();
   if (name === "import") fillImport(cfg.hermes_instances || []);
@@ -2581,6 +2582,9 @@ function renderJob(job) {
     ? "This page needs a login. Approve a vault login, type it on this card, or sign in on your screen."
     : (job.text || JSON.stringify(job, null, 2));
   const el = card(kind, body, jobMeta(job));
+  if (job.id) {
+    el.setAttribute("data-job-id", job.id);
+  }
   stampLane(el, job);
   if (job.step_count && job.total_steps) {
     const stepChip = document.createElement("div");
@@ -4324,6 +4328,104 @@ function renderMemoryResults(results, query) {
   });
 }
 
+async function fetchOpenHandoffs() {
+  try {
+    const res = await fetch("/api/handoffs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId || null })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderMemoryHandoffs(data.handoffs || []);
+  } catch (err) {
+    console.error("Failed to fetch handoffs:", err);
+  }
+}
+
+async function createHandoff() {
+  const task = $("handoffTask").value.trim();
+  const toSeat = $("handoffToSeat").value;
+  if (!task || !toSeat) {
+    showHint("Task and seat required");
+    return;
+  }
+  try {
+    const res = await fetch("/api/handoff/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task,
+        to_seat: toSeat,
+        from_seat: "cos",
+        project_id: projectId || null,
+        next_owner: toSeat
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showHint(`Handoff created: ${data.handoff_id}`);
+      $("handoffTask").value = "";
+      $("handoffToSeat").value = "";
+      fetchOpenHandoffs();
+    } else {
+      showHint(data.message || "Create failed");
+    }
+  } catch (err) {
+    showHint("Create failed");
+  }
+}
+
+function renderMemoryHandoffs(handoffs) {
+  const el = $("memoryHandoffs");
+  if (!el) return;
+  if (handoffs.length === 0) {
+    el.innerHTML = `<p class="muted">No open handoffs</p>`;
+    return;
+  }
+  el.innerHTML = handoffs.map((h) => {
+    const statusClass = h.status === "blocked" ? "status-blocked" : 
+                        h.status === "claimed" ? "status-claimed" : "status-open";
+    const taskBrief = h.task.length > 100 ? h.task.slice(0, 100) + "..." : h.task;
+    return `<div class="handoff-item" data-handoff-id="${escapeHtml(h.id)}">
+      <div class="handoff-item-header">
+        <span class="handoff-item-id">${escapeHtml(h.id)}</span>
+        <span class="handoff-item-status ${statusClass}">${escapeHtml(h.status)}</span>
+      </div>
+      <div class="handoff-item-task">${escapeHtml(taskBrief)}</div>
+      <div class="handoff-item-meta">
+        <span>${escapeHtml(h.from_seat || "—")} → ${escapeHtml(h.to_seat || "—")}</span>
+        <span>Next: ${escapeHtml(h.next_owner)}</span>
+      </div>
+      ${h.status === "open" ? `<button type="button" class="ghost-btn claim-handoff" data-handoff-id="${escapeHtml(h.id)}">Claim</button>` : ""}
+    </div>`;
+  }).join("");
+  
+  // Add claim button handlers
+  el.querySelectorAll(".claim-handoff").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const handoffId = btn.dataset.handoffId;
+      const claimant = projectId || "staff";
+      try {
+        const res = await fetch("/api/handoff/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handoff_id: handoffId, project_id: projectId || null, claimant })
+        });
+        if (res.ok) {
+          showHint(`Handoff ${handoffId} claimed`);
+          fetchOpenHandoffs();
+        } else {
+          const data = await res.json();
+          showHint(data.message || "Claim failed");
+        }
+      } catch (err) {
+        showHint("Claim failed");
+      }
+    });
+  });
+}
+
 if ($("memorySearch")) {
   let memorySearchTimeout = null;
   $("memorySearch").addEventListener("input", () => {
@@ -4362,6 +4464,8 @@ if ($("saveMemory")) {
       if (status) status.textContent = String(err);
     }
   });
+  
+  $("createHandoff").addEventListener("click", createHandoff);
 }
 
 boot().catch((err) => {

@@ -18,6 +18,7 @@ from openbot.store import in_spend_period, spend_summary, write_job, patch_index
 from openbot.usage import parse_opencode_events
 from openbot.server import _parse_index_fields, _search_memory
 from openbot.org import patch_scope
+from openbot.bus import write_handoff, load_open_handoffs, claim_handoff, create_handoff, handoff_summary
 import openbot.config as config_mod
 import openbot.store as store_mod
 
@@ -1939,6 +1940,244 @@ class BusLawTests(unittest.TestCase):
         self.assertEqual(job.get("engine"), "board")
         self.assertEqual(job.get("preset"), "cos")
         self.assertIn("Do not hire a Bot for an app", job.get("text") or "")
+
+
+class HandoffBusTests(unittest.TestCase):
+    """Tests for handoff bus protocol: schema, load, claim, multi-step metadata."""
+
+    def test_create_open_handoff_workflow(self):
+        """create_handoff creates open status handoff that appears in list and can be claimed."""
+        import openbot.bus as bus_mod
+        old_root = store_mod.ROOT
+        old_bus_root = bus_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            bus_mod.ROOT = Path(tmp)
+            try:
+                # Create open handoff
+                result = create_handoff(
+                    task="Implement the new feature",
+                    project_id="test5",
+                    from_seat="cos",
+                    to_seat="builder",
+                    next_owner="builder"
+                )
+                self.assertTrue(result["ok"])
+                self.assertIsNotNone(result["handoff_id"])
+                self.assertIn("handoff-", result["handoff_id"])
+                
+                # Should appear in open handoffs list
+                handoffs = load_open_handoffs("test5")
+                self.assertEqual(len(handoffs), 1)
+                self.assertEqual(handoffs[0]["status"], "open")
+                self.assertEqual(handoffs[0]["to_seat"], "builder")
+                self.assertIn("Implement the new feature", handoffs[0]["task"])
+                
+                # Claim it
+                claim_result = claim_handoff(result["handoff_id"], "test5", "builder-worker")
+                self.assertTrue(claim_result["ok"])
+                
+                # Should now be claimed
+                handoffs_after = load_open_handoffs("test5")
+                self.assertEqual(len(handoffs_after), 1)
+                self.assertEqual(handoffs_after[0]["status"], "claimed")
+                self.assertEqual(handoffs_after[0]["next_owner"], "builder-worker")
+            finally:
+                store_mod.ROOT = old_root
+                bus_mod.ROOT = old_bus_root
+
+    def test_write_handoff_creates_standard_schema(self):
+        """write_handoff creates a standardized markdown file with required fields."""
+        import openbot.bus as bus_mod
+        old_root = store_mod.ROOT
+        old_bus_root = bus_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            bus_mod.ROOT = Path(tmp)
+            try:
+                rel_path = write_handoff(
+                    job_id="job123",
+                    preset="builder",
+                    message="Refactor the utils module",
+                    result="Diff created, waiting for Accept",
+                    project_id="test-project",
+                    status="partial",
+                    sources="org/projects/test-project/INDEX.md",
+                    next_owner="operator (Accept / Reject)",
+                    from_seat="think",
+                    to_seat="builder",
+                )
+                self.assertIn("handoffs/job123.md", rel_path)
+                handoff_path = Path(tmp) / rel_path
+                self.assertTrue(handoff_path.is_file())
+                
+                content = handoff_path.read_text(encoding="utf-8")
+                # Check required fields
+                self.assertIn("TASK:", content)
+                self.assertIn("STATUS: partial", content)
+                self.assertIn("OUTPUT:", content)
+                self.assertIn("FROM: think", content)
+                self.assertIn("TO: builder", content)
+                self.assertIn("NEXT OWNER: operator (Accept / Reject)", content)
+                self.assertIn("SOURCES:", content)
+                self.assertIn("job123", content)
+            finally:
+                store_mod.ROOT = old_root
+                bus_mod.ROOT = old_bus_root
+
+    def test_load_open_handoffs_filters_by_status(self):
+        """load_open_handoffs returns only open/claimed/blocked handoffs, not complete."""
+        import openbot.bus as bus_mod
+        old_root = store_mod.ROOT
+        old_bus_root = bus_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            bus_mod.ROOT = Path(tmp)
+            try:
+                # Create open handoff
+                write_handoff(
+                    "job1", "think", "Plan the feature", "Plan ready",
+                    project_id="test2", status="open", next_owner="builder"
+                )
+                # Create claimed handoff
+                write_handoff(
+                    "job2", "builder", "Implement the feature", "Working on it",
+                    project_id="test2", status="claimed", next_owner="ops"
+                )
+                # Create complete handoff (should be filtered out)
+                write_handoff(
+                    "job3", "research", "Find docs", "Docs found",
+                    project_id="test2", status="complete", next_owner="operator"
+                )
+                
+                handoffs = load_open_handoffs("test2")
+                self.assertEqual(len(handoffs), 2)
+                ids = {h["id"] for h in handoffs}
+                self.assertIn("job1", ids)
+                self.assertIn("job2", ids)
+                self.assertNotIn("job3", ids)
+                
+                # Check fields are extracted
+                job1 = next(h for h in handoffs if h["id"] == "job1")
+                self.assertEqual(job1["status"], "open")
+                self.assertIn("Plan the feature", job1["task"])
+            finally:
+                store_mod.ROOT = old_root
+                bus_mod.ROOT = old_bus_root
+
+    def test_claim_handoff_updates_status_and_owner(self):
+        """claim_handoff changes STATUS to claimed and sets NEXT OWNER."""
+        import openbot.bus as bus_mod
+        old_root = store_mod.ROOT
+        old_bus_root = bus_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            bus_mod.ROOT = Path(tmp)
+            try:
+                write_handoff(
+                    "job123", "think", "Analyze the problem", "Analysis complete",
+                    project_id="test3", status="open", next_owner="—"
+                )
+                
+                result = claim_handoff("job123", "test3", "builder")
+                self.assertTrue(result["ok"])
+                self.assertIn("claimed", result["message"])
+                
+                # Verify file was updated
+                handoffs = load_open_handoffs("test3")
+                job = next(h for h in handoffs if h["id"] == "job123")
+                self.assertEqual(job["status"], "claimed")
+                self.assertEqual(job["next_owner"], "builder")
+                
+                # Cannot claim completed handoff
+                write_handoff(
+                    "job456", "ops", "Done work", "Finished",
+                    project_id="test3", status="complete", next_owner="operator"
+                )
+                result2 = claim_handoff("job456", "test3", "research")
+                self.assertFalse(result2["ok"])
+                self.assertIn("complete", result2["message"])
+            finally:
+                store_mod.ROOT = old_root
+                bus_mod.ROOT = old_bus_root
+
+    def test_handoff_summary_formats_for_job_packet(self):
+        """handoff_summary generates brief text for job packet OPEN HANDOFFS section."""
+        import openbot.bus as bus_mod
+        old_root = store_mod.ROOT
+        old_bus_root = bus_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            bus_mod.ROOT = Path(tmp)
+            try:
+                # No handoffs
+                summary = handoff_summary("test4")
+                self.assertEqual(summary, "")
+                
+                # Create some handoffs
+                write_handoff(
+                    "job1", "think", "Design the API endpoints", "Draft ready",
+                    project_id="test4", status="open", next_owner="builder"
+                )
+                write_handoff(
+                    "job2", "research", "Find pricing info", "Blocked on login",
+                    project_id="test4", status="blocked", next_owner="operator"
+                )
+                
+                summary = handoff_summary("test4")
+                self.assertIn("2 open handoffs:", summary)
+                self.assertIn("job1:", summary)
+                self.assertIn("job2:", summary)
+                self.assertIn("builder", summary)
+                self.assertIn("operator", summary)
+            finally:
+                store_mod.ROOT = old_root
+                bus_mod.ROOT = old_bus_root
+
+    def test_close_work_job_preserves_handoff_metadata(self):
+        """close_work_job includes handoff_from/handoff_to for multi-step chains."""
+        from openbot.bus import close_work_job
+        import openbot.bus as bus_mod
+        old_root = store_mod.ROOT
+        old_bus_root = bus_mod.ROOT
+        old_org = bus_mod.ORG
+        old_log = bus_mod.ACTION_LOG
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            bus_mod.ROOT = Path(tmp)
+            bus_mod.ORG = Path(tmp) / "org"
+            bus_mod.ACTION_LOG = bus_mod.ORG / "ACTION_LOG.md"
+            try:
+                # Single-step job (no handoff metadata)
+                receipt1 = {
+                    "id": "job1",
+                    "preset": "builder",
+                    "message": "Fix the bug",
+                    "handoff": ["cos", "builder"],
+                    "engine": "OpenCode",
+                }
+                result1 = close_work_job(receipt1, "Bug fixed")
+                self.assertIn("handoff_path", result1)
+                # Multi-step chain should add handoff metadata
+                self.assertEqual(result1.get("handoff_from"), "cos")
+                self.assertEqual(result1.get("handoff_to"), "builder")
+                
+                # Another multi-step: think → builder
+                receipt2 = {
+                    "id": "job2",
+                    "preset": "builder",
+                    "message": "Implement the design",
+                    "handoff": ["think", "builder"],
+                    "engine": "OpenCode",
+                }
+                result2 = close_work_job(receipt2, "Implementation ready")
+                self.assertEqual(result2.get("handoff_from"), "think")
+                self.assertEqual(result2.get("handoff_to"), "builder")
+            finally:
+                store_mod.ROOT = old_root
+                bus_mod.ROOT = old_bus_root
+                bus_mod.ORG = old_org
+                bus_mod.ACTION_LOG = old_log
 
 
 if __name__ == "__main__":

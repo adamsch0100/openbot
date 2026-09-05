@@ -36,6 +36,7 @@ from .bus import (
     classify_gate,
     close_work_job,
     cos_file_reply,
+    handoff_summary,
     law_extra,
     log_approval,
 )
@@ -600,6 +601,11 @@ def _packet_extra(
         for att in attachments:
             att_lines.append(f"  {att['filename']} ({att['size']} bytes): {att['path']}")
         bits.append(f"ATTACHMENTS:\n" + "\n".join(att_lines))
+    # Include open handoffs for CEO scope when starting work
+    if project_id and preset in {"think", "builder", "research", "ops"}:
+        handoffs = handoff_summary(project_id)
+        if handoffs:
+            bits.append(f"OPEN HANDOFFS:\n{handoffs}")
     hints = last_results(project_id=project_id)
     if hints:
         bits.append(f"HINTS:\n{hints}")
