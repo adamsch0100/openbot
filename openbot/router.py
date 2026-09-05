@@ -184,6 +184,59 @@ def _prefer_accounts(tools: dict | None) -> list[str]:
     return prefer
 
 
+def _effective_skills(preset: str, tools: dict | None) -> str | None:
+    """Compute effective skills for a preset based on connector configuration.
+    
+    Returns:
+        - None: use all installed skills (legacy behavior when no connectors configured)
+        - "": explicitly no skills
+        - "skill1,skill2": comma-separated list of allowed skills for this seat
+    """
+    settings = load_settings()
+    
+    # Get global and CEO-specific connectors
+    global_connectors = settings.get("connectors") or {}
+    ceo_connectors = (tools or {}).get("connectors") or {} if tools else {}
+    
+    # Merge: CEO overrides global
+    skills_config = {**(global_connectors.get("skills") or {}), **(ceo_connectors.get("skills") or {})}
+    
+    # Map preset to seat name used in connectors
+    seat_map = {"think": "think", "research": "research", "ops": "ops"}
+    seat = seat_map.get(preset)
+    
+    if not seat or not skills_config:
+        # No connector config, fall back to legacy hermesSkills
+        return str(settings.get("hermes_skills") or "").strip() or None
+    
+    # Collect skills enabled for this seat
+    allowed = []
+    for skill_name, seat_toggles in skills_config.items():
+        if isinstance(seat_toggles, dict) and seat_toggles.get(seat) is True:
+            allowed.append(skill_name)
+    
+    # If no skills are explicitly enabled, use legacy hermesSkills as fallback
+    if not allowed:
+        return str(settings.get("hermes_skills") or "").strip() or None
+    
+    return ",".join(allowed)
+
+
+def _prefer_accounts(tools: dict | None) -> list[str]:
+    prefer = []
+    blob = tools or {}
+    account_id = str(blob.get("account_id") or "").strip()
+    if not account_id:
+        account_id = str(load_settings().get("profile_account_id") or "").strip()
+    if account_id:
+        prefer.append(account_id)
+    for item in blob.get("fallback") or []:
+        value = str(item or "").strip()
+        if value:
+            prefer.append(value)
+    return prefer
+
+
 def _activate(engine: str, tools: dict | None, model: str | None = None) -> str | None:
     provider = model_provider(model) or None
     if provider == "opencode-zen":
@@ -866,7 +919,7 @@ def _handle_preset(
     brain_text = read_worker_brain(project_id, worker_id) or (index_text if project_id else read_brain("cos"))
     tools = tools or project_tools(project_id)
     seats = tools.get("seats") if isinstance(tools.get("seats"), dict) else {}
-    skills = str(load_settings().get("hermes_skills") or "").strip() or None
+    skills = _effective_skills(chosen, tools)
     hermes_home_dir = str(tools.get("hermes_home") or "").strip() or None
     login_wall = False
     page_url = None

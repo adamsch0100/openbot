@@ -137,6 +137,7 @@ const PANEL_TITLES = {
   keys: "Keys",
   ceo: "This CEO",
   models: "Models",
+  connectors: "Connectors",
   git: "Git",
   usage: "Usage",
   import: "Import",
@@ -1920,6 +1921,7 @@ function setSettingsPanel(name) {
     el.classList.toggle("on", el.id === `panel-${name}`);
   });
   if (name === "models") refreshCatalog();
+  if (name === "connectors") loadConnectorsCatalog();
   if (name === "git") loadGit();
   if (name === "keys") refreshProviders();
   if (name === "import") fillImport(cfg.hermes_instances || []);
@@ -3049,6 +3051,137 @@ $("saveModels").addEventListener("click", async () => {
   const data = await res.json();
   $("modelStatus").textContent = res.ok ? "models saved" : (data.error || "save failed");
   if (res.ok) applyConfig(data);
+});
+
+let connectorsCatalog = { skills: [], mcp: [] };
+
+async function loadConnectorsCatalog() {
+  try {
+    const res = await fetch("/api/connectors/catalog");
+    const data = await res.json();
+    connectorsCatalog = {
+      skills: data.skills || [],
+      mcp: data.mcp || []
+    };
+    paintConnectorsPanel();
+  } catch (err) {
+    console.error("Failed to load connectors catalog:", err);
+  }
+}
+
+function paintConnectorsPanel() {
+  const skillMatrix = $("skillMatrix");
+  const mcpMatrix = $("mcpMatrix");
+  if (!skillMatrix || !mcpMatrix) return;
+
+  const globalConnectors = cfg.connectors || { skills: {}, mcp: {} };
+  const seats = ["think", "research", "ops"];
+
+  // Hermes Skills Matrix
+  if (connectorsCatalog.skills.length === 0) {
+    skillMatrix.innerHTML = `<p class="muted">No Hermes skills found. Run <code>hermes skills list</code> to see available skills.</p>`;
+  } else {
+    let skillHtml = `<div class="connector-row connector-row-header">
+      <div class="connector-name">Skill</div>
+      <div class="connector-cell">Think</div>
+      <div class="connector-cell">Research</div>
+      <div class="connector-cell">Ops</div>
+      <div class="connector-cell">Chat</div>
+    </div>`;
+    
+    connectorsCatalog.skills.forEach((skill) => {
+      const skillConfig = globalConnectors.skills[skill] || {};
+      skillHtml += `<div class="connector-row">
+        <div class="connector-name">${escapeHtml(skill)}</div>`;
+      
+      seats.forEach((seat) => {
+        const checked = skillConfig[seat] === true ? " checked" : "";
+        skillHtml += `<div class="connector-cell">
+          <label>
+            <input type="checkbox" data-skill="${escapeHtml(skill)}" data-seat="${seat}"${checked} />
+          </label>
+        </div>`;
+      });
+      
+      skillHtml += `<div class="connector-cell connector-cell-disabled">
+        <label title="Chat never has tools">
+          <input type="checkbox" disabled />
+        </label>
+      </div>`;
+      skillHtml += `</div>`;
+    });
+    skillMatrix.innerHTML = skillHtml;
+  }
+
+  // MCP Matrix
+  if (connectorsCatalog.mcp.length === 0) {
+    mcpMatrix.innerHTML = `<p class="muted">No MCP servers found. Run <code>hermes mcp catalog</code> to see available servers.</p>`;
+  } else {
+    let mcpHtml = `<div class="connector-row connector-row-header">
+      <div class="connector-name">MCP Server</div>
+      <div class="connector-cell">Think</div>
+      <div class="connector-cell">Research</div>
+      <div class="connector-cell">Ops</div>
+      <div class="connector-cell">Code</div>
+    </div>`;
+    
+    connectorsCatalog.mcp.forEach((item) => {
+      const mcpId = item.id || "";
+      const mcpConfig = globalConnectors.mcp[mcpId] || {};
+      mcpHtml += `<div class="connector-row">
+        <div class="connector-name" title="${escapeHtml(item.label || mcpId)}">${escapeHtml(mcpId)}</div>`;
+      
+      ["think", "research", "ops", "code"].forEach((seat) => {
+        const checked = mcpConfig[seat] === true ? " checked" : "";
+        mcpHtml += `<div class="connector-cell">
+          <label>
+            <input type="checkbox" data-mcp="${escapeHtml(mcpId)}" data-seat="${seat}"${checked} />
+          </label>
+        </div>`;
+      });
+      
+      mcpHtml += `</div>`;
+    });
+    mcpMatrix.innerHTML = mcpHtml;
+  }
+}
+
+$("saveConnectors").addEventListener("click", async () => {
+  const connectors = { skills: {}, mcp: {} };
+  
+  // Collect skill settings
+  document.querySelectorAll("#skillMatrix input[data-skill][data-seat]").forEach((input) => {
+    const skill = input.dataset.skill;
+    const seat = input.dataset.seat;
+    if (!connectors.skills[skill]) connectors.skills[skill] = {};
+    connectors.skills[skill][seat] = input.checked;
+  });
+  
+  // Collect MCP settings
+  document.querySelectorAll("#mcpMatrix input[data-mcp][data-seat]").forEach((input) => {
+    const mcp = input.dataset.mcp;
+    const seat = input.dataset.seat;
+    if (!connectors.mcp[mcp]) connectors.mcp[mcp] = {};
+    connectors.mcp[mcp][seat] = input.checked;
+  });
+  
+  const res = await fetch("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ connectors })
+  });
+  const data = await res.json();
+  if ($("connectorStatus")) {
+    $("connectorStatus").textContent = res.ok ? "connectors saved" : (data.error || "save failed");
+  }
+  if (res.ok) applyConfig(data);
+});
+
+$("refreshConnectors").addEventListener("click", () => {
+  loadConnectorsCatalog();
+  if ($("connectorStatus")) {
+    $("connectorStatus").textContent = "refreshing catalog...";
+  }
 });
 
 $("saveWork").addEventListener("click", async () => {

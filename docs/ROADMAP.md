@@ -273,6 +273,29 @@ Open board → see named teammates with avatars/initials, Now/Blocker from their
 
 ---
 
+## Shipped Features (Implemented)
+
+### **Composer Attachments** ✅ **(Shipped on master, PR #9)**
+- Attach button, drag-and-drop, paste-image support
+- Visual thumbnails for images, file list for other types
+- Multipart upload transport, server-side enforcement (50 MB limit)
+- Job context paths for Think/Research attachment references
+- Tests: `tests/test_attachments.py`
+
+### **Connector UX + Shared Tool Plane** ✅ **(Shipped on cursor/connector-ux-shared-tool-plane-27e1)**
+- New Settings → Connectors panel with Hermes skills + MCP catalog
+- Per-seat skill toggles (Think/Research/Ops) with on/off matrix
+- MCP server selection with seat assignment (Think/Research/Ops/Code)
+- Replaces hermesSkills text box with visual connector matrix
+- Per-CEO connector overrides in This CEO panel
+- Backend: `connectors` field in settings and project tools, `_effective_skills()` router function
+- Frontend: skill/MCP matrix UI, catalog refresh, seat × tool visualization
+- Tests: `tests/test_connectors.py` — configuration storage, router integration, seat restrictions
+- Zero raw JSON required for happy path; advanced text allowlist still available as escape hatch
+- **Acceptance:** Chat/Cos stays tools-off; Think/Research/Ops use configured Hermes skills; Code uses selected MCPs
+
+---
+
 ## Deferred / Later Candidates
 
 These are **lower-priority** or **post-MVP** features. Ship the locked 3 PRs first, then revisit.

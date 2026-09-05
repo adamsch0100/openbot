@@ -23,6 +23,10 @@ DEFAULT_SETTINGS = {
     "license_key": "",
     "profile_account_id": "",
     "hermes_skills": "",
+    "connectors": {
+        "skills": {},
+        "mcp": {}
+    },
     "models": {
         "cos": "",
         "builder": "",
@@ -215,6 +219,12 @@ def load_settings() -> dict:
                 data["profile_account_id"] = raw["profile_account_id"].strip()
             if isinstance(raw.get("hermes_skills"), str):
                 data["hermes_skills"] = raw["hermes_skills"].strip()
+            connectors = raw.get("connectors")
+            if isinstance(connectors, dict):
+                if isinstance(connectors.get("skills"), dict):
+                    data["connectors"]["skills"] = connectors["skills"]
+                if isinstance(connectors.get("mcp"), dict):
+                    data["connectors"]["mcp"] = connectors["mcp"]
             for secret_key in SECRET_SETTING_KEYS:
                 value = raw.get(secret_key)
                 if isinstance(value, str):
@@ -259,6 +269,12 @@ def save_settings(patch: dict) -> dict:
         current["profile_account_id"] = str(patch.get("profile_account_id") or "").strip()
     if "hermes_skills" in patch:
         current["hermes_skills"] = str(patch.get("hermes_skills") or "").strip()
+    if "connectors" in patch and isinstance(patch.get("connectors"), dict):
+        connectors = patch["connectors"]
+        if isinstance(connectors.get("skills"), dict):
+            current["connectors"]["skills"] = connectors["skills"]
+        if isinstance(connectors.get("mcp"), dict):
+            current["connectors"]["mcp"] = connectors["mcp"]
     pin = patch.get("pin")
     if isinstance(pin, str) and pin:
         salt, hashed = hash_pin(pin)

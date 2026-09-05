@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Attachments shipped — attach button, drag-drop, paste-image, thumbnails, multipart transport, job context paths.
-Last: Turn Report card + Hermes live tool progress + Keep-going chain shipped on master; then Composer attachments (UI + server + router + tests + docs + server-side enforcement).
-Next: Connector UX (per ROADMAP deferred items).
+Now: Connector UX shipped on cursor/connector-ux-shared-tool-plane-27e1 — per-seat skill/MCP toggles live in Settings → Connectors; replaces hermesSkills text box; ready for PR.
+Last: Attachments shipped — attach button, drag-drop, paste-image, thumbnails, multipart transport, job context paths.
+Next: PR review + merge. Then Turn Report card; then Hermes live tool progress; then Keep-going. Deferred: Memory pane / handoff / routines.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
