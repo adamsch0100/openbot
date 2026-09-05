@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import json
-import mimetypes
 import os
 import re
 import secrets
-import shutil
 import sys
 import threading
 import time
 import uuid
-from email.parser import BytesParser
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from io import BytesIO
 from urllib.parse import parse_qs, urlparse
 
 from .channel import public_channel
@@ -149,44 +145,71 @@ def _has_key(keyring: dict | None = None) -> bool:
     return any(row.get("has_key") for row in ring.get("accounts") or [])
 
 
-def _save_attachments(files: list, project_id: str | None) -> list[dict]:
+ALLOWED_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp",
+    ".pdf", ".txt", ".md", ".json", ".csv", ".xml", ".html",
+    ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".rb", ".php", ".swift", ".kt",
+    ".sql", ".yaml", ".yml", ".toml",
+    ".mp4", ".webm", ".mp3", ".wav", ".ogg"
+}
+MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024
+
+
+def _save_attachments(files: list, project_id: str | None) -> tuple[list[dict], str | None]:
     if not files:
-        return []
+        return [], None
     from .store import ROOT
     if project_id:
         org = ensure_org()
         match = next((row for row in org["projects"] if row.get("id") == project_id), None)
         if match:
             attach_dir = ROOT / "org" / "projects" / project_id / "attachments"
+            scope = f"projects/{project_id}"
         else:
             attach_dir = ROOT / "attachments"
+            scope = "staff"
     else:
         attach_dir = ROOT / "attachments"
+        scope = "staff"
     attach_dir.mkdir(parents=True, exist_ok=True)
     saved = []
     for file_data in files:
         filename = file_data.get("filename", "")
+        content = file_data.get("content", b"")
         if not filename:
             continue
+        if len(content) > MAX_ATTACHMENT_SIZE:
+            return [], f"File too large: {filename} ({len(content)} bytes, max {MAX_ATTACHMENT_SIZE})"
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            return [], f"File type not allowed: {filename}"
         safe_name = re.sub(r"[^\w\s.-]", "_", filename)
-        base, ext = os.path.splitext(safe_name)
+        base, ext_part = os.path.splitext(safe_name)
         counter = 0
         dest_name = safe_name
         dest_path = attach_dir / dest_name
         while dest_path.exists():
             counter += 1
-            dest_name = f"{base}_{counter}{ext}"
+            dest_name = f"{base}_{counter}{ext_part}"
             dest_path = attach_dir / dest_name
         try:
-            dest_path.write_bytes(file_data["content"])
-            saved.append({"filename": filename, "path": str(dest_path), "size": len(file_data["content"])})
-        except (OSError, IOError):
-            pass
-    return saved
+            dest_path.write_bytes(content)
+            rel_id = f"{scope}/{dest_name}"
+            saved.append({
+                "filename": filename,
+                "path": str(dest_path),
+                "id": rel_id,
+                "size": len(content)
+            })
+        except (OSError, IOError) as err:
+            return [], f"Failed to save {filename}: {err}"
+    return saved, None
 
 
 def _chat_context(data: dict, files: list | None = None) -> tuple:
     message = str(data.get("message") or "").strip()
+    if not message and files:
+        message = "(attachment)"
     folder = data.get("folder")
     preset = data.get("preset")
     project_id = data.get("project_id")
@@ -199,7 +222,9 @@ def _chat_context(data: dict, files: list | None = None) -> tuple:
     worker_id = worker_raw.strip() if isinstance(worker_raw, str) and worker_raw.strip() else None
     pid = project_id.strip() if isinstance(project_id, str) and project_id.strip() else None
     requested = preset if isinstance(preset, str) and preset in PRESET_ENGINE else None
-    attachments = _save_attachments(files or [], pid)
+    attachments, err = _save_attachments(files or [], pid)
+    if err:
+        raise ValueError(err)
     return message, folder, requested, pid, worker_id, attachments
 
 
@@ -211,7 +236,7 @@ def _record_job(job: dict, message: str, project_id: str | None, worker_id: str 
     if cleaned:
         turn["quote"] = cleaned
     if attachments:
-        turn["attachments"] = [{"filename": a["filename"], "path": a["path"], "size": a["size"]} for a in attachments]
+        turn["attachments"] = [{"filename": a["filename"], "id": a["id"], "size": a["size"]} for a in attachments]
     append_turn(key, turn)
     append_turn(key, {"role": "bot", "job": job})
 
@@ -339,6 +364,46 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _unlock_cookie(self, token: str) -> str:
         return f"openbot_unlock={token}; HttpOnly; SameSite=Lax; Path=/"
+
+    def _serve_attachment(self, path: str) -> None:
+        from .store import ROOT
+        rel_path = path.replace("/api/attachments/", "")
+        if ".." in rel_path or rel_path.startswith("/"):
+            return self._json(403, {"error": "invalid path"})
+        parts = rel_path.split("/", 1)
+        if len(parts) < 2:
+            return self._json(404, {"error": "not found"})
+        scope, filename = parts[0], parts[1]
+        if scope == "staff":
+            file_path = ROOT / "attachments" / filename
+        elif scope == "projects":
+            rest = filename.split("/", 1)
+            if len(rest) < 2:
+                return self._json(404, {"error": "not found"})
+            project_id, name = rest[0], rest[1]
+            file_path = ROOT / "org" / "projects" / project_id / "attachments" / name
+        else:
+            return self._json(404, {"error": "not found"})
+        if not file_path.exists() or not file_path.is_file():
+            return self._json(404, {"error": "not found"})
+        try:
+            content = file_path.read_bytes()
+            ext = file_path.suffix.lower()
+            content_type = {
+                ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                ".gif": "image/gif", ".webp": "image/webp",
+                ".pdf": "application/pdf", ".txt": "text/plain", ".md": "text/markdown",
+                ".json": "application/json", ".html": "text/html",
+                ".mp4": "video/mp4", ".webm": "video/webm"
+            }.get(ext, "application/octet-stream")
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "private, max-age=3600")
+            self.end_headers()
+            self.wfile.write(content)
+        except (OSError, IOError):
+            return self._json(500, {"error": "read failed"})
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
@@ -488,6 +553,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, {"sessions": list_sessions(instance_sessions.group(1))})
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+        if path.startswith("/api/attachments/"):
+            return self._serve_attachment(path)
         return super().do_GET()
 
     def do_POST(self):

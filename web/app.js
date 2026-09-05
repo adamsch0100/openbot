@@ -2004,7 +2004,7 @@ function renderAttachments(el, attachments) {
       const imgWrap = document.createElement("div");
       imgWrap.className = "bubble-attachment";
       const img = document.createElement("img");
-      img.src = att.path || "";
+      img.src = att.id ? `/api/attachments/${att.id}` : "";
       img.alt = filename;
       imgWrap.appendChild(img);
       attDiv.appendChild(imgWrap);
@@ -3443,7 +3443,8 @@ if ($("msg")) {
 }
 
 async function sendMessage(message, opts) {
-  if (!message) return;
+  const attachmentsToSend = [...pendingAttachments];
+  if (!message && !attachmentsToSend.length) return;
   if (liveRunId) {
     enqueueMessage(message, opts);
     return;
@@ -3461,9 +3462,9 @@ async function sendMessage(message, opts) {
   if (empty) empty.remove();
   const pendingQuote = (opts && opts.quote != null) ? opts.quote : replyQuote;
   clearReply();
-  const userEl = bubble("user", message);
+  const displayMessage = message || "(attachment)";
+  const userEl = bubble("user", displayMessage);
   if (pendingQuote) attachQuotePreview(userEl, pendingQuote);
-  const attachmentsToSend = [...pendingAttachments];
   if (attachmentsToSend.length) {
     const attDiv = document.createElement("div");
     attDiv.className = "bubble-attachments";
