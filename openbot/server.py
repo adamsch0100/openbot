@@ -245,6 +245,67 @@ _CRON_INGEST_AT = 0.0
 _CRON_COOLDOWN_SEC = 60.0
 
 
+def _parse_index_fields(text: str) -> dict:
+    """Parse Now/Last/Next/Blocker from INDEX markdown."""
+    fields = {}
+    for label in ("Now", "Last", "Next", "Blocker"):
+        match = re.search(rf"^{label}:\s*(.*)$", text or "", re.M)
+        fields[label.lower()] = (match.group(1).strip() if match else "") or "—"
+    return fields
+
+
+def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -> dict:
+    """Search across INDEX text and recent job RESULT snippets."""
+    query_lower = query.lower().strip()
+    if not query_lower:
+        return {"results": [], "index_fields": {}}
+    
+    results = []
+    
+    # Search INDEX
+    if project_id:
+        from .org import read_project_index
+        index_text = read_project_index(project_id)
+    else:
+        index_text = read_index()
+    
+    if query_lower in index_text.lower():
+        results.append({
+            "type": "index",
+            "source": "INDEX",
+            "snippet": index_text[:500],
+            "match": True
+        })
+    
+    # Search recent job results
+    jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
+    if project_id:
+        jobs = [job for job in jobs if job.get("project_id") == project_id]
+    
+    for job in jobs[:limit]:
+        text_field = str(job.get("text") or "")
+        if query_lower in text_field.lower():
+            snippet = re.sub(r"\s+", " ", text_field)[:300]
+            results.append({
+                "type": "job",
+                "source": f"{job.get('engine', 'unknown')} · {job.get('id', '')}",
+                "snippet": snippet,
+                "at": job.get("at", ""),
+                "job_id": job.get("id", ""),
+                "engine": job.get("engine", ""),
+                "worker_id": job.get("worker_id"),
+                "project_id": job.get("project_id")
+            })
+    
+    index_fields = _parse_index_fields(index_text)
+    
+    return {
+        "results": results[:30],
+        "index_fields": index_fields,
+        "query": query
+    }
+
+
 def _activity(*, ingest_cron: bool = False) -> dict:
     keyring = public_keyring()
     jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
@@ -529,6 +590,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, public_catalog())
         if path == "/api/org":
             return self._json(200, ensure_org())
+        if path == "/api/memory/search":
+            qs = parse_qs(urlparse(self.path).query)
+            query = (qs.get("q") or [""])[0].strip()
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            return self._json(200, _search_memory(query, project_id))
         channel = PROJECT_CHANNEL.match(path)
         if channel:
             pid = channel.group(1)

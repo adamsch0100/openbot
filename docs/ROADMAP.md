@@ -318,8 +318,8 @@ Multi-step daily flows (e.g., standup = git status → summarize → post). Powe
 ### Kanban UX Over INDEX
 Visual cards for Now/Next/Blocker instead of markdown editing. Improves memory UX but not urgent.
 
-### Memory Pane Enhancements
-Structured goal/context cards, search across job history. Useful but INDEX already works.
+### ✅ Memory Pane Enhancements (SHIPPED)
+Memory pane with structured Now/Last/Next/Blocker cards + search across INDEX and job RESULT snippets. Files-first: edits still write INDEX/brains, not chat JSON.
 
 ### Skills Catalog Polish
 UI for browsing and toggling Hermes skills. Already configurable in Settings; catalog is polish.

@@ -194,6 +194,7 @@
           <button type="button" class="drawer-tab" data-panel="models">Models</button>
           <button type="button" class="drawer-tab" data-panel="connectors">Connectors</button>
           <button type="button" class="drawer-tab" data-panel="git">Git</button>
+          <button type="button" class="drawer-tab" data-panel="memory">Memory</button>
           <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
           <button type="button" class="drawer-tab" data-panel="about">About</button>
         </nav>
@@ -407,6 +408,15 @@
               <button type="button" class="ghost-btn" id="gotoOpenCode">Open OpenCode</button>
               <p class="muted" id="gitStatusNote"></p>
             </div>
+          </section>
+          <section class="drawer-panel" id="panel-memory">
+            <p class="lede">Structured INDEX cards and search across job history. Memory lives in files (INDEX/brains), not chat JSON.</p>
+            <div class="field">
+              <label for="memorySearch">Search INDEX and job results</label>
+              <input id="memorySearch" type="search" placeholder="Search memory..." autocomplete="off" />
+            </div>
+            <div id="memoryCards" class="memory-cards"></div>
+            <div id="memoryResults" class="memory-results"></div>
           </section>
           <section class="drawer-panel" id="panel-usage">
             <div class="field-row">

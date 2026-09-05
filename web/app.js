@@ -139,10 +139,10 @@ const PANEL_TITLES = {
   models: "Models",
   connectors: "Connectors",
   git: "Git",
+  memory: "Memory",
   usage: "Usage",
   import: "Import",
   channels: "Channels",
-  memory: "Usage",
   jobs: "Usage",
   about: "About"
 };
@@ -2121,6 +2121,7 @@ function setSettingsPanel(name) {
   if (name === "import") fillImport(cfg.hermes_instances || []);
   if (name === "ceo") fillCeoPanel();
   if (name === "channels") fillChannels();
+  if (name === "memory") loadMemory();
   if (name === "usage") loadJobs();
   if ($("settings") && !$("settings").classList.contains("hidden")) syncHash();
 }
@@ -4246,6 +4247,67 @@ async function loadSkillHints() {
   } catch (_err) {
     /* optional */
   }
+}
+
+async function loadMemory() {
+  const query = $("memorySearch") ? $("memorySearch").value.trim() : "";
+  try {
+    const params = new URLSearchParams({ q: query });
+    if (projectId) params.set("project_id", projectId);
+    const res = await fetch(`/api/memory/search?${params}`);
+    const data = await res.json();
+    renderMemoryCards(data.index_fields || {});
+    renderMemoryResults(data.results || [], query);
+  } catch (_err) {
+    if ($("memoryCards")) $("memoryCards").innerHTML = `<p class="muted">Failed to load memory</p>`;
+  }
+}
+
+function renderMemoryCards(fields) {
+  const el = $("memoryCards");
+  if (!el) return;
+  const entries = [
+    ["Now", fields.now || "—"],
+    ["Last", fields.last || "—"],
+    ["Next", fields.next || "—"],
+    ["Blocker", fields.blocker || "—"]
+  ];
+  el.innerHTML = entries.map(([label, value]) => {
+    const isBlocked = label === "Blocker" && value !== "—";
+    const className = isBlocked ? "memory-card blocked" : "memory-card";
+    return `<div class="${className}">
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${escapeHtml(value)}</dd>
+    </div>`;
+  }).join("");
+}
+
+function renderMemoryResults(results, query) {
+  const el = $("memoryResults");
+  if (!el) return;
+  if (!query) {
+    el.innerHTML = "";
+    return;
+  }
+  if (results.length === 0) {
+    el.innerHTML = `<p class="muted">No results for "${escapeHtml(query)}"</p>`;
+    return;
+  }
+  el.innerHTML = `<h4>Search results (${results.length})</h4>` + results.map((result) => {
+    const sourceLabel = result.type === "index" ? "INDEX" : result.source;
+    return `<div class="memory-result">
+      <div class="memory-result-meta">${escapeHtml(sourceLabel)}</div>
+      <div class="memory-result-snippet">${escapeHtml(result.snippet)}</div>
+    </div>`;
+  }).join("");
+}
+
+if ($("memorySearch")) {
+  let memorySearchTimeout = null;
+  $("memorySearch").addEventListener("input", () => {
+    if (memorySearchTimeout) clearTimeout(memorySearchTimeout);
+    memorySearchTimeout = setTimeout(() => loadMemory(), 300);
+  });
 }
 
 boot().catch((err) => {
