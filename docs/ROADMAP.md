@@ -406,6 +406,26 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 - Multi-seat fan-out (one message to multiple seats) — single @mention path shipped for v1
 - Full handoff bus protocol overhaul, routines, or Builder validation
 
+### **Builder Validation Gate** ✅
+**Shipped in PR #14** — pre-Accept validation runs syntax/lint checks on pending Builder diffs; failures block Accept with clear error chip; Force Accept escape hatch allows operator to proceed despite errors.
+
+**What shipped:**
+- Validation runner (`openbot/validator.py`) — Python `py_compile` + JS `node --check`, optional ruff/eslint if configured in repo
+- `decide_diff` integration — validation gate runs before Accept (unless `force=True`)
+- Validation failure response — returns `validation_failed: true` + `validation_error` with first 10 errors
+- Web UI error card — shows validation errors in danger-styled card with Force Accept / Fix First buttons
+- Force Accept button — `force=true` parameter bypasses validation, records force in job/activity
+- Comprehensive tests — 11 test cases with real assertions, mock/subprocess where needed
+
+**Acceptance:**
+1. Before Accept: syntax/lint checks on changed files (Python, JS) ✓
+2. On failure: block Accept, show error card with failing command + short log ✓
+3. Force Accept escape: button records force and proceeds ✓
+4. On success: Accept proceeds as before ✓
+5. Focused tests with real assertions ✓
+6. ROADMAP + INDEX updated ✓
+7. PR against master ✓
+
 ---
 
 ### **Handoff Bus Protocol** ✅
@@ -439,7 +459,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next PR: **Builder Validation Gate** — syntax/lint check before Accept to prevent broken diffs from landing.
+Next PR: **Routines** — multi-step scheduled flows for recurring work.
 
 ---
 

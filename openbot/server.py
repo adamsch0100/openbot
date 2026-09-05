@@ -1015,7 +1015,8 @@ class Handler(SimpleHTTPRequestHandler):
         match = JOB_ACTION.match(path)
         if match:
             job_id, action = match.group(1), match.group(2)
-            result = decide_diff(job_id, accept=(action == "accept"))
+            force = bool(data.get("force")) if isinstance(data, dict) else False
+            result = decide_diff(job_id, accept=(action == "accept"), force=force)
             code = 200 if result.get("ok") else 400
             # decide_diff already returns the correct INDEX (project or staff)
             if "index" not in result:

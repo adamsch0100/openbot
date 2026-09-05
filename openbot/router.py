@@ -1643,7 +1643,7 @@ def public_job(receipt: dict | None) -> dict:
     return out
 
 
-def decide_diff(job_id: str, accept: bool) -> dict:
+def decide_diff(job_id: str, accept: bool, force: bool = False) -> dict:
     job = read_job(job_id)
     if job is None:
         return {"error": "job not found", "ok": False}
@@ -1657,19 +1657,53 @@ def decide_diff(job_id: str, accept: bool) -> dict:
         patch_scope(pid, wid, label, value)
 
     if accept:
-        updated = update_job(
-            job_id,
-            {
-                "diff_pending": False,
-                "accepted": True,
-                "rejected": False,
-            },
-        )
+        # Run validation gate before accepting (unless force=True)
+        validation_bypassed = False
+        bypassed_error = None
+        if not force:
+            from .validator import validate_changes
+            
+            valid, detail = validate_changes(
+                str(folder),
+                job.get("diff") or "",
+                job.get("untracked") or []
+            )
+            if not valid:
+                # Validation failed - block Accept
+                return {
+                    "ok": False,
+                    "validation_failed": True,
+                    "validation_error": detail,
+                    "job": public_job(job),
+                    "index": read_project_index(pid) if pid else read_index(),
+                }
+        else:
+            # Force accept - record that validation was bypassed
+            validation_bypassed = True
+            from .validator import validate_changes
+            _, bypassed_error = validate_changes(
+                str(folder),
+                job.get("diff") or "",
+                job.get("untracked") or []
+            )
+        
+        # Validation passed or forced - proceed with accept
+        update_fields = {
+            "diff_pending": False,
+            "accepted": True,
+            "rejected": False,
+        }
+        if validation_bypassed:
+            update_fields["force_accepted"] = True
+            if bypassed_error:
+                update_fields["validation_error"] = bypassed_error[:500]  # Cap at 500 chars
+        
+        updated = update_job(job_id, update_fields)
         patch_lines("Last", f"accepted diff {job_id}")
         patch_lines("Next", "Ask for the next change")
         patch_lines("Blocker", "—")
         rollup_staff(pid, wid, f"accepted diff {job_id}")
-        log_approval(updated or job, True)
+        log_approval(updated or job, True, force=validation_bypassed)
         return {
             "ok": True,
             "accepted": True,
@@ -1694,7 +1728,7 @@ def decide_diff(job_id: str, accept: bool) -> dict:
     patch_lines("Next", "Ask Builder again, or change the folder")
     patch_lines("Blocker", "—")
     rollup_staff(pid, wid, f"rejected diff {job_id}")
-    log_approval(updated or job, False)
+    log_approval(updated or job, False, force=False)
     return {
         "ok": True,
         "accepted": False,
