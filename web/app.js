@@ -2809,19 +2809,63 @@ async function refreshThreadTail() {
   scrollChatBottom();
 }
 
-async function decide(jobId, action, actionsEl) {
+async function decide(jobId, action, actionsEl, force = false) {
   actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = true; });
   const res = await fetch(`/api/jobs/${jobId}/${action}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: "{}"
+    body: JSON.stringify({ force: force })
   });
   const data = await res.json();
+  
+  // Handle validation failure
+  if (!data.ok && data.validation_failed) {
+    // Show validation error card with Force Accept option
+    actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+    
+    const errorCard = document.createElement("div");
+    errorCard.className = "card card-blocker";
+    errorCard.innerHTML = `
+      <div class="meta">validation failed · syntax/lint errors block Accept</div>
+      <pre class="validation-error">${escapeHtml(data.validation_error || "validation failed")}</pre>
+      <div class="actions">
+        <button type="button" class="send" id="forceAccept-${jobId}">Force Accept</button>
+        <button type="button" class="ghost-btn" id="fixFirst-${jobId}">Fix First</button>
+      </div>
+    `;
+    
+    // Insert error card after the diff card
+    const diffCard = actionsEl.closest(".card");
+    if (diffCard && diffCard.parentNode) {
+      diffCard.parentNode.insertBefore(errorCard, diffCard.nextSibling);
+    } else {
+      stream.appendChild(errorCard);
+    }
+    
+    // Wire up Force Accept button
+    const forceBtn = document.getElementById(`forceAccept-${jobId}`);
+    const fixBtn = document.getElementById(`fixFirst-${jobId}`);
+    if (forceBtn) {
+      forceBtn.addEventListener("click", () => {
+        errorCard.remove();
+        decide(jobId, "accept", actionsEl, true);
+      });
+    }
+    if (fixBtn) {
+      fixBtn.addEventListener("click", () => {
+        errorCard.remove();
+        actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+      });
+    }
+    
+    return;
+  }
+  
   if (data.index) renderIndex(data.index);
   if (data.spend) renderSpend(data.spend);
   
   const statusText = data.ok
-    ? (action === "accept" ? "diff accepted" : "diff rejected · restored")
+    ? (action === "accept" ? (force ? "diff force accepted" : "diff accepted") : "diff rejected · restored")
     : (data.error || "diff action failed");
   card("bot", statusText, `job ${jobId}`);
   

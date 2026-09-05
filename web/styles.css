@@ -1413,6 +1413,19 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .gate-line.blocked { color: #c45c4a; }
 .diff { max-height: 280px; overflow: auto; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); overflow-wrap: anywhere; }
 .diff-actions { display: flex; gap: 8px; margin-top: 8px; }
+.card-blocker { border-left: 3px solid var(--danger); background: rgba(201, 137, 106, 0.08); }
+.validation-error {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--danger);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  border-radius: 6px;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
 .seat-autocomplete {
   position: absolute;
   bottom: 100%;

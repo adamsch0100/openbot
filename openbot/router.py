@@ -1643,7 +1643,7 @@ def public_job(receipt: dict | None) -> dict:
     return out
 
 
-def decide_diff(job_id: str, accept: bool) -> dict:
+def decide_diff(job_id: str, accept: bool, force: bool = False) -> dict:
     job = read_job(job_id)
     if job is None:
         return {"error": "job not found", "ok": False}
@@ -1657,6 +1657,25 @@ def decide_diff(job_id: str, accept: bool) -> dict:
         patch_scope(pid, wid, label, value)
 
     if accept:
+        # Run validation gate before accepting (unless force=True)
+        if not force:
+            from .validator import validate_changes
+            
+            valid, detail = validate_changes(
+                str(folder),
+                job.get("diff") or "",
+                job.get("untracked") or []
+            )
+            if not valid:
+                # Validation failed - block Accept
+                return {
+                    "ok": False,
+                    "validation_failed": True,
+                    "validation_error": detail,
+                    "job": public_job(job),
+                    "index": read_project_index(pid) if pid else read_index(),
+                }
+        # Validation passed or forced - proceed with accept
         updated = update_job(
             job_id,
             {
