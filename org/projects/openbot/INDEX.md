@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Ticket 1 — operator instance, now with contracts and an action gate on the diff card.
-Last: CEO INDEX has a Contract. Specialists hand off through org/projects/openbot/bus, not chat.
-Next: Folder → change → diff card Accept/Reject → INDEX. Hard-refresh so job cards show the gate line.
-Blocker: Do not start a local Telegram gateway while Railway is live.
+Now: Builder Delight Loop (ROADMAP PR #1) shipped — Accept/Reject → inline Brief card with Now/Last/Next/Blocker, no window switching.
+Last: OpenCode · Fixed server.py INDEX overwrite bug, added indexField() helper, styled Brief update card with mint accent.
+Next: Push cursor/builder-delight-loop-52e6 branch and create PR with end-to-end test demonstration notes.
+Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
 Folder: C:\Users\adamm\Projects\openbot

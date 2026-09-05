@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: ROADMAP.md drafted with locked CEO ship order (PR1 Builder delight, PR2 Chat OS reliability, PR3 Sidebar Agent OS). Waiting CEO review before merge.
-Last: cloud agent · Investigated repo + Railway surface, documented what works, encoded CEO locked plan into ROADMAP.md.
-Next: Merge ROADMAP PR after CEO review, then implement PR #1 Builder delight loop (Week 2 gate per OPENBOT.md).
+Now: Builder Delight Loop (ROADMAP PR #1) implemented on cursor/builder-delight-loop-52e6 — inline Brief updates after Accept, project INDEX preserved, mint accent card.
+Last: OpenCode · Implemented folder → opencode run → diff Accept/Reject → inline Brief update flow without window switching.
+Next: Push PR #1 branch, create pull request with test notes demonstrating the delight loop end-to-end.
 Blocker: —
 
 ## Vault
