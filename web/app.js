@@ -2180,17 +2180,13 @@ function renderJob(job) {
       const resultSnippet = lastResult.slice(-600);
       const continueMsg = `Continue. Last RESULT:\n${resultSnippet}\n\nNext: ${next}`;
       
-      // Get or create chain context
-      let ctx = chainContexts.get(aim);
-      if (!ctx || !job.step_count) {
-        ctx = { step: 1, total: 1, last_result: resultSnippet };
-      } else {
-        ctx = {
-          step: job.step_count + 1,
-          total: Math.max(job.total_steps, job.step_count + 1),
-          last_result: resultSnippet
-        };
-      }
+      // ALWAYS increment: step = (job.step_count||0)+1, total = max
+      const step = (job.step_count || 0) + 1;
+      const ctx = {
+        step: step,
+        total: Math.max(job.total_steps || 0, step),
+        last_result: resultSnippet
+      };
       chainContexts.set(aim, ctx);
       
       sendMessage(continueMsg, lane ? { preset: lane, chain_context: ctx } : { chain_context: ctx });
