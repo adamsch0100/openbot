@@ -14,7 +14,7 @@ from pathlib import Path
 from .config import load_config, load_settings
 from .detect import detect
 from .gitutil import diff_against_head, new_untracked, restore_snapshot, snapshot
-from .hermes import chat as hermes_chat
+from .hermes import TALK_TIMEOUT, chat as hermes_chat
 from .hermes import chat_packet, cron_create, job_packet, parse_schedule, split_model
 from .keyring import (
     LOGIN_FILE,
@@ -319,14 +319,16 @@ def clean_hermes_fail_hint(ran: dict | None) -> str:
             "OpenBot now sets security.allow_data_training_tiers_noninteractive on the Hermes home — retry."
         )
     if code == 127:
-        return "Hermes Agent binary missing on this box — answered from the brief."
+        return "Hermes Agent binary missing. Install Hermes Agent, then retry. Answered from the brief."
     if code == 2:
-        return "Chat needs a seated model with a provider prefix. Open Models and pick Chat."
+        return "Chat needs a seated model. Open Settings → Models → Chat and pick a model."
     if code == 124:
-        return "Hermes chat timed out — answered from the brief."
+        return f"Hermes chat timed out after {TALK_TIMEOUT}s. Answered from the brief."
+    if "wallet" in low or "balance" in low or "billing" in low:
+        return "Keyring wallets empty or model unavailable. Check Keys or try a different Chat model."
     if raw and raw not in {"(no output)", "Stopped.", "hermes timed out"} and len(raw) < 280:
-        return f"Hermes chat failed ({code}): {raw}"
-    return f"Hermes chat exited {code} — answered from the brief."
+        return f"Hermes chat failed (exit {code}): {raw[:200]}"
+    return f"Hermes chat exited {code}. Answered from the brief."
 
 
 def _work_folder(folder: str | None, project_id: str | None = None) -> str:
@@ -990,6 +992,13 @@ def _handle_preset(
             and not file_reply
             and bool(engines["hermes"]["present"])
         )
+        # Emit progress for all Cos paths (even board-only) so UI never hangs silent
+        who = node_label(project_id, worker_id) if project_id else "Chief of Staff"
+        if on_progress:
+            try:
+                _call_progress(on_progress, f"{who} · {'Chat' if use_llm else 'Brief'}", "cos")
+            except Exception:
+                pass
         if skill_ask:
             engine = "board"
             text = skills_reply()
@@ -1041,7 +1050,13 @@ def _handle_preset(
                     _call_progress(on_progress, f"{who} · Chat", "cos")
                 except Exception:
                     pass
-            for account, model in attempts:
+            for idx, (account, model) in enumerate(attempts):
+                # Emit progress for keyring fallback attempts
+                if idx > 0 and on_progress:
+                    try:
+                        _call_progress(on_progress, f"{who} · Chat (trying account {idx + 1})", "cos")
+                    except Exception:
+                        pass
                 if account.get("id"):
                     activate_account(str(account["id"]))
                 else:
