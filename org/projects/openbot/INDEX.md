@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Builder Delight Loop PR #2 open — https://github.com/adamsch0100/openbot/pull/2 — ready for CEO verification against ROADMAP criteria.
-Last: cloud agent · Created PR with comprehensive test notes, acceptance criteria checklist, end-to-end flow documentation.
-Next: Review PR #2 against ROADMAP PR1 acceptance criteria, test the delight loop manually, merge when verified.
+Now: ROADMAP PR #3 Sidebar Agent OS — PR #4 open with avatars, Now/Blocker chips, visual states. Awaiting manual verification.
+Last: cloud agent · Implemented sidebar teammate panel: initials avatars, INDEX status extraction, busy pulsing, ping states, enhanced CSS.
+Next: Manual verification per PR_MANUAL_VERIFY.md checklist, capture screenshots, mark PR #4 ready for merge.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

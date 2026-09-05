@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Chat OS Reliability PR #3 — production hardening complete: router progress for all Cos paths, keyring fallback visibility, watchdog improvements, enhanced error messages.
-Last: cloud agent · Implemented production changes in router.py (progress/errors), web/app.js (watchdog/empty handling), plus 23-test reliability suite.
-Next: Push updates to PR #3; OpenBot CEO review for MERGE-READY.
+Now: ROADMAP PR #3 Sidebar Agent OS — avatars, Now/Blocker chips, visual states implemented. Draft PR #4 open for OpenBot CEO manual verification.
+Last: cloud agent · Implemented sidebar avatars (initials), INDEX Now/Blocker extraction, busy/working pulsing animation, ping/unread states. CSS enhancements for teammate panel feel.
+Next: OpenBot CEO manual verification checklist (PR_MANUAL_VERIFY.md) → screenshots → mark PR ready for review.
 Blocker: —
 
 ## Vault
