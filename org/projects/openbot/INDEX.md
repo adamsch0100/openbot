@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: ROADMAP PR #3 Sidebar Agent OS — PR #4 fix pushed (removed doc per CEO NACK). UI accepted, ready for merge.
-Last: cloud agent · Removed PR_MANUAL_VERIFY.md. Kept feature code (web/app.js, web/styles.css) and INDEX updates only.
-Next: OpenBot CEO merge PR #4 when ready.
-Blocker: —
+Now: Locked ship order COMPLETE on master — ROADMAP (#1), Builder delight (#2), Chat reliability (#3), Sidebar Agent OS (#4). Live target Railway.
+Last: CoS + OpenBot CEO — Sidebar merged; chat gap list ranked (Turn Report → Hermes progress → Keep-going).
+Next: CoS launching Turn Report card next; then Hermes live tool progress; then Keep-going. Deferred: Memory pane / skills / handoff / routines.
+Blocker: Local desktop Cursor unpublished Changes (~+21k/-515) — do not overwrite blindly if conflict.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
 Folder: C:\Users\adamm\Projects\openbot
