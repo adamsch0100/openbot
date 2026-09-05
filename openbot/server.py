@@ -713,7 +713,9 @@ class Handler(SimpleHTTPRequestHandler):
             job_id, action = match.group(1), match.group(2)
             result = decide_diff(job_id, accept=(action == "accept"))
             code = 200 if result.get("ok") else 400
-            result["index"] = read_index()
+            # decide_diff already returns the correct INDEX (project or staff)
+            if "index" not in result:
+                result["index"] = read_index()
             result["spend"] = _public_config()["spend"]
             return self._json(code, result)
 

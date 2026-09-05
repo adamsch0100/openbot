@@ -822,6 +822,10 @@ body {
   overflow: hidden;
 }
 .card.user { border-left: 3px solid var(--bronze); }
+.card.brief { 
+  border-left: 3px solid var(--mint); 
+  background: rgba(34, 51, 44, 0.2);
+}
 .card .meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; overflow-wrap: anywhere; }
 .card pre {
   white-space: pre-wrap;

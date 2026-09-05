@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: ROADMAP.md drafted with locked CEO ship order (PR1 Builder delight, PR2 Chat OS reliability, PR3 Sidebar Agent OS). Waiting CEO review before merge.
-Last: cloud agent · Investigated repo + Railway surface, documented what works, encoded CEO locked plan into ROADMAP.md.
-Next: Merge ROADMAP PR after CEO review, then implement PR #1 Builder delight loop (Week 2 gate per OPENBOT.md).
+Now: Builder Delight Loop PR created (https://github.com/adamsch0100/openbot/pull/2) — ready for CoS/OpenBot CEO review against ROADMAP PR1 criteria.
+Last: cloud agent · Implemented inline Brief updates after Accept/Reject, fixed project INDEX preservation bug, created comprehensive PR with test notes.
+Next: OpenBot CEO reviews PR #2 against ROADMAP acceptance criteria; merge when approved.
 Blocker: —
 
 ## Vault

@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Ticket 1 — operator instance, now with contracts and an action gate on the diff card.
-Last: CEO INDEX has a Contract. Specialists hand off through org/projects/openbot/bus, not chat.
-Next: Folder → change → diff card Accept/Reject → INDEX. Hard-refresh so job cards show the gate line.
-Blocker: Do not start a local Telegram gateway while Railway is live.
+Now: Builder Delight Loop PR #2 open — https://github.com/adamsch0100/openbot/pull/2 — ready for CEO verification against ROADMAP criteria.
+Last: cloud agent · Created PR with comprehensive test notes, acceptance criteria checklist, end-to-end flow documentation.
+Next: Review PR #2 against ROADMAP PR1 acceptance criteria, test the delight loop manually, merge when verified.
+Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
 Folder: C:\Users\adamm\Projects\openbot

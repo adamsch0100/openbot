@@ -147,6 +147,12 @@ function indexNow(text) {
   return (match && match[1].trim()) || "source of truth";
 }
 
+function indexField(text, field) {
+  const pattern = new RegExp(`^${field}:\\s*(.*)$`, "m");
+  const match = String(text || "").match(pattern);
+  return (match && match[1].trim()) || "—";
+}
+
 function renderIndex(text) {
   if ($("indexCard")) $("indexCard").textContent = text || "(empty brief)";
   if ($("indexSummary")) $("indexSummary").textContent = `Brief · ${indexNow(text)}`;
@@ -2328,9 +2334,26 @@ async function decide(jobId, action, actionsEl) {
   const data = await res.json();
   if (data.index) renderIndex(data.index);
   if (data.spend) renderSpend(data.spend);
-  card("bot", data.ok
+  
+  const statusText = data.ok
     ? (action === "accept" ? "diff accepted" : "diff rejected · restored")
-    : (data.error || "diff action failed"), `job ${jobId}`);
+    : (data.error || "diff action failed");
+  card("bot", statusText, `job ${jobId}`);
+  
+  // Show inline Brief update after Accept/Reject
+  if (data.ok && data.index) {
+    const now = indexField(data.index, "Now");
+    const last = indexField(data.index, "Last");
+    const next = indexField(data.index, "Next");
+    const blocker = indexField(data.index, "Blocker");
+    
+    let briefLines = [`Now: ${now}`];
+    if (last !== "—") briefLines.push(`Last: ${last}`);
+    if (next !== "—") briefLines.push(`Next: ${next}`);
+    if (blocker !== "—") briefLines.push(`Blocker: ${blocker}`);
+    
+    card("bot brief", briefLines.join("\n"), "Brief updated");
+  }
 }
 
 async function loadJobs() {
