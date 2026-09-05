@@ -523,6 +523,7 @@ def _packet_extra(
     preset: str = "cos",
     worker_id: str | None = None,
     hermes_home: str | None = None,
+    attachments: list | None = None,
 ) -> str:
     bits: list[str] = []
     wire = wiring_brief(project_id)
@@ -530,6 +531,11 @@ def _packet_extra(
         bits.append(f"CHIEF OF STAFF:\n{wire}")
     if quote:
         bits.append(f"QUOTE (local thread, one snippet, not a replay):\n{quote}")
+    if attachments:
+        att_lines = []
+        for att in attachments:
+            att_lines.append(f"  {att['filename']} ({att['size']} bytes): {att['path']}")
+        bits.append(f"ATTACHMENTS:\n" + "\n".join(att_lines))
     hints = last_results(project_id=project_id)
     if hints:
         bits.append(f"HINTS:\n{hints}")
@@ -700,6 +706,7 @@ def handle(
     run_id: str | None = None,
     quote: str | None = None,
     chain_context: dict | None = None,
+    attachments: list | None = None,
 ) -> dict:
     node = "staff"
     if worker_id:
@@ -773,6 +780,7 @@ def handle(
                 run_id,
                 resume_id if step in {"think", "research", "ops"} else None,
                 on_progress,
+                attachments if index == 0 else None,
             )
         )
         carry = jobs[-1].get("text") or ""
@@ -832,6 +840,7 @@ def _handle_preset(
     run_id: str | None = None,
     resume_id: str | None = None,
     on_progress=None,
+    attachments: list | None = None,
 ) -> dict:
     def patch_index_line(label: str, value: str) -> None:
         patch_scope(project_id, worker_id, label, value)
@@ -940,6 +949,7 @@ def _handle_preset(
                         preset="think",
                         worker_id=worker_id,
                         hermes_home=hermes_home_dir,
+                        attachments=attachments,
                     ),
                 )
             ran = hermes_chat(
@@ -1150,7 +1160,7 @@ def _handle_preset(
             usage_model = "engine-default"
             git_snap = snapshot(work)
             model = seated_or_auto(load_settings(), "code", seats) or DEFAULT_CODE_MODEL
-            extra = _packet_extra(project_id, quote=quote, preset="builder", worker_id=worker_id)
+            extra = _packet_extra(project_id, quote=quote, preset="builder", worker_id=worker_id, attachments=attachments)
             prompt = (
                 "OpenBot Chat dispatched this to OpenCode for this CEO. "
                 "Edit the Code folder. Diffs come back to this chat for the operator.\n"
@@ -1308,6 +1318,7 @@ def _handle_preset(
                         preset="research",
                         worker_id=worker_id,
                         hermes_home=hermes_home_dir,
+                        attachments=attachments,
                     ),
                 )
                 ran = hermes_chat(
@@ -1417,6 +1428,7 @@ def _handle_preset(
                         "Silent on success. Idempotent retries. Never send, publish, pay, or delete.",
                         quote,
                         preset="ops",
+                        attachments=attachments,
                         worker_id=worker_id,
                         hermes_home=hermes_home_dir,
                     ),

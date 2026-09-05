@@ -37,6 +37,7 @@ let seenJobIds = new Set();
 let replyQuote = "";
 let lastOcFolder = "";
 let lastHermesHome = "";
+let pendingAttachments = [];
 
 function aimKey(pid, wid) {
   return `${pid == null ? projectId : pid}::${wid == null ? workerId : wid}`;
@@ -60,6 +61,73 @@ function syncLiveFromAim() {
   lockComposer(Boolean(cfg.has_key));
   paintLanes();
   paintQueueChip();
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function addAttachment(file) {
+  const MAX_SIZE = 50 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    showHint("File too large (max 50 MB)");
+    return;
+  }
+  if (pendingAttachments.some((a) => a.file.name === file.name && a.file.size === file.size)) {
+    return;
+  }
+  pendingAttachments.push({ file, id: Math.random().toString(36).slice(2) });
+  paintAttachments();
+}
+
+function removeAttachment(id) {
+  pendingAttachments = pendingAttachments.filter((a) => a.id !== id);
+  paintAttachments();
+}
+
+function clearAttachments() {
+  pendingAttachments = [];
+  paintAttachments();
+}
+
+function paintAttachments() {
+  const preview = $("attachmentsPreview");
+  if (!preview) return;
+  if (!pendingAttachments.length) {
+    preview.classList.add("hidden");
+    preview.innerHTML = "";
+    return;
+  }
+  preview.classList.remove("hidden");
+  preview.innerHTML = pendingAttachments.map((att) => {
+    const isImage = att.file.type.startsWith("image/");
+    const thumbHtml = isImage
+      ? `<img src="${URL.createObjectURL(att.file)}" alt="" class="attachment-thumb" />`
+      : `<div class="attachment-icon">📄</div>`;
+    return `
+      <div class="attachment-item" data-id="${att.id}">
+        ${thumbHtml}
+        <div class="attachment-info">
+          <div class="attachment-name" title="${escapeHtml(att.file.name)}">${escapeHtml(att.file.name)}</div>
+          <div class="attachment-size">${formatFileSize(att.file.size)}</div>
+        </div>
+        <button type="button" class="attachment-remove" data-id="${att.id}">×</button>
+      </div>
+    `;
+  }).join("");
+  preview.querySelectorAll(".attachment-remove").forEach((btn) => {
+    btn.addEventListener("click", () => removeAttachment(btn.dataset.id));
+  });
+}
+
+function showHint(msg) {
+  const hint = $("workHint");
+  if (!hint) return;
+  hint.textContent = msg;
+  hint.classList.remove("hidden");
+  setTimeout(() => hint.classList.add("hidden"), 3000);
 }
 const PANEL_TITLES = {
   you: "You",
@@ -1925,6 +1993,34 @@ function bubble(kind, body) {
   return el;
 }
 
+function renderAttachments(el, attachments) {
+  if (!el || !attachments || !attachments.length) return;
+  const attDiv = document.createElement("div");
+  attDiv.className = "bubble-attachments";
+  attachments.forEach((att) => {
+    const filename = att.filename || "";
+    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(filename);
+    if (isImage) {
+      const imgWrap = document.createElement("div");
+      imgWrap.className = "bubble-attachment";
+      const img = document.createElement("img");
+      img.src = att.id ? `/api/attachments/${att.id}` : "";
+      img.alt = filename;
+      imgWrap.appendChild(img);
+      attDiv.appendChild(imgWrap);
+    } else {
+      const fileWrap = document.createElement("div");
+      fileWrap.className = "bubble-attachment";
+      const fileDiv = document.createElement("div");
+      fileDiv.className = "bubble-attachment-file";
+      fileDiv.innerHTML = `<span class="bubble-attachment-icon">📄</span><span class="bubble-attachment-name">${escapeHtml(filename)}</span>`;
+      fileWrap.appendChild(fileDiv);
+      attDiv.appendChild(fileWrap);
+    }
+  });
+  el.appendChild(attDiv);
+}
+
 function appendWorkDetails(el, job) {
   if (!el || el.querySelector(".bubble-work")) return;
   const engine = job.engine || "board";
@@ -2402,6 +2498,7 @@ function renderTurns(turns, extras) {
       lastBot = "";
       const el = bubble("user", turn.text || "");
       if (turn.quote) attachQuotePreview(el, turn.quote);
+      if (turn.attachments) renderAttachments(el, turn.attachments);
       const next = rows[index + 1];
       const nextLane = next && next.job ? workLane(next.job) : "";
       el.dataset.lane = nextLane || "cos";
@@ -3253,8 +3350,9 @@ if ($("replyChipClear")) {
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const message = $("msg").value.trim();
+  const hasAttach = pendingAttachments.length > 0;
   if (liveRunId) {
-    if (message) {
+    if (message || hasAttach) {
       $("msg").value = "";
       sizeComposer();
       enqueueMessage(message);
@@ -3263,7 +3361,7 @@ $("form").addEventListener("submit", async (e) => {
     await stopLive();
     return;
   }
-  if (!message) return;
+  if (!message && !hasAttach) return;
   $("msg").value = "";
   sizeComposer();
   await sendMessage(message);
@@ -3274,7 +3372,8 @@ if ($("msg")) {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
     const message = $("msg").value.trim();
-    if (!message || $("msg").disabled) return;
+    const hasAttach = pendingAttachments.length > 0;
+    if ((!message && !hasAttach) || $("msg").disabled) return;
     $("msg").value = "";
     sizeComposer();
     if (liveRunId) {
@@ -3301,9 +3400,53 @@ if ($("queueChipClear")) {
     lockComposer(Boolean(cfg.has_key));
   });
 }
+if ($("attachBtn")) {
+  $("attachBtn").addEventListener("click", () => {
+    const input = $("attachInput");
+    if (input) input.click();
+  });
+}
+if ($("attachInput")) {
+  $("attachInput").addEventListener("change", (event) => {
+    const files = Array.from(event.target.files || []);
+    files.forEach((file) => addAttachment(file));
+    event.target.value = "";
+  });
+}
+if ($("form")) {
+  const form = $("form");
+  form.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    form.classList.add("drag-over");
+  });
+  form.addEventListener("dragleave", (event) => {
+    if (event.target === form) {
+      form.classList.remove("drag-over");
+    }
+  });
+  form.addEventListener("drop", (event) => {
+    event.preventDefault();
+    form.classList.remove("drag-over");
+    const files = Array.from(event.dataTransfer.files || []);
+    files.forEach((file) => addAttachment(file));
+  });
+}
+if ($("msg")) {
+  $("msg").addEventListener("paste", (event) => {
+    const items = Array.from(event.clipboardData.items || []);
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        event.preventDefault();
+        const file = item.getAsFile();
+        if (file) addAttachment(file);
+      }
+    }
+  });
+}
 
 async function sendMessage(message, opts) {
-  if (!message) return;
+  const attachmentsToSend = [...pendingAttachments];
+  if (!message && !attachmentsToSend.length) return;
   if (liveRunId) {
     enqueueMessage(message, opts);
     return;
@@ -3321,8 +3464,35 @@ async function sendMessage(message, opts) {
   if (empty) empty.remove();
   const pendingQuote = (opts && opts.quote != null) ? opts.quote : replyQuote;
   clearReply();
-  const userEl = bubble("user", message);
+  const displayMessage = message || "(attachment)";
+  const userEl = bubble("user", displayMessage);
   if (pendingQuote) attachQuotePreview(userEl, pendingQuote);
+  if (attachmentsToSend.length) {
+    const attDiv = document.createElement("div");
+    attDiv.className = "bubble-attachments";
+    attachmentsToSend.forEach((att) => {
+      const isImage = att.file.type.startsWith("image/");
+      if (isImage) {
+        const imgWrap = document.createElement("div");
+        imgWrap.className = "bubble-attachment";
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(att.file);
+        img.alt = att.file.name;
+        imgWrap.appendChild(img);
+        attDiv.appendChild(imgWrap);
+      } else {
+        const fileWrap = document.createElement("div");
+        fileWrap.className = "bubble-attachment";
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "bubble-attachment-file";
+        fileDiv.innerHTML = `<span class="bubble-attachment-icon">📄</span><span class="bubble-attachment-name">${escapeHtml(att.file.name)}</span>`;
+        fileWrap.appendChild(fileDiv);
+        attDiv.appendChild(fileWrap);
+      }
+    });
+    userEl.appendChild(attDiv);
+  }
+  clearAttachments();
   let liveBubble = thinkingBubble();
   liveBubble.dataset.liveKey = aim;
   const ac = new AbortController();
@@ -3362,10 +3532,22 @@ async function sendMessage(message, opts) {
   }
 
   try {
-    const res = await fetch("/api/chat/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    let body, headers;
+    if (attachmentsToSend.length) {
+      const formData = new FormData();
+      formData.append("message", message);
+      if (folder) formData.append("folder", folder);
+      formData.append("preset", lane);
+      if (sendProjectId) formData.append("project_id", sendProjectId);
+      if (sendWorkerId) formData.append("worker_id", sendWorkerId);
+      if (pendingQuote) formData.append("quote", pendingQuote);
+      attachmentsToSend.forEach((att) => {
+        formData.append("attachments", att.file);
+      });
+      body = formData;
+      headers = {};
+    } else {
+      body = JSON.stringify({
         message,
         folder,
         preset: lane,
@@ -3373,7 +3555,13 @@ async function sendMessage(message, opts) {
         worker_id: sendWorkerId || null,
         quote: pendingQuote || "",
         chain_context: (opts && opts.chain_context) || null
-      }),
+      });
+      headers = { "Content-Type": "application/json" };
+    }
+    const res = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers,
+      body,
       signal: ac.signal
     });
     const ctype = (res.headers.get("content-type") || "").toLowerCase();

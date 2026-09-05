@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Locked ship order COMPLETE on master — ROADMAP (#1), Builder delight (#2), Chat reliability (#3), Sidebar Agent OS (#4). Live target Railway.
-Last: CoS + OpenBot CEO — Sidebar merged; chat gap list ranked (Turn Report → Hermes progress → Keep-going).
-Next: CoS launching Turn Report card next; then Hermes live tool progress; then Keep-going. Deferred: Memory pane / skills / handoff / routines.
-Blocker: Local desktop Cursor unpublished Changes (~+21k/-515) — do not overwrite blindly if conflict.
+Now: Attachments shipped — attach button, drag-drop, paste-image, thumbnails, multipart transport, job context paths.
+Last: Turn Report card + Hermes live tool progress + Keep-going chain shipped on master; then Composer attachments (UI + server + router + tests + docs + server-side enforcement).
+Next: Connector UX (per ROADMAP deferred items).
+Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
 Folder: C:\Users\adamm\Projects\openbot

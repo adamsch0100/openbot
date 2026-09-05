@@ -125,6 +125,7 @@
       <section class="stream" id="stream"></section>
       <form class="composer" id="form">
         <input id="folder" type="hidden" />
+        <input id="attachInput" type="file" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.cpp,.c,.h,.go,.rs,.rb,.php,.swift,.kt,.sql,.yaml,.yml,.toml" />
         <p class="composer-who" id="composerWho">Talking to Chief of Staff</p>
         <div class="reply-chip hidden" id="replyChip">
           <span class="reply-chip-kicker">Replying to</span>
@@ -136,6 +137,7 @@
           <span class="reply-chip-text" id="queueChipText"></span>
           <button type="button" class="reply-chip-clear" id="queueChipClear" aria-label="Clear queue">×</button>
         </div>
+        <div class="attachments-preview hidden" id="attachmentsPreview"></div>
         <nav class="route" id="routeToggle" aria-label="Direct this send">
           <button type="button" class="route-btn on" data-preset="cos" title="Auto: this chat talks, and routes Code or Hermes when the message is work.">Auto</button>
           <button type="button" class="route-btn" data-preset="builder" title="Pin this send to OpenCode in this folder.">Code</button>
@@ -143,8 +145,11 @@
           <button type="button" class="route-btn" data-preset="research" title="Pin this send to a URL fetch.">Research</button>
           <button type="button" class="route-btn" data-preset="ops" title="Pin this send to a schedule.">Ops</button>
         </nav>
-        <textarea id="msg" rows="1" placeholder="Message Chief of Staff" required></textarea>
-        <button class="send" type="submit" id="sendBtn">Send</button>
+        <div class="composer-input-row">
+          <button type="button" class="attach-btn" id="attachBtn" title="Attach files or images">📎</button>
+          <textarea id="msg" rows="1" placeholder="Message Chief of Staff"></textarea>
+          <button class="send" type="submit" id="sendBtn">Send</button>
+        </div>
         <p class="composer-hint hidden" id="workHint" aria-live="polite"></p>
       </form>
       </div>

@@ -145,8 +145,71 @@ def _has_key(keyring: dict | None = None) -> bool:
     return any(row.get("has_key") for row in ring.get("accounts") or [])
 
 
-def _chat_context(data: dict) -> tuple:
+ALLOWED_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp",
+    ".pdf", ".txt", ".md", ".json", ".csv", ".xml", ".html",
+    ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".rb", ".php", ".swift", ".kt",
+    ".sql", ".yaml", ".yml", ".toml",
+    ".mp4", ".webm", ".mp3", ".wav", ".ogg"
+}
+MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024
+
+
+def _save_attachments(files: list, project_id: str | None) -> tuple[list[dict], str | None]:
+    if not files:
+        return [], None
+    from .store import ROOT
+    if project_id:
+        org = ensure_org()
+        match = next((row for row in org["projects"] if row.get("id") == project_id), None)
+        if match:
+            attach_dir = ROOT / "org" / "projects" / project_id / "attachments"
+            scope = f"projects/{project_id}"
+        else:
+            attach_dir = ROOT / "attachments"
+            scope = "staff"
+    else:
+        attach_dir = ROOT / "attachments"
+        scope = "staff"
+    attach_dir.mkdir(parents=True, exist_ok=True)
+    saved = []
+    for file_data in files:
+        filename = file_data.get("filename", "")
+        content = file_data.get("content", b"")
+        if not filename:
+            continue
+        if len(content) > MAX_ATTACHMENT_SIZE:
+            return [], f"File too large: {filename} ({len(content)} bytes, max {MAX_ATTACHMENT_SIZE})"
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            return [], f"File type not allowed: {filename}"
+        safe_name = re.sub(r"[^\w\s.-]", "_", filename)
+        base, ext_part = os.path.splitext(safe_name)
+        counter = 0
+        dest_name = safe_name
+        dest_path = attach_dir / dest_name
+        while dest_path.exists():
+            counter += 1
+            dest_name = f"{base}_{counter}{ext_part}"
+            dest_path = attach_dir / dest_name
+        try:
+            dest_path.write_bytes(content)
+            rel_id = f"{scope}/{dest_name}"
+            saved.append({
+                "filename": filename,
+                "path": str(dest_path),
+                "id": rel_id,
+                "size": len(content)
+            })
+        except (OSError, IOError) as err:
+            return [], f"Failed to save {filename}: {err}"
+    return saved, None
+
+
+def _chat_context(data: dict, files: list | None = None) -> tuple:
     message = str(data.get("message") or "").strip()
+    if not message and files:
+        message = "(attachment)"
     folder = data.get("folder")
     preset = data.get("preset")
     project_id = data.get("project_id")
@@ -159,16 +222,21 @@ def _chat_context(data: dict) -> tuple:
     worker_id = worker_raw.strip() if isinstance(worker_raw, str) and worker_raw.strip() else None
     pid = project_id.strip() if isinstance(project_id, str) and project_id.strip() else None
     requested = preset if isinstance(preset, str) and preset in PRESET_ENGINE else None
-    return message, folder, requested, pid, worker_id
+    attachments, err = _save_attachments(files or [], pid)
+    if err:
+        raise ValueError(err)
+    return message, folder, requested, pid, worker_id, attachments
 
 
-def _record_job(job: dict, message: str, project_id: str | None, worker_id: str | None, quote: str = "") -> None:
+def _record_job(job: dict, message: str, project_id: str | None, worker_id: str | None, quote: str = "", attachments: list | None = None) -> None:
     key = thread_key(project_id, worker_id)
     turn = {"role": "user", "text": redact_chat_login(message)}
     cleaned = redact_chat_login(str(quote or "").strip())
     cleaned = " ".join(cleaned.split())[:400]
     if cleaned:
         turn["quote"] = cleaned
+    if attachments:
+        turn["attachments"] = [{"filename": a["filename"], "id": a["id"], "size": a["size"]} for a in attachments]
     append_turn(key, turn)
     append_turn(key, {"role": "bot", "job": job})
 
@@ -297,6 +365,46 @@ class Handler(SimpleHTTPRequestHandler):
     def _unlock_cookie(self, token: str) -> str:
         return f"openbot_unlock={token}; HttpOnly; SameSite=Lax; Path=/"
 
+    def _serve_attachment(self, path: str) -> None:
+        from .store import ROOT
+        rel_path = path.replace("/api/attachments/", "")
+        if ".." in rel_path or rel_path.startswith("/"):
+            return self._json(403, {"error": "invalid path"})
+        parts = rel_path.split("/", 1)
+        if len(parts) < 2:
+            return self._json(404, {"error": "not found"})
+        scope, filename = parts[0], parts[1]
+        if scope == "staff":
+            file_path = ROOT / "attachments" / filename
+        elif scope == "projects":
+            rest = filename.split("/", 1)
+            if len(rest) < 2:
+                return self._json(404, {"error": "not found"})
+            project_id, name = rest[0], rest[1]
+            file_path = ROOT / "org" / "projects" / project_id / "attachments" / name
+        else:
+            return self._json(404, {"error": "not found"})
+        if not file_path.exists() or not file_path.is_file():
+            return self._json(404, {"error": "not found"})
+        try:
+            content = file_path.read_bytes()
+            ext = file_path.suffix.lower()
+            content_type = {
+                ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                ".gif": "image/gif", ".webp": "image/webp",
+                ".pdf": "application/pdf", ".txt": "text/plain", ".md": "text/markdown",
+                ".json": "application/json", ".html": "text/html",
+                ".mp4": "video/mp4", ".webm": "video/webm"
+            }.get(ext, "application/octet-stream")
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "private, max-age=3600")
+            self.end_headers()
+            self.wfile.write(content)
+        except (OSError, IOError):
+            return self._json(500, {"error": "read failed"})
+
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else b"{}"
@@ -304,6 +412,52 @@ class Handler(SimpleHTTPRequestHandler):
         if not isinstance(data, dict):
             raise json.JSONDecodeError("object required", "", 0)
         return data
+
+    def _parse_multipart(self) -> tuple[dict, list]:
+        ctype = self.headers.get("Content-Type", "")
+        if not ctype.startswith("multipart/form-data"):
+            return {}, []
+        boundary = None
+        for part in ctype.split(";"):
+            if "boundary=" in part:
+                boundary = part.split("=", 1)[1].strip()
+                break
+        if not boundary:
+            return {}, []
+        length = int(self.headers.get("Content-Length") or 0)
+        if not length:
+            return {}, []
+        body = self.rfile.read(length)
+        fields = {}
+        files = []
+        boundary_bytes = ("--" + boundary).encode()
+        parts = body.split(boundary_bytes)
+        for part in parts:
+            if not part or part == b"--\r\n" or part == b"--":
+                continue
+            if b"\r\n\r\n" not in part:
+                continue
+            headers_raw, content = part.split(b"\r\n\r\n", 1)
+            content = content.rstrip(b"\r\n")
+            headers_str = headers_raw.decode("utf-8", errors="ignore")
+            disp_line = ""
+            for line in headers_str.split("\r\n"):
+                if line.lower().startswith("content-disposition:"):
+                    disp_line = line
+                    break
+            if not disp_line:
+                continue
+            name_match = re.search(r'name="([^"]+)"', disp_line)
+            if not name_match:
+                continue
+            field_name = name_match.group(1)
+            filename_match = re.search(r'filename="([^"]+)"', disp_line)
+            if filename_match:
+                filename = filename_match.group(1)
+                files.append({"name": field_name, "filename": filename, "content": content})
+            else:
+                fields[field_name] = content.decode("utf-8", errors="ignore")
+        return fields, files
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -399,28 +553,39 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, {"sessions": list_sessions(instance_sessions.group(1))})
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+        if path.startswith("/api/attachments/"):
+            return self._serve_attachment(path)
         return super().do_GET()
 
     def do_POST(self):
         path = urlparse(self.path).path
+        ctype = self.headers.get("Content-Type", "")
+        is_multipart = ctype.startswith("multipart/form-data")
+        
         try:
-            data = self._read_json()
-        except json.JSONDecodeError:
-            return self._json(400, {"error": "invalid json"})
+            if is_multipart:
+                data, files = self._parse_multipart()
+            else:
+                data = self._read_json()
+                files = []
+        except (json.JSONDecodeError, ValueError):
+            return self._json(400, {"error": "invalid request"})
 
         if path == "/api/chat":
-            message, folder, requested, pid, worker_id = _chat_context(data)
-            if not message:
-                return self._json(400, {"error": "empty message"})
+            try:
+                message, folder, requested, pid, worker_id, attachments = _chat_context(data, files)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
             chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
-            job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx)
-            _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""))
+            job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx, attachments=attachments)
+            _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
             job["activity"] = _activity()
             return self._json(200, job)
         if path == "/api/chat/stream":
-            message, folder, requested, pid, worker_id = _chat_context(data)
-            if not message:
-                return self._json(400, {"error": "empty message"})
+            try:
+                message, folder, requested, pid, worker_id, attachments = _chat_context(data, files)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
             run_id = uuid.uuid4().hex[:12]
             live_start(run_id)
             self.send_response(200)
@@ -456,6 +621,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             try:
                 chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
+                chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
                 job = handle(
                     message,
                     folder,
@@ -467,8 +633,9 @@ class Handler(SimpleHTTPRequestHandler):
                     run_id=run_id,
                     quote=str(data.get("quote") or ""),
                     chain_context=chain_ctx,
+                    attachments=attachments,
                 )
-                _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""))
+                _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
                 job["activity"] = _activity()
                 emit("done", job)
             except Exception as err:
