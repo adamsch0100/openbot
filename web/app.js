@@ -1964,6 +1964,11 @@ function settleLive(live, job) {
     if (text) text.textContent = job.text || "";
     stampLane(live, job, true);
     appendWorkDetails(live, job);
+    // Add report card to settled live bubble
+    if (!live.querySelector(".report-card")) {
+      const reportCard = renderReportCard(job);
+      if (reportCard) live.appendChild(reportCard);
+    }
     scrollChatBottom();
     return;
   }
@@ -2021,6 +2026,9 @@ function renderTalk(job) {
   const el = bubble("bot", job.text || "");
   stampLane(el, job);
   appendWorkDetails(el, job);
+  // Add report card for talk jobs too
+  const reportCard = renderReportCard(job);
+  if (reportCard) el.appendChild(reportCard);
   return el;
 }
 
@@ -2158,6 +2166,68 @@ function fillLoginOffer(parsed) {
   return true;
 }
 
+function renderReportCard(job) {
+  if (!job) return null;
+  const card = document.createElement("div");
+  card.className = "report-card";
+  
+  // Header: engine · model · $ · preset
+  const header = document.createElement("div");
+  header.className = "report-card-header";
+  const engine = escapeHtml(job.engine || "board");
+  const model = escapeHtml(modelName(job.model) || job.model || "none");
+  const cost = Number(job.usd_estimate || 0);
+  const costStr = cost > 0 ? `$${cost.toFixed(4)}` : "$0";
+  const presetLabel = escapeHtml(job.preset || "cos");
+  header.innerHTML = `<span><b>${engine}</b> · ${model} · <i>${costStr}</i> · ${presetLabel}</span>`;
+  card.appendChild(header);
+  
+  // RESULT section (≤20 lines or clear empty/error)
+  const result = document.createElement("div");
+  result.className = "report-result";
+  const text = String(job.text || "").trim();
+  if (text) {
+    const lines = text.split("\n");
+    const displayLines = lines.slice(0, 20);
+    result.textContent = displayLines.join("\n");
+    if (lines.length > 20) {
+      result.textContent += `\n… (${lines.length - 20} more lines)`;
+    }
+  } else if (job.blocker) {
+    result.textContent = `Error: ${job.blocker}`;
+  }
+  card.appendChild(result);
+  
+  // INDEX delta: Now / Last / Next / Blocker
+  const hasIndexDelta = job.index_now || job.index_last || job.next || job.index_blocker;
+  if (hasIndexDelta) {
+    const delta = document.createElement("div");
+    delta.className = "report-index-delta";
+    const rows = [];
+    if (job.index_now) {
+      const val = String(job.index_now).trim();
+      rows.push(`<div><dt>Now</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
+    }
+    if (job.index_last) {
+      const val = String(job.index_last).trim();
+      rows.push(`<div><dt>Last</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
+    }
+    if (job.next) {
+      const val = String(job.next).trim();
+      rows.push(`<div><dt>Next</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
+    }
+    if (job.index_blocker) {
+      const val = String(job.index_blocker).trim();
+      const isBlocked = val && val !== "—";
+      rows.push(`<div><dt>Blocker</dt><dd class="${isBlocked ? "blocker" : "empty"}">${escapeHtml(val)}</dd></div>`);
+    }
+    delta.innerHTML = rows.join("");
+    card.appendChild(delta);
+  }
+  
+  return card;
+}
+
 function renderJob(job) {
   if (job && job.id) {
     seenCron.add(job.id);
@@ -2208,6 +2278,11 @@ function renderJob(job) {
     line.className = `gate-line ${gate.action || ""}`;
     line.textContent = [gate.label, job.handoff_path ? `file ${job.handoff_path}` : ""].filter(Boolean).join(" · ");
     el.appendChild(line);
+  }
+  // Add report card for non-talk jobs
+  if (!isTalk(job)) {
+    const reportCard = renderReportCard(job);
+    if (reportCard) el.appendChild(reportCard);
   }
   const hasDiff = Boolean((job.diff && job.diff.trim()) || (job.untracked && job.untracked.length));
   if (!hasDiff) return;
