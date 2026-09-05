@@ -389,7 +389,24 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 **Note on renames:** CEO/worker rename already ships on master (org tree with Chief of Staff → CEOs → workers). Not a new PR.
 
-Next PR: **#1 Builder Delight Loop** (the Week 2 gate per OPENBOT.md).
+## Week 1+ Shipped (Post-Locked-Ship Order)
+
+### **@seat Mentions + Handoff Cards** ✅
+**Shipped in PR #11** — operator can @-mention seats (Cos/Auto, Code/Builder, Think, Research, Ops, CEO names) in composer with autocomplete dropdown, and agent-to-agent handoffs show as in-stream cards with task/status/output/next-owner fields.
+
+**What shipped:**
+- @seat autocomplete in composer — typing `@` offers seat list with labels + descriptions
+- Dropdown with arrow navigation, Tab/Enter to select, Escape to dismiss
+- Selecting a seat auto-routes to that preset (except Cos/CEO which stay Auto)
+- Handoff card in stream — when agent routes work to another seat (e.g. Builder → Research), shows from→to, task summary, status (complete/blocked), output snippet, and next owner
+- Backend writes handoff metadata in job response; card renders below job result
+- Telegram one-way lock already documented in Channels panel (no change needed)
+
+**Not shipped (deferred as noted in task):**
+- Multi-seat fan-out (one message to multiple seats) — single @mention path shipped for v1
+- Full handoff bus protocol overhaul, routines, or Builder validation
+
+Next PR: **Memory Pane Enhancements** (or next ranked gap).
 
 ---
 

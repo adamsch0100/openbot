@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Connector UX shipped on cursor/connector-ux-shared-tool-plane-27e1 — per-seat skill/MCP toggles live in Settings → Connectors; replaces hermesSkills text box; ready for PR review.
-Last: Attachments shipped + Turn Report + Hermes live tool progress + Keep-going chain shipped on master (PR #9).
-Next: @seat mentions + handoff card. Deferred: Memory pane / handoff bus / routines / skills catalog.
+Now: @seat mentions + handoff cards shipped on cursor/seat-mentions-handoff-01da — composer @autocomplete, in-stream handoff card, backend metadata.
+Last: Connector UX merged on master (PR #10).
+Next: Test @mentions + handoff card locally, push PR #11. Then Memory pane or next ranked gap.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

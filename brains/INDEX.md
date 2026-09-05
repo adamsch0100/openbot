@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Connector UX shipped on cursor/connector-ux-shared-tool-plane-27e1 — per-seat skill/MCP toggles live in Settings → Connectors; replaces hermesSkills text box; ready for PR review.
-Last: Attachments shipped + Turn Report + Hermes live tool progress + Keep-going chain shipped on master (PR #9).
-Next: @seat mentions + handoff card. Deferred: Memory pane / handoff bus / routines / skills catalog.
+Now: @seat mentions + handoff cards shipped on cursor/seat-mentions-handoff-01da — composer autocomplete, in-stream handoff card, backend metadata ready.
+Last: Connector UX shipped and merged on master (PR #10).
+Next: Test @mentions + handoff card, push PR #11. Then Memory pane or next ranked gap.
 Blocker: —
 
 ## Vault
