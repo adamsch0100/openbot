@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Cos/Hermes Chat auto-acks contributor-tier model confirms (Muse Spark) for non-interactive board runs — seating on the board is the operator choice.
-Last: board · Instant "Chat didn't come back" was Hermes prompting `Use this model… [y/N]` with no stdin answer, not a Muse capability limit.
-Next: Restart the board and retry Cos chat with Muse seated. Browser work still on Nadia Think/Research + vault logins.
-Blocker: ListLogic SQLite history is gone. Do not `railway scale` old Hermes boxes — use `railway down -y`. Public PIN still empty.
+Now: ROADMAP.md drafted with locked CEO ship order (PR1 Builder delight, PR2 Chat OS reliability, PR3 Sidebar Agent OS). Waiting CEO review before merge.
+Last: cloud agent · Investigated repo + Railway surface, documented what works, encoded CEO locked plan into ROADMAP.md.
+Next: Merge ROADMAP PR after CEO review, then implement PR #1 Builder delight loop (Week 2 gate per OPENBOT.md).
+Blocker: —
 
 ## Vault
 
