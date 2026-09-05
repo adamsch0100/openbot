@@ -194,6 +194,7 @@
           <button type="button" class="drawer-tab" data-panel="models">Models</button>
           <button type="button" class="drawer-tab" data-panel="connectors">Connectors</button>
           <button type="button" class="drawer-tab" data-panel="git">Git</button>
+          <button type="button" class="drawer-tab" data-panel="memory">Memory</button>
           <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
           <button type="button" class="drawer-tab" data-panel="about">About</button>
         </nav>
@@ -408,7 +409,19 @@
               <p class="muted" id="gitStatusNote"></p>
             </div>
           </section>
-          <section class="drawer-panel" id="panel-usage">
+          <section class="drawer-panel" id="panel-memory">
+            <p class="lede">Structured INDEX cards with editable fields. Edit Now/Last/Next/Blocker and Save to patch INDEX. Memory lives in files (INDEX/brains), not chat JSON.</p>
+            <div id="memoryCards" class="memory-cards"></div>
+            <div class="actions">
+              <button type="button" class="send" id="saveMemory">Save INDEX</button>
+              <p class="muted" id="memoryStatus"></p>
+            </div>
+            <div class="field">
+              <label for="memorySearch">Search INDEX and job results</label>
+              <input id="memorySearch" type="search" placeholder="Search memory..." autocomplete="off" />
+            </div>
+            <div id="memoryResults" class="memory-results"></div>
+          </section>          <section class="drawer-panel" id="panel-usage">
             <div class="field-row">
               <div class="field">
                 <label for="spendCap">Cap USD</label>

@@ -245,6 +245,68 @@ _CRON_INGEST_AT = 0.0
 _CRON_COOLDOWN_SEC = 60.0
 
 
+def _parse_index_fields(text: str) -> dict:
+    """Parse Now/Last/Next/Blocker from INDEX markdown."""
+    fields = {}
+    for label in ("Now", "Last", "Next", "Blocker"):
+        match = re.search(rf"^{label}:\s*(.*)$", text or "", re.M)
+        fields[label.lower()] = (match.group(1).strip() if match else "") or "—"
+    return fields
+
+
+def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -> dict:
+    """Search across INDEX text and recent job RESULT snippets."""
+    # Always parse INDEX fields, even for empty query
+    if project_id:
+        from .org import read_project_index
+        index_text = read_project_index(project_id)
+    else:
+        index_text = read_index()
+    
+    index_fields = _parse_index_fields(index_text)
+    
+    query_lower = query.lower().strip()
+    if not query_lower:
+        return {"results": [], "index_fields": index_fields, "query": ""}
+    
+    results = []
+    
+    # Search INDEX
+    if query_lower in index_text.lower():
+        results.append({
+            "type": "index",
+            "source": "INDEX",
+            "snippet": index_text[:500],
+            "match": True
+        })
+    
+    # Search recent job results
+    jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
+    if project_id:
+        jobs = [job for job in jobs if job.get("project_id") == project_id]
+    
+    for job in jobs[:limit]:
+        text_field = str(job.get("text") or "")
+        if query_lower in text_field.lower():
+            snippet = re.sub(r"\s+", " ", text_field)[:300]
+            results.append({
+                "type": "job",
+                "source": f"{job.get('engine', 'unknown')} · {job.get('id', '')}",
+                "snippet": snippet,
+                "at": job.get("at", ""),
+                "job_id": job.get("id", ""),
+                "engine": job.get("engine", ""),
+                "worker_id": job.get("worker_id"),
+                "project_id": job.get("project_id")
+            })
+    
+    return {
+        "results": results[:30],
+        "index_fields": index_fields,
+        "query": query
+    }
+
+
 def _activity(*, ingest_cron: bool = False) -> dict:
     keyring = public_keyring()
     jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
@@ -529,6 +591,20 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, public_catalog())
         if path == "/api/org":
             return self._json(200, ensure_org())
+        if path == "/api/memory/search":
+            qs = parse_qs(urlparse(self.path).query)
+            query = (qs.get("q") or [""])[0].strip()
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            return self._json(200, _search_memory(query, project_id))
+        if path == "/api/memory/fields":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            if project_id:
+                from .org import read_project_index
+                index_text = read_project_index(project_id)
+            else:
+                index_text = read_index()
+            return self._json(200, {"index_fields": _parse_index_fields(index_text)})
         channel = PROJECT_CHANNEL.match(path)
         if channel:
             pid = channel.group(1)
@@ -752,6 +828,24 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+        
+        if path == "/api/memory/fields":
+            project_id = str(data.get("project_id") or "").strip() or None
+            label = str(data.get("label") or "").strip()
+            value = str(data.get("value") or "").strip()
+            if label not in ("Now", "Last", "Next", "Blocker"):
+                return self._json(400, {"error": "invalid label"})
+            try:
+                patch_scope(project_id, None, label, value)
+                if project_id:
+                    from .org import read_project_index
+                    index_text = read_project_index(project_id)
+                else:
+                    index_text = read_index()
+                return self._json(200, {"index_fields": _parse_index_fields(index_text)})
+            except Exception as err:
+                return self._json(400, {"error": str(err)})
+        
         project_patch = PROJECT_ID.match(path)
         if project_patch:
             pid = project_patch.group(1)

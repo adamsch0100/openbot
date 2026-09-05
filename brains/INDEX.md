@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: @seat mentions + handoff cards shipped on cursor/seat-mentions-handoff-01da (PR #11).
-Last: Connector UX merged on master (PR #10).
-Next: Memory pane enhancements (structured goal/context cards, search across job history).
+Now: Memory pane with editable INDEX fields (PR #12). Settings → Memory: edit Now/Last/Next/Blocker cards + Save to patch INDEX. Search across job results.
+Last: @seat mentions + handoff cards shipped (PR #11). Connector UX merged (PR #10). Composer attachments shipped (PR #9).
+Next: Handoff bus protocol (standardized bus/ schema for agent → agent async handoffs).
 Blocker: —
 
 ## Vault
