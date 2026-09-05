@@ -153,156 +153,152 @@ OpenBot has **Week 1 done**. Here's what a hosted-bot-killer still needs:
 
 ---
 
-## Next 5 Shippable PRs (Ranked by User-Felt Impact)
+## Next PRs (Locked Ship Order from OpenBot CEO)
 
-Each PR is scoped for **one cloud agent turn** with concrete acceptance criteria.
-
----
-
-### **PR #1: Handoff Bus Protocol (Async Agent → Agent Work)**
-**Problem:**
-CEOs and workers don't hand off work to each other. User must manually ping Builder, then Research, then Builder again.
-
-**User value:**
-"Ask Builder to add auth" → Builder writes `bus/need-docs-auth.md` → Research auto-picks it up → writes `bus/handoff-auth-research.md` → Builder resumes without user sending 3 messages.
-
-**Acceptance criteria:**
-1. Standardized handoff schema:
-   ```markdown
-   TASK: What I need
-   STATUS: blocked | waiting | done
-   OUTPUT: What I produced (file paths, summary)
-   NEXT OWNER: research | builder | cos
-   ```
-2. `bus/` polling on job finish: if `NEXT OWNER` matches my preset, read the handoff and run.
-3. Router recognizes "need docs for X" → writes handoff instead of chat reply.
-4. UI shows active handoffs in Activity feed (e.g., "Builder → Research: need API docs").
-
-**Files/areas touched:**
-- `openbot/bus.py` — add `parse_handoff()`, `write_handoff()`, `pending_handoffs()`
-- `openbot/router.py` — check `bus/` at job finish, trigger next agent if handoff exists
-- `web/app.js` — render handoff cards in activity stream
-- `brains/INDEX.md` — update contract: "End jobs with a HANDOFF file if another agent should continue."
-
-**Estimated complexity:** Medium (new file protocol + router logic, no new engine calls).
+These are the **ranked next 3 PRs** per the CEO + CoS forward plan. Each scoped for focused implementation.
 
 ---
 
-### **PR #2: Builder Validation Gate (Syntax/Lint/Test Check)**
+### **PR #1: Builder Delight Loop** ⭐
+**The Week 2 gate per OPENBOT.md**: folder → `opencode run` → streaming Diff Accept/Reject → INDEX update.
+
 **Problem:**
-Builder diffs may have syntax errors, linting failures, or broken tests. Operator only finds out after Accept when they try to run the code.
+Builder flow works but isn't delightful yet. Operator still opens multiple windows to see INDEX updates or check job progress.
 
 **User value:**
-Accept button is disabled until `npm run lint && npm test` passes (or Python equiv). No more "Builder broke the build."
+Ask for a one-file change → see streaming progress → Accept diff → Brief/INDEX updates immediately in the same composer view. No second window required.
 
 **Acceptance criteria:**
-1. After OpenCode finishes, detect project type (package.json → Node, pyproject.toml → Python, etc.).
-2. Run validation command in snapshot before showing diff card:
-   - Node: `npm run lint && npm test` (if scripts exist)
-   - Python: `ruff check . && pytest` (if tools installed)
-   - Skip if no validation tools found.
-3. Validation failure → show error on diff card, block Accept, offer "Reject and ask Builder to fix."
-4. Validation pass → Accept enabled as normal.
+1. Operator asks "add a comment to utils.js explaining the retry logic"
+2. Builder streams OpenCode progress (step-start events visible)
+3. Diff card appears inline with Accept/Reject
+4. Operator clicks Accept
+5. Brief card updates showing the change in Now/Last/Next
+6. All in one composer thread — zero window switching
+
+**What's already there:**
+- `opencode run` with JSON event streaming ✓
+- Diff capture + Accept/Reject flow ✓
+- INDEX patching on job finish ✓
+
+**What needs polish:**
+- Stream progress rendering (OpenCode step-start events → UI progress chips)
+- Inline Brief updates after Accept (currently requires refresh or status ask)
+- One-shot "ask → accept → done" without clicking between panels
 
 **Files/areas touched:**
-- `openbot/gitutil.py` — add `validate_project(folder, snapshot)` (detect type, run checks)
-- `openbot/router.py` — call `validate_project()` after Builder finishes, store result in job receipt
-- `openbot/server.py` — diff card API includes `validation_status` (passed/failed/skipped)
-- `web/app.js` — render validation errors on diff card, disable Accept button if failed
+- `web/app.js` — render OpenCode progress chips in stream, auto-refresh Brief after Accept
+- `openbot/router.py` — ensure INDEX patch happens synchronously before Accept response
+- `openbot/server.py` — Accept endpoint returns updated INDEX in response
 
-**Estimated complexity:** Medium-High (project type detection + subprocess validation, error parsing).
+**Estimated complexity:** Low-Medium (UI polish + sync flow, no new engine calls).
 
 ---
 
-### **PR #3: Spend Dashboard (Per-CEO Cost Breakdown)**
+### **PR #2: Chat OS Reliability** ⭐
+**The stability gate**: kill Cos/CEO hang, bleed, silent fail; always stream progress; Muse/Hermes confirm auto-ack.
+
 **Problem:**
-User sees total spend but not "which CEO burned money." No trend chart. No proactive alert when nearing cap.
+Recent fixes (500f218, a9d5f66) addressed Muse auto-ack and CEO chat bleed, but reliability still needs hardening. Cos status and CEO Chat must never silently fail or hang.
 
 **User value:**
-Open "Usage" panel → see spend by CEO (table + chart), last 7 days trend, per-lane breakdown (Chat $0.12, Code $3.45, Think $1.20).
+Send 10 Cos status questions + 5 CEO Chat messages → zero empty failures, zero hangs, zero "Chat didn't come back."
 
 **Acceptance criteria:**
-1. New `GET /api/spend/breakdown` endpoint:
-   - Input: `?period=week` (or month)
-   - Output: `{ projects: [{ id, name, spend_usd, by_preset: { chat, code, think, research, ops } }], timeline: [{ date, spend_usd }] }`
-2. Parse all job receipts in period, group by `project_id` + `preset`, sum `usd_estimate`.
-3. Usage panel renders:
-   - Per-CEO table (name, spend, % of cap)
-   - 7-day line chart (date vs spend)
-   - Per-lane pie chart (optional, nice-to-have)
-4. Alert chip on board if spend > 80% of cap: "Usage: $47.60 / $50.00 (95%) — consider raising cap or pausing CEOs."
+1. Run test suite: 10 Cos status asks (INDEX reads) + 5 CEO Chat sends (Hermes oneshot)
+2. All 15 complete with visible response (even if "Hermes missing" or "wallet empty")
+3. Zero silent failures (empty reply with no error card)
+4. Zero composer locks longer than job timeout
+5. Progress always visible (streaming or "Hermes chat starting…" chip)
+
+**What's already fixed:**
+- ✅ Muse contributor confirm auto-ack (500f218)
+- ✅ CEO chat bleed isolated (a9d5f66)
+- ✅ Pending-composer lock with message queueing (a9d5f66)
+
+**What needs hardening:**
+- Timeout handling: if Hermes doesn't respond in N seconds, show error card (not silent hang)
+- Fallback messaging: if all keyring accounts fail, show "wallets empty" card immediately
+- Progress rendering: every Cos/Chat job shows at least one progress event
 
 **Files/areas touched:**
-- `openbot/store.py` — add `spend_breakdown(period, start_date=None)` (read jobs, group, sum)
-- `openbot/server.py` — `GET /api/spend/breakdown`
-- `web/app.js` — fetch breakdown on Usage panel open, render table + chart (use simple canvas or SVG)
-- `web/index.html` + `web/styles.css` — layout for breakdown table + chart
+- `openbot/router.py` — add timeout guards on Hermes chat, fallback error cards
+- `openbot/hermes.py` — surface timeout/failure as structured error (not silent empty)
+- `web/app.js` — ensure every job shows progress chip, render timeout errors clearly
+- `tests/` — add reliability test suite (10 status + 5 chat sends)
 
-**Estimated complexity:** Medium (aggregation logic + chart rendering, no new agent calls).
+**Estimated complexity:** Medium (timeout logic + error surfacing + test harness).
 
 ---
 
-### **PR #4: Onboarding Tutorial (Post-Setup Test Job)**
+### **PR #3: Sidebar Agent OS** ⭐
+**The multi-agent UX**: avatars/initials, Now/Blocker chips from INDEX, busy/unread, fast CoS↔CEO switch.
+
 **Problem:**
-After first run, user sees blank board. No guidance on "what do I do now?" No confidence engines actually work.
+CEO list exists but doesn't feel like a team. No avatars, no status chips, no visual "who's working vs idle."
 
 **User value:**
-First-run wizard finishes → board auto-runs a test job (Cos reads INDEX, Builder makes trivial change if folder is a repo) → user sees job card + diff card immediately.
+Open board → see named teammates with avatars/initials, Now/Blocker from their INDEX, busy indicator during jobs, unread badge for pending approvals. Switch CoS ↔ CEO in <3 seconds.
 
 **Acceptance criteria:**
-1. After first-run (folder + PIN set), if `engines.opencode.present && work_dir is a git repo`:
-   - Auto-queue Builder job: "Add a comment to README.md that says 'OpenBot test job {timestamp}.'"
-   - Show job card with "Test job running…" in stream.
-2. If OpenCode missing, queue Cos job: "What is blocked right now?" → show staff briefing reply.
-3. Test job runs in background (same as normal job), result shows in Activity + Stream.
-4. Optional: "This was a test. Try asking for a real change." hint after test job finishes.
+1. Sidebar shows Chief of Staff + all CEOs with:
+   - Avatar (initials if no image, e.g., "NH" for Nadia, "CS" for CoS)
+   - Now chip (pulled from that CEO's INDEX, e.g., "Builder job 3f4a2c in listlogic.homes")
+   - Blocker chip if Blocker ≠ "—" (red/yellow indicator)
+   - Busy spinner during active job
+   - Unread badge for pending approvals (diff, login wall)
+2. Click CEO → switch composer context in <3 seconds
+3. Visual feels like a teammate panel (not a file list)
+
+**What's already there:**
+- Org tree with Chief of Staff + CEOs ✓
+- INDEX per CEO with Now/Last/Next/Blocker ✓
+- Activity feed with pending approvals ✓
+- CEO/worker rename on master ✓
+
+**What needs building:**
+- Avatar/initial generation (2-letter initials from CEO name)
+- INDEX field extraction per CEO (read Now/Blocker on sidebar render)
+- Busy/unread state tracking (live jobs + pending approvals)
+- Fast context switching (currently page-level state, needs optimized fetch)
 
 **Files/areas touched:**
-- `openbot/config.py` — add `first_run_test_done` flag to config
-- `openbot/server.py` — after `POST /api/config` sets `work_dir`, check `first_run_test_done`; if false, enqueue test job
-- `openbot/router.py` — handle test job as normal (no special logic needed)
-- `web/app.js` — render "Running your first test job…" in stream header if `setup_just_done` flag
+- `web/app.js` — sidebar rendering with avatars, Now/Blocker chips, busy/unread badges
+- `web/styles.css` — avatar circles, chip badges, teammate panel layout
+- `openbot/server.py` — `GET /api/org/summary` endpoint (returns all CEOs with INDEX Now/Blocker)
+- `openbot/org.py` — helper to extract Now/Blocker from each CEO's INDEX
 
-**Estimated complexity:** Low (reuse existing job flow, just auto-trigger once).
+**Estimated complexity:** Medium (new UI components + per-CEO INDEX parsing, no new engine calls).
 
 ---
 
-### **PR #5: Routine Scheduler (Multi-Step Daily Flows)**
-**Problem:**
-Ops cron is one-shot Hermes jobs. No "every morning: check new GitHub issues → summarize → post to Telegram" flow.
+## Deferred / Later Candidates
 
-**User value:**
-Settings → Routines → "Daily Standup: every weekday 9am, run Builder (git status) → Think (summarize) → Ops (post to Telegram)."
+These are **lower-priority** or **post-MVP** features. Ship the locked 3 PRs first, then revisit.
 
-**Acceptance criteria:**
-1. New `routines.json` config (or in org profile per CEO):
-   ```json
-   [
-     {
-       "id": "daily-standup",
-       "schedule": "0 9 * * 1-5",
-       "steps": [
-         { "preset": "builder", "prompt": "git status summary" },
-         { "preset": "think", "prompt": "Summarize last 24h changes" },
-         { "preset": "ops", "prompt": "Post summary to Telegram" }
-       ],
-       "enabled": true
-     }
-   ]
-   ```
-2. On Hermes cron trigger (or board-side scheduler if Hermes not available):
-   - Fetch routine config, execute steps in order, carry `PRIOR RESULT` to next step.
-3. Routine log shows full chain result in Activity feed.
-4. UI: Settings → Routines panel → Add/Edit/Disable routines (form: name, cron, steps list).
+### Handoff Bus Protocol
+Standardized `bus/` file schema for agent → agent async handoffs. Useful but not blocking delight or reliability.
 
-**Files/areas touched:**
-- `openbot/org.py` — store routines in org profile or per-CEO tools
-- `openbot/cronwatch.py` — hook routine execution (or new `openbot/routines.py` module)
-- `openbot/router.py` — `handle_routine(routine_id)` → run step chain, same as `handle()` but looped
-- `openbot/server.py` — `GET /api/routines`, `POST /api/routines`, `PUT /api/routines/:id`, `DELETE /api/routines/:id`
-- `web/app.js` + `web/index.html` — Routines panel UI (list, add form, cron input, steps builder)
+### Builder Validation Gate
+Syntax/lint/test check before Accept. Valuable but Builder delight (streaming + inline Brief) is higher leverage.
 
-**Estimated complexity:** High (new scheduler abstraction, multi-step chain logic, UI for step builder).
+### Spend Dashboard
+Per-CEO cost breakdown with trend charts. Nice-to-have; current spend summary + cap enforcement already works.
+
+### Onboarding Tutorial
+Auto-run test job after first-run. Helpful but not critical; first-run wizard already guides setup.
+
+### Routine Scheduler
+Multi-step daily flows (e.g., standup = git status → summarize → post). Powerful but complex; defer until core Chat OS is rock-solid.
+
+### Kanban UX Over INDEX
+Visual cards for Now/Next/Blocker instead of markdown editing. Improves memory UX but not urgent.
+
+### Memory Pane Enhancements
+Structured goal/context cards, search across job history. Useful but INDEX already works.
+
+### Skills Catalog Polish
+UI for browsing and toggling Hermes skills. Already configurable in Settings; catalog is polish.
 
 ---
 
@@ -338,35 +334,38 @@ Settings → Routines → "Daily Standup: every weekday 9am, run Builder (git st
 These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 - ❌ **Vendoring Hermes/OpenCode source** — call binaries only, never merge upstream code
-- ❌ **Multi-tenant SaaS** — v1 is self-hosted, your-instance-only
+- ❌ **Multi-tenant SaaS in v1** — Phase 1 is self-hosted, your-instance-only. Phase 2 per OPENBOT.md: others clone the repo and spin **their own** instance (not a shared multi-tenant cloud).
 - ❌ **Cloning Grok Bot UI pixel-perfect** — inspired by shape, not a fork
-- ❌ **Shared cloud browser as default** — snapshot + refs, screenshots opt-in
+- ❌ **Shared cloud browser / CRD as default** — snapshot + refs, screenshots opt-in
 - ❌ **Eternal chat context** — no replaying 200-turn threads into every job
 - ❌ **Third agent runtime** — OpenBot is routing + INDEX, not a new CodeAct loop
 - ❌ **Claiming affiliation** — no "Powered by Hermes" or "Official OpenCode Board"
 - ❌ **Secrets in git/chat/brains** — vault only, never API keys in markdown
+- ❌ **CoS on Telegram** — Chief of Staff stays on the board (CEOs have Telegram cohesion)
+- ❌ **Chat-as-database** — thread JSON is UI only, not the memory layer
 
 ---
 
 ## Success Metrics (How We Know We're Winning)
 
-1. **Operator never rewrites the same INDEX line twice** → memory is durable
-2. **Builder → Research → Builder chain runs without 3 user messages** → async handoffs work
-3. **Zero "Accept → build breaks" incidents in a week** → validation gate works
-4. **User sees spend breakdown on day 1** → transparency wins trust
-5. **First-run wizard → test job → user says "that was easy"** → onboarding smooth
-6. **Daily standup runs unattended for a week** → routines are reliable
+1. **Builder delight:** One-file change → Accept → Brief updates, zero window switching. (**PR #1**)
+2. **Chat OS reliability:** 10 Cos + 5 CEO Chat sends, zero empty failures. (**PR #2**)
+3. **Sidebar Agent OS:** Named teammates feel present in <3s, busy/unread visible. (**PR #3**)
+4. **Operator never rewrites the same INDEX line twice** → memory is durable (ongoing)
+5. **Zero wallet-empty hangs** → keyring failover + error cards always surface issues (ongoing)
 
 ---
 
 ## How to Use This Roadmap
 
-- **Cloud agents:** Pick a PR, read acceptance criteria, implement in one turn.
-- **Human operators:** Vote on PRs by impact to your workflow. Reorder if needed.
+- **Cloud agents:** Implement locked PRs in order: #1 Builder delight, then #2 Chat OS reliability, then #3 Sidebar Agent OS.
+- **Human operators:** The CEO + CoS locked this ship order. Deferred items live in "Later Candidates."
 - **Contributors:** Follow AGENTS.md + OPENBOT.md. Do NOT implement features from Anti-Roadmap.
-- **Cursor session:** Paste this file + "implement PR #2" → agent follows acceptance criteria.
+- **Cursor session:** Paste this file + "implement PR #1" → agent follows acceptance criteria.
 
-Next PR: **#1 Handoff Bus Protocol** (highest leverage for multi-agent collaboration).
+**Note on renames:** CEO/worker rename already ships on master (org tree with Chief of Staff → CEOs → workers). Not a new PR.
+
+Next PR: **#1 Builder Delight Loop** (the Week 2 gate per OPENBOT.md).
 
 ---
 

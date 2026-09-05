@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: ROADMAP.md shipped. Week 1 complete + reliability fixes (Muse auto-ack, CEO chat bleed, composer lock). Next: handoff bus or validation gate.
-Last: cloud agent · Investigated repo + product surface, documented what works vs gaps, ranked next 5 PRs by user impact.
-Next: Implement PR #1 (Handoff Bus Protocol) or PR #2 (Builder Validation Gate). Both are high-leverage, single-turn scope.
+Now: ROADMAP.md drafted with locked CEO ship order (PR1 Builder delight, PR2 Chat OS reliability, PR3 Sidebar Agent OS). Waiting CEO review before merge.
+Last: cloud agent · Investigated repo + Railway surface, documented what works, encoded CEO locked plan into ROADMAP.md.
+Next: Merge ROADMAP PR after CEO review, then implement PR #1 Builder delight loop (Week 2 gate per OPENBOT.md).
 Blocker: —
 
 ## Vault
