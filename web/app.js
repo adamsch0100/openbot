@@ -27,6 +27,8 @@ let liveAbort = null;
 const lives = new Map();
 /** @type {Map<string, Array<{ message: string, preset: string, quote: string }>>} */
 const messageQueues = new Map();
+/** @type {Map<string, { step: number, total: number, last_result: string }>} */
+const chainContexts = new Map();
 let focusedLane = "";
 let unreadLanes = new Set();
 let hydratingHistory = false;
@@ -666,7 +668,8 @@ async function stopLive(key) {
   }
   const id = live.runId && live.runId !== "pending" ? live.runId : "";
   setLive("", { key: idKey, projectId: live.projectId, workerId: live.workerId });
-  // Clear chain state when stopping
+  // Clear chain context and message queue (real cancel semantics)
+  chainContexts.delete(idKey);
   const queue = messageQueues.get(idKey);
   if (queue && queue.length > 0) {
     messageQueues.set(idKey, []);
@@ -2136,6 +2139,16 @@ function renderJob(job) {
     : (job.text || JSON.stringify(job, null, 2));
   const el = card(kind, body, jobMeta(job));
   stampLane(el, job);
+  if (job.step_count && job.total_steps) {
+    const stepChip = document.createElement("div");
+    stepChip.className = "step-chip";
+    stepChip.textContent = `Step ${job.step_count}/${job.total_steps}`;
+    const meta = el.querySelector(".meta");
+    if (meta) {
+      meta.appendChild(document.createTextNode(" · "));
+      meta.appendChild(stepChip);
+    }
+  }
   const actions = document.createElement("div");
   actions.className = "job-actions";
   if (job.login_wall && job.url) {
@@ -2151,7 +2164,7 @@ function renderJob(job) {
     const go = document.createElement("button");
     go.type = "button";
     go.className = "ghost-btn";
-    const stepCounter = (job.step_count && job.total_steps && job.in_chain) 
+    const stepCounter = (job.step_count && job.total_steps) 
       ? ` (${job.step_count}/${job.total_steps})` 
       : "";
     go.textContent = job.login_wall ? "I already logged in" : `Continue${stepCounter}`;
@@ -2161,12 +2174,26 @@ function renderJob(job) {
         sendMessage("Continue. I logged in on my screen.", { preset: lane || "think", allowSecret: true });
         return;
       }
+      const aim = aimKey();
       const next = job.next && job.next !== "—" ? job.next : "Continue from Last and Next on the brief.";
-      const chainContext = job.in_chain ? {
-        step: job.step_count || 1,
-        total: job.total_steps || 1
-      } : { step: 1, total: 1 };
-      sendMessage(`Continue. ${next}`, lane ? { preset: lane, chain_context: chainContext } : { chain_context: chainContext });
+      const lastResult = (job.text || "").trim();
+      const resultSnippet = lastResult.slice(-600);
+      const continueMsg = `Continue. Last RESULT:\n${resultSnippet}\n\nNext: ${next}`;
+      
+      // Get or create chain context
+      let ctx = chainContexts.get(aim);
+      if (!ctx || !job.step_count) {
+        ctx = { step: 1, total: 1, last_result: resultSnippet };
+      } else {
+        ctx = {
+          step: job.step_count + 1,
+          total: Math.max(job.total_steps, job.step_count + 1),
+          last_result: resultSnippet
+        };
+      }
+      chainContexts.set(aim, ctx);
+      
+      sendMessage(continueMsg, lane ? { preset: lane, chain_context: ctx } : { chain_context: ctx });
     });
     actions.appendChild(go);
   }
