@@ -3753,8 +3753,10 @@ function selectSeat(seatId, seatLabel) {
   const value = msg.value;
   const before = value.slice(0, seatAutocompleteStart);
   const after = value.slice(msg.selectionStart);
-  msg.value = before + "@" + seatLabel + " " + after;
-  msg.selectionStart = msg.selectionEnd = before.length + seatLabel.length + 2;
+  // Insert clean token (@builder, @think, etc.) not pretty label
+  const token = seatId.startsWith("ceo:") ? seatId.split(":")[1] : seatId;
+  msg.value = before + "@" + token + " " + after;
+  msg.selectionStart = msg.selectionEnd = before.length + token.length + 2;
   hideSeatAutocomplete();
   const preset = seatId.startsWith("ceo:") ? "cos" : seatId;
   if (preset !== "cos" && PRESET_ENGINE[preset]) setRoute(preset);
@@ -3949,6 +3951,8 @@ async function sendMessage(message, opts) {
     fillLoginOffer(parsed);
     return;
   }
+  // Strip leading @seat tokens (route already set, don't send junk to Hermes/OpenCode)
+  const cleanMessage = message.replace(/^@(builder|think|research|ops|cos|[\w-]+)\s+/i, "");
   const aim = aimKey();
   const sendProjectId = projectId || "";
   const sendWorkerId = workerId || "";
@@ -4028,7 +4032,7 @@ async function sendMessage(message, opts) {
     let body, headers;
     if (attachmentsToSend.length) {
       const formData = new FormData();
-      formData.append("message", message);
+      formData.append("message", cleanMessage);
       if (folder) formData.append("folder", folder);
       formData.append("preset", lane);
       if (sendProjectId) formData.append("project_id", sendProjectId);
@@ -4041,7 +4045,7 @@ async function sendMessage(message, opts) {
       headers = {};
     } else {
       body = JSON.stringify({
-        message,
+        message: cleanMessage,
         folder,
         preset: lane,
         project_id: sendProjectId || null,

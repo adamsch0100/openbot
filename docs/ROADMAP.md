@@ -406,7 +406,9 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 - Multi-seat fan-out (one message to multiple seats) — single @mention path shipped for v1
 - Full handoff bus protocol overhaul, routines, or Builder validation
 
-Next PR: **Memory Pane Enhancements** (or next ranked gap).
+---
+
+Next PR: **Memory Pane Enhancements** — structured goal/context cards, search across job history and thread archives, brain notes templates for project types.
 
 ---
 

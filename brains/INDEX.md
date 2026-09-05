@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: @seat mentions + handoff cards shipped on cursor/seat-mentions-handoff-01da — composer autocomplete, in-stream handoff card, backend metadata ready.
-Last: Connector UX shipped and merged on master (PR #10).
-Next: Test @mentions + handoff card, push PR #11. Then Memory pane or next ranked gap.
+Now: @seat mentions + handoff cards shipped on cursor/seat-mentions-handoff-01da (PR #11).
+Last: Connector UX merged on master (PR #10).
+Next: Memory pane enhancements (structured goal/context cards, search across job history).
 Blocker: —
 
 ## Vault

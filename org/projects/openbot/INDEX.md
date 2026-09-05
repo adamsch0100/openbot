@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: @seat mentions + handoff cards shipped on cursor/seat-mentions-handoff-01da — composer @autocomplete, in-stream handoff card, backend metadata.
+Now: @seat mentions + handoff cards shipped on cursor/seat-mentions-handoff-01da (PR #11).
 Last: Connector UX merged on master (PR #10).
-Next: Test @mentions + handoff card locally, push PR #11. Then Memory pane or next ranked gap.
+Next: Memory pane enhancements (structured goal/context cards, search across job history).
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
