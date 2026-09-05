@@ -3189,9 +3189,22 @@ async function sendMessage(message, opts) {
     abort: ac,
     lane: laneTag
   });
-  const watchdog = setTimeout(() => {
+  // Watchdog: abort if no progress for 90s (tracks last activity)
+  let lastActivity = Date.now();
+  let progressWatchdog = null;
+  function resetProgressWatchdog() {
+    lastActivity = Date.now();
+    if (progressWatchdog) clearTimeout(progressWatchdog);
+    progressWatchdog = setTimeout(() => {
+      if (Date.now() - lastActivity > 90000 && stillHere()) {
+        try { ac.abort(); } catch (_err) { /* already aborted */ }
+      }
+    }, 90000);
+  }
+  resetProgressWatchdog();
+  const maxWatchdog = setTimeout(() => {
     try { ac.abort(); } catch (_err) { /* already aborted */ }
-  }, 720000);
+  }, 600000); // Hard 10min max
   let job = null;
   let liveText = "";
   const stillHere = () => aimKey() === aim;
@@ -3260,6 +3273,7 @@ async function sendMessage(message, opts) {
           });
         }
         if (event === "progress" && (data.text || data.lane)) {
+          resetProgressWatchdog(); // Reset on any progress
           if (data.lane) {
             const cur = liveFor(aim);
             if (cur) cur.lane = data.lane;
@@ -3305,6 +3319,8 @@ async function sendMessage(message, opts) {
       }
       if (job) break;
     }
+    clearTimeout(maxWatchdog);
+    if (progressWatchdog) clearTimeout(progressWatchdog);
     if (stillHere()) {
       const el = activeBubble();
       if (job) {
@@ -3316,20 +3332,29 @@ async function sendMessage(message, opts) {
       } else if (liveText) {
         settleLive(el, { id: "live", text: liveText, keep_going: false, talk: true, engine: "board", preset: "cos" });
       } else if (el) {
-        el.remove();
-        renderJob({
+        // Empty response - should not happen with reliability fixes, but handle gracefully
+        const thinkEl = el.querySelector(".thinking");
+        const textEl = el.querySelector(".bubble-text");
+        if (thinkEl) thinkEl.classList.add("hidden");
+        if (textEl) {
+          textEl.textContent = "Chat didn't return a response. This shouldn't happen — check that Hermes is running and a Chat model is seated in Settings → Models.";
+        }
+        settleLive(el, {
           id: "empty",
-          text: "I didn't get a reply that time. Try again, or open Hermes / OpenCode from the tabs.",
+          text: "Chat didn't return a response. Check Hermes / Chat model settings.",
           keep_going: false,
           talk: true,
           engine: "board",
-          preset: "cos"
+          preset: "cos",
+          blocker: "empty response"
         });
       }
     } else if (job && job.id) {
       seenJobIds.add(job.id);
     }
   } catch (err) {
+    clearTimeout(maxWatchdog);
+    if (progressWatchdog) clearTimeout(progressWatchdog);
     const stopped = err && (err.name === "AbortError" || /abort/i.test(String(err)));
     if (stillHere()) {
       const el = activeBubble();

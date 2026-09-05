@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Builder Delight Loop PR created (https://github.com/adamsch0100/openbot/pull/2) — ready for CoS/OpenBot CEO review against ROADMAP PR1 criteria.
-Last: cloud agent · Implemented inline Brief updates after Accept/Reject, fixed project INDEX preservation bug, created comprehensive PR with test notes.
-Next: OpenBot CEO reviews PR #2 against ROADMAP acceptance criteria; merge when approved.
+Now: Chat OS Reliability PR #3 — production hardening complete: router progress for all Cos paths, keyring fallback visibility, watchdog improvements, enhanced error messages.
+Last: cloud agent · Implemented production changes in router.py (progress/errors), web/app.js (watchdog/empty handling), plus 23-test reliability suite.
+Next: Push updates to PR #3; OpenBot CEO review for MERGE-READY.
 Blocker: —
 
 ## Vault
