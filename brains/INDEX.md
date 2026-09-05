@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Chat OS Reliability PR #3 created (https://github.com/adamsch0100/openbot/pull/3) — ready for CoS/OpenBot CEO review against ROADMAP PR2 criteria.
-Last: cloud agent · Implemented comprehensive reliability test suite (23 tests), verified existing error handling, created PR with manual testing checklist.
-Next: OpenBot CEO reviews PR #3 against ROADMAP acceptance criteria; merge when approved.
+Now: Chat OS Reliability PR #3 — production hardening complete: router progress for all Cos paths, keyring fallback visibility, watchdog improvements, enhanced error messages.
+Last: cloud agent · Implemented production changes in router.py (progress/errors), web/app.js (watchdog/empty handling), plus 23-test reliability suite.
+Next: Push updates to PR #3; OpenBot CEO review for MERGE-READY.
 Blocker: —
 
 ## Vault
