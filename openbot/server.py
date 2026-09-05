@@ -98,6 +98,9 @@ LOGIN_ID = re.compile(r"^/api/logins/([a-zA-Z0-9_-]{4,32})$")
 PROJECT_ID = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})$")
 PROJECT_INDEX = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/index$")
 WORKER_ADD = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/workers$")
+ROUTINE_ID = re.compile(r"^/api/routines/([a-z0-9-]{8,32})$")
+ROUTINE_EXECUTE = re.compile(r"^/api/routines/([a-z0-9-]{8,32})/execute$")
+ROUTINE_RESUME = re.compile(r"^/api/routines/([a-z0-9-]{8,32})/resume$")
 WORKER_DEL = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/workers/([a-z0-9-]{1,40})$")
 WORKER_BRAIN = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/workers/([a-z0-9-]{1,40})/brain$")
 PROJECT_CHANNEL = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/channel$")
@@ -640,6 +643,20 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(400, {"error": str(err)})
         if path.startswith("/api/attachments/"):
             return self._serve_attachment(path)
+        if path == "/api/routines":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            from .routines import list_routines
+            return self._json(200, {"routines": list_routines(project_id)})
+        routine = ROUTINE_ID.match(path)
+        if routine:
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            from .routines import read_routine
+            data = read_routine(routine.group(1), project_id)
+            if not data:
+                return self._json(404, {"error": "routine not found"})
+            return self._json(200, data)
         return super().do_GET()
 
     def do_POST(self):
@@ -875,6 +892,39 @@ class Handler(SimpleHTTPRequestHandler):
             result = claim_handoff(handoff_id, project_id, claimant)
             return self._json(200 if result["ok"] else 400, result)
         
+        if path == "/api/routines":
+            name = str(data.get("name") or "").strip()
+            schedule = str(data.get("schedule") or "").strip()
+            steps = data.get("steps") or []
+            project_id = str(data.get("project_id") or "").strip() or None
+            enabled = bool(data.get("enabled", True))
+            if not name or not schedule or not steps:
+                return self._json(400, {"error": "missing name, schedule, or steps"})
+            from .routines import create_routine, attach_routine_cron
+            routine_id = create_routine(name, schedule, steps, project_id, enabled)
+            if enabled:
+                cron_result = attach_routine_cron(routine_id, project_id)
+                return self._json(200, {"routine_id": routine_id, "cron": cron_result})
+            return self._json(200, {"routine_id": routine_id})
+        
+        routine_execute = ROUTINE_EXECUTE.match(path)
+        if routine_execute:
+            routine_id = routine_execute.group(1)
+            project_id = str(data.get("project_id") or "").strip() or None
+            from .routines import execute_routine
+            result = execute_routine(routine_id, project_id)
+            return self._json(200 if result.get("ok") else 500, result)
+        
+        routine_resume = ROUTINE_RESUME.match(path)
+        if routine_resume:
+            routine_id = routine_resume.group(1)
+            project_id = str(data.get("project_id") or "").strip() or None
+            resume_step = int(data.get("resume_step", 0))
+            resume_result = str(data.get("resume_result") or "").strip()
+            from .routines import execute_routine
+            result = execute_routine(routine_id, project_id, resume_step, resume_result)
+            return self._json(200 if result.get("ok") else 500, result)
+        
         project_patch = PROJECT_ID.match(path)
         if project_patch:
             pid = project_patch.group(1)
@@ -1027,6 +1077,39 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
         return None
 
+    def do_PATCH(self):
+        path = urlparse(self.path).path
+        if not self._unlocked():
+            return self._json(401, {"error": "locked"})
+        length = int(self.headers.get("Content-Length", 0))
+        if length <= 0 or length > 64 * 1024:
+            return self._json(400, {"error": "body too large or empty"})
+        data = json.loads(self.rfile.read(length))
+        routine = ROUTINE_ID.match(path)
+        if routine:
+            routine_id = routine.group(1)
+            project_id = str(data.get("project_id") or "").strip() or None
+            from .routines import update_routine, attach_routine_cron, read_routine
+            fields = {}
+            if "name" in data:
+                fields["name"] = str(data["name"]).strip()
+            if "schedule" in data:
+                fields["schedule"] = str(data["schedule"]).strip()
+            if "steps" in data:
+                fields["steps"] = data["steps"]
+            if "enabled" in data:
+                fields["enabled"] = bool(data["enabled"])
+            ok = update_routine(routine_id, project_id, **fields)
+            if not ok:
+                return self._json(404, {"error": "routine not found"})
+            if fields.get("enabled") or "schedule" in fields:
+                routine_data = read_routine(routine_id, project_id)
+                if routine_data and routine_data.get("enabled"):
+                    attach_routine_cron(routine_id, project_id)
+            return self._json(200, {"ok": True})
+        self.send_error(404)
+        return None
+
     def do_PUT(self):
         path = urlparse(self.path).path
         try:
@@ -1085,6 +1168,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, remove_project(project.group(1), confirm))
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+        routine = ROUTINE_ID.match(path)
+        if routine:
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            from .routines import delete_routine
+            ok = delete_routine(routine.group(1), project_id)
+            return self._json(200 if ok else 404, {"ok": ok})
         self.send_error(404)
         return None
 

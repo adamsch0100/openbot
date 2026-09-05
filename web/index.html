@@ -193,6 +193,7 @@
           <button type="button" class="drawer-tab" data-panel="channels">Channels</button>
           <button type="button" class="drawer-tab" data-panel="models">Models</button>
           <button type="button" class="drawer-tab" data-panel="connectors">Connectors</button>
+          <button type="button" class="drawer-tab" data-panel="routines">Routines</button>
           <button type="button" class="drawer-tab" data-panel="git">Git</button>
           <button type="button" class="drawer-tab" data-panel="memory">Memory</button>
           <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
@@ -400,6 +401,40 @@
               <button type="button" class="ghost-btn" id="refreshConnectors">Refresh catalog</button>
               <p class="muted" id="connectorStatus"></p>
             </div>
+          </section>
+          <section class="drawer-panel" id="panel-routines">
+            <p class="lede">Scheduled multi-step flows. Routines run ordered steps (e.g., morning: Code status → Think summarize → Ops note). Hermes cron fires them on schedule.</p>
+            <div class="field">
+              <label for="routineName">Name</label>
+              <input id="routineName" type="text" placeholder="Morning standup" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="routineSchedule">Schedule</label>
+              <input id="routineSchedule" type="text" placeholder="every morning at 8am" autocomplete="off" />
+            </div>
+            <h4>Steps</h4>
+            <div id="routineSteps" class="routine-steps"></div>
+            <div class="routine-step-form">
+              <select id="routineStepSeat">
+                <option value="">Select seat...</option>
+                <option value="code">Code</option>
+                <option value="think">Think</option>
+                <option value="research">Research</option>
+                <option value="ops">Ops</option>
+              </select>
+              <input id="routineStepInstr" type="text" placeholder="Step instruction..." />
+              <button type="button" class="ghost-btn" id="addRoutineStep">Add Step</button>
+            </div>
+            <label class="check-line">
+              <input id="routineEnabled" type="checkbox" checked />
+              Enabled (attach Hermes cron)
+            </label>
+            <div class="actions">
+              <button type="button" class="send" id="saveRoutine">Create Routine</button>
+              <p class="muted" id="routineStatus"></p>
+            </div>
+            <h4>Saved Routines</h4>
+            <div id="routineList" class="routine-list"></div>
           </section>
           <section class="drawer-panel" id="panel-git">
             <div id="gitStatus" class="git-card muted">Git of the selected CEO’s Code folder.</div>
