@@ -4296,11 +4296,32 @@ function renderMemoryResults(results, query) {
   }
   el.innerHTML = `<h4>Search results (${results.length})</h4>` + results.map((result) => {
     const sourceLabel = result.type === "index" ? "INDEX" : result.source;
-    return `<div class="memory-result">
+    const jobId = result.job_id || "";
+    const clickable = result.type === "job" && jobId ? "memory-result-clickable" : "";
+    return `<div class="memory-result ${clickable}" data-job-id="${escapeHtml(jobId)}">
       <div class="memory-result-meta">${escapeHtml(sourceLabel)}</div>
       <div class="memory-result-snippet">${escapeHtml(result.snippet)}</div>
     </div>`;
   }).join("");
+  
+  // Add click handlers to job results
+  el.querySelectorAll(".memory-result-clickable").forEach((card) => {
+    card.addEventListener("click", () => {
+      const jobId = card.dataset.jobId;
+      if (!jobId) return;
+      // Try to find the job in the stream and scroll to it
+      const jobEl = document.querySelector(`[data-job-id="${jobId}"]`);
+      if (jobEl) {
+        setSettings(false);
+        jobEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        jobEl.classList.add("highlight");
+        setTimeout(() => jobEl.classList.remove("highlight"), 2000);
+      } else {
+        // Job not in current stream, open Usage panel to show jobs
+        setSettings(true, "usage");
+      }
+    });
+  });
 }
 
 if ($("memorySearch")) {
