@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import select
 import subprocess
 import tempfile
 import time
@@ -487,7 +488,8 @@ def chat(
                         "usage": parse_usage_file(usage_path),
                         "stopped": True,
                     }
-                if deadline and time.time() > deadline:
+                now = time.time()
+                if deadline and now > deadline:
                     proc.kill()
                     return {
                         "ok": False,
@@ -496,20 +498,31 @@ def chat(
                         "usage": parse_usage_file(usage_path),
                     }
                 # Heartbeat: emit "working" chip if >5s without activity
-                now = time.time()
                 if on_progress and not talk and (now - last_progress) > 5.0 and not heartbeat_sent:
                     try:
                         on_progress("Hermes · working")
                         heartbeat_sent = True
                     except Exception:
                         pass
-                try:
-                    line = proc.stdout.readline() if proc.stdout else ""
-                except (UnicodeDecodeError, ValueError):
-                    if proc.poll() is not None:
-                        break
-                    time.sleep(0.05)
-                    continue
+                # Non-blocking read with 1s timeout so heartbeat can fire
+                if proc.stdout and os.name != "nt":
+                    # Unix: use select for non-blocking read
+                    ready, _, _ = select.select([proc.stdout], [], [], 1.0)
+                    if ready:
+                        try:
+                            line = proc.stdout.readline()
+                        except (UnicodeDecodeError, ValueError):
+                            line = ""
+                    else:
+                        line = ""
+                else:
+                    # Windows: no select on file objects, use short readline timeout
+                    try:
+                        line = proc.stdout.readline() if proc.stdout else ""
+                    except (UnicodeDecodeError, ValueError):
+                        line = ""
+                    if not line:
+                        time.sleep(0.05)
                 if line:
                     chunks.append(line)
                     # Detect tool activity and emit progress
@@ -555,7 +568,6 @@ def chat(
                                 except Exception:
                                     pass
                     break
-                time.sleep(0.05)
             code = proc.returncode or 0
         except OSError as err:
             return {"ok": False, "code": 1, "text": str(err), "usage": {}}
