@@ -846,6 +846,22 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as err:
                 return self._json(400, {"error": str(err)})
         
+        if path == "/api/handoffs":
+            project_id = str(data.get("project_id") or "").strip() or None
+            from .bus import load_open_handoffs
+            handoffs = load_open_handoffs(project_id, limit=50)
+            return self._json(200, {"handoffs": handoffs})
+        
+        if path == "/api/handoff/claim":
+            handoff_id = str(data.get("handoff_id") or "").strip()
+            project_id = str(data.get("project_id") or "").strip() or None
+            claimant = str(data.get("claimant") or "").strip()
+            if not handoff_id or not claimant:
+                return self._json(400, {"error": "handoff_id and claimant required"})
+            from .bus import claim_handoff
+            result = claim_handoff(handoff_id, project_id, claimant)
+            return self._json(200 if result["ok"] else 400, result)
+        
         project_patch = PROJECT_ID.match(path)
         if project_patch:
             pid = project_patch.group(1)

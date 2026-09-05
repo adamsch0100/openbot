@@ -4,7 +4,7 @@ CEO brief. Status on this project reads this file only.
 
 Now: Memory pane with editable INDEX fields (PR #12). Settings → Memory: edit Now/Last/Next/Blocker cards + Save to patch INDEX. Search across job results.
 Last: @seat mentions + handoff cards shipped (PR #11). Connector UX merged (PR #10). Composer attachments shipped (PR #9).
-Next: Handoff bus protocol (standardized bus/ schema for agent → agent async handoffs).
+Next: Builder validation OR routines (pick next after handoff bus merged).
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
