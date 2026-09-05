@@ -412,7 +412,8 @@ class Handler(SimpleHTTPRequestHandler):
             message, folder, requested, pid, worker_id = _chat_context(data)
             if not message:
                 return self._json(400, {"error": "empty message"})
-            job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""))
+            chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
+            job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx)
             _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""))
             job["activity"] = _activity()
             return self._json(200, job)
@@ -454,6 +455,7 @@ class Handler(SimpleHTTPRequestHandler):
                     emit("progress", payload)
 
             try:
+                chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
                 job = handle(
                     message,
                     folder,
@@ -464,6 +466,7 @@ class Handler(SimpleHTTPRequestHandler):
                     on_progress=on_progress,
                     run_id=run_id,
                     quote=str(data.get("quote") or ""),
+                    chain_context=chain_ctx,
                 )
                 _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""))
                 job["activity"] = _activity()

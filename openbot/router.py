@@ -697,6 +697,7 @@ def handle(
     on_progress=None,
     run_id: str | None = None,
     quote: str | None = None,
+    chain_context: dict | None = None,
 ) -> dict:
     node = "staff"
     if worker_id:
@@ -726,6 +727,8 @@ def handle(
         cancel = cancel_event(run_id)
     jobs: list[dict] = []
     carry = ""
+    chain_step = (chain_context or {}).get("step", 0)
+    chain_total = (chain_context or {}).get("total", 0)
     for index, step in enumerate(steps):
         payload = message
         if index and carry:
@@ -798,6 +801,9 @@ def handle(
         login_wall=bool(last.get("login_wall")),
         ok=not last.get("blocker"),
     )
+    last["step_count"] = chain_step + len(jobs) if chain_step else len(jobs)
+    last["total_steps"] = chain_total if chain_total else len(jobs)
+    last["in_chain"] = bool(chain_context)
     return last
 
 

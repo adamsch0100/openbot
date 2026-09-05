@@ -666,6 +666,12 @@ async function stopLive(key) {
   }
   const id = live.runId && live.runId !== "pending" ? live.runId : "";
   setLive("", { key: idKey, projectId: live.projectId, workerId: live.workerId });
+  // Clear chain state when stopping
+  const queue = messageQueues.get(idKey);
+  if (queue && queue.length > 0) {
+    messageQueues.set(idKey, []);
+    paintQueueChip();
+  }
   if (!id) return;
   await fetch(`/api/runs/${id}/stop`, {
     method: "POST",
@@ -2145,7 +2151,10 @@ function renderJob(job) {
     const go = document.createElement("button");
     go.type = "button";
     go.className = "ghost-btn";
-    go.textContent = job.login_wall ? "I already logged in" : "Keep going";
+    const stepCounter = (job.step_count && job.total_steps && job.in_chain) 
+      ? ` (${job.step_count}/${job.total_steps})` 
+      : "";
+    go.textContent = job.login_wall ? "I already logged in" : `Continue${stepCounter}`;
     go.addEventListener("click", () => {
       const lane = (job.preset && job.preset !== "cos") ? job.preset : "";
       if (job.login_wall) {
@@ -2153,7 +2162,11 @@ function renderJob(job) {
         return;
       }
       const next = job.next && job.next !== "—" ? job.next : "Continue from Last and Next on the brief.";
-      sendMessage(`Continue. ${next}`, lane ? { preset: lane } : undefined);
+      const chainContext = job.in_chain ? {
+        step: job.step_count || 1,
+        total: job.total_steps || 1
+      } : { step: 1, total: 1 };
+      sendMessage(`Continue. ${next}`, lane ? { preset: lane, chain_context: chainContext } : { chain_context: chainContext });
     });
     actions.appendChild(go);
   }
@@ -3187,7 +3200,8 @@ async function sendMessage(message, opts) {
         preset: lane,
         project_id: sendProjectId || null,
         worker_id: sendWorkerId || null,
-        quote: pendingQuote || ""
+        quote: pendingQuote || "",
+        chain_context: (opts && opts.chain_context) || null
       }),
       signal: ac.signal
     });
