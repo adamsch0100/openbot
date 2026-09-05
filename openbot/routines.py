@@ -65,7 +65,7 @@ def parse_routine(text: str) -> dict:
     
     ## Steps
     
-    1. **Code** - Check git status
+    1. **Builder** - Check git status
     2. **Think** - Summarize changes from last 24h
     3. **Ops** - Post summary note to INDEX
     
@@ -102,11 +102,13 @@ def parse_routine(text: str) -> dict:
         if line.startswith("## ") and in_steps:
             break
         if in_steps and re.match(r"^\d+\.\s+\*\*", line):
-            # Example: "1. **Code** - Check git status"
+            # Example: "1. **Builder** - Check git status"
             match = re.match(r"^\d+\.\s+\*\*([^*]+)\*\*\s*-\s*(.+)$", line)
             if match:
-                seat = match.group(1).strip().lower()
+                seat_raw = match.group(1).strip().lower()
                 instruction = match.group(2).strip()
+                # Map "code" to "builder" for router compatibility
+                seat = "builder" if seat_raw == "code" else seat_raw
                 steps.append({"seat": seat, "instruction": instruction})
     
     return {
@@ -138,7 +140,9 @@ def format_routine(meta: dict) -> str:
     ]
     
     for idx, step in enumerate(steps, 1):
-        seat = step.get("seat", "code").title()
+        seat_raw = step.get("seat", "builder")
+        # Display "Builder" in markdown (internal preset name)
+        seat = seat_raw.title()
         instruction = step.get("instruction", "")
         lines.append(f"{idx}. **{seat}** - {instruction}")
     

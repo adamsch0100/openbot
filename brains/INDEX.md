@@ -4,8 +4,8 @@ Source of truth for this OpenBot instance. Status questions read this file only.
 
 Now: Routines (multi-step scheduled flows) shipped (PR #15): ordered steps, Hermes cron integration, resume capability, Settings UI.
 Last: Builder validation gate (PR #14). Handoff bus (PR #13). Memory pane (PR #12). @seat mentions + handoff cards (PR #11).
-Next: Memory pane polish, spend dashboard, or skills catalog (deferred items) — or queue complete, operator directs next.
-Blocker: —
+Next: Queue complete — operator directs next.
+Blocker: Hermes Agent missing
 
 ## Vault
 

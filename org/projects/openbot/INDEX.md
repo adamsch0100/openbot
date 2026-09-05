@@ -4,7 +4,7 @@ CEO brief. Status on this project reads this file only.
 
 Now: Routines (multi-step scheduled flows) shipped (PR #15): ordered steps, Hermes cron integration, resume capability, Settings UI.
 Last: Builder validation gate (PR #14). Handoff bus (PR #13). Memory pane (PR #12). @seat mentions + handoff cards (PR #11).
-Next: Memory pane polish, spend dashboard, or skills catalog (deferred items) — or queue complete, operator directs next.
+Next: Queue complete — operator directs next.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

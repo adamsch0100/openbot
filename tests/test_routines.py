@@ -37,7 +37,7 @@ class RoutineStorageTests(unittest.TestCase):
             "Morning Standup",
             "every morning at 8am",
             [
-                {"seat": "code", "instruction": "Check git status"},
+                {"seat": "builder", "instruction": "Check git status"},
                 {"seat": "think", "instruction": "Summarize changes"},
             ],
             project_id=None,
@@ -49,7 +49,7 @@ class RoutineStorageTests(unittest.TestCase):
         content = path.read_text(encoding="utf-8")
         self.assertIn("Morning Standup", content)
         self.assertIn("every morning at 8am", content)
-        self.assertIn("**Code** - Check git status", content)
+        self.assertIn("**Builder** - Check git status", content)
         self.assertIn("**Think** - Summarize changes", content)
 
     def test_parse_routine(self):
@@ -62,7 +62,7 @@ Owner: staff
 
 ## Steps
 
-1. **Code** - Check git status
+1. **Builder** - Check git status
 2. **Think** - Summarize day
 
 ## History
@@ -74,12 +74,12 @@ Owner: staff
         self.assertTrue(meta["enabled"])
         self.assertEqual(meta["owner"], "staff")
         self.assertEqual(len(meta["steps"]), 2)
-        self.assertEqual(meta["steps"][0]["seat"], "code")
+        self.assertEqual(meta["steps"][0]["seat"], "builder")
         self.assertEqual(meta["steps"][0]["instruction"], "Check git status")
 
     def test_list_routines(self):
         """list_routines returns all routines for a scope."""
-        routines.create_routine("Test 1", "every morning", [{"seat": "code", "instruction": "test"}], None, True)
+        routines.create_routine("Test 1", "every morning", [{"seat": "builder", "instruction": "test"}], None, True)
         routines.create_routine("Test 2", "every evening", [{"seat": "think", "instruction": "test"}], None, False)
         
         items = routines.list_routines(None)
@@ -89,7 +89,7 @@ Owner: staff
 
     def test_update_routine(self):
         """update_routine modifies a routine file."""
-        routine_id = routines.create_routine("Original", "every day", [{"seat": "code", "instruction": "test"}], None, True)
+        routine_id = routines.create_routine("Original", "every day", [{"seat": "builder", "instruction": "test"}], None, True)
         ok = routines.update_routine(routine_id, None, name="Updated Name", schedule="every week")
         self.assertTrue(ok)
         
@@ -100,7 +100,7 @@ Owner: staff
 
     def test_delete_routine(self):
         """delete_routine removes a routine file."""
-        routine_id = routines.create_routine("Delete Me", "every day", [{"seat": "code", "instruction": "test"}], None, True)
+        routine_id = routines.create_routine("Delete Me", "every day", [{"seat": "builder", "instruction": "test"}], None, True)
         path = routines.routine_path(routine_id, None)
         self.assertTrue(path.exists())
         
@@ -131,7 +131,7 @@ class RoutineExecutionTests(unittest.TestCase):
         routine_id = routines.create_routine(
             "Disabled",
             "every day",
-            [{"seat": "code", "instruction": "test"}],
+            [{"seat": "builder", "instruction": "test"}],
             None,
             enabled=False,
         )
@@ -159,7 +159,7 @@ class RoutineExecutionTests(unittest.TestCase):
         routine_id = routines.create_routine(
             "Test",
             "every day",
-            [{"seat": "code", "instruction": "test"}],
+            [{"seat": "builder", "instruction": "test"}],
             None,
             True,
         )
@@ -180,7 +180,7 @@ class RoutineFormatTests(unittest.TestCase):
             "enabled": True,
             "owner": "staff",
             "steps": [
-                {"seat": "code", "instruction": "Check status"},
+                {"seat": "builder", "instruction": "Check status"},
                 {"seat": "think", "instruction": "Summarize"},
             ],
         }
@@ -189,7 +189,7 @@ class RoutineFormatTests(unittest.TestCase):
         self.assertIn("# Test Routine", md)
         self.assertIn("Schedule: every morning at 8am", md)
         self.assertIn("Enabled: true", md)
-        self.assertIn("1. **Code** - Check status", md)
+        self.assertIn("1. **Builder** - Check status", md)
         self.assertIn("2. **Think** - Summarize", md)
         self.assertIn("## History", md)
 
@@ -202,7 +202,7 @@ Enabled: false
 
 ## Steps
 
-1. **Code** - test
+1. **Builder** - test
 """
         meta = routines.parse_routine(text)
         self.assertFalse(meta["enabled"])
@@ -225,7 +225,7 @@ class RoutineResumeTests(unittest.TestCase):
             "Resume Test",
             "every day",
             [
-                {"seat": "code", "instruction": "Step 1"},
+                {"seat": "builder", "instruction": "Step 1"},
                 {"seat": "think", "instruction": "Step 2"},
                 {"seat": "ops", "instruction": "Step 3"},
             ],

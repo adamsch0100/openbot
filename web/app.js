@@ -4525,6 +4525,8 @@ if ($("saveMemory")) {
     }
   }
   
+  let lastRoutineResult = null;
+  
   function renderRoutineList(routines) {
     const el = $("routineList");
     if (!el) return;
@@ -4535,7 +4537,7 @@ if ($("saveMemory")) {
     el.innerHTML = routines.map((r) => {
       const stepCount = (r.steps || []).length;
       const enabledBadge = r.enabled ? `<span class="badge">enabled</span>` : `<span class="badge muted">disabled</span>`;
-      return `<div class="routine-item">
+      return `<div class="routine-item" data-routine-id="${escapeHtml(r.id)}">
         <div class="routine-item-header">
           <strong>${escapeHtml(r.name)}</strong>
           ${enabledBadge}
@@ -4545,6 +4547,7 @@ if ($("saveMemory")) {
         </div>
         <button type="button" class="ghost-btn execute-routine" data-routine-id="${escapeHtml(r.id)}">Run Now</button>
         <button type="button" class="ghost-btn delete-routine" data-routine-id="${escapeHtml(r.id)}">Delete</button>
+        <div class="routine-resume hidden" data-routine-id="${escapeHtml(r.id)}"></div>
       </div>`;
     }).join("");
     
@@ -4554,6 +4557,8 @@ if ($("saveMemory")) {
         if (!routineId) return;
         btn.disabled = true;
         btn.textContent = "Running...";
+        const resumeEl = el.querySelector(`.routine-resume[data-routine-id="${routineId}"]`);
+        if (resumeEl) resumeEl.classList.add("hidden");
         try {
           const res = await fetch(`/api/routines/${routineId}/execute`, {
             method: "POST",
@@ -4562,9 +4567,47 @@ if ($("saveMemory")) {
           });
           const data = await res.json();
           if (data.ok) {
-            showHint("Routine completed");
+            showHint(`Routine completed (${data.completed_steps}/${data.total_steps} steps)`);
+            lastRoutineResult = null;
           } else {
-            showHint(data.error || "Routine failed");
+            const failedStep = data.failed_at_step || "?";
+            const blocker = data.blocker || data.error || "failed";
+            showHint(`Routine failed at step ${failedStep}: ${blocker}`);
+            lastRoutineResult = data;
+            if (resumeEl && data.resume_step) {
+              resumeEl.innerHTML = `<p class="muted">Failed at step ${data.resume_step}/${data.total_steps}: ${escapeHtml(blocker)}</p>
+<button type="button" class="ghost-btn resume-routine" data-routine-id="${routineId}">Resume from Step ${data.resume_step}</button>`;
+              resumeEl.classList.remove("hidden");
+              const resumeBtn = resumeEl.querySelector(".resume-routine");
+              if (resumeBtn) {
+                resumeBtn.addEventListener("click", async () => {
+                  resumeBtn.disabled = true;
+                  resumeBtn.textContent = "Resuming...";
+                  try {
+                    const resumeRes = await fetch(`/api/routines/${routineId}/resume`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        project_id: projectId || null,
+                        resume_step: data.resume_step,
+                        resume_result: (data.results || []).slice(-1)[0]?.text || "",
+                      }),
+                    });
+                    const resumeData = await resumeRes.json();
+                    if (resumeData.ok) {
+                      showHint(`Routine completed (${resumeData.completed_steps}/${resumeData.total_steps} steps)`);
+                      resumeEl.classList.add("hidden");
+                    } else {
+                      showHint(`Resume failed: ${resumeData.error || resumeData.blocker}`);
+                    }
+                  } catch (err) {
+                    showHint(String(err));
+                  }
+                  resumeBtn.disabled = false;
+                  resumeBtn.textContent = `Resume from Step ${data.resume_step}`;
+                });
+              }
+            }
           }
         } catch (err) {
           showHint(String(err));
