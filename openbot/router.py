@@ -699,6 +699,7 @@ def handle(
     on_progress=None,
     run_id: str | None = None,
     quote: str | None = None,
+    chain_context: dict | None = None,
 ) -> dict:
     node = "staff"
     if worker_id:
@@ -728,6 +729,8 @@ def handle(
         cancel = cancel_event(run_id)
     jobs: list[dict] = []
     carry = ""
+    chain_step = int((chain_context or {}).get("step", 0))
+    chain_total = int((chain_context or {}).get("total", 0))
     for index, step in enumerate(steps):
         payload = message
         if index and carry:
@@ -736,6 +739,7 @@ def handle(
                 f"PRIOR RESULT from {jobs[-1].get('engine')} "
                 f"(use this; do not redo that work):\n{carry[-1200:]}"
             )
+        current_step = chain_step if chain_step else (index + 1)
         aimed = work_target(project_id, step)
         if step != "cos" and aimed:
             ensure_ceo_engines(aimed)
@@ -800,6 +804,17 @@ def handle(
         login_wall=bool(last.get("login_wall")),
         ok=not last.get("blocker"),
     )
+    # Properly track step count: use chain_step if provided, otherwise this is step 1
+    if chain_step:
+        last["step_count"] = chain_step
+        last["total_steps"] = max(chain_total, chain_step)
+    elif len(jobs) > 1:
+        last["step_count"] = len(jobs)
+        last["total_steps"] = len(jobs)
+    else:
+        last["step_count"] = 1
+        last["total_steps"] = 1
+    last["in_chain"] = bool(chain_context and chain_step)
     return last
 
 
