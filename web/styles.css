@@ -230,8 +230,30 @@ body {
   border-left: 2px solid transparent;
   padding: 8px 10px; cursor: pointer;
   display: grid;
-  gap: 2px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
   font: inherit;
+  min-width: 0;
+}
+.org-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(201, 166, 107, 0.2), rgba(143, 191, 178, 0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bronze);
+  flex-shrink: 0;
+  border: 1px solid rgba(201, 166, 107, 0.3);
+}
+.org-btn-text {
+  display: grid;
+  gap: 2px;
   min-width: 0;
 }
 .org-btn b {
@@ -250,13 +272,34 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.org-btn.has-blocker .org-now {
+  color: var(--danger);
+}
 .org-btn.on {
   background: var(--bronze-soft);
   border-left-color: var(--bronze);
   color: var(--bronze);
 }
+.org-btn.on .org-avatar {
+  background: linear-gradient(135deg, var(--bronze), rgba(143, 191, 178, 0.4));
+  border-color: var(--bronze);
+  color: #1a140c;
+}
 .org-btn.ping { box-shadow: inset 3px 0 0 var(--bronze); }
 .org-btn.working { color: var(--bronze); }
+.org-btn.working .org-avatar {
+  animation: avatar-pulse 1.5s ease-in-out infinite;
+}
+@keyframes avatar-pulse {
+  0%, 100% { 
+    border-color: rgba(201, 166, 107, 0.3);
+    box-shadow: 0 0 0 0 rgba(201, 166, 107, 0.4);
+  }
+  50% { 
+    border-color: var(--bronze);
+    box-shadow: 0 0 0 3px rgba(201, 166, 107, 0.1);
+  }
+}
 .org-inbox {
   display: grid;
   gap: 6px;
@@ -334,7 +377,11 @@ body {
   gap: 2px;
   min-width: 0;
 }
-.org-row .org-btn { padding-left: 8px; }
+.org-row .org-btn { 
+  padding-left: 8px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+}
 .org-twist {
   background: transparent; color: var(--muted); border: 0;
   cursor: pointer; padding: 10px 0 0; font-size: 11px;
