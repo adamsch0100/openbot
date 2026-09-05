@@ -409,20 +409,25 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 ---
 
 ### **Handoff Bus Protocol** ✅
-**Shipped in PR #13** — standardized `bus/handoffs/` file schema with TASK/STATUS/OUTPUT/FROM/TO/NEXT OWNER fields, agents read open handoffs on job start, seats can claim work, Memory pane displays open handoffs with claim button.
+**Shipped in PR #13** — standardized `bus/handoffs/` file schema with TASK/STATUS/OUTPUT/FROM/TO/NEXT OWNER fields, agents read open handoffs on job start, seats can create and claim work, Memory pane displays open handoffs with create form and claim button.
 
 **What shipped:**
 - Standardized handoff markdown schema: `TASK`, `STATUS` (open/claimed/blocked/complete/partial), `OUTPUT`, `FROM`, `TO`, `NEXT OWNER`, `SOURCES`, `DECISIONS`, `UNCERTAINTIES`
+- `create_handoff()` function to create open handoffs for async work
 - `load_open_handoffs()` in bus.py reads handoff files, filters by status (excludes complete/partial)
+- `claim_handoff()` updates STATUS to claimed, sets NEXT OWNER
+- `handoff_summary()` generates brief summary for job packets
 - Router integration: `_packet_extra()` includes `OPEN HANDOFFS` section in job packets for Think/Builder/Research/Ops
+- `POST /api/handoff/create` endpoint (Cos/board can create handoffs)
 - `POST /api/handoffs` endpoint returns open handoffs for a CEO scope
-- `POST /api/handoff/claim` endpoint lets seats claim handoffs (changes STATUS to claimed, sets NEXT OWNER)
-- Memory pane UI: displays open handoffs with id, status badge, task preview, from→to routing, claim button
+- `POST /api/handoff/claim` endpoint lets seats claim handoffs
+- Memory pane UI: Create Handoff form (task + to seat), displays open handoffs with status badges, task preview, from→to routing, claim button
 - `data-job-id` attributes on job bubbles for Memory search jump to stream
-- Comprehensive tests: schema write/read, status filtering, claim workflow, multi-step handoff metadata
+- Comprehensive tests: schema write/read, status filtering, claim workflow, multi-step handoff metadata, create→list→claim end-to-end
 - In-stream handoff cards preserve existing functionality from PR #11
 
 **Impact:**
+- Cos can create open handoffs for seats to claim (async work delegation)
 - Agents now see open handoffs at job start, enabling async work pickup
 - Seats can claim handoffs via Memory pane, making multi-agent collaboration explicit
 - Bus files are the source of truth for agent→agent coordination, not chat
@@ -434,7 +439,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next PR: **Memory Pane Enhancements** — structured goal/context cards, search across job history and thread archives, brain notes templates for project types.
+Next PR: **Builder Validation Gate** — syntax/lint check before Accept to prevent broken diffs from landing.
 
 ---
 

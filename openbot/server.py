@@ -852,6 +852,19 @@ class Handler(SimpleHTTPRequestHandler):
             handoffs = load_open_handoffs(project_id, limit=50)
             return self._json(200, {"handoffs": handoffs})
         
+        if path == "/api/handoff/create":
+            task = str(data.get("task") or "").strip()
+            project_id = str(data.get("project_id") or "").strip() or None
+            from_seat = str(data.get("from_seat") or "").strip() or "cos"
+            to_seat = str(data.get("to_seat") or "").strip()
+            next_owner = str(data.get("next_owner") or "").strip()
+            output = str(data.get("output") or "").strip()
+            if not task or not to_seat:
+                return self._json(400, {"error": "task and to_seat required"})
+            from .bus import create_handoff
+            result = create_handoff(task, project_id, from_seat, to_seat, next_owner, output)
+            return self._json(200 if result["ok"] else 400, result)
+        
         if path == "/api/handoff/claim":
             handoff_id = str(data.get("handoff_id") or "").strip()
             project_id = str(data.get("project_id") or "").strip() or None

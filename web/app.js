@@ -4343,6 +4343,39 @@ async function fetchOpenHandoffs() {
   }
 }
 
+async function createHandoff() {
+  const task = $("handoffTask").value.trim();
+  const toSeat = $("handoffToSeat").value;
+  if (!task || !toSeat) {
+    showHint("Task and seat required");
+    return;
+  }
+  try {
+    const res = await fetch("/api/handoff/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task,
+        to_seat: toSeat,
+        from_seat: "cos",
+        project_id: projectId || null,
+        next_owner: toSeat
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showHint(`Handoff created: ${data.handoff_id}`);
+      $("handoffTask").value = "";
+      $("handoffToSeat").value = "";
+      fetchOpenHandoffs();
+    } else {
+      showHint(data.message || "Create failed");
+    }
+  } catch (err) {
+    showHint("Create failed");
+  }
+}
+
 function renderMemoryHandoffs(handoffs) {
   const el = $("memoryHandoffs");
   if (!el) return;
@@ -4431,6 +4464,8 @@ if ($("saveMemory")) {
       if (status) status.textContent = String(err);
     }
   });
+  
+  $("createHandoff").addEventListener("click", createHandoff);
 }
 
 boot().catch((err) => {

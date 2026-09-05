@@ -463,6 +463,47 @@ def load_open_handoffs(project_id: str | None, *, limit: int = 20) -> list[dict]
     return results
 
 
+def create_handoff(
+    task: str,
+    project_id: str | None,
+    from_seat: str,
+    to_seat: str,
+    next_owner: str = "",
+    output: str = "",
+) -> dict:
+    """Create an open handoff for async work.
+    
+    Returns {"ok": bool, "message": str, "handoff_id": str|None, "path": str|None}
+    """
+    if not task or not to_seat:
+        return {"ok": False, "message": "task and to_seat required", "handoff_id": None, "path": None}
+    
+    import uuid
+    handoff_id = f"handoff-{uuid.uuid4().hex[:8]}"
+    
+    try:
+        path_str = write_handoff(
+            job_id=handoff_id,
+            preset=to_seat,
+            message=task,
+            result=output or "—",
+            project_id=project_id,
+            status="open",
+            next_owner=next_owner or to_seat,
+            from_seat=from_seat,
+            to_seat=to_seat,
+            engine="board",
+        )
+        return {
+            "ok": True,
+            "message": f"Handoff {handoff_id} created",
+            "handoff_id": handoff_id,
+            "path": path_str,
+        }
+    except (OSError, ValueError) as err:
+        return {"ok": False, "message": f"Failed to create: {err}", "handoff_id": None, "path": None}
+
+
 def claim_handoff(handoff_id: str, project_id: str | None, claimant: str) -> dict:
     """Claim an open handoff by changing STATUS to claimed and setting NEXT OWNER.
     

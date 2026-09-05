@@ -417,6 +417,17 @@
               <p class="muted" id="memoryStatus"></p>
             </div>
             <h4>Open Handoffs</h4>
+            <div class="create-handoff-form">
+              <input id="handoffTask" type="text" placeholder="Task description..." />
+              <select id="handoffToSeat">
+                <option value="">To seat...</option>
+                <option value="think">Think</option>
+                <option value="builder">Builder</option>
+                <option value="research">Research</option>
+                <option value="ops">Ops</option>
+              </select>
+              <button type="button" class="ghost-btn" id="createHandoff">Create</button>
+            </div>
             <div id="memoryHandoffs" class="memory-handoffs"></div>
             <div class="field">
               <label for="memorySearch">Search INDEX and job results</label>

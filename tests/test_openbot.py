@@ -18,7 +18,7 @@ from openbot.store import in_spend_period, spend_summary, write_job, patch_index
 from openbot.usage import parse_opencode_events
 from openbot.server import _parse_index_fields, _search_memory
 from openbot.org import patch_scope
-from openbot.bus import write_handoff, load_open_handoffs, claim_handoff, handoff_summary
+from openbot.bus import write_handoff, load_open_handoffs, claim_handoff, create_handoff, handoff_summary
 import openbot.config as config_mod
 import openbot.store as store_mod
 
@@ -1944,6 +1944,47 @@ class BusLawTests(unittest.TestCase):
 
 class HandoffBusTests(unittest.TestCase):
     """Tests for handoff bus protocol: schema, load, claim, multi-step metadata."""
+
+    def test_create_open_handoff_workflow(self):
+        """create_handoff creates open status handoff that appears in list and can be claimed."""
+        import openbot.bus as bus_mod
+        old_root = store_mod.ROOT
+        old_bus_root = bus_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            bus_mod.ROOT = Path(tmp)
+            try:
+                # Create open handoff
+                result = create_handoff(
+                    task="Implement the new feature",
+                    project_id="test5",
+                    from_seat="cos",
+                    to_seat="builder",
+                    next_owner="builder"
+                )
+                self.assertTrue(result["ok"])
+                self.assertIsNotNone(result["handoff_id"])
+                self.assertIn("handoff-", result["handoff_id"])
+                
+                # Should appear in open handoffs list
+                handoffs = load_open_handoffs("test5")
+                self.assertEqual(len(handoffs), 1)
+                self.assertEqual(handoffs[0]["status"], "open")
+                self.assertEqual(handoffs[0]["to_seat"], "builder")
+                self.assertIn("Implement the new feature", handoffs[0]["task"])
+                
+                # Claim it
+                claim_result = claim_handoff(result["handoff_id"], "test5", "builder-worker")
+                self.assertTrue(claim_result["ok"])
+                
+                # Should now be claimed
+                handoffs_after = load_open_handoffs("test5")
+                self.assertEqual(len(handoffs_after), 1)
+                self.assertEqual(handoffs_after[0]["status"], "claimed")
+                self.assertEqual(handoffs_after[0]["next_owner"], "builder-worker")
+            finally:
+                store_mod.ROOT = old_root
+                bus_mod.ROOT = old_bus_root
 
     def test_write_handoff_creates_standard_schema(self):
         """write_handoff creates a standardized markdown file with required fields."""

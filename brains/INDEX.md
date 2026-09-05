@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Memory pane with editable INDEX fields (PR #12). Settings → Memory: edit Now/Last/Next/Blocker cards + Save to patch INDEX. Search across job results.
-Last: @seat mentions + handoff cards shipped (PR #11). Connector UX merged (PR #10). Composer attachments shipped (PR #9).
-Next: Builder validation OR routines (pick next after handoff bus merged).
+Now: Handoff bus shipped (PR #13): create/list/claim workflow, agents see open work at job start, Memory pane UI.
+Last: Memory pane with editable INDEX fields (PR #12). @seat mentions + handoff cards (PR #11). Connector UX (PR #10).
+Next: Builder validation gate (syntax/lint check before Accept).
 Blocker: —
 
 ## Vault
