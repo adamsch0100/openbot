@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Builder Delight Loop (ROADMAP PR #1) shipped — Accept/Reject → inline Brief card with Now/Last/Next/Blocker, no window switching.
-Last: OpenCode · Fixed server.py INDEX overwrite bug, added indexField() helper, styled Brief update card with mint accent.
-Next: Push cursor/builder-delight-loop-52e6 branch and create PR with end-to-end test demonstration notes.
+Now: Builder Delight Loop PR #2 open — https://github.com/adamsch0100/openbot/pull/2 — ready for CEO verification against ROADMAP criteria.
+Last: cloud agent · Created PR with comprehensive test notes, acceptance criteria checklist, end-to-end flow documentation.
+Next: Review PR #2 against ROADMAP PR1 acceptance criteria, test the delight loop manually, merge when verified.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
