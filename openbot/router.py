@@ -1443,6 +1443,9 @@ def _handle_preset(
     receipt = _receipt_base(job_id, chosen, engine, message, work)
     index_now = read_project_index(project_id) if project_id else read_index()
     next_line = index_field(index_now, "Next")
+    now_line = index_field(index_now, "Now")
+    last_line = index_field(index_now, "Last")
+    blocker_line = index_field(index_now, "Blocker")
     receipt.update(
         {
             "engine": engine,
@@ -1472,6 +1475,9 @@ def _handle_preset(
             "logins": public_logins(project_id) if login_wall else [],
             "stopped": stopped,
             "next": next_line,
+            "index_now": now_line,
+            "index_last": last_line,
+            "index_blocker": blocker_line,
             "talk": talk,
             "keep_going": keep_going_for(
                 chosen,
