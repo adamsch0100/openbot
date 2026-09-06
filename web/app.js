@@ -1674,6 +1674,33 @@ function renderOrg(data) {
     const primary = projects.find((row) => row.primary) || projects[0];
     if (primary) expanded.add(primary.id);
   }
+  
+  // Fetch queue status asynchronously
+  let queueData = { queue_status: [], active_workers: [], total_queued: 0 };
+  fetch("/api/queue/status")
+    .then(r => r.json())
+    .then(data => {
+      queueData = data;
+      // Re-render with queue data
+      renderOrgWithQueue(org, queueData);
+    })
+    .catch(() => {
+      // Fallback to render without queue data
+      renderOrgWithQueue(org, queueData);
+    });
+}
+
+function renderOrgWithQueue(org, queueData) {
+  const tree = $("orgTree");
+  if (!tree) return;
+  const projects = org.projects || [];
+  const queueByProject = new Map();
+  
+  // Index queue data by project_id
+  for (const q of queueData.queue_status || []) {
+    queueByProject.set(q.project_id || "_staff", q.queued_count || 0);
+  }
+  
   const projectBits = projects.map((project) => {
     const open = expanded.has(project.id);
     const workers = (project.workers || []).map((worker) => `
@@ -1691,6 +1718,8 @@ function renderOrg(data) {
     const ping = (projectNeedsYou(project.id) || busy) ? " ping" : "";
     const initials = ceoInitials(project.name);
     const hasBlocker = (project.index_blocker || "").trim() && (project.index_blocker || "").trim() !== "—";
+    const queuedCount = queueByProject.get(project.id) || 0;
+    const queueChip = queuedCount > 0 ? `<span class="queue-chip" title="${queuedCount} task(s) queued">${queuedCount}</span>` : "";
     return `
       <div class="org-project${open ? " open" : ""}" data-project-wrap="${escapeHtml(project.id)}">
         <div class="org-row">
@@ -1698,7 +1727,7 @@ function renderOrg(data) {
           <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}${hasBlocker ? " has-blocker" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}${busy ? " · working" : ""}">
             <span class="org-avatar" aria-hidden="true">${escapeHtml(initials)}</span>
             <span class="org-btn-text">
-              <b>${escapeHtml(project.name)}</b>
+              <b>${escapeHtml(project.name)}${queueChip}</b>
               ${wire ? `<span class="org-now">${escapeHtml(wire)}</span>` : ""}
             </span>
           </button>
@@ -1709,11 +1738,13 @@ function renderOrg(data) {
   }).join("");
   const staffBusy = lives.has(aimKey("", ""));
   const cosInitials = ceoInitials("Chief of Staff");
+  const staffQueuedCount = queueByProject.get("_staff") || 0;
+  const staffQueueChip = staffQueuedCount > 0 ? `<span class="queue-chip" title="${staffQueuedCount} task(s) queued">${staffQueuedCount}</span>` : "";
   tree.innerHTML = `
     <button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
       <span class="org-avatar" aria-hidden="true">${escapeHtml(cosInitials)}</span>
       <span class="org-btn-text">
-        <b>Chief of Staff</b>
+        <b>Chief of Staff${staffQueueChip}</b>
         <span class="org-now">runs the CEOs</span>
       </span>
     </button>

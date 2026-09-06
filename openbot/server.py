@@ -77,6 +77,7 @@ from .org import (
 )
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
 from .router import decide_diff, handle, pending_approvals, public_job
+from .queueworker import active_workers, auto_create_handoffs
 from .store import (
     ROOT,
     list_brains,
@@ -608,6 +609,49 @@ class Handler(SimpleHTTPRequestHandler):
             else:
                 index_text = read_index()
             return self._json(200, {"index_fields": _parse_index_fields(index_text)})
+        
+        if path == "/api/queue/status":
+            from .bus import load_open_handoffs
+            org_data = ensure_org()
+            
+            # Build queue status per CEO
+            queue_status = []
+            
+            # Staff queue
+            staff_handoffs = load_open_handoffs(None, limit=100)
+            staff_open = [h for h in staff_handoffs if h["status"] == "open"]
+            if staff_open:
+                queue_status.append({
+                    "project_id": None,
+                    "name": "Chief of Staff",
+                    "queued_count": len(staff_open),
+                    "handoffs": staff_open[:5],
+                })
+            
+            # Per-CEO queues
+            for project in org_data.get("projects") or []:
+                pid = project.get("id")
+                if not pid:
+                    continue
+                handoffs = load_open_handoffs(pid, limit=100)
+                open_handoffs = [h for h in handoffs if h["status"] == "open"]
+                if open_handoffs:
+                    queue_status.append({
+                        "project_id": pid,
+                        "name": project.get("name") or pid,
+                        "queued_count": len(open_handoffs),
+                        "handoffs": open_handoffs[:5],
+                    })
+            
+            # Active workers
+            workers = active_workers()
+            
+            return self._json(200, {
+                "queue_status": queue_status,
+                "active_workers": workers,
+                "total_queued": sum(q["queued_count"] for q in queue_status),
+            })
+        
         channel = PROJECT_CHANNEL.match(path)
         if channel:
             pid = channel.group(1)
@@ -679,7 +723,22 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
             chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
-            job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx, attachments=attachments)
+            
+            # Check for multi-spawn
+            from .multispawn import multi_spawn_handle
+            multi_result = multi_spawn_handle(
+                message, folder, pid, worker_id,
+                quote=str(data.get("quote") or ""),
+                attachments=attachments
+            )
+            
+            if multi_result:
+                # Multi-spawn executed
+                job = multi_result
+            else:
+                # Normal single-seat routing
+                job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx, attachments=attachments)
+            
             _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
             job["activity"] = _activity()
             return self._json(200, job)
@@ -723,20 +782,37 @@ class Handler(SimpleHTTPRequestHandler):
 
             try:
                 chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
-                chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
-                job = handle(
-                    message,
-                    folder,
-                    requested,
-                    pid,
-                    worker_id,
+                
+                # Check for multi-spawn
+                from .multispawn import multi_spawn_handle
+                multi_result = multi_spawn_handle(
+                    message, folder, pid, worker_id,
                     on_delta=on_delta,
                     on_progress=on_progress,
                     run_id=run_id,
                     quote=str(data.get("quote") or ""),
-                    chain_context=chain_ctx,
-                    attachments=attachments,
+                    attachments=attachments
                 )
+                
+                if multi_result:
+                    # Multi-spawn executed
+                    job = multi_result
+                else:
+                    # Normal single-seat routing
+                    job = handle(
+                        message,
+                        folder,
+                        requested,
+                        pid,
+                        worker_id,
+                        on_delta=on_delta,
+                        on_progress=on_progress,
+                        run_id=run_id,
+                        quote=str(data.get("quote") or ""),
+                        chain_context=chain_ctx,
+                        attachments=attachments,
+                    )
+                
                 _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
                 job["activity"] = _activity()
                 emit("done", job)

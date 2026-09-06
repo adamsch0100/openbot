@@ -75,19 +75,28 @@ OpenBot has **Week 1 + gap ship order #2–#4 (Builder delight, Chat reliability
 
 Here's what remains to reach **world-class Chat OS** status:
 
-### 1. True Parallel Multi-Agent
-**Current state:**
-- ✅ Cos can @mention seats and create handoffs
-- ✅ Handoff bus protocol exists (`bus/handoffs/` with TASK/STATUS/OUTPUT)
-- ✅ Routines run multi-step flows, but one seat at a time
+### 1. True Parallel Multi-Agent ✅ **SHIPPED**
 
-**What's missing:**
-- Cos cannot spawn multiple workers simultaneously (no concurrent task queue)
-- Worker pool has no autonomous task queue (agents only work when user sends message)
-- No "Builder stuck, auto-route to Research" handoff detection
-- Agents don't autonomously pick up `bus/handoffs/` work without manual prompt
+**Shipped in WC-1** — Cos can spawn multiple workers simultaneously from one message, autonomous task queue where workers check bus/handoffs/ and claim open work, auto-handoff detection (e.g., "need docs" signals create Research handoffs), 3+ workers running concurrently with live progress visible in sidebar, queue visibility showing queued task counts per CEO.
 
-**Impact:** Operator must manually sequence multi-agent work. True parallel collaboration (e.g., Code + Research + Think all working at once on different subtasks) is not possible.
+**What shipped:**
+- Multi-spawn from one message: `@Builder: add logging; @Research: fetch API docs` spawns parallel workers
+- Autonomous task queue: workers poll `bus/handoffs/` and claim+execute open work on idle
+- Auto-handoff detection: `close_work_job` detects "need docs" signals and auto-creates handoffs to Research
+- Concurrent execution: `spawn_parallel` runs 3+ workers concurrently via threading
+- Queue visibility: sidebar displays queued task counts per CEO with badge chips
+- Comprehensive tests: 12 tests covering multi-spawn, queue worker, handoff detection, concurrent execution (all passing)
+
+**Files:**
+- `openbot/multispawn.py` — parse multi-seat messages and spawn parallel workers
+- `openbot/queueworker.py` — autonomous queue worker loop, detect handoff signals, claim+execute
+- `openbot/bus.py` — auto-handoff creation in `close_work_job`
+- `openbot/server.py` — `/api/queue/status` endpoint, multi-spawn integration in chat endpoints
+- `web/app.js` — queue chip display in sidebar
+- `web/styles.css` — `.queue-chip` styling
+- `tests/test_parallel_multiagent.py` — comprehensive test suite
+
+**Impact:** Operators can now send one message and spawn multiple workers simultaneously. Workers autonomously pick up open handoffs from `bus/handoffs/` without manual prompts. Auto-handoff detection routes work between agents (e.g., Builder → Research when docs needed).
 
 ### 2. Coding Worker Hardening
 **Current state:**
