@@ -2922,10 +2922,13 @@ function emptyStreamHtml() {
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
   let lead = "You are talking to Chief of Staff — the bot under you. CEOs report here. Click a CEO for their own chat.";
+  let showCTA = !project; // Show "Pick a CEO" on CoS empty state
   if (worker && project) {
     lead = `You are talking to ${worker.name} on ${project.name}. Work still reports in this chat.`;
+    showCTA = false;
   } else if (project) {
     lead = `You are talking to ${project.name}. Pin Code, Think, Research, or Ops below when you want that engine next. A CEO can propose a helper here if one is actually needed.`;
+    showCTA = false;
   }
   return `
     <div class="empty-stream" id="streamEmpty">
@@ -2935,6 +2938,7 @@ function emptyStreamHtml() {
       ${nxt ? `<p><b>Next</b> ${escapeHtml(nxt)}</p>` : ""}
       ${stuck ? `<p><b>Blocked</b> ${escapeHtml(stuck)}</p>` : "<p>Nothing blocked on the brief.</p>"}
       <p>${lead}</p>
+      ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">☰ Pick a CEO</button>' : ""}
     </div>`;
 }
 
@@ -2950,6 +2954,18 @@ function renderTurns(turns, extras) {
     stream.innerHTML = emptyStreamHtml();
     hydratingHistory = false;
     paintLanes();
+    // Wire mobile CTA to open drawer
+    const cta = document.getElementById("mobileCeoPickerCTA");
+    if (cta) {
+      cta.addEventListener("click", () => {
+        const rail = $("rail");
+        const scrim = $("railScrim");
+        if (rail && scrim) {
+          rail.classList.add("open");
+          scrim.classList.add("open");
+        }
+      });
+    }
     return;
   }
   stream.innerHTML = "";
@@ -5374,7 +5390,57 @@ if ($("saveMemory")) {
   loadRoutines();
 }
 
+// Mobile menu toggle
+function initMobileMenu() {
+  const toggle = $("mobileOrgToggle");
+  const rail = $("rail");
+  const scrim = $("railScrim");
+  
+  if (!toggle || !rail || !scrim) return;
+  
+  // Show hamburger on mobile
+  function updateMobileUI() {
+    const isMobile = window.innerWidth <= 860;
+    toggle.style.display = isMobile ? "flex" : "none";
+    if (!isMobile) {
+      rail.classList.remove("open");
+      scrim.classList.remove("open");
+    }
+  }
+  
+  // Toggle rail
+  toggle.addEventListener("click", () => {
+    rail.classList.toggle("open");
+    scrim.classList.toggle("open");
+  });
+  
+  // Close on scrim click
+  scrim.addEventListener("click", () => {
+    rail.classList.remove("open");
+    scrim.classList.remove("open");
+  });
+  
+  // Close on CEO selection (so user sees chat immediately)
+  const orgTree = $("orgTree");
+  if (orgTree) {
+    orgTree.addEventListener("click", (event) => {
+      const btn = event.target.closest(".org-btn");
+      if (btn && window.innerWidth <= 860) {
+        window.setTimeout(() => {
+          rail.classList.remove("open");
+          scrim.classList.remove("open");
+        }, 200);
+      }
+    });
+  }
+  
+  updateMobileUI();
+  window.addEventListener("resize", updateMobileUI);
+}
+
 boot().catch((err) => {
   renderIndex(String(err));
   loadOrgTree();
 });
+
+initMobileMenu();

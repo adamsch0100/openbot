@@ -1073,6 +1073,19 @@ body {
   font-size: 14px;
   line-height: 1.5;
 }
+.mobile-cta {
+  display: none;
+  margin-top: 16px;
+  padding: 12px 18px;
+  background: var(--bronze-soft);
+  border: 1px solid var(--bronze);
+  color: var(--bronze);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+}
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -1249,6 +1262,7 @@ input, textarea, select {
 .embed-head h1 { margin: 0; font-size: 20px; font-weight: 500; font-family: var(--display); }
 .embed-head p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .embed { width: 100%; height: 100%; border: 0; background: #0b0a09; min-height: 0; }
+.mobile-org-toggle { display: none; } /* Hidden on desktop */
 .overlay {
   position: fixed; inset: 0; background: rgba(10, 9, 8, 0.86);
   display: grid; place-items: center; z-index: 20; padding: 24px;
@@ -1607,15 +1621,498 @@ footer {
   white-space: nowrap;
 }
 footer a { color: var(--bronze); }
+/* Mobile-first layout: phone ≤480px, usable ≤860px */
 @media (max-width: 860px) {
   body { overflow: auto; }
-  .bar { grid-template-columns: minmax(0, 1fr) auto; }
-  .stages { grid-column: 1 / -1; justify-self: start; }
-  #stage-chat.on, .drawer-grid, .field-row, .model-grid { grid-template-columns: minmax(0, 1fr); }
+  .bar { 
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 8px 12px;
+    gap: 12px;
+  }
+  
+  /* Compact header: hide "LOCAL ORG." sub, keep gem + OPENBOT */
+  .sub { display: none; }
+  .word { font-size: 11px; letter-spacing: 0.18em; }
+  .mark-gem { width: 28px; height: 28px; }
+  
+  /* Stage tabs horizontal scroll */
+  .stages { 
+    grid-column: 2; 
+    justify-self: center;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .stage-btn { 
+    font-size: 11px;
+    padding: 5px 11px;
+    white-space: nowrap;
+  }
+  
+  /* Hamburger menu button for org rail */
+  .mobile-org-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--ink);
+    font-size: 18px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .mobile-org-toggle:hover { border-color: var(--bronze); color: var(--bronze); }
+  
+  /* Chat stage: full-width chat, rail as overlay */
+  #stage-chat.on { 
+    grid-template-columns: minmax(0, 1fr);
+    position: relative;
+  }
+  
+  /* Rail becomes overlay drawer */
+  .rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 80vw);
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
+  }
+  .rail.open { transform: translateX(0); }
+  
+  /* Rail scrim */
+  .rail-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 9, 8, 0.7);
+    z-index: 29;
+  }
+  .rail-scrim.open { display: block; }
+  
+  /* Chat column full width */
+  .chat-col { width: 100%; }
+  .chat-shell { 
+    width: 100%;
+    padding: 0 12px 12px;
+  }
+  
+  /* Lanes: horizontal scroll with better tap targets */
+  .lanes { 
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px;
+  }
+  .lane { 
+    padding: 8px 14px;
+    font-size: 13px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  
+  /* Route buttons: better tap targets */
+  .route { 
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .route-btn { 
+    padding: 8px 14px;
+    font-size: 12px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  
+  /* Composer: ensure above safe area */
+  .composer {
+    padding: 10px 12px;
+    margin-bottom: env(safe-area-inset-bottom, 8px);
+  }
+  .composer textarea {
+    font-size: 16px; /* Prevent iOS zoom */
+    min-height: 48px;
+  }
+  
+  /* Compact footer: collapse engines info */
+  footer { 
+    white-space: normal;
+    font-size: 10px;
+    padding: 6px 12px;
+    line-height: 1.4;
+  }
+  
+  /* Settings drawer full-width */
   .drawer { grid-template-columns: minmax(0, 1fr); }
+  .drawer-grid { 
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .drawer-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 8px;
+    gap: 4px;
+  }
+  .drawer-tab {
+    white-space: nowrap;
+    min-height: 44px;
+    font-size: 12px;
+    padding: 10px 14px;
+  }
+  .drawer-body {
+    padding: 16px 16px 24px;
+  }
+  
+  /* Form fields stack */
+  .field-row, .model-grid { grid-template-columns: minmax(0, 1fr); }
   .kv div { grid-template-columns: minmax(0, 1fr); }
-  footer { white-space: normal; }
+  
+  /* Better input tap targets */
+  input, textarea, select {
+    font-size: 16px; /* Prevent iOS zoom */
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+  
+  /* Better button tap targets */
+  .ghost-btn, .send {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  
+  /* User bubbles full width on small screens */
   .bubble.user { max-width: 100%; }
+  
+  /* Meter compact: stack or single line */
+  .bar-right { 
+    grid-column: 3;
+    justify-self: end;
+  }
+  .meter { 
+    padding: 6px 10px;
+    font-size: 10px;
+    max-width: 110px;
+    gap: 4px;
+  }
+  .meter-line { 
+    display: none; /* Hide breakdown on mobile, just show total */
+  }
+  .meter-total { font-size: 11px; }
+  .engine-hint { display: none; } /* Hide on mobile */
+  
+  /* Wizard/first-run panels: phone-friendly */
+  .overlay {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: max(16px, env(safe-area-inset-top, 16px));
+  }
+  .panel {
+    padding: 20px 16px;
+    width: 100%;
+    max-width: 100%;
+    gap: 14px;
+  }
+  .panel h2 { font-size: 20px; }
+  .panel .mark {
+    text-align: center;
+  }
+  .mark-lockup {
+    width: 180px;
+    height: auto;
+  }
+  
+  /* Unlock gate: phone-friendly */
+  #unlockGate .panel {
+    padding: 24px 20px;
+  }
+  #unlockPin {
+    font-size: 20px; /* Bigger PIN input on phone */
+    text-align: center;
+    letter-spacing: 0.3em;
+    padding: 14px;
+  }
+  
+  /* Wizard inputs */
+  .wizard-step input,
+  .wizard-step select {
+    font-size: 16px;
+    padding: 12px;
+  }
+  
+  /* Auth status cards */
+  .auth-status-card {
+    padding: 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .auth-status-icon {
+    font-size: 32px;
+    align-self: center;
+  }
+  
+  /* Usage panel: spend breaks readable */
+  .spend-break {
+    padding: 12px;
+    font-size: 12px;
+    gap: 8px;
+  }
+  .spend-break div {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  /* Job log */
+  .job-log {
+    gap: 10px;
+  }
+  .job-row {
+    padding: 12px;
+    gap: 6px;
+    font-size: 12px;
+  }
+  
+  /* Spend table */
+  .spend-table {
+    font-size: 12px;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .spend-table th,
+  .spend-table td {
+    padding: 6px;
+    white-space: nowrap;
+  }
+  
+  /* Provider cards */
+  .provider {
+    padding: 12px;
+    gap: 10px;
+  }
+  .provider-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  /* Seat cards */
+  .seat-card {
+    padding: 12px;
+    gap: 10px;
+  }
+  .seat-card header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  
+  /* Memory cards */
+  .memory-cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  /* Actions wrap on phone */
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .actions button {
+    width: 100%;
+  }
+  
+  /* Empty state: show "Pick a CEO" CTA on mobile */
+  .mobile-cta {
+    display: block;
+  }
+}
+
+/* Phone-specific: ≤480px */
+@media (max-width: 480px) {
+  .bar { 
+    padding: 6px 10px; 
+    gap: 8px;
+  }
+  .mark-gem { width: 24px; height: 24px; }
+  .word { font-size: 10px; letter-spacing: 0.16em; }
+  
+  .mobile-org-toggle {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+  
+  .stages { 
+    font-size: 10px;
+    padding: 2px;
+  }
+  .stage-btn { 
+    font-size: 10px;
+    padding: 4px 9px;
+    min-height: 32px;
+  }
+  
+  .rail { width: min(260px, 85vw); }
+  
+  .chat-shell { padding: 0 10px 10px; }
+  .chat-head { padding: 12px 4px 6px; }
+  
+  .lane, .route-btn { 
+    padding: 7px 12px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+  
+  .composer { 
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .composer textarea {
+    min-height: 44px;
+  }
+  
+  /* Tap target: minimum 44px for primary controls */
+  button.send { min-height: 44px; padding: 10px 14px; }
+  .attach-btn { min-height: 44px; min-width: 44px; padding: 0; }
+  
+  /* Wizard on phone */
+  .overlay {
+    padding: 12px;
+  }
+  .panel {
+    padding: 18px 14px;
+    gap: 12px;
+  }
+  .panel h2 { font-size: 18px; }
+  .mark-lockup {
+    width: 160px;
+  }
+  
+  /* Unlock */
+  #unlockGate .panel {
+    padding: 20px 16px;
+  }
+  #unlockPin {
+    font-size: 22px;
+    padding: 16px;
+    letter-spacing: 0.4em;
+  }
+  
+  /* Meter even more compact */
+  .meter {
+    padding: 5px 8px;
+    font-size: 9px;
+    max-width: 90px;
+  }
+  .meter-total { font-size: 10px; }
+  
+  /* Drawer on phone */
+  .drawer-nav {
+    padding: 6px;
+    gap: 3px;
+  }
+  .drawer-tab {
+    font-size: 11px;
+    padding: 8px 12px;
+    min-height: 40px;
+  }
+  .drawer-body {
+    padding: 14px 12px 20px;
+  }
+  .drawer-top {
+    padding: 14px 16px;
+  }
+  .drawer-top h2 { font-size: 20px; }
+  
+  /* Form elements */
+  input, textarea, select {
+    font-size: 16px;
+    padding: 10px;
+  }
+  
+  /* Buttons */
+  .ghost-btn, .send {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  
+  /* Spend UI */
+  .spend-break {
+    padding: 10px;
+    font-size: 11px;
+  }
+  .job-row {
+    padding: 10px;
+    font-size: 11px;
+  }
+  
+  /* Providers */
+  .provider {
+    padding: 10px;
+  }
+  
+  /* Seat cards */
+  .seat-card {
+    padding: 10px;
+  }
+  
+  /* Actions */
+  .actions {
+    gap: 8px;
+  }
+  
+  /* Footer */
+  footer { font-size: 9px; padding: 5px 10px; }
+  
+  /* Bubbles */
+  .bubble {
+    font-size: 14px;
+  }
+  .bubble-text {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .card {
+    padding: 10px 12px;
+  }
+  
+  /* Index brief */
+  .index {
+    padding: 8px 0 10px;
+  }
+  .index pre {
+    font-size: 11px;
+    max-height: 140px;
+  }
+  
+  /* Empty state on phone */
+  .empty-stream {
+    padding: 20px 8px 30px;
+  }
+  .empty-stream h1 {
+    font-size: 20px;
+    line-height: 1.3;
+  }
+  .empty-stream p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .mobile-cta {
+    display: block;
+  }
 }
 
 .memory-cards {

@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Hermes job argv drop --usage-file (not valid on hermes chat, only on hermes -z)
-Last: PR #29 merged (restored -z for talk), PR #28 merged (talk to chat --query-file), PR #27 deployed
-Next: Live Think re-smoke after merge
-Blocker: live Think re-smoke not done yet
+Now: Mobile PR #31 clean + undraft, cache v=56 (a454e3a) — ready for merge to master + Railway deploy
+Last: Fixed all shot issues: rail→drawer, chat full-width, hamburger, no nested scroll, safe-area
+Next: Merge PR #31 to master → Railway auto-deploy → live phone smoke at 390×844
+Blocker: Railway serves master only (branch not live yet for CEO test)
 
 ## Vault
 
