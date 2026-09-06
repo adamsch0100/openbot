@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PRODUCTION OUTAGE — revert PR #36 (gateway auto-start caused Railway 502)
-Last: PR #36 merged d93eb6f broke https://openbot-production-9334.up.railway.app (timeouts/502)
-Next: CEO merge revert PR to restore board
+Now: revert PR #38 ready for CEO merge (clean/mergeable)
+Last: reverted d93eb6f cleanly (PR #36 gateway auto-start → Railway 502)
+Next: CEO merge https://github.com/adamsch0100/openbot/pull/38 to restore production
 Blocker: —
 
 ## Vault
