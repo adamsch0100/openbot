@@ -1659,6 +1659,25 @@ function inboxHtml() {
   </div>`;
 }
 
+function capNoticesHtml() {
+  const notices = ((cfg.activity || {}).cap_notices) || [];
+  if (!notices.length) return "";
+  
+  const items = notices.map((notice) => {
+    const badge = notice.level === "cap_exceeded" ? "🔴" : "⚠️";
+    const className = notice.level === "cap_exceeded" ? "cap-notice-error" : "cap-notice-warning";
+    return `<div class="org-cap-notice ${className}">
+      <span class="cap-notice-badge">${badge}</span>
+      <span>${escapeHtml(notice.message)}</span>
+    </div>`;
+  }).join("");
+  
+  return `<div class="org-cap-notices">
+    <div class="org-inbox-head">Spend Alerts</div>
+    ${items}
+  </div>`;
+}
+
 function projectNeedsYou(pid) {
   return (((cfg.activity || {}).needs_you) || []).some(
     (row) => String(row.project_id || "") === String(pid || "") && !inboxSeen.has(row.id)
@@ -1675,26 +1694,36 @@ function renderOrg(data) {
     if (primary) expanded.add(primary.id);
   }
   
-  // Fetch queue status asynchronously
+  // Fetch queue status and spend alerts asynchronously
   let queueData = { queue_status: [], active_workers: [], total_queued: 0 };
-  fetch("/api/queue/status")
-    .then(r => r.json())
-    .then(data => {
-      queueData = data;
-      // Re-render with queue data
-      renderOrgWithQueue(org, queueData);
-    })
-    .catch(() => {
-      // Fallback to render without queue data
-      renderOrgWithQueue(org, queueData);
-    });
+  let spendAlerts = { alerts: [] };
+  
+  Promise.all([
+    fetch("/api/queue/status").then(r => r.json()).catch(() => queueData),
+    fetch("/api/spend/dashboard").then(r => r.json()).catch(() => ({ alerts: { alerts: [] } }))
+  ]).then(([qData, sData]) => {
+    queueData = qData;
+    spendAlerts = sData.alerts || { alerts: [] };
+    renderOrgWithQueue(org, queueData, spendAlerts);
+  }).catch(() => {
+    renderOrgWithQueue(org, queueData, spendAlerts);
+  });
 }
 
-function renderOrgWithQueue(org, queueData) {
+function renderOrgWithQueue(org, queueData, spendAlerts) {
   const tree = $("orgTree");
   if (!tree) return;
   const projects = org.projects || [];
   const queueByProject = new Map();
+  const alertsByCeo = new Map();
+  
+  // Index spend alerts by CEO id
+  spendAlerts = spendAlerts || { alerts: [] };
+  for (const alert of (spendAlerts.alerts || [])) {
+    const ceoId = alert.ceo_id;
+    if (!alertsByCeo.has(ceoId)) alertsByCeo.set(ceoId, []);
+    alertsByCeo.get(ceoId).push(alert);
+  }
   
   // Index queue data by project_id
   for (const q of queueData.queue_status || []) {
@@ -1728,13 +1757,22 @@ function renderOrgWithQueue(org, queueData) {
     const hasBlocker = (project.index_blocker || "").trim() && (project.index_blocker || "").trim() !== "—";
     const queuedCount = queueByProject.get(project.id) || 0;
     const activeCount = activeByProject.get(project.id) || 0;
+    const ceoAlerts = alertsByCeo.get(project.id) || [];
     
-    // Show queue chip if queued, or active workers chip if running
+    // Show queue chip if queued, or active workers chip if running, or spend alert
     let statusChip = "";
     if (activeCount > 0) {
       statusChip = `<span class="active-chip" title="${activeCount} worker(s) running">▸ ${activeCount}</span>`;
     } else if (queuedCount > 0) {
       statusChip = `<span class="queue-chip" title="${queuedCount} task(s) queued">${queuedCount}</span>`;
+    }
+    
+    // Add spend alert badge
+    if (ceoAlerts.length > 0) {
+      const alert = ceoAlerts[0];
+      const badge = alert.level === "cap_exceeded" ? "🔴" : "⚠️";
+      const className = alert.level === "cap_exceeded" ? "spend-alert-badge-error" : "spend-alert-badge-warning";
+      statusChip += ` <span class="${className}" title="${escapeHtml(alert.message)}">${badge}</span>`;
     }
     
     return `
@@ -1775,6 +1813,7 @@ function renderOrgWithQueue(org, queueData) {
       </span>
     </button>
     ${inboxHtml()}
+    ${capNoticesHtml()}
     ${projectBits}
     <button type="button" class="org-add" id="addCeoBtn">Add CEO</button>
   `;
@@ -3053,6 +3092,77 @@ async function revertDiff(jobId, actionsEl) {
 }
 
 async function loadJobs() {
+  // Fetch spend dashboard data
+  const dashRes = await fetch("/api/spend/dashboard");
+  const dashData = await dashRes.json();
+  
+  // Render per-CEO breakdown
+  const breakdown = dashData.breakdown || {};
+  const ceos = breakdown.ceos || [];
+  const alerts = dashData.alerts || {};
+  const trends = dashData.trends || {};
+  
+  let html = "";
+  
+  // Alerts section
+  if (alerts.has_alerts) {
+    html += `<div class="spend-alerts">`;
+    html += `<h4>Spend Alerts</h4>`;
+    for (const alert of alerts.alerts || []) {
+      const badge = alert.kind === "error" ? "🔴" : "⚠️";
+      const className = alert.kind === "error" ? "spend-alert-error" : "spend-alert-warning";
+      html += `<div class="${className}">${badge} ${escapeHtml(alert.message)}</div>`;
+    }
+    html += `</div>`;
+  }
+  
+  // Per-CEO breakdown
+  if (ceos.length > 0) {
+    html += `<div class="usage-card">`;
+    html += `<h4>Per-CEO Spend (${breakdown.period || "week"})</h4>`;
+    html += `<table class="spend-table">`;
+    html += `<thead><tr>`;
+    html += `<th>CEO</th>`;
+    html += `<th>Weekly</th>`;
+    html += `<th>Monthly</th>`;
+    html += `<th>Total</th>`;
+    html += `<th>Status</th>`;
+    html += `</tr></thead>`;
+    html += `<tbody>`;
+    for (const ceo of ceos) {
+      const statusBadge = ceo.at_cap ? "🔴 Cap" : ceo.alert_50_percent ? "⚠️ 50%" : "✅";
+      html += `<tr>`;
+      html += `<td>${escapeHtml(ceo.name)}</td>`;
+      html += `<td>$${ceo.weekly_usd.toFixed(2)}</td>`;
+      html += `<td>$${ceo.monthly_usd.toFixed(2)}</td>`;
+      html += `<td>$${ceo.total_usd.toFixed(2)}</td>`;
+      html += `<td>${statusBadge}</td>`;
+      html += `</tr>`;
+    }
+    html += `</tbody></table>`;
+    html += `</div>`;
+  }
+  
+  // Week-over-week trend charts
+  if (Object.keys(trends).length > 0) {
+    html += `<div class="usage-card">`;
+    html += `<h4>Week-over-Week Trend (Last 14 Days)</h4>`;
+    for (const ceoId in trends) {
+      const trend = trends[ceoId];
+      const ceo = ceos.find(c => c.id === ceoId);
+      if (!ceo) continue;
+      
+      html += `<div class="trend-chart">`;
+      html += `<h5>${escapeHtml(ceo.name)}</h5>`;
+      html += renderTrendChart(trend.series, ceo.name);
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  
+  $("spendBreak").innerHTML = html;
+  
+  // Keep job log as before
   const res = await fetch("/api/jobs");
   const data = await res.json();
   const jobs = data.jobs || [];
@@ -3068,6 +3178,51 @@ async function loadJobs() {
       <div class="muted">${job.blocker ? escapeHtml(job.blocker) : "ok"}${job.at ? ` · ${escapeHtml(job.at)}` : ""}</div>
     </article>
   `).join("");
+}
+
+function renderTrendChart(series, ceoName) {
+  if (!series || series.length === 0) return `<p class="muted">No data</p>`;
+  
+  const maxUsd = Math.max(...series.map(d => d.usd), 0.01);
+  const width = 600;
+  const height = 120;
+  const padding = { left: 50, right: 20, top: 20, bottom: 30 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  
+  // Generate SVG line chart
+  let svg = `<svg width="${width}" height="${height}" class="trend-svg">`;
+  
+  // Y-axis labels
+  svg += `<text x="5" y="${padding.top}" font-size="10" fill="#666">$${maxUsd.toFixed(2)}</text>`;
+  svg += `<text x="5" y="${padding.top + chartHeight}" font-size="10" fill="#666">$0</text>`;
+  
+  // Line path
+  const points = series.map((d, i) => {
+    const x = padding.left + (i / (series.length - 1)) * chartWidth;
+    const y = padding.top + chartHeight - (d.usd / maxUsd) * chartHeight;
+    return `${x},${y}`;
+  });
+  svg += `<polyline points="${points.join(' ')}" fill="none" stroke="#4A90E2" stroke-width="2"/>`;
+  
+  // Data points
+  series.forEach((d, i) => {
+    const x = padding.left + (i / (series.length - 1)) * chartWidth;
+    const y = padding.top + chartHeight - (d.usd / maxUsd) * chartHeight;
+    svg += `<circle cx="${x}" cy="${y}" r="3" fill="#4A90E2"/>`;
+  });
+  
+  // X-axis labels (show every 3rd date to avoid crowding)
+  series.forEach((d, i) => {
+    if (i % 3 === 0 || i === series.length - 1) {
+      const x = padding.left + (i / (series.length - 1)) * chartWidth;
+      const dateLabel = d.date.slice(5); // MM-DD
+      svg += `<text x="${x}" y="${padding.top + chartHeight + 20}" font-size="9" fill="#666" text-anchor="middle">${dateLabel}</text>`;
+    }
+  });
+  
+  svg += `</svg>`;
+  return svg;
 }
 
 async function refreshProviders() {

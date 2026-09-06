@@ -233,26 +233,31 @@ See **"Gaps vs World-Class Multi-Agent Chat OS → 1. True Parallel Multi-Agent 
 
 ---
 
-### **WC-3: Spend Dashboard** ⭐
+### **WC-3: Spend Dashboard** ✅ SHIPPED
 
 **Why:**
 Spend caps work but operators only see global spend summary. No per-CEO burn breakdown, no proactive alerts when 50% of weekly cap is hit. Operators discover overspend after the cap blocks a job.
 
-**Acceptance criteria:**
-1. Per-CEO cost breakdown in UI: Settings → Spend shows each CEO's weekly/monthly burn
-2. Week-over-week trend: line chart of daily burn for last 2 weeks
-3. Proactive alerts: when CEO hits 50% of weekly cap, show alert in sidebar (yellow badge) and activity feed
-4. Cap-exceeded notice: when cap blocks a job, show "Nadia hit $X cap, resets in 3 days" in activity
-5. Comprehensive tests: simulate 10 jobs across 3 CEOs, verify per-CEO totals, verify 50% alert triggers
-6. ROADMAP + INDEX updated
+**Shipped:**
+- ✅ Per-CEO cost breakdown in Settings → Spend panel with weekly/monthly burn per CEO
+- ✅ Week-over-week trend: SVG line chart showing daily burn for last 14 days
+- ✅ Proactive alerts: 50% threshold triggers yellow badge in sidebar + activity feed alert
+- ✅ Cap-exceeded notice: activity feed shows "CEO hit $X cap, resets in N days"
+- ✅ Comprehensive tests: 7 tests passing, simulate 10 jobs across 3 CEOs, verify totals & alerts
+- ✅ ROADMAP + INDEX updated
+
+**Files:**
+- `openbot/spend.py` — per_ceo_breakdown, weekly_trend, check_cap_alerts functions
+- `openbot/server.py` — /api/spend/dashboard endpoint, cap_notices in activity
+- `openbot/org.py` — list_projects helper
+- `web/app.js` — loadJobs with dashboard rendering, sidebar alert badges, cap notices
+- `web/styles.css` — spend dashboard, alert badges, trend chart styles
+- `tests/test_wc3_spend_dashboard.py` — comprehensive test suite (7 tests)
 
 **Out of scope:**
 - Spend forecasting ("at this rate, cap in 2 days")
 - Per-seat spend breakdown (only per-CEO for v1)
 - Spend export (CSV download of receipts)
-
-**Estimated complexity:**
-Medium. Requires spend aggregation by CEO, weekly/monthly rollup logic, alert triggers, chart rendering. Touches spend.py, settings UI, sidebar badges, activity feed.
 
 ---
 
@@ -456,7 +461,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-3 Spend dashboard
+Next: WC-4 Onboarding
 
 ---
 

@@ -232,6 +232,24 @@ def _public_worker(project_id: str, project_name: str, row: dict) -> dict:
     return worker
 
 
+def list_projects() -> list[dict]:
+    """Return minimal list of projects with id and name."""
+    blob = _load_saved()
+    if not blob:
+        return []
+    projects = []
+    for row in blob.get("projects") or []:
+        if not isinstance(row, dict):
+            continue
+        pid = str(row.get("id") or "")
+        if pid:
+            projects.append({
+                "id": pid,
+                "name": str(row.get("name") or pid),
+            })
+    return projects
+
+
 def public_org(data: dict | None = None) -> dict:
     blob = bind_telegram_sessions(data or _load_saved() or ensure_org())
     projects = []

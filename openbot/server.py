@@ -313,6 +313,8 @@ def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -
 
 
 def _activity(*, ingest_cron: bool = False) -> dict:
+    from .spend import check_cap_alerts
+    
     keyring = public_keyring()
     jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
     index = read_index()
@@ -333,11 +335,26 @@ def _activity(*, ingest_cron: bool = False) -> dict:
         row = dict(item)
         row["name"] = names.get(row.get("project_id") or "") or "Chief of Staff"
         needs.append(row)
+    
+    # Check for spend cap alerts
+    cfg = load_config()
+    settings = load_settings()
+    try:
+        spend_alerts = check_cap_alerts(
+            float(cfg.get("spend_cap_usd", 5.0)),
+            cfg.get("spend_cap_period", "week"),
+            policy=settings.get("spend_policy")
+        )
+        cap_notices = spend_alerts.get("alerts") or []
+    except Exception:
+        cap_notices = []
+    
     return {
         "now": (now_match.group(1).strip() if now_match else ""),
         "jobs": [public_job(job) for job in jobs[:30]],
         "needs_you": needs,
         "cron_jobs": cron_jobs,
+        "cap_notices": cap_notices,
         "has_key": _has_key(keyring),
         "opencode_running": bool(opencode_web_status().get("running")),
         "hermes_running": bool(hermes_dash_status().get("running")),
@@ -596,6 +613,30 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, public_catalog())
         if path == "/api/org":
             return self._json(200, ensure_org())
+        if path == "/api/spend/dashboard":
+            from .spend import check_cap_alerts, per_ceo_breakdown, weekly_trend
+            
+            cfg = load_config()
+            settings = load_settings()
+            cap_usd = float(cfg.get("spend_cap_usd", 5.0))
+            period = cfg.get("spend_cap_period", "week")
+            policy = settings.get("spend_policy")
+            
+            breakdown = per_ceo_breakdown(cap_usd, period, policy=policy)
+            alerts = check_cap_alerts(cap_usd, period, policy=policy)
+            
+            # Trend data for each CEO
+            trends = {}
+            for ceo in breakdown["ceos"]:
+                trends[ceo["id"]] = weekly_trend(project_id=ceo["id"], policy=policy)
+            
+            return self._json(200, {
+                "breakdown": breakdown,
+                "alerts": alerts,
+                "trends": trends,
+                "cap_usd": cap_usd,
+                "period": period,
+            })
         if path == "/api/memory/search":
             qs = parse_qs(urlparse(self.path).query)
             query = (qs.get("q") or [""])[0].strip()
