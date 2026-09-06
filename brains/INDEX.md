@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #46 MERGE-READY — Fix Meta junk multiline blocks (rewrite cleanBotText with proper [\s\S] matching + tests)
-Last: Phone re-smoke FAIL on #45. Multi-line Meta contributor tier blocks from /api/jobs left orphan fragments ("prompts and completions", "See current pricing"). Root cause: #45 regexes line-anchored (^...$) or didn't match across newlines. Fixed: rewrote cleanBotText with [\s\S]*? multiline block removal from "!!! CONTRIBUTOR" through "standard v", strip mid-line CONTRIBUTOR, strip orphans. Added 2 test scripts (test-cleanBotText.js + edge-cases.js) with real fixture. All tests PASS. v=62.
-Next: Phone re-smoke with tests proven
+Now: PR #47 MERGE-READY — Fix card() bypass (wire cleanBotText into job card render path)
+Last: Phone smoke FAIL on #46. cleanBotText works on fixtures but ops/think/research job cards still show Meta junk. Root cause: renderJob() → card(kind, body) with raw job.text, card() does escapeHtml(body) without cleanBotText. Fixed: one-line in card() — const cleaned = kind.includes('bot') ? cleanBotText(body) : body. Documented all 5 render paths in test-cleanBotText.js. v=63.
+Next: Phone re-smoke on all job types (talk/ops/think/research)
 Blocker: —
 
 ## Vault
