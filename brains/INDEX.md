@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Hermes argv correction pending merge (restore -z for talk per CoS lock, drop --create-if-missing from job)
-Last: PR #28 merged (talk to chat --query-file), PR #27 deployed, WC-8 harness
-Next: Merge argv fix → deploy → live Think smoke
-Blocker: live Think re-smoke not done yet (PR #28 left Think path unfixed)
+Now: Hermes job argv drop --usage-file (not valid on hermes chat, only on hermes -z)
+Last: PR #29 merged (restored -z for talk), PR #28 merged (talk to chat --query-file), PR #27 deployed
+Next: Live Think re-smoke after merge
+Blocker: —
 
 ## Vault
 

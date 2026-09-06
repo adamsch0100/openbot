@@ -429,6 +429,7 @@ def chat(
             ]
         else:
             # Job mode: full multi-turn session with toolsets and skills.
+            # hermes chat does NOT support --usage-file (only hermes -z does).
             query = root / "query.txt"
             query.write_text(prompt, encoding="utf-8")
             cmd = [
@@ -452,7 +453,6 @@ def chat(
                 cmd.extend(["--resume", resume])
             elif session:
                 cmd.extend(["--continue", session])
-            cmd.extend(["--usage-file", str(usage_path)])
         if provider and model_id:
             cmd.extend(["--provider", provider, "-m", model_id])
         elif model_id:
