@@ -613,6 +613,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {
                 "skills": skills.get("skills") or [],
                 "skills_ok": skills.get("ok", False),
+                "popular_skills": skills.get("popular") or [],
                 "mcp": mcp.get("items") or [],
                 "mcp_ok": mcp.get("ok", False)
             })
@@ -748,6 +749,9 @@ class Handler(SimpleHTTPRequestHandler):
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             from .routines import list_routines
             return self._json(200, {"routines": list_routines(project_id)})
+        if path == "/api/routines/templates":
+            from .routine_templates import get_routine_templates
+            return self._json(200, {"templates": get_routine_templates()})
         routine = ROUTINE_ID.match(path)
         if routine:
             qs = parse_qs(urlparse(self.path).query)

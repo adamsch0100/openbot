@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: WC-5 Observability shipped: Hermes tool-call progress streaming to UI, replay verbose modal with full session logs, View raw log links on job cards.
-Last: WC-4 Onboarding (auth checks, test job), WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: WC-6 Polish pack — operator directs next.
+Now: WC-6 Polish Pack shipped: skills catalog polish (descriptions + popular skills section), routine templates (Morning standup, Weekly review, 3 others), Memory search → stream jump with data-job-id on all job bubbles.
+Last: WC-5 Observability (Hermes tool-call progress streaming, replay verbose modal, View raw log links), WC-4 Onboarding (auth checks, test job), WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
+Next: WC-7 Self-build loop — operator directs next.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

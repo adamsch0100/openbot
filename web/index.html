@@ -430,6 +430,13 @@
           <section class="drawer-panel" id="panel-routines">
             <p class="lede">Scheduled multi-step flows. Routines run ordered steps (e.g., morning: Code status → Think summarize → Ops note). Hermes cron fires them on schedule.</p>
             <div class="field">
+              <label for="routineTemplate">Create from template</label>
+              <select id="routineTemplate">
+                <option value="">Start from scratch...</option>
+              </select>
+              <p class="muted" id="routineTemplateDesc"></p>
+            </div>
+            <div class="field">
               <label for="routineName">Name</label>
               <input id="routineName" type="text" placeholder="Morning standup" autocomplete="off" />
             </div>

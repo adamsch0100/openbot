@@ -204,7 +204,7 @@ Here's what remains to reach **world-class Chat OS** status:
 
 These are the **serial next 8 PRs** locked by the operator. Each scoped for focused implementation. Ship in this order.
 
-**Status:** WC-1 ✅ SHIPPED, WC-2 ✅ SHIPPED, WC-3 ✅ SHIPPED, WC-4 ✅ SHIPPED, WC-5 pending.
+**Status:** WC-1 ✅ SHIPPED, WC-2 ✅ SHIPPED, WC-3 ✅ SHIPPED, WC-4 ✅ SHIPPED, WC-5 ✅ SHIPPED, WC-6 ✅ SHIPPED.
 
 ---
 
@@ -314,26 +314,32 @@ Live streaming works for OpenCode (step-start events → UI chips) but not for H
 
 ---
 
-### **WC-6: Polish Pack** ⭐
+### **WC-6: Polish Pack** ✅ **SHIPPED**
 
-**Why:**
-Skills catalog, routine templates, and Memory search → stream jump are functional but not polished. Onboarding friction: users must discover skills manually, routine patterns are blank-slate, Memory search jump requires consistent `data-job-id`.
+**Shipped:** WC-6 polish pack complete. Skills catalog shows descriptions + popular skills section. Routine templates with Morning standup and Weekly review presets. Memory search → stream jump verified with consistent data-job-id.
 
-**Acceptance criteria:**
-1. Skills catalog polish: Settings → Connectors shows skill descriptions (one-liner per skill), "Popular skills" section with recommended skills for Think/Research/Ops
-2. Routine templates: Settings → Routines has "Create from template" dropdown with presets ("Morning standup: Code status → Think summarize", "Weekly review: Think list last week → Research fetch changelog → Ops note")
-3. Memory search → stream jump: ensure ALL job bubbles have `data-job-id` attribute (audit + fix missing ones), Memory search results link directly to job bubble in stream
-4. Routine preset loads template steps into create form (user can edit before saving)
-5. Comprehensive tests: verify skill descriptions render, verify template presets load, verify Memory search jump links to correct job bubble
-6. ROADMAP + INDEX updated
+**What shipped:**
+- Skills catalog polish: `skills_list()` returns skill descriptions (one-liner per skill) and popular skills list for Think/Research/Ops
+- Connectors UI: Popular Skills section displays recommended skills with descriptions, All Skills section shows full catalog with descriptions
+- Routine templates: 5 predefined templates (Morning Standup, Weekly Review, Pre-Deploy Check, Documentation Sync, Dependency Audit)
+- Template dropdown: Settings → Routines has "Create from template" dropdown that loads preset steps into form
+- Memory search → stream jump: All job bubbles (`renderJob`, `renderTalk`) have `data-job-id` attribute, Memory search results click handler scrolls to job in stream with highlight animation
+- Comprehensive tests: 14 tests covering skill descriptions, popular skills, routine templates, template loading, data-job-id audit, memory jump, API endpoints, CSS styles (all passing)
+- ROADMAP + INDEX + org/projects/openbot/INDEX updated: Now=WC-6 shipped, Last includes WC-5, Next=WC-7
 
-**Out of scope:**
-- Custom skill creation (only toggle existing Hermes skills)
-- Routine editor (visual step builder, drag-drop reorder)
-- Memory semantic search (only keyword search for v1)
+**Files:**
+- `openbot/hermes.py` — enhanced `skills_list()` with descriptions and popular recommendations
+- `openbot/routine_templates.py` — NEW: 5 routine templates with common workflows
+- `openbot/server.py` — `/api/routines/templates` endpoint, enhanced `/api/connectors/catalog`
+- `web/app.js` — Popular Skills section, template dropdown + loader, `data-job-id` on renderTalk
+- `web/styles.css` — `.popular-skills-section`, `.connector-row-popular`, `.connector-name-desc` styles
+- `web/index.html` — template dropdown in Routines panel
+- `tests/test_wc6_polish_pack.py` — NEW: comprehensive test suite (14 tests)
+
+**Impact:** Onboarding friction reduced. Users see skill descriptions and recommendations in Connectors. Routine templates provide ready-to-use workflows (morning standup, weekly review). Memory search jump now reliably scrolls to job bubbles.
 
 **Estimated complexity:**
-Low-Medium. Requires skill descriptions data, routine template definitions, `data-job-id` audit, template UI. Touches connectors UI, routines UI, memory pane, job bubble rendering.
+Low-Medium. Skill descriptions data structure, routine template definitions, data-job-id audit, template UI. Touched connectors UI, routines UI, memory pane, job bubble rendering.
 
 ---
 
@@ -467,7 +473,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-6 Polish pack
+Next: WC-7 Self-build loop
 
 ---
 
