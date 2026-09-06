@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #47 MERGE-READY — Fix card() bypass (wire cleanBotText into job card render path)
-Last: Phone smoke FAIL on #46. cleanBotText works on fixtures but ops/think/research job cards still show Meta junk. Root cause: renderJob() → card(kind, body) with raw job.text, card() does escapeHtml(body) without cleanBotText. Fixed: one-line in card() — const cleaned = kind.includes('bot') ? cleanBotText(body) : body. Documented all 5 render paths in test-cleanBotText.js. v=63.
-Next: Phone re-smoke on all job types (talk/ops/think/research)
+Now: PR #48 MERGE-READY — World-class mobile UX redesign (modern chat-first experience)
+Last: Operator: "mobile design still terrible, make it world class and best chat design on the market." Complete mobile redesign (≤860px/≤480px): backdrop blur header, iMessage-style bubbles (18px rounded corners, slide-in animation), floating composer (hide "Talking to" label, 40px icon buttons, prominent send), 30vh stream padding, modern pill tabs, full-screen settings drawer, touch-friendly 48px inputs. All features retained (OpenCode, Hermes, settings, spend, org rail). v=64.
+Next: Operator phone test, merge when delightful
 Blocker: —
 
 ## Vault
