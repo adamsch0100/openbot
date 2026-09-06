@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #34 rebased, MERGE-READY — fix mobile rail CSS specificity (remove inline style)
-Last: Resolved rebase conflicts, fix intact: no inline style, no JS display toggle, v=57
-Next: Merge #34 → Railway deploy → live phone smoke at 390×844 verify hamburger+overlay
-Blocker: none
+Now: world-class v2 signed by CoS (2026-09-06)
+Last: Chat smoke PASS (#33 Think/Research/Builder) + mobile phone proof PASS (#34 v=57 @390×844 hamburger/overlay/scrim)
+Next: operator directs / optional polish (Meta contributor banner strip; Builder Hermes/muse label oddity)
+Blocker: —
 
 ## Vault
 

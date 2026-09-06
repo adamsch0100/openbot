@@ -1,5 +1,14 @@
 # OpenBot World-Class Audit
 
+## CoS GO Decision
+
+**Date:** 2026-09-06  
+**Decision:** CoS GO on world-class v2  
+**Evidence:** chat smoke Think/Research/Builder PASS after #33 (a7ebdb1); mobile #34 (dfd361c) live v=57 phone proof shots post34-default / hamburger-open / scrim-dismissed / composer / ceo  
+**Non-blockers:** Meta contributor banner; Builder engine label oddity
+
+---
+
 ## Executive Summary
 
 **Status:** Harness Delivered; Partial Live Smoke (2/4); Open Blocker (PIN Unlock)  
