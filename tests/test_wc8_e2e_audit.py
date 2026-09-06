@@ -141,7 +141,7 @@ class TestE2ESmokeTestClient(unittest.TestCase):
 
     @patch("tests.e2e.smoke_test.HTTPSConnection")
     def test_client_unlock(self, mock_https):
-        """Test client unlock with PIN."""
+        """Test client unlock with PIN (unlocked=true case)."""
         from tests.e2e.smoke_test import OpenBotE2EClient
         
         # Mock response
@@ -160,13 +160,112 @@ class TestE2ESmokeTestClient(unittest.TestCase):
         self.assertTrue(result)
 
     @patch("tests.e2e.smoke_test.HTTPSConnection")
+    def test_client_unlock_with_token(self, mock_https):
+        """Test unlock success when token present."""
+        from tests.e2e.smoke_test import OpenBotE2EClient
+        
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.read.return_value = b'{"token": "abc123token", "work_dir": "/workspace"}'
+        mock_response.getheaders.return_value = []
+        
+        mock_conn = Mock()
+        mock_conn.getresponse.return_value = mock_response
+        mock_https.return_value = mock_conn
+        
+        client = OpenBotE2EClient("https://test.example.com", pin="1234")
+        result = client.unlock()
+        
+        self.assertTrue(result)
+        self.assertEqual(client.session_cookies.get("openbot_unlock"), "abc123token")
+
+    @patch("tests.e2e.smoke_test.HTTPSConnection")
+    def test_client_unlock_with_needs_unlock_false(self, mock_https):
+        """Test unlock success when needs_unlock=false."""
+        from tests.e2e.smoke_test import OpenBotE2EClient
+        
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.read.return_value = b'{"needs_unlock": false, "work_dir": "/workspace", "has_key": true}'
+        mock_response.getheaders.return_value = []
+        
+        mock_conn = Mock()
+        mock_conn.getresponse.return_value = mock_response
+        mock_https.return_value = mock_conn
+        
+        client = OpenBotE2EClient("https://test.example.com", pin="1234")
+        result = client.unlock()
+        
+        self.assertTrue(result)
+
+    @patch("tests.e2e.smoke_test.HTTPSConnection")
+    def test_client_unlock_with_cookie(self, mock_https):
+        """Test unlock success when cookie is set."""
+        from tests.e2e.smoke_test import OpenBotE2EClient
+        
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.read.return_value = b'{"work_dir": "/workspace"}'
+        mock_response.getheaders.return_value = [
+            ("Set-Cookie", "openbot_unlock=session123; HttpOnly; Path=/")
+        ]
+        
+        mock_conn = Mock()
+        mock_conn.getresponse.return_value = mock_response
+        mock_https.return_value = mock_conn
+        
+        client = OpenBotE2EClient("https://test.example.com", pin="1234")
+        result = client.unlock()
+        
+        self.assertTrue(result)
+        self.assertEqual(client.session_cookies.get("openbot_unlock"), "session123")
+
+    @patch("tests.e2e.smoke_test.HTTPSConnection")
+    def test_client_unlock_with_work_dir(self, mock_https):
+        """Test unlock success when work_dir present and no error."""
+        from tests.e2e.smoke_test import OpenBotE2EClient
+        
+        mock_response = Mock()
+        mock_response.status = 200
+        mock_response.read.return_value = b'{"work_dir": "/workspace", "engines": {"opencode": true}}'
+        mock_response.getheaders.return_value = []
+        
+        mock_conn = Mock()
+        mock_conn.getresponse.return_value = mock_response
+        mock_https.return_value = mock_conn
+        
+        client = OpenBotE2EClient("https://test.example.com", pin="1234")
+        result = client.unlock()
+        
+        self.assertTrue(result)
+
+    @patch("tests.e2e.smoke_test.HTTPSConnection")
+    def test_client_unlock_failure(self, mock_https):
+        """Test unlock failure with wrong PIN."""
+        from tests.e2e.smoke_test import OpenBotE2EClient
+        
+        mock_response = Mock()
+        mock_response.status = 403
+        mock_response.read.return_value = b'{"error": "wrong PIN", "needs_unlock": true}'
+        mock_response.getheaders.return_value = []
+        
+        mock_conn = Mock()
+        mock_conn.getresponse.return_value = mock_response
+        mock_https.return_value = mock_conn
+        
+        client = OpenBotE2EClient("https://test.example.com", pin="9999")
+        result = client.unlock()
+        
+        self.assertFalse(result)
+
+    @patch("tests.e2e.smoke_test.HTTPSConnection")
     def test_client_send_message(self, mock_https):
         """Test sending message."""
         from tests.e2e.smoke_test import OpenBotE2EClient
         
         mock_response = Mock()
         mock_response.status = 200
-        mock_response.read.return_value = b'{"job_id": "abc123"}'
+        mock_response.read.return_value = b'{"id": "abc123", "preset": "builder"}'
         mock_response.getheaders.return_value = []
         
         mock_conn = Mock()
@@ -176,7 +275,8 @@ class TestE2ESmokeTestClient(unittest.TestCase):
         client = OpenBotE2EClient("https://test.example.com")
         result = client.send_message("test message", seat="builder")
         
-        self.assertEqual(result["job_id"], "abc123")
+        # Job ID is in 'id' field
+        self.assertEqual(result["id"], "abc123")
 
 
 class TestE2ETestRunner(unittest.TestCase):
@@ -217,7 +317,7 @@ class TestE2ETestRunner(unittest.TestCase):
         from tests.e2e.smoke_test import E2ETestRunner
         
         mock_client = Mock()
-        mock_client.send_message.return_value = {"job_id": "job123"}
+        mock_client.send_message.return_value = {"id": "job123"}
         mock_client.get_job.return_value = {
             "status": "completed",
             "has_diff": True,
@@ -240,7 +340,7 @@ class TestE2ETestRunner(unittest.TestCase):
         from tests.e2e.smoke_test import E2ETestRunner
         
         mock_client = Mock()
-        mock_client.send_message.return_value = {"job_id": "job456"}
+        mock_client.send_message.return_value = {"id": "job456"}
         mock_client.get_job.return_value = {
             "status": "completed",
             "result": "This is a summary of the README file with lots of content.",
@@ -256,12 +356,14 @@ class TestE2ETestRunner(unittest.TestCase):
 
     @patch("tests.e2e.smoke_test.OpenBotE2EClient")
     def test_runner_ops_flow(self, mock_client_class):
-        """Test Ops flow test."""
+        """Test Ops flow test (POST create routine)."""
         from tests.e2e.smoke_test import E2ETestRunner
         
         mock_client = Mock()
-        mock_client.send_message.return_value = {"job_id": "job789"}
-        mock_client.get_job.return_value = {"status": "completed"}
+        mock_client.create_routine.return_value = {"routine_id": "routine123"}
+        mock_client.get_routines.return_value = [
+            {"id": "routine123", "name": "e2e_test_routine_abc"}
+        ]
         mock_client_class.return_value = mock_client
         
         runner = E2ETestRunner("https://test.example.com", evidence_dir=self.evidence_dir)

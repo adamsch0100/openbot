@@ -95,29 +95,73 @@ class OpenBotE2EClient:
             return {"error": str(e)}
 
     def unlock(self) -> bool:
-        """Unlock board with PIN (if required)."""
+        """Unlock board with PIN (if required).
+        
+        Success if ANY of:
+        - unlocked=true OR
+        - token present (non-empty string) OR
+        - needs_unlock=False OR
+        - openbot_unlock cookie captured OR
+        - work_dir present with HTTP 200 and no error
+        """
         if not self.pin:
             print("WARN: No PIN provided, skipping unlock")
             return True
         
         result = self._request("POST", "/api/unlock", {"pin": self.pin})
-        if result.get("unlocked"):
+        
+        # Check for error response
+        if result.get("error") or result.get("status", 200) >= 400:
+            print(f"✗ Unlock failed: {result}")
+            return False
+        
+        # Success criteria
+        unlocked = result.get("unlocked")
+        token = result.get("token")
+        needs_unlock = result.get("needs_unlock")
+        work_dir = result.get("work_dir")
+        has_cookie = "openbot_unlock" in self.session_cookies
+        
+        success = (
+            unlocked is True
+            or (isinstance(token, str) and token)
+            or needs_unlock is False
+            or has_cookie
+            or (work_dir and not result.get("error"))
+        )
+        
+        if success:
             print("✓ Board unlocked")
+            # Store token if present for Bearer auth
+            if isinstance(token, str) and token:
+                self.session_cookies["openbot_unlock"] = token
             return True
         else:
             print(f"✗ Unlock failed: {result}")
             return False
 
     def get_status(self) -> dict:
-        """Get board status (health check)."""
+        """Get board status (health check).
+        
+        Prefers /api/health (live), falls back to /api/status.
+        """
+        # Try health endpoint first
+        result = self._request("GET", "/api/health")
+        if not result.get("error") and result.get("status", 200) < 400:
+            return result
+        
+        # Fallback to status endpoint
         return self._request("GET", "/api/status")
 
     def send_message(self, message: str, seat: str = "cos", project: str = "openbot") -> dict:
-        """Send message to OpenBot and get job ID."""
+        """Send message to OpenBot and get job ID.
+        
+        Uses 'preset' parameter (server naming), returns job['id'].
+        """
         return self._request("POST", "/api/chat", {
             "message": message,
-            "seat": seat,
-            "project": project,
+            "preset": seat,  # Server uses 'preset' not 'seat'
+            "project_id": project,
         })
 
     def get_job(self, job_id: str) -> dict:
@@ -139,8 +183,21 @@ class OpenBotE2EClient:
 
     def get_routines(self, project: str = "openbot") -> list[dict]:
         """Get routines for a project."""
-        result = self._request("GET", f"/api/routines?project={project}")
+        result = self._request("GET", f"/api/routines?project_id={project}")
         return result.get("routines", [])
+    
+    def create_routine(self, name: str, schedule: str, steps: list, project: str = "openbot", enabled: bool = True) -> dict:
+        """Create a new routine (cron).
+        
+        POST /api/routines with name, schedule, steps.
+        """
+        return self._request("POST", "/api/routines", {
+            "name": name,
+            "schedule": schedule,
+            "steps": steps,
+            "project_id": project,
+            "enabled": enabled,
+        })
 
 
 class E2ETestRunner:
@@ -245,9 +302,10 @@ class E2ETestRunner:
             self.record_result("builder_flow", False, f"Message send failed: {response.get('error')}")
             return False
         
-        job_id = response.get("job_id")
+        # Job ID is in 'id' field, not 'job_id'
+        job_id = response.get("id") or response.get("job_id")
         if not job_id:
-            self.record_result("builder_flow", False, "No job_id in response")
+            self.record_result("builder_flow", False, "No job id in response")
             return False
         
         self.log(f"  Job created: {job_id}")
@@ -295,9 +353,10 @@ class E2ETestRunner:
             self.record_result("research_flow", False, f"Message send failed: {response.get('error')}")
             return False
         
-        job_id = response.get("job_id")
+        # Job ID is in 'id' field, not 'job_id'
+        job_id = response.get("id") or response.get("job_id")
         if not job_id:
-            self.record_result("research_flow", False, "No job_id in response")
+            self.record_result("research_flow", False, "No job id in response")
             return False
         
         self.log(f"  Job created: {job_id}")
@@ -325,57 +384,51 @@ class E2ETestRunner:
             return False
 
     def test_ops_flow(self) -> bool:
-        """Test 4: Ops flow (create/verify routine or ops path)."""
-        self.log("\n=== Test 4: Ops Flow ===")
+        """Test 4: Ops flow (create cron via POST /api/routines).
         
-        # Send message to Ops to create a routine
+        Must exercise POST /api/routines (create + attach cron), not just GET.
+        """
+        self.log("\n=== Test 4: Ops Flow (Create Routine) ===")
+        
+        # Create a test routine via POST
         routine_name = f"e2e_test_routine_{self.run_id}"
-        message = f"Create a weekly routine called '{routine_name}' that checks project status"
+        schedule = "0 0 * * 0"  # Weekly on Sunday
+        steps = [
+            {
+                "instruction": "Check project status and report any issues",
+                "preset": "cos",
+            }
+        ]
         
-        self.log(f"  Sending message to Ops: {message[:80]}...")
-        response = self.client.send_message(message, seat="ops", project="openbot")
+        self.log(f"  Creating routine: {routine_name}")
+        result = self.client.create_routine(routine_name, schedule, steps, project="openbot", enabled=False)
         
-        if response.get("error"):
-            # Ops might not be fully wired for routine creation via chat
-            # Try checking if routines endpoint works instead
-            self.log(f"  Ops message failed, checking routines endpoint...")
-            routines = self.client.get_routines()
-            if isinstance(routines, list):
-                self.record_result("ops_flow", True, f"Ops path verified (routines endpoint OK, {len(routines)} routines)")
-                return True
-            else:
-                self.record_result("ops_flow", False, f"Ops message failed and routines check failed")
-                return False
-        
-        job_id = response.get("job_id")
-        if not job_id:
-            # Still try routines endpoint
-            self.log(f"  No job_id, checking routines endpoint...")
-            routines = self.client.get_routines()
-            if isinstance(routines, list):
-                self.record_result("ops_flow", True, f"Ops path verified (routines endpoint OK)")
-                return True
-            else:
-                self.record_result("ops_flow", False, "No job_id and routines check failed")
-                return False
-        
-        self.log(f"  Job created: {job_id}")
-        
-        # Wait for job to complete
-        self.log(f"  Waiting for job to complete...")
-        job = self.wait_for_job(job_id, timeout=180)
-        
-        if not job:
-            self.record_result("ops_flow", False, "Job did not complete in time")
+        if result.get("error"):
+            self.record_result("ops_flow", False, f"Routine creation failed: {result.get('error')}")
             return False
         
-        status = job.get("status")
-        if status == "completed":
-            self.record_result("ops_flow", True, f"Ops job completed")
-            return True
-        else:
-            self.record_result("ops_flow", False, f"Job status: {status}")
+        routine_id = result.get("routine_id")
+        if not routine_id:
+            self.record_result("ops_flow", False, f"No routine_id in response: {result}")
             return False
+        
+        self.log(f"  Routine created: {routine_id}")
+        
+        # Verify we can list routines and see ours
+        self.log(f"  Verifying routine via GET...")
+        routines = self.client.get_routines("openbot")
+        
+        if not isinstance(routines, list):
+            self.record_result("ops_flow", False, f"Failed to list routines: {routines}")
+            return False
+        
+        found = any(r.get("id") == routine_id or r.get("name") == routine_name for r in routines)
+        if not found:
+            self.record_result("ops_flow", False, f"Created routine not found in list")
+            return False
+        
+        self.record_result("ops_flow", True, f"Routine created and verified: {routine_id}")
+        return True
 
     def run_all_tests(self) -> dict:
         """Run all E2E smoke tests."""
