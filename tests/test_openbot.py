@@ -2496,6 +2496,57 @@ class HermesSessionPersistenceTests(unittest.TestCase):
                 store_mod.ROOT = old_root
                 org_mod.ROOT = old_org_root
 
+    def test_go_wallets_use_go_eligible_models(self):
+        """OpenCode Go wallets should use family:go models (deepseek), not Zen models (claude-fable/gpt-5.6)."""
+        from unittest.mock import patch
+        from openbot.router import _go_eligible_model
+        
+        # Mock all_models to return both Go and Zen models
+        with patch("openbot.models.all_models") as mock_all:
+            mock_all.return_value = [
+                {
+                    "id": "opencode/deepseek-v4-flash",
+                    "label": "DeepSeek",
+                    "provider": "opencode",
+                    "family": "go",
+                    "connected": True,
+                    "in_usd": 0.01,
+                    "out_usd": 0.01,
+                },
+                {
+                    "id": "opencode/claude-fable-5",
+                    "label": "Fable 5",
+                    "provider": "opencode",
+                    "family": "zen",  # Zen-only model
+                    "connected": True,
+                    "in_usd": 0.00,
+                    "out_usd": 0.00,
+                },
+                {
+                    "id": "opencode/gpt-5.6-sol",
+                    "label": "GPT 5.6",
+                    "provider": "opencode",
+                    "family": "zen",  # Zen-only model
+                    "connected": True,
+                    "in_usd": 0.00,
+                    "out_usd": 0.00,
+                },
+            ]
+            
+            # OpenCode Go wallet should get Go-family model
+            go_account = {"id": "dd9a8b15", "provider": "opencode", "label": "Shared Go"}
+            model = _go_eligible_model(go_account, None)
+            self.assertEqual(model, "opencode/deepseek-v4-flash",
+                "Go wallet should use Go-family model, not Zen model")
+            
+            # OpenCode Zen wallet can use any model
+            zen_account = {"id": "abc123", "provider": "opencode", "label": "Zen Wallet"}
+            # This would use cheap_chat_for_provider which might pick Fable (cheapest)
+            # but for this test we just verify _go_eligible_model doesn't restrict it
+            model_zen = _go_eligible_model(zen_account, None)
+            # Should work (returns some model)
+            self.assertTrue(model_zen)
+
 
 if __name__ == "__main__":
     unittest.main()

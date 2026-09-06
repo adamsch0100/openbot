@@ -282,6 +282,31 @@ def _live_accounts(rows: list[dict]) -> list[dict]:
     return live or rows
 
 
+def _go_eligible_model(account: dict, seated_model: str | None) -> str | None:
+    """Return Go-eligible model for OpenCode Go wallets, else cheap chat."""
+    provider = str(account.get("provider") or "")
+    label = str(account.get("label") or "").lower()
+    
+    # OpenCode Go wallet: prefer Go-family models (deepseek, not claude-fable/gpt-5.6 Zen)
+    if provider == "opencode" and "go" in label:
+        from .models import all_models
+        go_models = [
+            row for row in all_models()
+            if row.get("connected") is not False
+            and model_provider(row) == "opencode"
+            and row.get("family") == "go"
+        ]
+        if go_models:
+            return cheap_chat_for_provider("opencode", models=go_models)
+    
+    # Same provider keeps seated model
+    seated_provider = model_provider(seated_model) if seated_model else ""
+    if seated_model and seated_provider == provider:
+        return seated_model
+    
+    return cheap_chat_for_provider(provider)
+
+
 def _chat_attempts(tools: dict | None, seated_model: str | None) -> list[tuple[dict, str]]:
     """Walk keyring order. Same provider keeps the seated model; later providers get their own cheap Chat."""
     attempts: list[tuple[dict, str]] = []
@@ -295,11 +320,7 @@ def _chat_attempts(tools: dict | None, seated_model: str | None) -> list[tuple[d
             nous_rows = [{"id": "", "provider": "nous"}]
         rows = nous_rows + rest
     for row in rows:
-        provider = str(row.get("provider") or "")
-        if seated_model and seated_provider == provider:
-            model = seated_model
-        else:
-            model = cheap_chat_for_provider(provider)
+        model = _go_eligible_model(row, seated_model)
         if not model:
             continue
         key = (str(row.get("id") or ""), model)
