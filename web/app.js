@@ -5398,10 +5398,9 @@ function initMobileMenu() {
   
   if (!toggle || !rail || !scrim) return;
   
-  // Show hamburger on mobile
+  // Close rail when resizing to desktop
   function updateMobileUI() {
     const isMobile = window.innerWidth <= 860;
-    toggle.style.display = isMobile ? "flex" : "none";
     if (!isMobile) {
       rail.classList.remove("open");
       scrim.classList.remove("open");

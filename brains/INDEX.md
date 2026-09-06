@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Restore --create-if-missing for job mode --continue
-Last: PR #32 + #31 merged (sticky session + mobile layout live)
-Next: Deploy + re-smoke Think/Research/Ops
-Blocker: live Think/Research re-smoke not done yet
+Now: PR #34 fixing mobile rail stacking (CSS specificity bug from inline style)
+Last: PR #32 + #33 merged (--create-if-missing + sticky session), now fixing #31 phone layout
+Next: Live phone smoke at 390×844 after PR #34 merges — verify hamburger+overlay work
+Blocker: none
 
 ## Vault
 
