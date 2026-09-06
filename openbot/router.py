@@ -1088,7 +1088,6 @@ def _handle_preset(
     elif chosen == "think":
         settings = load_settings()
         chosen_model = seated_or_auto(settings, "think", seats) or None
-        _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
         usage_model = chosen_model or "engine-default"
         talk = False
         if not engines["hermes"]["present"]:
@@ -1125,21 +1124,52 @@ def _handle_preset(
                         attachments=attachments,
                     ),
                 )
-            ran = hermes_chat(
-                packet,
-                cwd=work,
-                model=chosen_model,
-                toolsets=None,
-                session=None if talk or resume_id else session,
-                resume=None if talk else resume_id,
-                skills=None if talk else skills,
-                on_delta=on_delta,
-                on_progress=on_progress,
-                cancel=cancel,
-                run_id=run_id,
-                home=hermes_home_dir,
-                talk=talk,
-            )
+            
+            # Wallet rotation for Think (like Cos chat)
+            attempts = _chat_attempts(tools, chosen_model)
+            if not attempts:
+                _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
+                attempts = [({}, chosen_model)] if chosen_model else []
+            
+            ran: dict = {}
+            for idx, (account, model) in enumerate(attempts):
+                if idx > 0 and on_progress:
+                    try:
+                        _call_progress(on_progress, f"Think · trying account {idx + 1}", "think")
+                    except Exception:
+                        pass
+                if account.get("id"):
+                    activate_account(str(account["id"]))
+                else:
+                    _activate("Hermes Agent", tools, model, force_go=force_go_wallet)
+                
+                ran = hermes_chat(
+                    packet,
+                    cwd=work,
+                    model=model,
+                    toolsets=None,
+                    session=None if talk or resume_id else session,
+                    resume=None if talk else resume_id,
+                    skills=None if talk else skills,
+                    on_delta=on_delta,
+                    on_progress=on_progress,
+                    cancel=cancel,
+                    run_id=run_id,
+                    home=hermes_home_dir,
+                    talk=talk,
+                )
+                chosen_model = model
+                if ran.get("stopped"):
+                    break
+                if wallet_empty(ran.get("text") or ""):
+                    if account.get("id"):
+                        mark_wallet_empty(str(account["id"]))
+                    continue
+                if ran.get("ok"):
+                    break
+                # Non-wallet error: don't retry
+                break
+            
             text = ran.get("text") or "(no output)"
             usage = ran.get("usage") or {}
             prompt_tokens = int(usage.get("input_tokens") or 0)
@@ -1149,7 +1179,6 @@ def _handle_preset(
             if usage.get("model"):
                 usage_model = str(usage.get("model"))
             if not talk:
-                _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                 if ran.get("raw_log"):
                     if write_session_log(job_id, ran["raw_log"]):
                         mark_job_has_log(job_id)
@@ -1159,6 +1188,12 @@ def _handle_preset(
                 patch_index_line("Blocker", "stopped")
             elif not ran.get("ok"):
                 blocker = f"hermes think exited {ran.get('code')}"
+                # Clear session on failure to prevent sticky resume
+                if wallet_empty(text):
+                    try:
+                        patch_project_tools(project_id, {"hermes_session_id": ""})
+                    except (ValueError, TypeError):
+                        pass
                 patch_index_line("Blocker", blocker)
                 patch_index_line("Last", _index_last(text, failed=True))
             elif talk:
@@ -1171,6 +1206,8 @@ def _handle_preset(
                     blocker = "login wall — approve a vault login or type it here"
                     patch_index_line("Blocker", blocker)
                 else:
+                    # Only persist session on success
+                    _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                     patch_index_line("Last", _index_last(text))
                     patch_index_line("Now", "Think finished")
                     patch_index_line("Next", "Ask Code to execute, or Chief of Staff for status")
@@ -1458,7 +1495,6 @@ def _handle_preset(
             else:
                 engine = "Hermes Agent"
                 chosen_model = seated_or_auto(settings, "research", seats) or None
-                _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
                 usage_model = chosen_model or "engine-default"
                 extra = (
                     f"URL: {page.get('url') or url}\n"
@@ -1499,20 +1535,51 @@ def _handle_preset(
                         attachments=attachments,
                     ),
                 )
-                ran = hermes_chat(
-                    packet,
-                    cwd=work,
-                    model=chosen_model,
-                    toolsets=toolsets,
-                    session=None if resume_id else session,
-                    resume=resume_id,
-                    skills=skills,
-                    on_delta=on_delta,
-                    on_progress=on_progress,
-                    cancel=cancel,
-                    run_id=run_id,
-                    home=hermes_home_dir,
-                )
+                
+                # Wallet rotation for Research (like Cos chat)
+                attempts = _chat_attempts(tools, chosen_model)
+                if not attempts:
+                    _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
+                    attempts = [({}, chosen_model)] if chosen_model else []
+                
+                ran: dict = {}
+                for idx, (account, model) in enumerate(attempts):
+                    if idx > 0 and on_progress:
+                        try:
+                            _call_progress(on_progress, f"Research · trying account {idx + 1}", "research")
+                        except Exception:
+                            pass
+                    if account.get("id"):
+                        activate_account(str(account["id"]))
+                    else:
+                        _activate("Hermes Agent", tools, model, force_go=force_go_wallet)
+                    
+                    ran = hermes_chat(
+                        packet,
+                        cwd=work,
+                        model=model,
+                        toolsets=toolsets,
+                        session=None if resume_id else session,
+                        resume=resume_id,
+                        skills=skills,
+                        on_delta=on_delta,
+                        on_progress=on_progress,
+                        cancel=cancel,
+                        run_id=run_id,
+                        home=hermes_home_dir,
+                    )
+                    chosen_model = model
+                    if ran.get("stopped"):
+                        break
+                    if wallet_empty(ran.get("text") or ""):
+                        if account.get("id"):
+                            mark_wallet_empty(str(account["id"]))
+                        continue
+                    if ran.get("ok"):
+                        break
+                    # Non-wallet error: don't retry
+                    break
+                
                 text = ran.get("text") or "(no output)"
                 usage = ran.get("usage") or {}
                 prompt_tokens = int(usage.get("input_tokens") or 0)
@@ -1521,7 +1588,6 @@ def _handle_preset(
                 usd_estimate = float(usage.get("estimated_cost_usd") or 0)
                 if usage.get("model"):
                     usage_model = str(usage.get("model"))
-                _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                 if ran.get("raw_log"):
                     if write_session_log(job_id, ran["raw_log"]):
                         mark_job_has_log(job_id)
@@ -1531,6 +1597,12 @@ def _handle_preset(
                     patch_index_line("Blocker", "stopped")
                 elif not ran.get("ok"):
                     blocker = f"hermes chat exited {ran.get('code')}"
+                    # Clear session on failure to prevent sticky resume
+                    if wallet_empty(text):
+                        try:
+                            patch_project_tools(project_id, {"hermes_session_id": ""})
+                        except (ValueError, TypeError):
+                            pass
                     if page.get("ok"):
                         text = (
                             f"{text}\n\nFetched extract (Hermes did not finish):\n"
@@ -1546,6 +1618,8 @@ def _handle_preset(
                         blocker = "login wall — approve a vault login or type it here"
                         patch_index_line("Blocker", blocker)
                     else:
+                        # Only persist session on success
+                        _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                         patch_index_line("Last", _index_last(text))
                         patch_index_line("Now", f"Research {page.get('url') or url}")
                         patch_index_line("Next", "Ask another URL, or open Hermes for snapshot clicks")
@@ -1569,10 +1643,10 @@ def _handle_preset(
         else:
             engine = "Hermes Agent"
             chosen_model = seated_or_auto(settings, "ops", seats) or None
-            _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
             usage_model = chosen_model or "engine-default"
             schedule = parse_schedule(message)
             if schedule:
+                _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
                 created = cron_create(
                     schedule,
                     message,
@@ -1614,20 +1688,51 @@ def _handle_preset(
                         hermes_home=hermes_home_dir,
                     ),
                 )
-                ran = hermes_chat(
-                    packet,
-                    cwd=work,
-                    model=chosen_model,
-                    toolsets=None,
-                    session=None if resume_id else session,
-                    resume=resume_id,
-                    skills=skills,
-                    on_delta=on_delta,
-                    on_progress=on_progress,
-                    cancel=cancel,
-                    run_id=run_id,
-                    home=hermes_home_dir,
-                )
+                
+                # Wallet rotation for Ops (like Cos chat)
+                attempts = _chat_attempts(tools, chosen_model)
+                if not attempts:
+                    _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
+                    attempts = [({}, chosen_model)] if chosen_model else []
+                
+                ran: dict = {}
+                for idx, (account, model) in enumerate(attempts):
+                    if idx > 0 and on_progress:
+                        try:
+                            _call_progress(on_progress, f"Ops · trying account {idx + 1}", "ops")
+                        except Exception:
+                            pass
+                    if account.get("id"):
+                        activate_account(str(account["id"]))
+                    else:
+                        _activate("Hermes Agent", tools, model, force_go=force_go_wallet)
+                    
+                    ran = hermes_chat(
+                        packet,
+                        cwd=work,
+                        model=model,
+                        toolsets=None,
+                        session=None if resume_id else session,
+                        resume=resume_id,
+                        skills=skills,
+                        on_delta=on_delta,
+                        on_progress=on_progress,
+                        cancel=cancel,
+                        run_id=run_id,
+                        home=hermes_home_dir,
+                    )
+                    chosen_model = model
+                    if ran.get("stopped"):
+                        break
+                    if wallet_empty(ran.get("text") or ""):
+                        if account.get("id"):
+                            mark_wallet_empty(str(account["id"]))
+                        continue
+                    if ran.get("ok"):
+                        break
+                    # Non-wallet error: don't retry
+                    break
+                
                 text = (
                     f"Saved inbox/ops.md.\n\n"
                     f"{ran.get('text')}\n\n"
@@ -1640,7 +1745,6 @@ def _handle_preset(
                 usd_estimate = float(usage.get("estimated_cost_usd") or 0)
                 if usage.get("model"):
                     usage_model = str(usage.get("model"))
-                _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                 if ran.get("raw_log"):
                     if write_session_log(job_id, ran["raw_log"]):
                         mark_job_has_log(job_id)
@@ -1650,9 +1754,17 @@ def _handle_preset(
                     patch_index_line("Blocker", "stopped")
                 elif not ran.get("ok"):
                     blocker = f"hermes chat exited {ran.get('code')}"
+                    # Clear session on failure to prevent sticky resume
+                    if wallet_empty(text):
+                        try:
+                            patch_project_tools(project_id, {"hermes_session_id": ""})
+                        except (ValueError, TypeError):
+                            pass
                     patch_index_line("Blocker", blocker)
                     patch_index_line("Last", _index_last(text, failed=True))
                 else:
+                    # Only persist session on success
+                    _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                     patch_index_line("Last", _index_last(text))
                     patch_index_line("Now", "Ops cron requested in Hermes")
                     patch_index_line("Next", "Open Hermes to confirm the schedule")

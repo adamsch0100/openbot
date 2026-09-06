@@ -2197,5 +2197,305 @@ class HandoffBusTests(unittest.TestCase):
                 bus_mod.ACTION_LOG = old_log
 
 
+class HermesSessionPersistenceTests(unittest.TestCase):
+    """Tests for Hermes session persistence behavior after job success/failure."""
+
+    def test_think_persists_session_only_on_success(self):
+        """Think job should only persist session ID when job succeeds, not on failure."""
+        from unittest.mock import patch
+        import openbot.org as org_mod
+        
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_file = Path(tmp) / "org.json"
+            org_file.write_text(json.dumps({
+                "projects": [{
+                    "id": "test-ceo",
+                    "name": "Test CEO",
+                    "folder": tmp,
+                    "tools": {}
+                }]
+            }))
+            
+            try:
+                # Patch _persist_hermes_session to track when it's called
+                with patch("openbot.router._persist_hermes_session") as mock_persist:
+                    with patch("openbot.router.hermes_chat") as mock_chat:
+                        with patch("openbot.router.detect") as mock_detect:
+                            with patch("openbot.router._activate"):
+                                with patch("openbot.router.seated_or_auto") as mock_seated:
+                                    with patch("openbot.router.load_settings") as mock_settings:
+                                        mock_settings.return_value = {}
+                                        mock_seated.return_value = "nous/hermes-3"
+                                        mock_detect.return_value = {
+                                            "hermes": {"present": True, "path": "/usr/bin/hermes"},
+                                            "opencode": {"present": False}
+                                        }
+                                        
+                                        # Failed job: exit code 1
+                                        mock_chat.return_value = {
+                                            "ok": False,
+                                            "code": 1,
+                                            "text": "Anthropic API 401 Unauthorized",
+                                            "session_id": "failed_session_123",
+                                            "usage": {}
+                                        }
+                                        
+                                        from openbot.router import _handle_preset
+                                        result = _handle_preset(
+                                            "Complete research task",
+                                            folder=tmp,
+                                            chosen="think",
+                                            project_id="test-ceo",
+                                            worker_id=None,
+                                            session="think-session",
+                                            tools={},
+                                            on_delta=None,
+                                            cancel=None
+                                        )
+                                        
+                                        # Verify job failed
+                                        self.assertIsNotNone(result.get("blocker"))
+                                        
+                                        # Verify _persist_hermes_session was NOT called after failure
+                                        self.assertEqual(mock_persist.call_count, 0, 
+                                            "_persist_hermes_session should not be called on failure")
+                                        
+                                        # Reset mock
+                                        mock_persist.reset_mock()
+                                        
+                                        # Success case
+                                        mock_chat.return_value = {
+                                            "ok": True,
+                                            "code": 0,
+                                            "text": "Research completed successfully",
+                                            "session_id": "success_session_456",
+                                            "usage": {}
+                                        }
+                                        
+                                        result2 = _handle_preset(
+                                            "Complete second task",
+                                            folder=tmp,
+                                            chosen="think",
+                                            project_id="test-ceo",
+                                            worker_id=None,
+                                            session="think-session",
+                                            tools={},
+                                            on_delta=None,
+                                            cancel=None
+                                        )
+                                        
+                                        # Verify job succeeded
+                                        self.assertIsNone(result2.get("blocker"))
+                                        
+                                        # Verify _persist_hermes_session WAS called on success
+                                        self.assertEqual(mock_persist.call_count, 1,
+                                            "_persist_hermes_session should be called once on success")
+                                        # Verify it was called with the right session ID
+                                        call_args = mock_persist.call_args
+                                        self.assertEqual(call_args[0][2], "success_session_456")
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+
+    def test_research_persists_session_only_on_success(self):
+        """Research job should only persist session ID when job succeeds."""
+        from unittest.mock import patch
+        import openbot.org as org_mod
+        
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_file = Path(tmp) / "org.json"
+            org_file.write_text(json.dumps({
+                "projects": [{
+                    "id": "test-ceo",
+                    "name": "Test CEO",
+                    "folder": tmp,
+                    "tools": {}
+                }]
+            }))
+            
+            try:
+                with patch("openbot.router._persist_hermes_session") as mock_persist:
+                    with patch("openbot.router.hermes_chat") as mock_chat:
+                        with patch("openbot.router.detect") as mock_detect:
+                            with patch("openbot.router.fetch_page") as mock_fetch:
+                                with patch("openbot.router._activate"):
+                                    with patch("openbot.router.seated_or_auto") as mock_seated:
+                                        with patch("openbot.router.load_settings") as mock_settings:
+                                            mock_settings.return_value = {}
+                                            mock_seated.return_value = "nous/hermes-3"
+                                            mock_detect.return_value = {
+                                                "hermes": {"present": True, "path": "/usr/bin/hermes"},
+                                                "opencode": {"present": False}
+                                            }
+                                            mock_fetch.return_value = {
+                                                "ok": True,
+                                                "url": "https://example.com",
+                                                "text": "Example content",
+                                                "backend": "fetch"
+                                            }
+                                            
+                                            # Failed job
+                                            mock_chat.return_value = {
+                                                "ok": False,
+                                                "code": 1,
+                                                "text": "Balance insufficient",
+                                                "session_id": "failed_research_789",
+                                                "usage": {}
+                                            }
+                                            
+                                            from openbot.router import _handle_preset
+                                            result = _handle_preset(
+                                                "Look at https://example.com",
+                                                folder=tmp,
+                                                chosen="research",
+                                                project_id="test-ceo",
+                                                worker_id=None,
+                                                session="research-session",
+                                                tools={},
+                                                on_delta=None,
+                                                cancel=None
+                                            )
+                                            
+                                            # Session NOT persisted on failure
+                                            self.assertEqual(mock_persist.call_count, 0)
+                                            
+                                            # Reset mock
+                                            mock_persist.reset_mock()
+                                            
+                                            # Success case
+                                            mock_chat.return_value = {
+                                                "ok": True,
+                                                "code": 0,
+                                                "text": "Extracted the info",
+                                                "session_id": "success_research_999",
+                                                "usage": {}
+                                            }
+                                            
+                                            result2 = _handle_preset(
+                                                "Look at https://example.com",
+                                                folder=tmp,
+                                                chosen="research",
+                                                project_id="test-ceo",
+                                                worker_id=None,
+                                                session="research-session",
+                                                tools={},
+                                                on_delta=None,
+                                                cancel=None
+                                            )
+                                            
+                                            # Session WAS persisted on success
+                                            self.assertEqual(mock_persist.call_count, 1)
+                                            call_args = mock_persist.call_args
+                                            self.assertEqual(call_args[0][2], "success_research_999")
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+
+    def test_think_rotates_wallets_on_insufficient_balance(self):
+        """Think should try next wallet when first returns insufficient balance."""
+        from unittest.mock import patch, call
+        import openbot.org as org_mod
+        
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_file = Path(tmp) / "org.json"
+            org_file.write_text(json.dumps({
+                "projects": [{
+                    "id": "test-ceo",
+                    "name": "Test CEO",
+                    "folder": tmp,
+                    "tools": {}
+                }]
+            }))
+            
+            try:
+                with patch("openbot.router._chat_attempts") as mock_attempts:
+                    with patch("openbot.router.hermes_chat") as mock_chat:
+                        with patch("openbot.router.detect") as mock_detect:
+                            with patch("openbot.router.activate_account") as mock_activate:
+                                with patch("openbot.router.mark_wallet_empty") as mock_mark:
+                                    with patch("openbot.router.load_settings") as mock_settings:
+                                        mock_settings.return_value = {}
+                                        mock_detect.return_value = {
+                                            "hermes": {"present": True, "path": "/usr/bin/hermes"},
+                                            "opencode": {"present": False}
+                                        }
+                                        
+                                        # Set up wallet rotation: shared Go, SAA Go, ListLogic Go, OpenRouter
+                                        mock_attempts.return_value = [
+                                            ({"id": "dd9a8b15", "provider": "opencode"}, "opencode-zen/hermes-3"),
+                                            ({"id": "08a958dc", "provider": "opencode"}, "opencode-zen/hermes-3"),
+                                            ({"id": "83f30e4d", "provider": "opencode"}, "opencode-zen/hermes-3"),
+                                            ({"id": "6f5a225b", "provider": "openrouter"}, "openrouter/nous/hermes-3")
+                                        ]
+                                        
+                                        # First call: insufficient balance (shared pool)
+                                        # Second call: insufficient balance (SAA)
+                                        # Third call: success (ListLogic)
+                                        mock_chat.side_effect = [
+                                            {
+                                                "ok": False,
+                                                "code": 1,
+                                                "text": "insufficient balance https://opencode.ai/dd9a8b15/billing",
+                                                "session_id": "sess1",
+                                                "usage": {}
+                                            },
+                                            {
+                                                "ok": False,
+                                                "code": 1,
+                                                "text": "insufficient balance https://opencode.ai/08a958dc/billing",
+                                                "session_id": "sess2",
+                                                "usage": {}
+                                            },
+                                            {
+                                                "ok": True,
+                                                "code": 0,
+                                                "text": "Task completed successfully",
+                                                "session_id": "sess3",
+                                                "usage": {}
+                                            }
+                                        ]
+                                        
+                                        from openbot.router import _handle_preset
+                                        result = _handle_preset(
+                                            "Complete the task",
+                                            folder=tmp,
+                                            chosen="think",
+                                            project_id="test-ceo",
+                                            worker_id=None,
+                                            session="think-session",
+                                            tools={},
+                                            on_delta=None,
+                                            cancel=None
+                                        )
+                                        
+                                        # Verify wallets were rotated
+                                        self.assertEqual(mock_chat.call_count, 3, "Should try 3 wallets")
+                                        
+                                        # Verify first two wallets were marked empty
+                                        self.assertEqual(mock_mark.call_count, 2)
+                                        mark_calls = [call[0][0] for call in mock_mark.call_args_list]
+                                        self.assertIn("dd9a8b15", mark_calls)
+                                        self.assertIn("08a958dc", mark_calls)
+                                        
+                                        # Verify job succeeded on third attempt
+                                        self.assertIsNone(result.get("blocker"))
+                                        self.assertEqual(result.get("text"), "Task completed successfully")
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+
+
 if __name__ == "__main__":
     unittest.main()
