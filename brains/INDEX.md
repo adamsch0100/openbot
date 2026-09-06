@@ -3,8 +3,8 @@
 Source of truth for this OpenBot instance. Status questions read this file only.
 
 Now: PR #44 MERGE-READY — Mobile UX fix (compact composer, strip Meta pricing junk, readable chat history)
-Last: Operator Vitzer reported mobile "still terrible" with screenshot. Fixed: 9px "Talking to" label, 15px textarea (UI font not serif), stream padding max(140px,25vh), Meta Model API pricing/rate-limits stripped in cleanBotText, single-row composer controls 36-38px height. Tested 390×844, 393×851, 375×667.
-Next: Operator test on real phone, merge if delightful
+Last: CEO review blocker resolved. iOS Safari auto-zooms when textarea font-size < 16px. Changed mobile/phone textarea back to 16px (kept compact heights, UI font, padding). All other fixes intact: 9px "Talking to" label, stream padding max(140px,25vh), Meta pricing stripped, 36-38px controls. v=60.
+Next: Merge when CEO approves
 Blocker: —
 
 ## Vault
