@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Docker engines + OPENBOT_DATA_DIR=/data (PR #27) — MERGE-READY pending CoS merge/deploy
-Last: WC-8 harness+partial live smoke, WC-7 Self-Build Loop, WC-6 Polish Pack, WC-5 Observability, WC-4 Onboarding, WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: CoS merge → Railway GitHub deploy → smoke Health+engines+org(saa/litlogic)+Builder/Research+Ops
-Blocker: live deploy + smoke not done yet
+Now: Hermes CLI invoke fix (PR #28) — talk path was invalid -z flag
+Last: PR #27 deployed live (engines present, /data org restored, Ops create-cron PASS), WC-8 harness+partial live smoke, WC-7 Self-Build Loop
+Next: CoS merge #28 → deploy → re-smoke Think + Research; Builder needs OpenRouter 18+ confirm
+Blocker: live Think/Research re-smoke not done yet
 
 ## Vault
 
