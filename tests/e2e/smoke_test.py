@@ -98,11 +98,14 @@ class OpenBotE2EClient:
         """Unlock board with PIN (if required).
         
         Success if ANY of:
-        - unlocked=true OR
-        - token present (non-empty string) OR
-        - needs_unlock=False OR
-        - openbot_unlock cookie captured OR
-        - work_dir present with HTTP 200 and no error
+        - Set-Cookie openbot_unlock captured, OR
+        - Body has token (also set as cookie), OR
+        - needs_unlock is False, OR
+        - unlocked is true, OR
+        - HTTP 200 with work_dir and no error
+        
+        Master server.py auth: Cookie openbot_unlock only.
+        Token from Set-Cookie or JSON body → store as session cookie.
         """
         if not self.pin:
             print("WARN: No PIN provided, skipping unlock")
@@ -115,7 +118,7 @@ class OpenBotE2EClient:
             print(f"✗ Unlock failed: {result}")
             return False
         
-        # Success criteria
+        # Success criteria (CoS confirmed)
         unlocked = result.get("unlocked")
         token = result.get("token")
         needs_unlock = result.get("needs_unlock")
@@ -123,16 +126,16 @@ class OpenBotE2EClient:
         has_cookie = "openbot_unlock" in self.session_cookies
         
         success = (
-            unlocked is True
-            or (isinstance(token, str) and token)
+            has_cookie  # Set-Cookie captured
+            or (isinstance(token, str) and token)  # Body token
             or needs_unlock is False
-            or has_cookie
-            or (work_dir and not result.get("error"))
+            or unlocked is True
+            or (work_dir and not result.get("error"))  # HTTP 200 config
         )
         
         if success:
             print("✓ Board unlocked")
-            # Store token if present for Bearer auth
+            # Store token if present in body (also as cookie for auth)
             if isinstance(token, str) and token:
                 self.session_cookies["openbot_unlock"] = token
             return True
@@ -143,15 +146,15 @@ class OpenBotE2EClient:
     def get_status(self) -> dict:
         """Get board status (health check).
         
-        Prefers /api/health (live), falls back to /api/status.
+        Uses /api/health or /api/config (NOT /api/status - 404 when unlocked on master).
         """
         # Try health endpoint first
         result = self._request("GET", "/api/health")
         if not result.get("error") and result.get("status", 200) < 400:
             return result
         
-        # Fallback to status endpoint
-        return self._request("GET", "/api/status")
+        # Fallback to config endpoint (not status - no handler on master when unlocked)
+        return self._request("GET", "/api/config")
 
     def send_message(self, message: str, seat: str = "cos", project: str = "openbot") -> dict:
         """Send message to OpenBot and get job ID.
@@ -402,6 +405,11 @@ class E2ETestRunner:
         
         self.log(f"  Creating routine: {routine_name}")
         result = self.client.create_routine(routine_name, schedule, steps, project="openbot", enabled=False)
+        
+        # Check for 404 (missing routines endpoint on prod)
+        if result.get("status") == 404:
+            self.record_result("ops_flow", False, "POST /api/routines returned 404 - production missing routines endpoint")
+            return False
         
         if result.get("error"):
             self.record_result("ops_flow", False, f"Routine creation failed: {result.get('error')}")
