@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Mobile layout PR pending push + smoke test
-Last: Phone-first layout implemented (rail → drawer, chat full-width, compact header, tap targets ≥44px)
-Next: Push branch, open PR, verify at 390×844 or live Railway instance
+Now: Mobile layout PR #31 open + clean (cursor/mobile-phone-first-layout-8d91)
+Last: Rail → drawer, chat full-width, ≥44px taps, compact header — desktop unchanged
+Next: Manual smoke at 390×844 or Railway live
 Blocker: none
 
 ## Vault
