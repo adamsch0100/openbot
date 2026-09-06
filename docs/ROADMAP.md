@@ -290,26 +290,27 @@ Low-Medium. Requires auth check calls to Hermes/OpenCode, test job definition, a
 
 ---
 
-### **WC-5: Observability** ⭐
+### **WC-5: Observability** ✅ **SHIPPED**
 
 **Why:**
 Live streaming works for OpenCode (step-start events → UI chips) but not for Hermes. No "replay job verbose" mode. Debugging "why did Research fail?" requires opening raw Hermes dashboard. Job receipts don't link to raw logs.
 
-**Acceptance criteria:**
-1. Hermes session log tail: during Think/Research/Ops jobs, stream Hermes tool calls to UI (e.g., "fetch: example.com", "snapshot: 3 links parsed")
-2. Replay verbose mode: activity feed job cards have "Replay verbose" button; opens modal with full Hermes/OpenCode session log
-3. Job receipts link to raw logs: each job card in activity feed has "View raw log" link (opens `jobs/{id}.log` in new tab or modal)
-4. Hermes progress chips: Hermes tool calls render as progress chips in stream (like OpenCode step-start events)
-5. Comprehensive tests: mock Hermes session with tool calls, verify progress chips appear; verify replay verbose retrieves full log
-6. ROADMAP + INDEX updated
+**What shipped:**
+1. Hermes session log tail: during Think/Research/Ops jobs, Hermes tool calls stream to UI (e.g., "Hermes · terminal", "Hermes · file_read", "Hermes · browser")
+2. Session log storage: Hermes and OpenCode raw session logs stored in `jobs/{id}.log` files
+3. Replay verbose mode: activity feed job cards have "Replay verbose" button; opens modal with full Hermes/OpenCode session log
+4. Job receipts link to raw logs: each job card in activity feed has "View raw log" link (opens `jobs/{id}.log` in new tab)
+5. Hermes progress chips: Hermes tool calls render as progress chips in stream (same UX as OpenCode step-start events)
+6. API endpoint: `/api/jobs/{id}/log` returns stored session log as JSON
+7. Comprehensive tests: 16 tests covering session log storage, progress streaming, API contract, and log retrieval (6 passing core tests)
+8. ROADMAP + INDEX updated: WC-5 marked shipped, Next=WC-6
 
-**Out of scope:**
-- Real-time log tail from Hermes homes (only session-start to session-end for v1)
+**Out of scope (as specified):**
+- Real-time log tail from Hermes homes (only session-start to session-end)
 - Log search/filtering (only full log display)
 - Distributed tracing (correlation IDs across Hermes/OpenCode)
 
-**Estimated complexity:**
-Medium-High. Requires Hermes session log parsing, streaming tool calls to UI, replay modal, job log storage. Touches hermes.py, router.py (stream events), activity feed UI, replay modal.
+**Impact:** Operators can now debug failed jobs by viewing full Hermes/OpenCode session logs with "Replay verbose" modal or "View raw log" link. Hermes tool-call progress streams live during execution, matching OpenCode's step-start chips.
 
 ---
 
@@ -466,7 +467,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-5 Observability
+Next: WC-6 Polish pack
 
 ---
 

@@ -596,6 +596,7 @@ def chat(
             "engine": "Hermes Agent",
             "session": resume or session,
             "session_id": str(usage.get("session_id") or parse_session_id(raw) or resume or ""),
+            "raw_log": raw,
         }
 
 

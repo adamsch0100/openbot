@@ -585,6 +585,13 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {"jobs": [public_job(job) for job in jobs[:30]]})
         if path == "/api/activity":
             return self._json(200, _activity(ingest_cron=True))
+        if path.startswith("/api/jobs/") and path.endswith("/log"):
+            job_id = path.split("/")[3]
+            from .store import read_session_log
+            log = read_session_log(job_id)
+            if log is None:
+                return self._json(404, {"error": "Log not found"})
+            return self._json(200, {"job_id": job_id, "log": log})
         if path == "/api/onboarding/status":
             if not self._unlocked():
                 return self._json(200, _locked_payload())

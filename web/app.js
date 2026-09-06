@@ -198,6 +198,73 @@ function escapeHtml(s) {
   }[c]));
 }
 
+async function showReplayModal(jobId) {
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/log`);
+    if (!res.ok) {
+      alert("Session log not found");
+      return;
+    }
+    const data = await res.json();
+    const log = data.log || "No log available";
+    
+    const modal = document.createElement("div");
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+      <div class="modal-content replay-modal">
+        <div class="modal-header">
+          <h2>Replay Verbose: ${escapeHtml(jobId)}</h2>
+          <button type="button" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <pre class="session-log">${escapeHtml(log)}</pre>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal || e.target.classList.contains("modal-close")) {
+        modal.remove();
+      }
+    });
+    
+    const escListener = (e) => {
+      if (e.key === "Escape") {
+        modal.remove();
+        document.removeEventListener("keydown", escListener);
+      }
+    };
+    document.addEventListener("keydown", escListener);
+  } catch (err) {
+    alert("Failed to load session log");
+  }
+}
+
+async function viewRawLog(jobId) {
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/log`);
+    if (!res.ok) {
+      alert("Session log not found");
+      return;
+    }
+    const data = await res.json();
+    const log = data.log || "No log available";
+    
+    const win = window.open("", "_blank");
+    if (!win) {
+      alert("Please allow popups to view raw log");
+      return;
+    }
+    win.document.write(`<html><head><title>Raw Log: ${escapeHtml(jobId)}</title><style>body{font-family:monospace;white-space:pre-wrap;padding:20px;background:#1a1a1a;color:#e0e0e0;}pre{margin:0;}</style></head><body><pre>${escapeHtml(log)}</pre></body></html>`);
+    win.document.close();
+  } catch (err) {
+    alert("Failed to load session log");
+  }
+}
+
+
 function renderEngines(engines, targetId) {
   const h = engines.hermes || {};
   const o = engines.opencode || {};
@@ -2694,6 +2761,24 @@ function renderJob(job) {
   }
   const actions = document.createElement("div");
   actions.className = "job-actions";
+  
+  // Add Replay verbose and View raw log buttons for jobs with session logs
+  if (job.id && job.has_session_log) {
+    const replayBtn = document.createElement("button");
+    replayBtn.type = "button";
+    replayBtn.className = "ghost-btn";
+    replayBtn.textContent = "Replay verbose";
+    replayBtn.addEventListener("click", () => showReplayModal(job.id));
+    actions.appendChild(replayBtn);
+    
+    const viewLogBtn = document.createElement("button");
+    viewLogBtn.type = "button";
+    viewLogBtn.className = "ghost-btn";
+    viewLogBtn.textContent = "View raw log";
+    viewLogBtn.addEventListener("click", () => viewRawLog(job.id));
+    actions.appendChild(viewLogBtn);
+  }
+  
   if (job.login_wall && job.url) {
     const open = document.createElement("a");
     open.className = "send";
