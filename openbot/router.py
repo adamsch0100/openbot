@@ -1164,13 +1164,17 @@ def _handle_preset(
                 else:
                     _activate("Hermes Agent", tools, model, force_go=force_go_wallet)
                 
+                # First attempt: use resume_id if present. Subsequent attempts: fresh session
+                use_resume = (None if talk else resume_id) if idx == 0 else None
+                use_session = (None if talk or resume_id else session) if idx == 0 else None
+                
                 ran = hermes_chat(
                     packet,
                     cwd=work,
                     model=model,
                     toolsets=None,
-                    session=None if talk or resume_id else session,
-                    resume=None if talk else resume_id,
+                    session=use_session,
+                    resume=use_resume,
                     skills=None if talk else skills,
                     on_delta=on_delta,
                     on_progress=on_progress,
@@ -1185,6 +1189,11 @@ def _handle_preset(
                 if wallet_empty(ran.get("text") or ""):
                     if account.get("id"):
                         mark_wallet_empty(str(account["id"]))
+                    # Clear sticky session on wallet failure
+                    try:
+                        patch_project_tools(project_id, {"hermes_session_id": ""})
+                    except (ValueError, TypeError):
+                        pass
                     continue
                 if ran.get("ok"):
                     break
@@ -1209,12 +1218,11 @@ def _handle_preset(
                 patch_index_line("Blocker", "stopped")
             elif not ran.get("ok"):
                 blocker = f"hermes think exited {ran.get('code')}"
-                # Clear session on failure to prevent sticky resume
-                if wallet_empty(text):
-                    try:
-                        patch_project_tools(project_id, {"hermes_session_id": ""})
-                    except (ValueError, TypeError):
-                        pass
+                # Clear session on ANY failure to prevent sticky resume
+                try:
+                    patch_project_tools(project_id, {"hermes_session_id": ""})
+                except (ValueError, TypeError):
+                    pass
                 patch_index_line("Blocker", blocker)
                 patch_index_line("Last", _index_last(text, failed=True))
             elif talk:
@@ -1575,13 +1583,17 @@ def _handle_preset(
                     else:
                         _activate("Hermes Agent", tools, model, force_go=force_go_wallet)
                     
+                    # First attempt: use resume_id if present. Subsequent attempts: fresh session
+                    use_resume = resume_id if idx == 0 else None
+                    use_session = (None if resume_id else session) if idx == 0 else None
+                    
                     ran = hermes_chat(
                         packet,
                         cwd=work,
                         model=model,
                         toolsets=toolsets,
-                        session=None if resume_id else session,
-                        resume=resume_id,
+                        session=use_session,
+                        resume=use_resume,
                         skills=skills,
                         on_delta=on_delta,
                         on_progress=on_progress,
@@ -1595,6 +1607,11 @@ def _handle_preset(
                     if wallet_empty(ran.get("text") or ""):
                         if account.get("id"):
                             mark_wallet_empty(str(account["id"]))
+                        # Clear sticky session on wallet failure
+                        try:
+                            patch_project_tools(project_id, {"hermes_session_id": ""})
+                        except (ValueError, TypeError):
+                            pass
                         continue
                     if ran.get("ok"):
                         break
@@ -1618,12 +1635,11 @@ def _handle_preset(
                     patch_index_line("Blocker", "stopped")
                 elif not ran.get("ok"):
                     blocker = f"hermes chat exited {ran.get('code')}"
-                    # Clear session on failure to prevent sticky resume
-                    if wallet_empty(text):
-                        try:
-                            patch_project_tools(project_id, {"hermes_session_id": ""})
-                        except (ValueError, TypeError):
-                            pass
+                    # Clear session on ANY failure to prevent sticky resume
+                    try:
+                        patch_project_tools(project_id, {"hermes_session_id": ""})
+                    except (ValueError, TypeError):
+                        pass
                     if page.get("ok"):
                         text = (
                             f"{text}\n\nFetched extract (Hermes did not finish):\n"
@@ -1728,13 +1744,17 @@ def _handle_preset(
                     else:
                         _activate("Hermes Agent", tools, model, force_go=force_go_wallet)
                     
+                    # First attempt: use resume_id if present. Subsequent attempts: fresh session
+                    use_resume = resume_id if idx == 0 else None
+                    use_session = (None if resume_id else session) if idx == 0 else None
+                    
                     ran = hermes_chat(
                         packet,
                         cwd=work,
                         model=model,
                         toolsets=None,
-                        session=None if resume_id else session,
-                        resume=resume_id,
+                        session=use_session,
+                        resume=use_resume,
                         skills=skills,
                         on_delta=on_delta,
                         on_progress=on_progress,
@@ -1748,6 +1768,11 @@ def _handle_preset(
                     if wallet_empty(ran.get("text") or ""):
                         if account.get("id"):
                             mark_wallet_empty(str(account["id"]))
+                        # Clear sticky session on wallet failure
+                        try:
+                            patch_project_tools(project_id, {"hermes_session_id": ""})
+                        except (ValueError, TypeError):
+                            pass
                         continue
                     if ran.get("ok"):
                         break
@@ -1775,12 +1800,11 @@ def _handle_preset(
                     patch_index_line("Blocker", "stopped")
                 elif not ran.get("ok"):
                     blocker = f"hermes chat exited {ran.get('code')}"
-                    # Clear session on failure to prevent sticky resume
-                    if wallet_empty(text):
-                        try:
-                            patch_project_tools(project_id, {"hermes_session_id": ""})
-                        except (ValueError, TypeError):
-                            pass
+                    # Clear session on ANY failure to prevent sticky resume
+                    try:
+                        patch_project_tools(project_id, {"hermes_session_id": ""})
+                    except (ValueError, TypeError):
+                        pass
                     patch_index_line("Blocker", blocker)
                     patch_index_line("Last", _index_last(text, failed=True))
                 else:
