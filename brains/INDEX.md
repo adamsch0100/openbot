@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Mobile layout PR #31 ready for CEO review (all surfaces: composer, unlock, wizard, spend, chat)
-Last: Comprehensive phone-first ≤480px — 16px inputs (no zoom), 44px taps, safe-area, drawer nav, CTA
-Next: CEO smoke → MERGE-READY signal
-Blocker: none
+Now: Mobile PR #31 clean + undraft, cache v=56 (a454e3a) — ready for merge to master + Railway deploy
+Last: Fixed all shot issues: rail→drawer, chat full-width, hamburger, no nested scroll, safe-area
+Next: Merge PR #31 to master → Railway auto-deploy → live phone smoke at 390×844
+Blocker: Railway serves master only (branch not live yet for CEO test)
 
 ## Vault
 
