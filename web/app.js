@@ -207,6 +207,9 @@ function cleanBotText(text) {
   cleaned = cleaned.replace(/^This\s+is\s+Meta'?s?\s+contributor\s+tier.*$/gim, "");
   cleaned = cleaned.replace(/^Selecting\s+it\s+permits?\s+Meta.*train.*$/gim, "");
   
+  // Strip "it permits Meta to use your prompts and completions to train future Meta models"
+  cleaned = cleaned.replace(/it\s+permits\s+Meta\s+to\s+use\s+your\s+prompts\s+and\s+completions\s+to\s+train\s+future\s+Meta\s+models\.?/gi, "");
+  
   // Strip Meta Model API pricing/rate-limit boilerplate
   // Pattern: "Meta Model API is free... pricing and rate limits... https://dev.meta.ai/docs/pricing-rate-limits/"
   cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free.*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gis, "");
@@ -219,6 +222,12 @@ function cleanBotText(text) {
   
   // Strip any long paragraph about Meta's acceptable use policy or training data
   cleaned = cleaned.replace(/It\s+lowers\s+the\s+barrier\s+to\s+entry.*?acceptable\./gis, "");
+  
+  // Strip "Do NOT use it for confidential, proprietary, personal, or otherwise sensitive data"
+  cleaned = cleaned.replace(/Do\s+NOT\s+use\s+it\s+for\s+confidential,\s+proprietary,\s+personal,\s+or\s+otherwise\s+sensitive\s+data\.?/gi, "");
+  
+  // Strip "For the same model with no training on your data, select..."
+  cleaned = cleaned.replace(/For\s+the\s+same\s+model\s+with\s+no\s+training\s+on\s+your\s+data,?\s+.*$/gim, "");
   
   // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
   const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
@@ -326,8 +335,9 @@ function indexField(text, field) {
 }
 
 function renderIndex(text) {
-  if ($("indexCard")) $("indexCard").textContent = text || "(empty brief)";
-  if ($("indexSummary")) $("indexSummary").textContent = `Brief · ${indexNow(text)}`;
+  const cleaned = cleanBotText(text);
+  if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty brief)";
+  if ($("indexSummary")) $("indexSummary").textContent = `Brief · ${indexNow(cleaned)}`;
 }
 
 function moneyPair(input, output) {
@@ -1987,12 +1997,13 @@ function selectedIndexText() {
 
 function renderBotMeta() {
   const text = selectedIndexText();
-  if ($("indexCard")) $("indexCard").textContent = text || "(empty)";
+  const cleaned = cleanBotText(text);
+  if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty)";
   const worker = currentWorker();
   const project = currentProject();
   const label = worker ? `${worker.name} brief` : project ? `${project.name} brief` : "Chief of Staff brief";
   if ($("indexSummary")) {
-    $("indexSummary").textContent = `${label} · ${indexNow(text)}`;
+    $("indexSummary").textContent = `${label} · ${indexNow(cleaned)}`;
   }
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
@@ -2950,7 +2961,7 @@ function renderJob(job) {
 function emptyStreamHtml() {
   const project = currentProject();
   const worker = currentWorker();
-  const text = selectedIndexText();
+  const text = cleanBotText(selectedIndexText());
   const now = indexNow(text);
   const nxt = (text.match(/^Next:\s*(.*)$/m) || [])[1] || "";
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
