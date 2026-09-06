@@ -2721,6 +2721,35 @@ function renderJob(job) {
   if (job.diff_pending) {
     const diffActions = document.createElement("div");
     diffActions.className = "diff-actions";
+    
+    // Optional controls
+    const controls = document.createElement("div");
+    controls.className = "diff-controls";
+    controls.style.marginBottom = "10px";
+    controls.style.fontSize = "14px";
+    
+    const pushLabel = document.createElement("label");
+    pushLabel.style.marginRight = "15px";
+    pushLabel.style.cursor = "pointer";
+    const pushCheck = document.createElement("input");
+    pushCheck.type = "checkbox";
+    pushCheck.id = `push-${job.id}`;
+    pushCheck.style.marginRight = "5px";
+    pushLabel.appendChild(pushCheck);
+    pushLabel.appendChild(document.createTextNode("Push branch + open PR"));
+    
+    const testLabel = document.createElement("label");
+    testLabel.style.cursor = "pointer";
+    const testCheck = document.createElement("input");
+    testCheck.type = "checkbox";
+    testCheck.id = `test-${job.id}`;
+    testCheck.style.marginRight = "5px";
+    testLabel.appendChild(testCheck);
+    testLabel.appendChild(document.createTextNode("Run tests after Accept"));
+    
+    controls.appendChild(pushLabel);
+    controls.appendChild(testLabel);
+    
     const accept = document.createElement("button");
     accept.type = "button";
     accept.className = "send";
@@ -2729,11 +2758,27 @@ function renderJob(job) {
     reject.type = "button";
     reject.className = "ghost-btn";
     reject.textContent = "Reject";
-    accept.addEventListener("click", () => decide(job.id, "accept", diffActions));
+    accept.addEventListener("click", () => {
+      const pushBranch = document.getElementById(`push-${job.id}`).checked;
+      const runTests = document.getElementById(`test-${job.id}`).checked;
+      decide(job.id, "accept", diffActions, false, pushBranch, runTests);
+    });
     reject.addEventListener("click", () => decide(job.id, "reject", diffActions));
+    diffActions.appendChild(controls);
     diffActions.appendChild(accept);
     diffActions.appendChild(reject);
     diffBlock.appendChild(diffActions);
+  } else if (job.accepted && !job.reverted && !job.rejected) {
+    // Show Revert button for accepted diffs (not yet reverted)
+    const revertActions = document.createElement("div");
+    revertActions.className = "diff-actions";
+    const revert = document.createElement("button");
+    revert.type = "button";
+    revert.className = "ghost-btn revert-btn";
+    revert.textContent = "Revert Accept";
+    revert.addEventListener("click", () => revertDiff(job.id, revertActions));
+    revertActions.appendChild(revert);
+    diffBlock.appendChild(revertActions);
   }
   el.appendChild(diffBlock);
 }
@@ -2866,12 +2911,12 @@ async function refreshThreadTail() {
   scrollChatBottom();
 }
 
-async function decide(jobId, action, actionsEl, force = false) {
+async function decide(jobId, action, actionsEl, force = false, pushBranch = false, runTests = false) {
   actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = true; });
   const res = await fetch(`/api/jobs/${jobId}/${action}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ force: force })
+    body: JSON.stringify({ force: force, push_branch: pushBranch, run_tests: runTests })
   });
   const data = await res.json();
   
@@ -2921,6 +2966,36 @@ async function decide(jobId, action, actionsEl, force = false) {
   if (data.index) renderIndex(data.index);
   if (data.spend) renderSpend(data.spend);
   
+  // Handle test failure with rollback offer
+  if (data.ok && data.test_failed) {
+    const testFailCard = document.createElement("div");
+    testFailCard.className = "card card-blocker";
+    testFailCard.innerHTML = `
+      <div class="meta">tests failed · ${escapeHtml(data.test_command || "tests")}</div>
+      <pre class="validation-error">${escapeHtml(data.test_output || "tests failed")}</pre>
+      <div class="actions">
+        <button type="button" class="send" id="revertFailed-${jobId}">Revert Accept</button>
+        <button type="button" class="ghost-btn" id="keepFailed-${jobId}">Keep Anyway</button>
+      </div>
+    `;
+    stream.appendChild(testFailCard);
+    
+    const revertBtn = document.getElementById(`revertFailed-${jobId}`);
+    const keepBtn = document.getElementById(`keepFailed-${jobId}`);
+    if (revertBtn) {
+      revertBtn.addEventListener("click", () => {
+        testFailCard.remove();
+        revertDiff(jobId, actionsEl);
+      });
+    }
+    if (keepBtn) {
+      keepBtn.addEventListener("click", () => {
+        testFailCard.remove();
+      });
+    }
+    return;
+  }
+  
   const statusText = data.ok
     ? (action === "accept" ? (force ? "diff force accepted" : "diff accepted") : "diff rejected · restored")
     : (data.error || "diff action failed");
@@ -2940,6 +3015,41 @@ async function decide(jobId, action, actionsEl, force = false) {
     
     card("bot brief", briefLines.join("\n"), "Brief updated");
   }
+}
+
+async function revertDiff(jobId, actionsEl) {
+  actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+  const res = await fetch(`/api/jobs/${jobId}/revert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  const data = await res.json();
+  
+  if (data.index) renderIndex(data.index);
+  if (data.spend) renderSpend(data.spend);
+  
+  const statusText = data.ok
+    ? "diff reverted · restored git snapshot"
+    : (data.error || "revert failed");
+  card("bot", statusText, `job ${jobId}`);
+  
+  // Show inline Brief update after Revert
+  if (data.ok && data.index) {
+    const now = indexField(data.index, "Now");
+    const last = indexField(data.index, "Last");
+    const next = indexField(data.index, "Next");
+    const blocker = indexField(data.index, "Blocker");
+    
+    let briefLines = [`Now: ${now}`];
+    if (last !== "—") briefLines.push(`Last: ${last}`);
+    if (next !== "—") briefLines.push(`Next: ${next}`);
+    if (blocker !== "—") briefLines.push(`Blocker: ${blocker}`);
+    
+    card("bot brief", briefLines.join("\n"), "Brief updated");
+  }
+  
+  await refreshActivity();
+  paintLanes();
 }
 
 async function loadJobs() {

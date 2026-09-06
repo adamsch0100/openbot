@@ -412,6 +412,23 @@ def _work_folder(folder: str | None, project_id: str | None = None) -> str:
     return str(Path.cwd())
 
 
+def _is_transient_failure(code: int, output: str) -> bool:
+    """Check if OpenCode failure is transient (network error, rate limit)."""
+    if code in {0, 130}:  # success or stopped by user
+        return False
+    low = (output or "").lower()
+    # Network errors
+    if any(err in low for err in ["connection", "network", "timeout", "socket", "dns", "unreachable"]):
+        return True
+    # Rate limits
+    if any(err in low for err in ["rate limit", "ratelimit", "too many requests", "429"]):
+        return True
+    # API errors that might be transient
+    if any(err in low for err in ["502", "503", "504", "bad gateway", "service unavailable", "gateway timeout"]):
+        return True
+    return False
+
+
 def run_opencode(
     folder: str,
     prompt: str,
@@ -422,6 +439,7 @@ def run_opencode(
     run_id: str | None = None,
     mcp_github: bool = False,
     on_progress=None,
+    _attempt: int = 0,
 ) -> tuple[int, str]:
     exe = binary or "opencode"
     cmd = [exe, "run", "--format", "json", "--auto", "--dir", folder]
@@ -526,7 +544,38 @@ def run_opencode(
             )
             out = (proc2.stdout or "") + (("\n" + proc2.stderr) if proc2.stderr else "")
             return proc2.returncode, out[-24000:]
-        return proc.returncode or 0, out[-24000:]
+        code = proc.returncode or 0
+        out_text = out[-24000:]
+        
+        # Retry logic for transient failures
+        if _attempt < 3 and _is_transient_failure(code, out_text):
+            if cancel is not None and cancel.is_set():
+                return code, out_text
+            backoff = 2 ** (_attempt + 1)  # 0→2s, 1→4s, 2→8s
+            if on_progress:
+                try:
+                    _call_progress(
+                        on_progress,
+                        f"OpenCode · retry {_attempt + 1}/3 after {backoff}s",
+                        "builder",
+                    )
+                except Exception:
+                    pass
+            time.sleep(backoff)
+            return run_opencode(
+                folder,
+                prompt,
+                binary,
+                model,
+                on_delta,
+                cancel,
+                run_id,
+                mcp_github,
+                on_progress,
+                _attempt + 1,
+            )
+        
+        return code, out_text
     except subprocess.TimeoutExpired:
         return 124, "opencode run timed out"
 
@@ -1643,7 +1692,7 @@ def public_job(receipt: dict | None) -> dict:
     return out
 
 
-def decide_diff(job_id: str, accept: bool, force: bool = False) -> dict:
+def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: bool = False, branch_name: str | None = None, run_tests: bool = False) -> dict:
     job = read_job(job_id)
     if job is None:
         return {"error": "job not found", "ok": False}
@@ -1698,12 +1747,111 @@ def decide_diff(job_id: str, accept: bool, force: bool = False) -> dict:
             if bypassed_error:
                 update_fields["validation_error"] = bypassed_error[:500]  # Cap at 500 chars
         
+        # Optional branch/PR workflow
+        if push_branch and folder:
+            from .gitutil import create_branch, commit_changes, push_branch as git_push, get_current_branch, get_remote_url
+            import time
+            
+            # Generate branch name if not provided
+            if not branch_name:
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                branch_name = f"openbot-builder-{job_id}-{timestamp}"
+            
+            # Check if we're on a clean branch (not main/master)
+            current_branch = get_current_branch(folder)
+            if current_branch.lower() in {"main", "master"}:
+                # Create new branch
+                ok, msg = create_branch(folder, branch_name)
+                if not ok:
+                    return {"ok": False, "error": f"branch creation failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+            else:
+                # Use current branch
+                branch_name = current_branch
+            
+            # Commit changes
+            commit_msg = f"Builder job {job_id}: {str(job.get('message') or 'code changes')[:100]}"
+            ok, msg = commit_changes(folder, commit_msg)
+            if not ok:
+                return {"ok": False, "error": f"commit failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+            
+            # Push to remote
+            ok, msg = git_push(folder, branch_name)
+            if not ok:
+                return {"ok": False, "error": f"push failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+            
+            update_fields["branch_name"] = branch_name
+            update_fields["pushed"] = True
+            remote_url = get_remote_url(folder)
+            if remote_url:
+                update_fields["remote_url"] = remote_url
+            
+            # Open PR with gh CLI
+            pr_title = f"Builder job {job_id}"
+            pr_body = f"Automated PR from OpenBot Builder\n\nJob ID: {job_id}\nMessage: {str(job.get('message') or 'code changes')[:200]}"
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["gh", "pr", "create", "--title", pr_title, "--body", pr_body, "--head", branch_name],
+                    cwd=folder,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    # Extract PR URL from output
+                    pr_url = result.stdout.strip().split("\n")[-1] if result.stdout else ""
+                    if pr_url.startswith("http"):
+                        update_fields["pr_url"] = pr_url
+                        update_fields["pr_opened"] = True
+                    else:
+                        update_fields["pr_error"] = "PR created but no URL returned"
+                else:
+                    update_fields["pr_error"] = result.stderr[:500] if result.stderr else "gh pr create failed"
+            except subprocess.TimeoutExpired:
+                update_fields["pr_error"] = "gh pr create timed out"
+            except FileNotFoundError:
+                update_fields["pr_error"] = "gh CLI not found"
+            except Exception as e:
+                update_fields["pr_error"] = str(e)[:500]
+        
         updated = update_job(job_id, update_fields)
         patch_lines("Last", f"accepted diff {job_id}")
         patch_lines("Next", "Ask for the next change")
         patch_lines("Blocker", "—")
         rollup_staff(pid, wid, f"accepted diff {job_id}")
         log_approval(updated or job, True, force=validation_bypassed)
+        
+        # Optional test-after-accept
+        if run_tests and folder:
+            from .testrunner import detect_test_command, run_tests as run_test_cmd
+            
+            test_cmd = detect_test_command(folder)
+            if test_cmd:
+                ok, test_output = run_test_cmd(folder, test_cmd)
+                if not ok:
+                    # Tests failed - store result and offer rollback
+                    update_job(job_id, {
+                        "test_failed": True,
+                        "test_output": test_output[:2000],
+                        "test_command": test_cmd,
+                    })
+                    return {
+                        "ok": True,
+                        "accepted": True,
+                        "test_failed": True,
+                        "test_output": test_output[:2000],
+                        "test_command": test_cmd,
+                        "job": public_job(updated),
+                        "index": read_project_index(pid) if pid else read_index(),
+                    }
+                else:
+                    # Tests passed
+                    update_job(job_id, {
+                        "tests_passed": True,
+                        "test_output": test_output[:500],
+                    })
+        
         return {
             "ok": True,
             "accepted": True,
@@ -1733,6 +1881,56 @@ def decide_diff(job_id: str, accept: bool, force: bool = False) -> dict:
         "ok": True,
         "accepted": False,
         "rejected": True,
+        "job": public_job(updated),
+        "index": read_project_index(pid) if pid else read_index(),
+    }
+
+
+def revert_accept(job_id: str) -> dict:
+    """Revert a previously accepted diff, restoring git snapshot."""
+    job = read_job(job_id)
+    if job is None:
+        return {"error": "job not found", "ok": False}
+    if not job.get("accepted"):
+        return {"error": "job not accepted", "ok": False, "job": public_job(job)}
+    if job.get("reverted"):
+        return {"error": "job already reverted", "ok": False, "job": public_job(job)}
+    
+    folder = job.get("folder")
+    pid = job.get("project_id") if isinstance(job.get("project_id"), str) else None
+    wid = job.get("worker_id") if isinstance(job.get("worker_id"), str) else None
+    
+    def patch_lines(label: str, value: str) -> None:
+        patch_scope(pid, wid, label, value)
+    
+    # Restore the git snapshot
+    ok, detail = restore_snapshot(str(folder), job.get("git_snapshot") or {})
+    if not ok:
+        patch_lines("Blocker", f"revert restore failed ({job_id})")
+        return {"ok": False, "error": detail, "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+    
+    # Mark job as reverted, clear accept
+    updated = update_job(
+        job_id,
+        {
+            "accepted": False,
+            "reverted": True,
+            "diff": "",
+            "untracked": [],
+        },
+    )
+    
+    patch_lines("Last", f"reverted accept {job_id}")
+    patch_lines("Next", "Ask Builder for a new change")
+    patch_lines("Blocker", "—")
+    rollup_staff(pid, wid, f"reverted accept {job_id}")
+    
+    # Log the revert approval
+    log_approval(updated or job, False, force=False, action="revert")
+    
+    return {
+        "ok": True,
+        "reverted": True,
         "job": public_job(updated),
         "index": read_project_index(pid) if pid else read_index(),
     }

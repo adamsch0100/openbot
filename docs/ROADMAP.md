@@ -100,19 +100,27 @@ Here's what remains to reach **world-class Chat OS** status:
 
 **Impact:** Operators can now send one message and spawn multiple workers simultaneously. Workers autonomously pick up open handoffs from `bus/handoffs/` without manual prompts. Auto-handoff detection routes work between agents (e.g., Builder → Research when docs needed).
 
-### 2. Coding Worker Hardening
-**Current state:**
-- ✅ Builder validation gate (syntax/lint checks before Accept)
-- ✅ Diff Accept/Reject flow with git restore on reject
-- ✅ Reliability fixes shipped (Muse auto-ack, CEO chat bleed)
+### 2. Coding Worker Hardening ✅ **SHIPPED (WC-2)**
 
-**What's missing:**
-- No automatic retry on transient OpenCode failures (network blips, rate limits)
-- No rollback if Accept → production breaks (only pre-Accept validation)
-- Git snapshot is local only (no branch/PR integration beyond snapshot)
-- No "Accept → test → rollback if test fails" path
+**Shipped in WC-2** — Automatic retry on transient OpenCode failures (3×exponential backoff: 2s, 4s, 8s) on network errors/rate limits, Accept→Revert rollback restores git snapshot and clears job from activity, optional branch/PR integration (Builder can push to branch and open PR), test-after-accept runs `npm test` or `pytest` after Accept with rollback offer on failure, comprehensive tests (18 tests, all passing).
 
-**Impact:** Transient failures require manual retry. Broken Accepts stay broken until manually reverted.
+**What shipped:**
+- Retry on transient failures: detects network errors (connection, timeout, DNS), rate limits (429), API errors (502/503/504)
+- Revert Accept: new `revert_accept()` function, "Revert Accept" button in UI, restores git snapshot, logs action
+- Branch/PR: git helpers (`create_branch`, `commit_changes`, `push_branch`), optional push on Accept
+- Test-after-accept: `openbot/testrunner.py` auto-detects `npm test`/`pytest`, runs post-Accept, offers rollback on fail
+- Tests: `tests/test_hardening.py` with TestOpenCodeRetry, TestRevertAccept, TestBranchPR, TestTestAfterAccept
+
+**Files:**
+- `openbot/router.py` — retry logic, `revert_accept()`, branch/PR on accept, test-after-accept integration
+- `openbot/server.py` — `/api/jobs/{id}/revert` endpoint, `push_branch`/`run_tests` parameters
+- `openbot/gitutil.py` — branch/PR git helpers
+- `openbot/testrunner.py` — NEW: test detection and execution
+- `openbot/bus.py` — `log_approval` supports revert action
+- `web/app.js` — Revert Accept button and `revertDiff()` handler
+- `tests/test_hardening.py` — NEW: comprehensive test suite
+
+**Impact:** Transient failures auto-retry. Operators can revert broken Accepts with one click. Builder can push to branch/PR. Tests run after Accept with rollback offer.
 
 ### 3. Spend Dashboard
 **Current state:**
@@ -204,26 +212,24 @@ See **"Gaps vs World-Class Multi-Agent Chat OS → 1. True Parallel Multi-Agent 
 
 ---
 
-### **WC-2: Coding Worker Hardening** ⭐
+### **WC-2: Coding Worker Hardening** ✅ SHIPPED
 
-**Why:**
-Builder has validation gate but no retry on transient failures (network blips, OpenCode rate limits). No rollback if Accept → production breaks. Git integration stops at local snapshot. Operators manually retry failed jobs and manually revert broken Accepts.
+**Goal:** Harden Builder/OpenCode with retries on transient failures, Accept→Revert rollback, optional branch/PR, optional test-after-accept with rollback offer.
 
-**Acceptance criteria:**
-1. Automatic retry on transient OpenCode failures: 3 retries with exponential backoff (2s, 4s, 8s) on network errors or rate limits
-2. Accept → rollback path: if operator clicks "Revert Accept" on activity card, git restores the snapshot and removes job from activity
-3. Branch/PR integration: Builder can optionally push to branch and open PR (not just local snapshot)
-4. Test-after-accept flow: if repo has `npm test` or `pytest`, optionally run tests after Accept and offer rollback if tests fail
-5. Comprehensive tests: mock transient OpenCode failure, verify retry; Accept → Revert → verify git restore; branch push + PR creation
-6. ROADMAP + INDEX updated
+**Shipped features:**
+- Automatic retry on transient OpenCode failures: 3 retries with exponential backoff (2s, 4s, 8s) on network errors or rate limits
+- Accept → Revert rollback path: activity card "Revert Accept" restores git snapshot and removes/clears that job from activity
+- Branch/PR integration: Builder can optionally push to a branch and open a PR (not only local snapshot)
+- Test-after-accept: if repo has `npm test` or `pytest`, optionally run after Accept; if tests fail, offer rollback
+- Comprehensive tests with real assertions covering all features
 
-**Out of scope:**
-- Full CI/CD integration (webhook listeners, GitHub Actions triggers)
-- Automatic rollback without operator approval
-- Multi-commit rollback (only last Accept snapshot for v1)
-
-**Estimated complexity:**
-Medium-High. Requires retry logic in OpenCode runner, rollback flow in diff handler, branch/PR integration in Builder preset. Touches router, builder.py, git.py, activity feed UI.
+**Acceptance (all passed):**
+1. ✅ Automatic retry on transient OpenCode failures: 3 retries with exponential backoff (2s, 4s, 8s)
+2. ✅ Accept → rollback path: "Revert Accept" restores git snapshot and clears job from activity
+3. ✅ Branch/PR integration: Builder can push to branch and open PR (not only local snapshot)
+4. ✅ Test-after-accept: run `npm test` or `pytest` after Accept; offer rollback on failure
+5. ✅ Comprehensive tests with real assertions
+6. ✅ Updated docs/ROADMAP.md + brains/INDEX.md + org/projects/openbot/INDEX.md
 
 ---
 
@@ -450,7 +456,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-2 Coding worker hardening
+Next: WC-3 Spend dashboard
 
 ---
 

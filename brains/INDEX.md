@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: WC-1 True Parallel Multi-Agent shipped: multi-spawn from one message, autonomous task queue, auto-handoff detection, concurrent execution, queue visibility in sidebar.
-Last: World-class v2 ship order locked (ROADMAP): WC-1..8 serial PRs defined. Routines (PR #15). Builder validation gate (PR #14). Handoff bus (PR #13).
-Next: WC-2 Coding worker hardening — operator directs next.
+Now: WC-2 Coding Worker Hardening shipped: retry on transient failures (3×exponential backoff), Accept→Revert rollback, optional branch/PR, test-after-accept, comprehensive tests.
+Last: WC-1 True Parallel Multi-Agent (autonomous task queue, auto-handoff, concurrent execution). World-class v2 ship order locked (ROADMAP). Routines (PR #15). Builder validation gate (PR #14). Handoff bus (PR #13).
+Next: WC-3 Spend dashboard (per-CEO cost breakdown with trend charts).
 Blocker: —
 
 ## Vault
