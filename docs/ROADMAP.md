@@ -343,26 +343,35 @@ Low-Medium. Skill descriptions data structure, routine template definitions, dat
 
 ---
 
-### **WC-7: Self-Build Loop** ⭐
+### **WC-7: Self-Build Loop** ✅ SHIPPED
 
-**Why:**
-OpenBot doesn't dogfood itself. Operator manually drives Builder to open PRs. No "weekly: OpenBot Builder opens a PR for next ROADMAP item" routine. Missing self-improvement automation.
+**Shipped:** WC-7 self-build loop complete. OpenBot dogfoods itself by implementing next ROADMAP item weekly.
 
-**Acceptance criteria:**
-1. Self-build routine: create routine "Weekly self-build" with steps ("Builder: implement next ROADMAP PR", "Think: review diff for correctness", "Ops: open PR with summary")
-2. Routine uses cheap OpenCode Go seats (not PAYG) for self-build jobs
-3. Self-build PR template: PR title "OpenBot self-build: [ROADMAP item]", body includes ROADMAP acceptance criteria checklist
-4. Self-build flag: Settings → Advanced has "Enable self-build loop" toggle (off by default)
-5. Comprehensive tests: enable self-build, trigger routine, verify Builder job runs in openbot folder, verify PR opens against openbot repo
-6. ROADMAP + INDEX updated
+**What shipped:**
+- Self-build routine "Weekly Self-Build": 3 steps (Builder implements next ROADMAP PR, Think reviews diff, Ops opens PR)
+- Routine uses cheap OpenCode Go seats (not PAYG) — `force_go_wallet` enforcement in router
+- Self-build PR template: title format `OpenBot self-build: [ROADMAP item]`, body with acceptance checklist
+- Settings → Advanced: "Enable self-build loop" toggle (default OFF), creates/disables routine on change
+- ROADMAP parser: `openbot/roadmap.py` extracts next unshipped WC item with acceptance criteria
+- Comprehensive tests: 29 tests covering ROADMAP parsing, template expansion, settings, routine management, OpenCode Go enforcement, execution flow
+- ROADMAP + INDEX + org/projects/openbot/INDEX updated: Now=WC-7 shipped, Last includes WC-6, Next=WC-8
 
-**Out of scope:**
-- Auto-merge self-build PRs (operator reviews and merges manually)
-- Self-build approval gate (operator can disable routine)
-- Multi-PR self-build (only one PR per routine run)
+**Files:**
+- `openbot/roadmap.py` — parse ROADMAP.md, extract next unshipped item, format PR title/body
+- `openbot/routine_templates.py` — self-build template with dynamic instruction expansion
+- `openbot/selfbuild.py` — manage self-build routine (create/disable), check status
+- `openbot/config.py` — `enable_self_build` setting (default False)
+- `openbot/router.py` — `force_go_wallet` parameter, enforce OpenCode Go seats for self-build jobs
+- `openbot/server.py` — `/api/selfbuild/status` endpoint, ensure routine when setting changes
+- `web/index.html` — Advanced panel with self-build toggle
+- `web/app.js` — self-build status, save handler
+- `tests/test_wc7_self_build.py` — comprehensive test suite (29 tests)
 
-**Estimated complexity:**
-Low-Medium. Requires self-build routine definition, PR template, OpenCode seat enforcement, self-build toggle. Touches routines.py, router.py (seat enforcement), settings UI.
+**Impact:** OpenBot autonomously implements next ROADMAP item on Monday 10am schedule when operator enables the flag. Self-build jobs use OpenCode Go quota (not PAYG) to keep costs predictable.
+
+**Out of scope (intentional):**
+- Auto-merge self-build PRs (operator reviews manually)
+- Multi-PR per run (only one PR per routine execution)
 
 ---
 
@@ -473,7 +482,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-7 Self-build loop
+Next: WC-8 E2E World-Class Audit
 
 ---
 

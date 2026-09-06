@@ -752,6 +752,11 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/routines/templates":
             from .routine_templates import get_routine_templates
             return self._json(200, {"templates": get_routine_templates()})
+        if path == "/api/selfbuild/status":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            from .selfbuild import self_build_status
+            return self._json(200, self_build_status(project_id))
         routine = ROUTINE_ID.match(path)
         if routine:
             qs = parse_qs(urlparse(self.path).query)
@@ -982,11 +987,16 @@ class Handler(SimpleHTTPRequestHandler):
                     "clear_pin",
                     "license_key",
                     "spend_policy",
+                    "enable_self_build",
                 )
                 if any(key in data for key in settings_keys):
                     if isinstance(data.get("seats"), dict):
                         validate_seats(data["seats"])
                     save_settings(data)
+                    # If enable_self_build changed, ensure/disable routine
+                    if "enable_self_build" in data:
+                        from .selfbuild import ensure_self_build_routine
+                        ensure_self_build_routine(project_id=None)
                     account_id = str(data.get("profile_account_id") or "").strip()
                     if account_id:
                         from .keyring import activate_account

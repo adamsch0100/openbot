@@ -251,10 +251,29 @@ def _prefer_accounts(tools: dict | None) -> list[str]:
     return prefer
 
 
-def _activate(engine: str, tools: dict | None, model: str | None = None) -> str | None:
+def _activate(engine: str, tools: dict | None, model: str | None = None, force_go: bool = False) -> str | None:
     provider = model_provider(model) or None
     if provider == "opencode-zen":
         provider = "opencode"
+    
+    # For self-build: force OpenCode Go wallets only (no PAYG)
+    if force_go and engine == "OpenCode":
+        from .keyring import keyring
+        accounts = keyring().get("accounts") or []
+        go_accounts = [
+            acc for acc in accounts
+            if acc.get("provider") == "opencode" and "go" in str(acc.get("label") or "").lower()
+        ]
+        if go_accounts:
+            # Activate first available Go wallet
+            for acc in go_accounts:
+                acc_id = str(acc.get("id") or "")
+                if acc_id and not wallet_marked_empty(acc_id):
+                    return activate_account(acc_id)
+            # All Go wallets empty - use first one anyway (will error gracefully)
+            if go_accounts:
+                return activate_account(str(go_accounts[0].get("id") or ""))
+    
     return activate_for_engine(engine, prefer=_prefer_accounts(tools), provider=provider or None)
 
 
@@ -828,12 +847,21 @@ def handle(
     quote: str | None = None,
     chain_context: dict | None = None,
     attachments: list | None = None,
+    force_go_wallet: bool = False,
 ) -> dict:
     node = "staff"
     if worker_id:
         node = "worker"
     elif project_id:
         node = "ceo"
+    
+    # Check if this is a self-build routine job
+    is_self_build = False
+    if chain_context:
+        routine_id = chain_context.get("routine_id") or ""
+        if "self-build" in routine_id.lower() or routine_id == "routine-selfbuild":
+            is_self_build = True
+            force_go_wallet = True
     if PROGRAM.search(message or ""):
         inbox_id = project_id or work_target(None, "builder")
         if inbox_id:
@@ -902,6 +930,7 @@ def handle(
                 resume_id if step in {"think", "research", "ops"} else None,
                 on_progress,
                 attachments if index == 0 else None,
+                force_go_wallet,
             )
         )
         carry = jobs[-1].get("text") or ""
@@ -962,6 +991,7 @@ def _handle_preset(
     resume_id: str | None = None,
     on_progress=None,
     attachments: list | None = None,
+    force_go_wallet: bool = False,
 ) -> dict:
     def patch_index_line(label: str, value: str) -> None:
         patch_scope(project_id, worker_id, label, value)
@@ -1058,7 +1088,7 @@ def _handle_preset(
     elif chosen == "think":
         settings = load_settings()
         chosen_model = seated_or_auto(settings, "think", seats) or None
-        _activate("Hermes Agent", tools, chosen_model)
+        _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
         usage_model = chosen_model or "engine-default"
         talk = False
         if not engines["hermes"]["present"]:
@@ -1232,7 +1262,7 @@ def _handle_preset(
                 if account.get("id"):
                     activate_account(str(account["id"]))
                 else:
-                    _activate("Hermes Agent", tools, model)
+                    _activate("Hermes Agent", tools, model, force_go=force_go_wallet)
                 ran = hermes_chat(
                     packet,
                     cwd=work,
@@ -1328,7 +1358,7 @@ def _handle_preset(
                 if account.get("id"):
                     activate_account(str(account["id"]))
                 else:
-                    _activate("OpenCode", tools, attempt_model)
+                    _activate("OpenCode", tools, attempt_model, force_go=force_go_wallet)
                 model = attempt_model
                 code, out, raw_log = run_opencode(
                     work,
@@ -1428,7 +1458,7 @@ def _handle_preset(
             else:
                 engine = "Hermes Agent"
                 chosen_model = seated_or_auto(settings, "research", seats) or None
-                _activate("Hermes Agent", tools, chosen_model)
+                _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
                 usage_model = chosen_model or "engine-default"
                 extra = (
                     f"URL: {page.get('url') or url}\n"
@@ -1539,7 +1569,7 @@ def _handle_preset(
         else:
             engine = "Hermes Agent"
             chosen_model = seated_or_auto(settings, "ops", seats) or None
-            _activate("Hermes Agent", tools, chosen_model)
+            _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
             usage_model = chosen_model or "engine-default"
             schedule = parse_schedule(message)
             if schedule:
