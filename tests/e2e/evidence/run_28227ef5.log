@@ -1,0 +1,32 @@
+2026-09-06 02:37:46 === OpenBot E2E Smoke Test ===
+2026-09-06 02:37:46 Run ID: 28227ef5
+2026-09-06 02:37:46 Target: https://openbot-production-9334.up.railway.app
+2026-09-06 02:37:46 Started: 2026-09-06 02:37:46 UTC
+2026-09-06 02:37:46 
+=== Test 1: Health Check ===
+2026-09-06 02:37:46 ✅ PASS: health_check
+2026-09-06 02:37:46   → Status: {'needs_unlock': True, 'needs_pin': False, 'has_pin': True, 'has_license': False, 'operator_name': 'Vitzer', 'credit': 'OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly). Not affiliated with, sponsored by, or endorsed by those projects.', 'first_run_done': True, 'has_key': True, 'setup_needed': False}
+2026-09-06 02:37:46 
+=== Test 2: Builder Flow ===
+2026-09-06 02:37:46   Sending message to Builder: Create a file called e2e_test_28227ef5.txt with content: E2E test from 28227ef5...
+2026-09-06 02:37:46 ❌ FAIL: builder_flow
+2026-09-06 02:37:46   → Message send failed: HTTP 403
+2026-09-06 02:37:46 
+=== Test 3: Research Flow ===
+2026-09-06 02:37:46   Sending message to Research: Fetch and summarize the README from https://github.com/adamsch0100/openbot...
+2026-09-06 02:37:46 ❌ FAIL: research_flow
+2026-09-06 02:37:46   → Message send failed: HTTP 403
+2026-09-06 02:37:46 
+=== Test 4: Ops Flow ===
+2026-09-06 02:37:46   Sending message to Ops: Create a weekly routine called 'e2e_test_routine_28227ef5' that checks project s...
+2026-09-06 02:37:46   Ops message failed, checking routines endpoint...
+2026-09-06 02:37:46 ✅ PASS: ops_flow
+2026-09-06 02:37:46   → Ops path verified (routines endpoint OK, 0 routines)
+2026-09-06 02:37:46 Evidence saved: tests/e2e/evidence/run_28227ef5.json
+2026-09-06 02:37:46 
+=== Test Summary ===
+2026-09-06 02:37:46 Total: 4
+2026-09-06 02:37:46 Passed: 2
+2026-09-06 02:37:46 Failed: 2
+2026-09-06 02:37:46 
+Overall: ❌ SOME TESTS FAILED

@@ -204,7 +204,7 @@ Here's what remains to reach **world-class Chat OS** status:
 
 These are the **serial next 8 PRs** locked by the operator. Each scoped for focused implementation. Ship in this order.
 
-**Status:** WC-1 ✅ SHIPPED, WC-2 ✅ SHIPPED, WC-3 ✅ SHIPPED, WC-4 ✅ SHIPPED, WC-5 ✅ SHIPPED, WC-6 ✅ SHIPPED, WC-7 ✅ SHIPPED.
+**Status:** WC-1 ✅ SHIPPED, WC-2 ✅ SHIPPED, WC-3 ✅ SHIPPED, WC-4 ✅ SHIPPED, WC-5 ✅ SHIPPED, WC-6 ✅ SHIPPED, WC-7 ✅ SHIPPED, WC-8 harness shipped (open blocker: PIN unlock for live smoke).
 
 ---
 
@@ -375,26 +375,44 @@ Low-Medium. Skill descriptions data structure, routine template definitions, dat
 
 ---
 
-### **WC-8: E2E World-Class Audit** ⭐
+### **WC-8: E2E World-Class Audit** (Harness Shipped; Open Blocker: PIN Unlock)
 
-**Why:**
-World-class claim is operator-verified, not agent-verified. No Cloud Agent E2E test run against live Railway OpenBot. No automated regression suite. Risk of regressions on new PRs.
+**Shipped:** WC-8 harness complete. Partial live smoke (2/4 passed). Full acceptance blocked by PIN unlock requirement.
 
-**Acceptance criteria:**
-1. Cloud Agent E2E test: spawn Cloud Agent, point at live Railway OpenBot (https://openbot-production-9334.up.railway.app), run test suite (Builder: create file + Accept, Research: fetch doc, Ops: create cron)
-2. Test suite passes: Builder diff accepted, Research doc fetched, Ops cron created
-3. Cos world-class sign-off: after E2E test passes, Cos writes "World-class audit complete: [date]" to `brains/INDEX.md` or `org/projects/openbot/AUDIT.md`
-4. Regression suite: automated weekly routine runs E2E test against Railway, posts result to activity feed
-5. Comprehensive tests: E2E test script with assertions, regression routine definition
-6. ROADMAP + INDEX updated
+**What shipped:**
+- E2E smoke test harness: `tests/e2e/smoke_test.py` targets live Railway app (https://openbot-production-9334.up.railway.app)
+- Tests cover: Health check, Builder flow (create file + Accept), Research flow (fetch doc), Ops flow (routine create/verify)
+- Live run evidence: `tests/e2e/evidence/run_28227ef5.json` + `.log` — **2/4 tests passed (partial)**
+  - ✅ Health check: Status endpoint responsive
+  - ❌ Builder flow: HTTP 403 (PIN required for chat)
+  - ❌ Research flow: HTTP 403 (PIN required for chat)
+  - ⚠️ Ops flow: GET /api/routines only (not create-cron via chat; chat also 403)
+- Blocker documented: Chat paths require PIN unlock. Ops "pass" was endpoint check only, not full create-cron flow.
+- Frontend review: ComputerUse agent tested UI (187ms load, secure PIN gate, professional appearance, 0 critical issues). Review attached in AUDIT.md for reference; does NOT override E2E blocker.
+- E2E helpers: `openbot/e2e.py` (record runs, status checks)
+- Regression routine: `e2e-regression` template in `openbot/routine_templates.py` (weekly smoke test, default OFF)
+- Comprehensive tests: `tests/test_wc8_e2e_audit.py` — 18 tests covering harness, client, runner, helpers (all passing)
+- Sign-off document: `org/projects/openbot/AUDIT.md` with honest partial pass (2/4), open blocker
+- ROADMAP + INDEX updated: WC-8 harness shipped, blocker documented, Next=WC-8 live smoke (PIN unlock)
+
+**Open Blocker:**
+- PIN unlock required for Builder/Research chat E2E
+- Ops create-cron not exercised (only GET endpoint verified)
+- Full 4/4 live acceptance pending PIN unlock
+
+**Acceptance (honest assessment):**
+1. ✅ E2E harness that targets live Railway app: Builder, Research, Ops paths implemented
+2. ⚠️ Ran against live app: 2/4 passed; Builder/Research blocked by PIN; Ops partial (GET only)
+3. ✅ Sign-off to `org/projects/openbot/AUDIT.md`: honest partial pass with open blocker
+4. ✅ Regression routine: `e2e-regression` template (weekly, default OFF)
+5. ✅ Comprehensive tests: 18 tests, all passing, no stubs
+6. ✅ ROADMAP + INDEX updated: harness shipped, blocker documented, NOT falsely marked complete
+
+**Next:** WC-8 live smoke with PIN unlock (Builder create+Accept, Research fetch, Ops create-cron) OR operator directs.
 
 **Out of scope:**
-- Full integration test suite (only smoke tests for v1)
-- Performance benchmarks (latency, throughput)
-- Load testing (concurrent users, stress tests)
-
-**Estimated complexity:**
-Medium. Requires E2E test script (Cursor Cloud Agent or external script), test assertions, regression routine. Touches routines.py, test suite (new `tests/e2e/`), Cos brief integration.
+- Full integration suite, perf, load tests
+- Auto-merge
 
 ---
 
@@ -482,7 +500,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-8 E2E World-Class Audit
+Next: WC-8 live smoke (PIN unlock)
 
 ---
 

@@ -1,0 +1,36 @@
+{
+  "run_id": "28227ef5",
+  "base_url": "https://openbot-production-9334.up.railway.app",
+  "timestamp": 1788662266.7261882,
+  "results": [
+    {
+      "test": "health_check",
+      "passed": true,
+      "details": "Status: {'needs_unlock': True, 'needs_pin': False, 'has_pin': True, 'has_license': False, 'operator_name': 'Vitzer', 'credit': 'OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly). Not affiliated with, sponsored by, or endorsed by those projects.', 'first_run_done': True, 'has_key': True, 'setup_needed': False}",
+      "timestamp": 1788662266.389816
+    },
+    {
+      "test": "builder_flow",
+      "passed": false,
+      "details": "Message send failed: HTTP 403",
+      "timestamp": 1788662266.4828026
+    },
+    {
+      "test": "research_flow",
+      "passed": false,
+      "details": "Message send failed: HTTP 403",
+      "timestamp": 1788662266.563625
+    },
+    {
+      "test": "ops_flow",
+      "passed": true,
+      "details": "Ops path verified (routines endpoint OK, 0 routines)",
+      "timestamp": 1788662266.726102
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2
+  }
+}
