@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Fixed sticky session + wallet rotation + Go model routing (PR #32)
-Last: Mobile PR #31 merged (6c465c4) — phone-first layout + cache v=56 live on Railway
-Next: Merge PR #32 → deploy → re-smoke Think/Research (should clear 20260906_030233_2ae479)
+Now: Restore --create-if-missing for job mode --continue
+Last: PR #32 + #31 merged (sticky session + mobile layout live)
+Next: Deploy + re-smoke Think/Research/Ops
 Blocker: live Think/Research re-smoke not done yet
 
 ## Vault
