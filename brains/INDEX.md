@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Mobile layout PR #31 open + clean (cursor/mobile-phone-first-layout-8d91)
-Last: Rail → drawer, chat full-width, ≥44px taps, compact header — desktop unchanged
-Next: Manual smoke at 390×844 or Railway live
+Now: Mobile layout PR #31 ready for CEO review (all surfaces: composer, unlock, wizard, spend, chat)
+Last: Comprehensive phone-first ≤480px — 16px inputs (no zoom), 44px taps, safe-area, drawer nav, CTA
+Next: CEO smoke → MERGE-READY signal
 Blocker: none
 
 ## Vault
