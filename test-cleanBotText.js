@@ -7,6 +7,7 @@
 // 3. renderBotMeta() - brief panel (org.staff/project.index) ✅
 // 4. renderIndex() - generic brief render ✅
 // 5. emptyStreamHtml() - empty stream state ✅
+// 6. renderReportCard() - report card RESULT box + INDEX delta fields ✅
 //
 // If adding new render paths, wire cleanBotText or Meta junk will reappear.
 
