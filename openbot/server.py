@@ -760,14 +760,28 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 data = self._read_json()
                 project_id = data.get("project_id") or None
-                worker_id = data.get("worker_id") or "builder"
+                worker_id = data.get("worker_id") or None
                 
                 from .config import load_config
-                from .org import work_target
                 
                 prompt = test_job_prompt()
                 cfg = load_config()
-                folder = work_target(project_id, cfg["work_dir"] if cfg["work_dir_ok"] else None)
+                
+                # Resolve folder: project folder if present, else work_dir
+                folder = None
+                if project_id:
+                    org_data = ensure_org()
+                    project = next((p for p in org_data.get("projects", []) if p.get("id") == project_id), None)
+                    if project and project.get("folder"):
+                        project_folder = Path(project["folder"]).expanduser()
+                        if project_folder.is_dir():
+                            folder = str(project_folder)
+                
+                if not folder:
+                    if cfg["work_dir_ok"]:
+                        folder = cfg["work_dir"]
+                    else:
+                        return self._json(400, {"error": "no valid work directory configured"})
                 
                 job = handle(
                     message=prompt,

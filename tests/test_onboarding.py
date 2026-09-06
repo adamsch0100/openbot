@@ -276,10 +276,10 @@ class TestOnboarding(unittest.TestCase):
     @patch("openbot.server.handle")
     @patch("openbot.server._record_job")
     @patch("openbot.server._activity")
-    @patch("openbot.config.load_config")
-    @patch("openbot.org.work_target")
+    @patch("openbot.server.ensure_org")
+    @patch("openbot.server.load_config")
     def test_test_job_endpoint_calls_handle_correctly(
-        self, mock_work_target, mock_config, mock_activity, mock_record, mock_handle
+        self, mock_config, mock_org, mock_activity, mock_record, mock_handle
     ):
         """Test job endpoint calls handle() with correct kwargs."""
         # Setup mocks
@@ -290,8 +290,8 @@ class TestOnboarding(unittest.TestCase):
             "text": "Test complete",
         }
         mock_activity.return_value = {"jobs": []}
-        mock_config.return_value = {"work_dir": "/test/dir", "work_dir_ok": True}
-        mock_work_target.return_value = "/test/work"
+        mock_config.return_value = {"work_dir": "/test/work/dir", "work_dir_ok": True}
+        mock_org.return_value = {"projects": []}
         
         # Import after patching
         import json
@@ -302,26 +302,24 @@ class TestOnboarding(unittest.TestCase):
         with patch("openbot.server.Handler._unlocked", return_value=True):
             with patch("openbot.server.Handler._read_json") as mock_read_json:
                 mock_read_json.return_value = {
-                    "project_id": "test-proj",
-                    "worker_id": "builder"
+                    "project_id": None,
+                    "worker_id": None
                 }
                 
                 with patch("openbot.server.Handler._json") as mock_json_response:
-                    # We'll call the logic directly since full HTTP mocking is complex
-                    # This tests the critical path: does the endpoint call handle correctly?
-                    
                     # Simulate what the endpoint does
                     from openbot.onboarding import test_job_prompt
                     prompt = test_job_prompt()
-                    folder = mock_work_target.return_value
+                    cfg = mock_config.return_value
+                    folder = cfg["work_dir"]
                     
                     # Call handle as the endpoint does
                     job = mock_handle(
                         message=prompt,
                         folder=folder,
                         preset="builder",
-                        project_id="test-proj",
-                        worker_id="builder",
+                        project_id=None,
+                        worker_id=None,
                         quote="",
                         attachments=None,
                     )
@@ -337,10 +335,16 @@ class TestOnboarding(unittest.TestCase):
         self.assertIn("message", call_args[1])
         self.assertIn("folder", call_args[1])
         self.assertEqual(call_args[1]["preset"], "builder")
-        self.assertEqual(call_args[1]["project_id"], "test-proj")
-        self.assertEqual(call_args[1]["worker_id"], "builder")
+        self.assertIsNone(call_args[1]["project_id"])
+        self.assertIsNone(call_args[1]["worker_id"])
         self.assertIn("quote", call_args[1])
         self.assertIn("attachments", call_args[1])
+        
+        # Check folder is a real path (not a slug)
+        folder_value = call_args[1]["folder"]
+        self.assertIsInstance(folder_value, str)
+        self.assertTrue(len(folder_value) > 0)
+        self.assertEqual(folder_value, "/test/work/dir")
         
         # Check forbidden args are NOT present
         self.assertNotIn("job_id", call_args[1])
