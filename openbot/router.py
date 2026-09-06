@@ -842,6 +842,28 @@ def route_for_node(message: str, node: str) -> list[str]:
     return route_plan(message, None)
 
 
+def _clear_stale_session_if_last_failed(project_id: str | None) -> None:
+    """Proactively clear sticky session if the last job for this CEO failed."""
+    if not project_id:
+        return
+    try:
+        from .store import list_jobs
+        jobs = sorted(
+            [j for j in list_jobs() if j.get("project_id") == project_id],
+            key=lambda j: str(j.get("at") or ""),
+            reverse=True
+        )
+        if not jobs:
+            return
+        last = jobs[0]
+        # If last job had blocker (non-empty, not "—"), clear session
+        blocker = str(last.get("blocker") or "").strip()
+        if blocker and blocker != "—":
+            patch_project_tools(project_id, {"hermes_session_id": ""})
+    except Exception:
+        pass
+
+
 def _persist_hermes_session(project_id: str | None, worker_id: str | None, sid: str) -> None:
     if not project_id or not sid or worker_id:
         return
@@ -921,6 +943,11 @@ def handle(
         if step != "cos" and aimed:
             ensure_ceo_engines(aimed)
         tools = project_tools(aimed if step != "cos" else project_id)
+        # Proactively clear stale session if last job failed
+        if step in {"think", "research", "ops"} and aimed and not worker_id:
+            _clear_stale_session_if_last_failed(aimed)
+            # Re-read tools after potential session clear
+            tools = project_tools(aimed)
         resume_id = None
         if aimed and not worker_id:
             resume_id = str(tools.get("hermes_session_id") or "").strip() or None

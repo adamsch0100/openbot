@@ -2547,6 +2547,5 @@ class HermesSessionPersistenceTests(unittest.TestCase):
             # Should work (returns some model)
             self.assertTrue(model_zen)
 
-
 if __name__ == "__main__":
     unittest.main()
