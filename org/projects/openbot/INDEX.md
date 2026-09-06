@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Routines (multi-step scheduled flows) shipped (PR #15): ordered steps, Hermes cron integration, resume capability, Settings UI.
-Last: Builder validation gate (PR #14). Handoff bus (PR #13). Memory pane (PR #12). @seat mentions + handoff cards (PR #11).
-Next: Queue complete — operator directs next.
+Now: World-class v2 ship order locked (ROADMAP): WC-1..8 serial PRs defined with acceptance criteria. Gap queue #1–#15 shipped on master.
+Last: Routines (PR #15). Builder validation gate (PR #14). Handoff bus (PR #13). Memory pane (PR #12). @seat mentions + handoff cards (PR #11).
+Next: WC-1 True parallel multi-agent (Cos spawn/queue workers; autonomous task queue; no manual CEO hop for parallel work).
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
