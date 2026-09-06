@@ -2549,3 +2549,155 @@ class HermesSessionPersistenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProjectNotFoundTests(unittest.TestCase):
+    """Tests for patch_project_tools handling missing projects gracefully."""
+    
+    def test_patch_project_tools_create_if_missing_true(self):
+        """patch_project_tools with create_if_missing=True creates project instead of raising."""
+        from openbot.org import patch_project_tools, _slug
+        import openbot.org as org_mod
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            try:
+                # Start with empty org
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                org_mod.PROFILE_PATH.write_text(json.dumps({"projects": []}), encoding="utf-8")
+                
+                # Patch a non-existent project with create_if_missing=True
+                result = patch_project_tools("newproject", {"hermes_home": "/test/home"}, create_if_missing=True)
+                
+                # Should not raise, should create the project
+                self.assertIsInstance(result, dict)
+                projects = result.get("projects", [])
+                self.assertEqual(len(projects), 1)
+                self.assertEqual(projects[0]["id"], "newproject")
+                self.assertEqual(projects[0]["tools"]["hermes_home"], "/test/home")
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+    
+    def test_patch_project_tools_create_if_missing_false_raises(self):
+        """patch_project_tools with create_if_missing=False raises ValueError for missing project."""
+        from openbot.org import patch_project_tools
+        import openbot.org as org_mod
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            try:
+                # Start with empty org
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                org_mod.PROFILE_PATH.write_text(json.dumps({"projects": []}), encoding="utf-8")
+                
+                # Patch a non-existent project with create_if_missing=False (default)
+                with self.assertRaises(ValueError) as ctx:
+                    patch_project_tools("missing", {"hermes_home": "/test/home"}, create_if_missing=False)
+                
+                self.assertEqual(str(ctx.exception), "project not found")
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+    
+    def test_patch_project_tools_updates_existing_project(self):
+        """patch_project_tools updates existing project without creating duplicate."""
+        from openbot.org import patch_project_tools
+        import openbot.org as org_mod
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            try:
+                # Start with a project
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                org_mod.PROFILE_PATH.write_text(
+                    json.dumps({
+                        "projects": [
+                            {
+                                "id": "existing",
+                                "name": "Existing Project",
+                                "role": "ceo",
+                                "folder": str(tmp),
+                                "primary": True,
+                                "workers": [],
+                                "hermes_home": "/old/home"
+                            }
+                        ]
+                    }),
+                    encoding="utf-8"
+                )
+                
+                # Patch with new hermes_home
+                result = patch_project_tools("existing", {"hermes_home": "/new/home"}, create_if_missing=True)
+                
+                # Should update, not duplicate
+                projects = result.get("projects", [])
+                self.assertEqual(len(projects), 1)
+                self.assertEqual(projects[0]["id"], "existing")
+                self.assertEqual(projects[0]["tools"]["hermes_home"], "/new/home")
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+    
+    def test_bootstrap_ceo_runtime_tolerates_missing_project(self):
+        """bootstrap_ceo_runtime does not crash when project is missing from profile.json."""
+        from openbot.org import bootstrap_ceo_runtime
+        import openbot.org as org_mod
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        old_hermes_homes = org_mod.HERMES_HOMES
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            org_mod.HERMES_HOMES = Path(tmp) / "hermes-homes"
+            try:
+                # Start with empty org
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                org_mod.PROFILE_PATH.write_text(json.dumps({"projects": []}), encoding="utf-8")
+                
+                # Bootstrap a CEO for a missing project
+                result = bootstrap_ceo_runtime("testproject", "Test Project", str(tmp))
+                
+                # Should not raise, should return runtime info
+                self.assertIsInstance(result, dict)
+                self.assertEqual(result["project_id"], "testproject")
+                self.assertTrue(Path(result["folder"]).exists())
+                self.assertTrue(Path(result["hermes_home"]).exists())
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+                org_mod.HERMES_HOMES = old_hermes_homes
+
+
+if __name__ == "__main__":
+    unittest.main()
