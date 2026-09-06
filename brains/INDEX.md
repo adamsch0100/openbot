@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: world-class v2 signed by CoS (2026-09-06)
-Last: Chat smoke PASS (#33 Think/Research/Builder) + mobile phone proof PASS (#34 v=57 @390×844 hamburger/overlay/scrim)
-Next: operator directs / optional polish (Meta contributor banner strip; Builder Hermes/muse label oddity)
+Now: PRODUCTION OUTAGE — revert PR #36 (gateway auto-start caused Railway 502)
+Last: PR #36 merged d93eb6f broke https://openbot-production-9334.up.railway.app (timeouts/502)
+Next: CEO merge revert PR to restore board
 Blocker: —
 
 ## Vault
