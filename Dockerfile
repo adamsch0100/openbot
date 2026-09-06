@@ -33,6 +33,11 @@ ENV PYTHONUNBUFFERED=1
 ENV OPENBOT_OPEN_BROWSER=0
 ENV OPENBOT_HOST=0.0.0.0
 ENV HERMES_HOME=/root/.hermes
+ENV OPENBOT_DATA_DIR=/data
+
+# Create data directory and ensure it's writable
+# Railway volume will mount over this, but we need it for local/non-volume deploys
+RUN mkdir -p /data
 
 EXPOSE 8787
 

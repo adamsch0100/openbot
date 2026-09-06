@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# CODE_ROOT: where app code lives (always /app in Docker)
+CODE_ROOT = Path(__file__).resolve().parent.parent
+
+# DATA_ROOT: where org/brains/jobs/threads live (volume-mountable)
+# Defaults to CODE_ROOT, but respects OPENBOT_DATA_DIR for Railway /data volume
+_data_dir = os.environ.get("OPENBOT_DATA_DIR", "").strip()
+ROOT = Path(_data_dir).resolve() if _data_dir else CODE_ROOT
+
 BRAINS = ROOT / "brains"
 JOBS = ROOT / "jobs"
 INDEX = BRAINS / "INDEX.md"

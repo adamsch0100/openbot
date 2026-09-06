@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .store import ROOT
+from .store import CODE_ROOT
 
 
 def record_e2e_run(run_id: str, results: list[dict], metadata: dict | None = None) -> Path:
     """Record E2E test run results to activity log."""
-    e2e_dir = ROOT / "tests" / "e2e" / "runs"
+    e2e_dir = CODE_ROOT / "tests" / "e2e" / "runs"
     e2e_dir.mkdir(parents=True, exist_ok=True)
     
     run_file = e2e_dir / f"{run_id}.json"
@@ -38,7 +38,7 @@ def record_e2e_run(run_id: str, results: list[dict], metadata: dict | None = Non
 
 def latest_e2e_run() -> dict | None:
     """Get latest E2E run results."""
-    e2e_dir = ROOT / "tests" / "e2e" / "runs"
+    e2e_dir = CODE_ROOT / "tests" / "e2e" / "runs"
     if not e2e_dir.exists():
         return None
     

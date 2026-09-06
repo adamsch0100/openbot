@@ -81,6 +81,7 @@ from .providers import connected_provider_ids, openrouter_models, provider_statu
 from .router import decide_diff, revert_accept, handle, pending_approvals, public_job
 from .queueworker import active_workers, auto_create_handoffs
 from .store import (
+    CODE_ROOT,
     ROOT,
     list_brains,
     list_jobs,
@@ -92,7 +93,7 @@ from .store import (
 )
 from .threadstore import append_turn, read_thread, thread_key
 
-WEB = ROOT / "web"
+WEB = CODE_ROOT / "web"
 JOB_ACTION = re.compile(r"^/api/jobs/([a-f0-9]{6,32})/(accept|reject)$")
 JOB_REVERT = re.compile(r"^/api/jobs/([a-f0-9]{6,32})/revert$")
 RUN_STOP = re.compile(r"^/api/runs/([a-zA-Z0-9-]{6,40})/stop$")
@@ -1408,6 +1409,18 @@ def listen_addr() -> tuple[str, int]:
 
 def main() -> None:
     apply_env_file()
+    
+    # Verify data directory is writable
+    ROOT.mkdir(parents=True, exist_ok=True)
+    if not ROOT.is_dir():
+        raise RuntimeError(f"DATA_DIR is not a directory: {ROOT}")
+    test_file = ROOT / ".openbot-write-test"
+    try:
+        test_file.write_text("ok", encoding="utf-8")
+        test_file.unlink()
+    except OSError as err:
+        raise RuntimeError(f"DATA_DIR is not writable: {ROOT} ({err})") from err
+    
     host, port = listen_addr()
     WEB.mkdir(exist_ok=True)
     

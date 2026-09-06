@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .store import ROOT
+from .store import CODE_ROOT
 
-ROADMAP_PATH = ROOT / "docs" / "ROADMAP.md"
+ROADMAP_PATH = CODE_ROOT / "docs" / "ROADMAP.md"
 
 
 def parse_roadmap() -> dict:
