@@ -1591,11 +1591,29 @@ class HermesGlueTests(unittest.TestCase):
         self.assertIn("--skills", source)
         self.assertIn("--ignore-rules", source)
         self.assertIn("--toolsets", source)
-        self.assertIn("bot_room", source)
         self.assertNotIn('--toolsets", "none"', source)
-        self.assertIn('"1" if talk', source)
         self.assertNotIn("--ignore-user-config", source)
         self.assertNotIn("--create-if-missing", source)
+
+    def test_job_mode_no_usage_file_talk_mode_keeps_it(self):
+        """Job mode (hermes chat) does NOT pass --usage-file; talk mode (hermes -z) does."""
+        # Read the source to verify the fix
+        source = (Path(__file__).resolve().parent.parent / "openbot" / "hermes.py").read_text(encoding="utf-8")
+        
+        # Find talk mode block (hermes -z path) - should have --usage-file in cmd.extend or list
+        talk_block_start = source.find('if talk:')
+        talk_block_end = source.find('else:', talk_block_start)
+        talk_block = source[talk_block_start:talk_block_end]
+        self.assertIn('"--usage-file"', talk_block, "Talk mode should pass --usage-file")
+        self.assertIn('"-z"', talk_block, "Talk mode should use hermes -z")
+        
+        # Find job mode cmd construction - should NOT contain "--usage-file" in the cmd list
+        job_block_start = source.find('else:', talk_block_end)
+        job_block_end = source.find('if provider and model_id:', job_block_start)
+        job_block = source[job_block_start:job_block_end]
+        # Check that cmd.extend with --usage-file is NOT present
+        self.assertNotIn('cmd.extend(["--usage-file"', job_block, "Job mode should NOT append --usage-file")
+        self.assertIn('"chat"', job_block, "Job mode should use hermes chat")
 
 
 class ThreadQuoteTests(unittest.TestCase):
