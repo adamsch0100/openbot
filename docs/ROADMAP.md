@@ -4,340 +4,405 @@ Product map for OpenBot — the self-hosted control plane routing to Hermes Agen
 
 See `OPENBOT.md` for the spec and `AGENTS.md` for coding law.
 
-## What Already Works (Live on Railway)
+## What Already Works (Shipped on Master)
 
-OpenBot is **shipping at https://openbot-production-9334.up.railway.app** with real operator usage:
+OpenBot is **shipping at https://openbot-production-9334.up.railway.app** with real operator usage.
 
-### Core Infrastructure ✓
-- **Board server** — Python stdlib-only HTTP server on loopback/Railway (8787)
+### Pre-Gap Foundation ✓
+
+Before the gap ship order, OpenBot had:
+- **Board server** — Python stdlib HTTP server on loopback/Railway (8787), healthcheck, 0.0.0.0 binding
 - **Engine detection** — finds `hermes` and `opencode` binaries, offers install links
-- **Railway deployment** — healthcheck, 0.0.0.0 binding, environment variables
-- **First-run flow** — folder picker, engine detection, PIN setup, credit lockup display
-
-### Memory & Routing ✓
-- **INDEX + brains** — `brains/INDEX.md` is source of truth; 4-line brains (Now/Last/Next/Blocker) per bot
+- **First-run flow** — folder picker, engine setup, PIN setup, credit lockup display
+- **INDEX + brains** — `brains/INDEX.md` source of truth, 4-line brains (Now/Last/Next/Blocker) per bot
 - **Org tree** — Chief of Staff, CEO projects, named workers (Think/Code/Research/Ops lanes)
 - **Router** — message classification routes to Cos/Builder/Research/Ops/Think presets
 - **Thread storage** — UI chat history stored per CEO/worker, but NOT sent as prompt (job packets only)
 - **Job log** — receipts in `jobs/` with engine, model, tokens, USD estimate, diff metadata
-
-### Agent Execution ✓
-- **Cos (Chat)** — Hermes Agent chat with auto keyring fallback, files-first replies, staff briefing
-- **Builder** — `opencode run` with JSON event streaming, git snapshots, diff+untracked capture
-- **Think** — Hermes Agent job packets (INDEX + brain + extra), session resume, skills, login staging
-- **Research** — fetch + Hermes snapshot with accessibility trees, login wall detection
-- **Ops** — inbox tickets + Hermes cron creation (schedule parsing or Hermes-planned job)
-
-### Spend & Wallets ✓
-- **Keyring** — multiple OpenCode/OpenRouter/Nous accounts with fallback order, per-CEO overrides
-- **Spend tracking** — job receipts, wallet classification (Go included quota vs PAYG), empty wallet detection
-- **Spend caps** — configurable USD cap with period (week/month), staff + per-CEO overrides
-- **Wallet failover** — automatic keyring walk on "insufficient balance" errors, mark-empty persistence
-
-### UX & Approvals ✓
+- **Agent execution** — Cos (Hermes chat), Builder (`opencode run`), Think (Hermes job packets), Research (fetch + snapshot), Ops (inbox + cron)
+- **Keyring + spend** — multiple wallets with fallback, spend tracking, caps (week/month), wallet failover
 - **Diff cards** — Accept/Reject on Builder diffs, git restore on reject
 - **Login walls** — vault logins (username/pass per site), auto-fill staging, approval flow
 - **PIN unlock** — operator PIN gates the board (cookie-based unlock tokens)
 - **Model picker** — seat config (Chat/Think/Code/Research/Ops) with Auto ladder, per-CEO pins
 - **Live streaming** — SSE-based `chat/stream` with delta, progress, stop button
 - **Activity feed** — job cards, pending approvals (diff/login), Hermes cron ingestion
-- **Composer attachments** — attach button, drag-drop, paste images; thumbnails in thread; paths in job packets for Hermes/OpenCode
-
-### Advanced ✓
 - **MCP toggles** — GitHub MCP on Builder (per-CEO), OAuth credential flow
 - **Hermes import** — import Railway Hermes backups, connect remote instances, pull Telegram sessions
 - **Skills config** — Hermes skill allowlist (Tools OFF for Cos, on-demand for Think/Research/Ops)
 - **Browser snapshots** — fetch-first ladder, snapshot worker, LOGIN_WALL marker, vault staging
 - **Git awareness** — status, diff against HEAD, untracked detection, snapshot/restore
 - **Multi-lane queueing** — concurrent CEO threads, message queuing during live runs
-- **Reliability fixes** — Muse contributor auto-ack (500f218), CEO chat bleed fix (a9d5f66)
+- **Credit & branding** — NOTICE + README with MIT lockup, footer attribution, BRAND.md compliance
 
-### Credit & Branding ✓
-- **NOTICE + README** — required MIT credit lockup (Hermes Agent, OpenCode)
-- **Footer** — three-line attribution, engine links, "LOCAL ORG." on mark
-- **BRAND.md compliance** — no rebrand, no affiliation claim, engine name on every job card
+### Gap Ship Order (Shipped PRs #1–#15) ✓
+
+**PR #1:** [Add comprehensive ROADMAP.md documentation](https://github.com/adamsch0100/openbot/pull/1) — locked original ship order (Builder delight, Chat reliability, Sidebar Agent OS)
+
+**PR #2:** [ROADMAP PR #1: Builder Delight Loop](https://github.com/adamsch0100/openbot/pull/2) — folder → `opencode run` → streaming progress → Diff Accept/Reject → inline INDEX updates
+
+**PR #3:** [ROADMAP PR #2: Chat OS Reliability](https://github.com/adamsch0100/openbot/pull/3) — Cos/CEO hang/bleed/silent fail hardening, Muse auto-ack (500f218), CEO chat bleed fix (a9d5f66), timeout handling, fallback error cards
+
+**PR #4:** [PR #3: Sidebar Agent OS](https://github.com/adamsch0100/openbot/pull/4) — avatars/initials, Now/Blocker chips from INDEX, busy/unread badges, fast CoS↔CEO switch
+
+**PR #5:** [Update INDEX status: ship order complete, sidebar merged, Railway target](https://github.com/adamsch0100/openbot/pull/5) — INDEX milestone update after gap ship order #1–#3 complete
+
+**PR #6:** [Add Turn Report Card (Chat Gap #1)](https://github.com/adamsch0100/openbot/pull/6) — brief card after job turns, inline summary of work done, INDEX update visibility
+
+**PR #7:** [Chat gap #2: HERMES LIVE TOOL PROGRESS](https://github.com/adamsch0100/openbot/pull/7) — Hermes tool call progress chips, live streaming for Think/Research/Ops
+
+**PR #8:** [Implement keep-going step chain (Chat Gap #3)](https://github.com/adamsch0100/openbot/pull/8) — multi-step jobs, carry RESULT forward, "Continue from here" flow
+
+**PR #9:** [Composer attachments: files + photos](https://github.com/adamsch0100/openbot/pull/9) — attach button, drag-drop, paste images; thumbnails in thread; paths in job packets for Hermes/OpenCode
+
+**PR #10:** [Connector UX + shared tool plane](https://github.com/adamsch0100/openbot/pull/10) — Settings → Connectors panel, Hermes skills + MCP catalog, per-seat toggles, per-CEO overrides
+
+**PR #11:** [@seat mentions + in-stream handoff cards](https://github.com/adamsch0100/openbot/pull/11) — @-mention seats in composer with autocomplete, agent-to-agent handoff cards (from→to, task/status/output)
+
+**PR #12:** [Memory pane: structured INDEX cards + search](https://github.com/adamsch0100/openbot/pull/12) — editable Now/Last/Next/Blocker cards, search across INDEX and job RESULT snippets, edit fields + Save to patch INDEX/brains
+
+**PR #13:** [Handoff Bus Protocol](https://github.com/adamsch0100/openbot/pull/13) — standardized `bus/handoffs/` file schema (TASK/STATUS/OUTPUT/FROM/TO/NEXT OWNER), agents read open handoffs on job start, Memory pane displays open handoffs with claim button
+
+**PR #14:** [Builder validation gate with Force Accept](https://github.com/adamsch0100/openbot/pull/14) — pre-Accept validation runs syntax/lint checks (Python `py_compile`, JS `node --check`, optional ruff/eslint), failures block Accept with Force Accept escape hatch
+
+**PR #15:** [Routines: multi-step scheduled flows](https://github.com/adamsch0100/openbot/pull/15) — ordered steps (e.g., morning: Code status → Think summarize → Ops note), Hermes cron integration, resume capability for failed steps, Settings UI
 
 ---
 
 ## Gaps vs World-Class Multi-Agent Chat OS
 
-OpenBot has **Week 1 done**. Here's what a hosted-bot-killer still needs:
+OpenBot has **Week 1 + gap ship order #2–#4 (Builder delight, Chat reliability, Sidebar Agent OS), chat gaps #6–#8 (Turn report, Hermes progress, Keep-going), and PRs #9–#15 (Attachments, Connectors, @mentions, Memory, Handoff bus, Validation, Routines) complete**.
 
-### 1. Durable Memory UX
-**What's missing:**
-- INDEX edits are raw text (no structured goal/context cards)
-- No memory search across job history or thread archives
-- Brain notes are unstructured (no templates for project types)
-- No agent-facing "last 5 decisions" summary view
+Here's what remains to reach **world-class Chat OS** status:
 
-**Impact:** Users manually rewrite INDEX; agents don't learn project patterns.
-
-### 2. Sidebar Agents / Parallel Work
-**What's missing:**
-- No multi-agent orchestration (one composer fires one chain)
-- Workers exist but have no autonomous task queue
-- No "Builder is stuck, ask Research for a doc" handoff detection
-- Cos doesn't spawn CEO workers automatically
-
-**Impact:** User must manually switch CEOs; no true multi-agent collaboration.
-
-### 3. Async Handoffs & Bus Protocol
-**What's partially there:**
-- `bus/` folder exists with seed contracts (`ensure_bus`, `seed_org_contracts`)
-- `HANDOFF` mentioned in contracts but not enforced
+### 1. True Parallel Multi-Agent
+**Current state:**
+- ✅ Cos can @mention seats and create handoffs
+- ✅ Handoff bus protocol exists (`bus/handoffs/` with TASK/STATUS/OUTPUT)
+- ✅ Routines run multi-step flows, but one seat at a time
 
 **What's missing:**
-- No standardized handoff file schema (TASK/STATUS/OUTPUT/NEXT OWNER)
-- Agents don't read `bus/` to pick up work
-- No handoff routing (e.g., Builder → Research when docs needed)
-- Inbox is one-way (user → agent), not agent → agent
+- Cos cannot spawn multiple workers simultaneously (no concurrent task queue)
+- Worker pool has no autonomous task queue (agents only work when user sends message)
+- No "Builder stuck, auto-route to Research" handoff detection
+- Agents don't autonomously pick up `bus/handoffs/` work without manual prompt
 
-**Impact:** Agents only work when user sends a message; no self-driven task queues.
+**Impact:** Operator must manually sequence multi-agent work. True parallel collaboration (e.g., Code + Research + Think all working at once on different subtasks) is not possible.
 
-### 4. Routines (Scheduled Multi-Step Flows)
-**What's missing:**
-- Ops cron is single Hermes jobs (no multi-step routines)
-- No routine templates (daily standup, weekly review, monitoring flows)
-- Cron doesn't trigger CEO → worker chains
-- No "every morning: check PRs, run tests, post summary" flow
-
-**Impact:** User must manually sequence multi-step daily work.
-
-### 5. Coding Worker Reliability
-**Known bugs (some fixed, some open):**
-- ✅ **FIXED (500f218):** Cos Chat instant fail on Muse Spark contributor confirm
-- ✅ **FIXED (5f78632):** Hermes non-interactive model prompt blocks board runs
-- ✅ **FIXED (a9d5f66):** CEO Chat bleed and pending-composer lock
-- ⚠️ **Status unknown:** ListLogic SQLite history loss (INDEX: "Do not railway scale old Hermes boxes")
+### 2. Coding Worker Hardening
+**Current state:**
+- ✅ Builder validation gate (syntax/lint checks before Accept)
+- ✅ Diff Accept/Reject flow with git restore on reject
+- ✅ Reliability fixes shipped (Muse auto-ack, CEO chat bleed)
 
 **What's missing:**
-- No automatic retry on transient OpenCode failures
-- No Builder validation (does the diff actually compile/lint/test?)
-- No rollback if Accept → production breaks
-- Git snapshot is local only (no branch/PR integration yet)
+- No automatic retry on transient OpenCode failures (network blips, rate limits)
+- No rollback if Accept → production breaks (only pre-Accept validation)
+- Git snapshot is local only (no branch/PR integration beyond snapshot)
+- No "Accept → test → rollback if test fails" path
 
-**Impact:** Diffs may be syntactically broken; operator catches errors manually.
+**Impact:** Transient failures require manual retry. Broken Accepts stay broken until manually reverted.
 
-### 6. Spend Transparency
-**What's there:**
-- Job receipts with prompt/cached/output tokens, USD estimate, wallet label
-- Spend summary (used/cap/remaining) visible on board
-
-**What's missing:**
-- No per-project cost breakdown in UI (only latest spend)
-- No month-over-month trend charts
-- No "this CEO burned $X this week" alert
-- OpenCode Go quota is from API; no local prediction when it'll hit zero
-
-**Impact:** User discovers overspend after the fact.
-
-### 7. First-Run & Onboarding
-**What's there:**
-- Folder picker, engine detect, PIN setup, first-run flag
+### 3. Spend Dashboard
+**Current state:**
+- ✅ Job receipts with prompt/cached/output tokens, USD estimate, wallet label
+- ✅ Spend summary (used/cap/remaining) visible on board
+- ✅ Spend caps enforce USD cap with period (week/month)
 
 **What's missing:**
-- No "try a test job" tutorial after setup
-- No sample project template (e.g., "hello world" OpenCode change)
-- No engine version check (Hermes 0.x vs 1.x breaking changes)
+- No per-CEO cost breakdown in UI (only global spend summary)
+- No week-over-week trend charts or burn alerts
+- No "this CEO burned $X this week, 50% of cap" proactive alert
+
+**Impact:** Operator discovers overspend after the fact, no proactive budget warnings.
+
+### 4. Onboarding
+**Current state:**
+- ✅ Folder picker, engine detect, PIN setup, first-run flag
+- ✅ First prompt: "What is this project and what is blocked?"
+
+**What's missing:**
+- No sample/test job after first-run (e.g., "try a one-file change" tutorial)
+- No Hermes auth check (`hermes portal status` or session check) before first Think/Research/Ops
 - No OpenCode auth check (`opencode auth status`) before first Builder run
+- No engine version check (Hermes 0.x vs 1.x breaking changes)
 
-**Impact:** New users may not realize OpenCode needs separate login.
+**Impact:** New users may hit "not authenticated" errors on first real job instead of at setup time.
 
-### 8. Observability & Debugging
+### 5. Observability
+**Current state:**
+- ✅ Live streaming progress for OpenCode (step-start events → UI progress chips)
+- ✅ Activity feed with job cards, timestamps, engine/model used
+
 **What's missing:**
-- No live Hermes tool call progress (only OpenCode emits step-start events)
-- No log tail for Hermes sessions (must open raw Hermes dashboard)
+- No live Hermes session log tail (can only see "Hermes running…" or final output)
 - No "replay this job with --verbose" debug mode
-- Job receipts don't link to raw OpenCode JSON logs
+- Job receipts don't link to raw Hermes/OpenCode session logs
+- No way to see Hermes tool calls mid-job (only after completion)
 
-**Impact:** Debugging "why did Research fail?" requires diving into Hermes CLI.
+**Impact:** Debugging "why did Research fail?" requires opening raw Hermes dashboard or CLI.
+
+### 6. Polish Pack
+**Current state:**
+- ✅ Skills catalog in Settings → Connectors with per-seat toggles
+- ✅ Routine templates (Settings → Routines with create form)
+- ✅ Memory pane with search across INDEX and job RESULT snippets
+- ✅ `data-job-id` on job bubbles for stream jump
+
+**What's missing:**
+- Skills catalog UX is functional but not polished (no skill descriptions, no "popular skills" section)
+- Routine templates are blank-slate create form (no "morning standup" or "weekly review" presets)
+- Memory search → stream jump needs consistent `data-job-id` on all job bubbles (some missing)
+
+**Impact:** Onboarding friction. Users must discover skills and routine patterns manually.
+
+### 7. Self-Build Loop
+**Current state:**
+- ✅ Builder can open PRs (manual operator flow)
+- ✅ OpenCode sessions work in OpenBot repo folder
+
+**What's missing:**
+- OpenBot doesn't use OpenCode Go seats to open its own PRs (operator manually drives Builder)
+- No "weekly: OpenBot Builder opens a PR for next ROADMAP item" routine
+
+**Impact:** Dogfooding is manual. OpenBot doesn't autonomously improve itself.
+
+### 8. E2E World-Class Audit
+**Current state:**
+- ✅ OpenBot runs on Railway front+back
+- ✅ PRs #1–#15 shipped and tested by operator
+
+**What's missing:**
+- No Cloud Agent E2E test run against live Railway OpenBot
+- No Cos sign-off that "this is world-class" before operator handoff
+- No automated regression suite (weekly: spin up OpenBot, run Builder/Research/Ops test jobs)
+
+**Impact:** World-class claim is operator-verified, not agent-verified. Risk of regressions on new PRs.
 
 ---
 
-## Next PRs (Locked Ship Order from OpenBot CEO)
+## Next PRs (Locked Ship Order)
 
-These are the **ranked next 3 PRs** per the CEO + CoS forward plan. Each scoped for focused implementation.
+These are the **serial next 8 PRs** locked by the operator. Each scoped for focused implementation. Ship in this order.
 
 ---
 
-### **PR #1: Builder Delight Loop** ⭐
-**The Week 2 gate per OPENBOT.md**: folder → `opencode run` → streaming Diff Accept/Reject → INDEX update.
+### **WC-1: True Parallel Multi-Agent** ⭐
 
-**Problem:**
-Builder flow works but isn't delightful yet. Operator still opens multiple windows to see INDEX updates or check job progress.
-
-**User value:**
-Ask for a one-file change → see streaming progress → Accept diff → Brief/INDEX updates immediately in the same composer view. No second window required.
+**Why:**
+OpenBot has handoffs, routines, and @mentions but no autonomous task queue. Cos cannot spawn multiple workers to run simultaneously. Operators must manually sequence work that should run in parallel (e.g., Code diff + Research doc fetch + Think summarize all at once). This is the core Chat OS gap.
 
 **Acceptance criteria:**
-1. Operator asks "add a comment to utils.js explaining the retry logic"
-2. Builder streams OpenCode progress (step-start events visible)
-3. Diff card appears inline with Accept/Reject
-4. Operator clicks Accept
-5. Brief card updates showing the change in Now/Last/Next
-6. All in one composer thread — zero window switching
+1. Cos can spawn multiple CEO workers simultaneously (e.g., "Builder: add logging; Research: fetch API docs" in one message)
+2. Worker pool has autonomous task queue: agents check `bus/handoffs/` on idle and claim open work
+3. Handoff detection: when Builder job emits "need docs", auto-route handoff to Research without operator prompt
+4. Concurrent execution: 3+ workers running at once, each with live progress visible in sidebar
+5. Queue visibility: sidebar shows queued tasks per CEO (e.g., "2 tasks queued for Nadia")
+6. Comprehensive tests: spawn 3 workers, verify all run concurrently, verify handoff auto-routing
+7. ROADMAP + INDEX updated
 
-**What's already there:**
-- `opencode run` with JSON event streaming ✓
-- Diff capture + Accept/Reject flow ✓
-- INDEX patching on job finish ✓
+**Out of scope:**
+- Dependency graphs (sequential task chains)
+- Multi-seat fan-out from one handoff (one handoff → one seat for v1)
+- Full Kanban UX over `bus/` (visual cards, drag-drop)
 
-**What needs polish:**
-- Stream progress rendering (OpenCode step-start events → UI progress chips)
-- Inline Brief updates after Accept (currently requires refresh or status ask)
-- One-shot "ask → accept → done" without clicking between panels
-
-**Files/areas touched:**
-- `web/app.js` — render OpenCode progress chips in stream, auto-refresh Brief after Accept
-- `openbot/router.py` — ensure INDEX patch happens synchronously before Accept response
-- `openbot/server.py` — Accept endpoint returns updated INDEX in response
-
-**Estimated complexity:** Low-Medium (UI polish + sync flow, no new engine calls).
+**Estimated complexity:**
+High. Requires task queue implementation in board, concurrent worker management, handoff auto-routing logic, sidebar queue rendering. Touches router, board, sidebar UI, handoff bus integration. Core architectural change.
 
 ---
 
-### **PR #2: Chat OS Reliability** ⭐
-**The stability gate**: kill Cos/CEO hang, bleed, silent fail; always stream progress; Muse/Hermes confirm auto-ack.
+### **WC-2: Coding Worker Hardening** ⭐
 
-**Problem:**
-Recent fixes (500f218, a9d5f66) addressed Muse auto-ack and CEO chat bleed, but reliability still needs hardening. Cos status and CEO Chat must never silently fail or hang.
-
-**User value:**
-Send 10 Cos status questions + 5 CEO Chat messages → zero empty failures, zero hangs, zero "Chat didn't come back."
+**Why:**
+Builder has validation gate but no retry on transient failures (network blips, OpenCode rate limits). No rollback if Accept → production breaks. Git integration stops at local snapshot. Operators manually retry failed jobs and manually revert broken Accepts.
 
 **Acceptance criteria:**
-1. Run test suite: 10 Cos status asks (INDEX reads) + 5 CEO Chat sends (Hermes oneshot)
-2. All 15 complete with visible response (even if "Hermes missing" or "wallet empty")
-3. Zero silent failures (empty reply with no error card)
-4. Zero composer locks longer than job timeout
-5. Progress always visible (streaming or "Hermes chat starting…" chip)
+1. Automatic retry on transient OpenCode failures: 3 retries with exponential backoff (2s, 4s, 8s) on network errors or rate limits
+2. Accept → rollback path: if operator clicks "Revert Accept" on activity card, git restores the snapshot and removes job from activity
+3. Branch/PR integration: Builder can optionally push to branch and open PR (not just local snapshot)
+4. Test-after-accept flow: if repo has `npm test` or `pytest`, optionally run tests after Accept and offer rollback if tests fail
+5. Comprehensive tests: mock transient OpenCode failure, verify retry; Accept → Revert → verify git restore; branch push + PR creation
+6. ROADMAP + INDEX updated
 
-**What's already fixed:**
-- ✅ Muse contributor confirm auto-ack (500f218)
-- ✅ CEO chat bleed isolated (a9d5f66)
-- ✅ Pending-composer lock with message queueing (a9d5f66)
+**Out of scope:**
+- Full CI/CD integration (webhook listeners, GitHub Actions triggers)
+- Automatic rollback without operator approval
+- Multi-commit rollback (only last Accept snapshot for v1)
 
-**What needs hardening:**
-- Timeout handling: if Hermes doesn't respond in N seconds, show error card (not silent hang)
-- Fallback messaging: if all keyring accounts fail, show "wallets empty" card immediately
-- Progress rendering: every Cos/Chat job shows at least one progress event
-
-**Files/areas touched:**
-- `openbot/router.py` — add timeout guards on Hermes chat, fallback error cards
-- `openbot/hermes.py` — surface timeout/failure as structured error (not silent empty)
-- `web/app.js` — ensure every job shows progress chip, render timeout errors clearly
-- `tests/` — add reliability test suite (10 status + 5 chat sends)
-
-**Estimated complexity:** Medium (timeout logic + error surfacing + test harness).
+**Estimated complexity:**
+Medium-High. Requires retry logic in OpenCode runner, rollback flow in diff handler, branch/PR integration in Builder preset. Touches router, builder.py, git.py, activity feed UI.
 
 ---
 
-### **PR #3: Sidebar Agent OS** ⭐
-**The multi-agent UX**: avatars/initials, Now/Blocker chips from INDEX, busy/unread, fast CoS↔CEO switch.
+### **WC-3: Spend Dashboard** ⭐
 
-**Problem:**
-CEO list exists but doesn't feel like a team. No avatars, no status chips, no visual "who's working vs idle."
-
-**User value:**
-Open board → see named teammates with avatars/initials, Now/Blocker from their INDEX, busy indicator during jobs, unread badge for pending approvals. Switch CoS ↔ CEO in <3 seconds.
+**Why:**
+Spend caps work but operators only see global spend summary. No per-CEO burn breakdown, no proactive alerts when 50% of weekly cap is hit. Operators discover overspend after the cap blocks a job.
 
 **Acceptance criteria:**
-1. Sidebar shows Chief of Staff + all CEOs with:
-   - Avatar (initials if no image, e.g., "NH" for Nadia, "CS" for CoS)
-   - Now chip (pulled from that CEO's INDEX, e.g., "Builder job 3f4a2c in listlogic.homes")
-   - Blocker chip if Blocker ≠ "—" (red/yellow indicator)
-   - Busy spinner during active job
-   - Unread badge for pending approvals (diff, login wall)
-2. Click CEO → switch composer context in <3 seconds
-3. Visual feels like a teammate panel (not a file list)
+1. Per-CEO cost breakdown in UI: Settings → Spend shows each CEO's weekly/monthly burn
+2. Week-over-week trend: line chart of daily burn for last 2 weeks
+3. Proactive alerts: when CEO hits 50% of weekly cap, show alert in sidebar (yellow badge) and activity feed
+4. Cap-exceeded notice: when cap blocks a job, show "Nadia hit $X cap, resets in 3 days" in activity
+5. Comprehensive tests: simulate 10 jobs across 3 CEOs, verify per-CEO totals, verify 50% alert triggers
+6. ROADMAP + INDEX updated
 
-**What's already there:**
-- Org tree with Chief of Staff + CEOs ✓
-- INDEX per CEO with Now/Last/Next/Blocker ✓
-- Activity feed with pending approvals ✓
-- CEO/worker rename on master ✓
+**Out of scope:**
+- Spend forecasting ("at this rate, cap in 2 days")
+- Per-seat spend breakdown (only per-CEO for v1)
+- Spend export (CSV download of receipts)
 
-**What needs building:**
-- Avatar/initial generation (2-letter initials from CEO name)
-- INDEX field extraction per CEO (read Now/Blocker on sidebar render)
-- Busy/unread state tracking (live jobs + pending approvals)
-- Fast context switching (currently page-level state, needs optimized fetch)
-
-**Files/areas touched:**
-- `web/app.js` — sidebar rendering with avatars, Now/Blocker chips, busy/unread badges
-- `web/styles.css` — avatar circles, chip badges, teammate panel layout
-- `openbot/server.py` — `GET /api/org/summary` endpoint (returns all CEOs with INDEX Now/Blocker)
-- `openbot/org.py` — helper to extract Now/Blocker from each CEO's INDEX
-
-**Estimated complexity:** Medium (new UI components + per-CEO INDEX parsing, no new engine calls).
+**Estimated complexity:**
+Medium. Requires spend aggregation by CEO, weekly/monthly rollup logic, alert triggers, chart rendering. Touches spend.py, settings UI, sidebar badges, activity feed.
 
 ---
 
-## Shipped Features (Implemented)
+### **WC-4: Onboarding** ⭐
 
-### **Composer Attachments** ✅ **(Shipped on master, PR #9)**
-- Attach button, drag-and-drop, paste-image support
-- Visual thumbnails for images, file list for other types
-- Multipart upload transport, server-side enforcement (50 MB limit)
-- Job context paths for Think/Research attachment references
-- Tests: `tests/test_attachments.py`
+**Why:**
+First-run setup works but doesn't verify engine auth before first real job. New users hit "OpenCode not authenticated" or "Hermes portal missing" errors on first Builder/Think job instead of at setup time. No sample job to verify board works.
 
-### **Connector UX + Shared Tool Plane** ✅ **(Shipped on cursor/connector-ux-shared-tool-plane-27e1)**
-- New Settings → Connectors panel with Hermes skills + MCP catalog
-- Per-seat skill toggles (Think/Research/Ops) with on/off matrix
-- MCP server selection with seat assignment (Think/Research/Ops/Code)
-- Replaces hermesSkills text box with visual connector matrix
-- Per-CEO connector overrides in This CEO panel
-- Backend: `connectors` field in settings and project tools, `_effective_skills()` router function
-- Frontend: skill/MCP matrix UI, catalog refresh, seat × tool visualization
-- Tests: `tests/test_connectors.py` — configuration storage, router integration, seat restrictions
-- Zero raw JSON required for happy path; advanced text allowlist still available as escape hatch
-- **Acceptance:** Chat/Cos stays tools-off; Think/Research/Ops use configured Hermes skills; Code uses selected MCPs
+**Acceptance criteria:**
+1. After first-run folder picker + PIN setup, offer "Run test job" button (e.g., "Create a hello.txt file with Builder")
+2. Test job runs Builder, creates file, shows diff card, operator Accepts, INDEX updates
+3. Before test job: check Hermes auth (`hermes portal status` or session check), show "Hermes not authenticated" card if missing
+4. Before test job: check OpenCode auth (`opencode auth status`), show "OpenCode not authenticated" card if missing
+5. Auth check cards have "Authenticate now" button (opens `hermes portal` or `opencode auth login` instructions)
+6. Comprehensive tests: mock unauthenticated engines, verify auth check cards appear; mock authenticated engines, verify test job runs
+7. ROADMAP + INDEX updated
+
+**Out of scope:**
+- Full tutorial flow (multi-step wizard)
+- Sample project template (repo scaffolding)
+- Engine version compatibility checks (Hermes 0.x vs 1.x)
+
+**Estimated complexity:**
+Low-Medium. Requires auth check calls to Hermes/OpenCode, test job definition, auth card rendering, first-run flow extension. Touches server.py (first-run), hermes.py, builder.py, web UI (auth cards).
+
+---
+
+### **WC-5: Observability** ⭐
+
+**Why:**
+Live streaming works for OpenCode (step-start events → UI chips) but not for Hermes. No "replay job verbose" mode. Debugging "why did Research fail?" requires opening raw Hermes dashboard. Job receipts don't link to raw logs.
+
+**Acceptance criteria:**
+1. Hermes session log tail: during Think/Research/Ops jobs, stream Hermes tool calls to UI (e.g., "fetch: example.com", "snapshot: 3 links parsed")
+2. Replay verbose mode: activity feed job cards have "Replay verbose" button; opens modal with full Hermes/OpenCode session log
+3. Job receipts link to raw logs: each job card in activity feed has "View raw log" link (opens `jobs/{id}.log` in new tab or modal)
+4. Hermes progress chips: Hermes tool calls render as progress chips in stream (like OpenCode step-start events)
+5. Comprehensive tests: mock Hermes session with tool calls, verify progress chips appear; verify replay verbose retrieves full log
+6. ROADMAP + INDEX updated
+
+**Out of scope:**
+- Real-time log tail from Hermes homes (only session-start to session-end for v1)
+- Log search/filtering (only full log display)
+- Distributed tracing (correlation IDs across Hermes/OpenCode)
+
+**Estimated complexity:**
+Medium-High. Requires Hermes session log parsing, streaming tool calls to UI, replay modal, job log storage. Touches hermes.py, router.py (stream events), activity feed UI, replay modal.
+
+---
+
+### **WC-6: Polish Pack** ⭐
+
+**Why:**
+Skills catalog, routine templates, and Memory search → stream jump are functional but not polished. Onboarding friction: users must discover skills manually, routine patterns are blank-slate, Memory search jump requires consistent `data-job-id`.
+
+**Acceptance criteria:**
+1. Skills catalog polish: Settings → Connectors shows skill descriptions (one-liner per skill), "Popular skills" section with recommended skills for Think/Research/Ops
+2. Routine templates: Settings → Routines has "Create from template" dropdown with presets ("Morning standup: Code status → Think summarize", "Weekly review: Think list last week → Research fetch changelog → Ops note")
+3. Memory search → stream jump: ensure ALL job bubbles have `data-job-id` attribute (audit + fix missing ones), Memory search results link directly to job bubble in stream
+4. Routine preset loads template steps into create form (user can edit before saving)
+5. Comprehensive tests: verify skill descriptions render, verify template presets load, verify Memory search jump links to correct job bubble
+6. ROADMAP + INDEX updated
+
+**Out of scope:**
+- Custom skill creation (only toggle existing Hermes skills)
+- Routine editor (visual step builder, drag-drop reorder)
+- Memory semantic search (only keyword search for v1)
+
+**Estimated complexity:**
+Low-Medium. Requires skill descriptions data, routine template definitions, `data-job-id` audit, template UI. Touches connectors UI, routines UI, memory pane, job bubble rendering.
+
+---
+
+### **WC-7: Self-Build Loop** ⭐
+
+**Why:**
+OpenBot doesn't dogfood itself. Operator manually drives Builder to open PRs. No "weekly: OpenBot Builder opens a PR for next ROADMAP item" routine. Missing self-improvement automation.
+
+**Acceptance criteria:**
+1. Self-build routine: create routine "Weekly self-build" with steps ("Builder: implement next ROADMAP PR", "Think: review diff for correctness", "Ops: open PR with summary")
+2. Routine uses cheap OpenCode Go seats (not PAYG) for self-build jobs
+3. Self-build PR template: PR title "OpenBot self-build: [ROADMAP item]", body includes ROADMAP acceptance criteria checklist
+4. Self-build flag: Settings → Advanced has "Enable self-build loop" toggle (off by default)
+5. Comprehensive tests: enable self-build, trigger routine, verify Builder job runs in openbot folder, verify PR opens against openbot repo
+6. ROADMAP + INDEX updated
+
+**Out of scope:**
+- Auto-merge self-build PRs (operator reviews and merges manually)
+- Self-build approval gate (operator can disable routine)
+- Multi-PR self-build (only one PR per routine run)
+
+**Estimated complexity:**
+Low-Medium. Requires self-build routine definition, PR template, OpenCode seat enforcement, self-build toggle. Touches routines.py, router.py (seat enforcement), settings UI.
+
+---
+
+### **WC-8: E2E World-Class Audit** ⭐
+
+**Why:**
+World-class claim is operator-verified, not agent-verified. No Cloud Agent E2E test run against live Railway OpenBot. No automated regression suite. Risk of regressions on new PRs.
+
+**Acceptance criteria:**
+1. Cloud Agent E2E test: spawn Cloud Agent, point at live Railway OpenBot (https://openbot-production-9334.up.railway.app), run test suite (Builder: create file + Accept, Research: fetch doc, Ops: create cron)
+2. Test suite passes: Builder diff accepted, Research doc fetched, Ops cron created
+3. Cos world-class sign-off: after E2E test passes, Cos writes "World-class audit complete: [date]" to `brains/INDEX.md` or `org/projects/openbot/AUDIT.md`
+4. Regression suite: automated weekly routine runs E2E test against Railway, posts result to activity feed
+5. Comprehensive tests: E2E test script with assertions, regression routine definition
+6. ROADMAP + INDEX updated
+
+**Out of scope:**
+- Full integration test suite (only smoke tests for v1)
+- Performance benchmarks (latency, throughput)
+- Load testing (concurrent users, stress tests)
+
+**Estimated complexity:**
+Medium. Requires E2E test script (Cursor Cloud Agent or external script), test assertions, regression routine. Touches routines.py, test suite (new `tests/e2e/`), Cos brief integration.
 
 ---
 
 ## Deferred / Later Candidates
 
-These are **lower-priority** or **post-MVP** features. Ship the locked 3 PRs first, then revisit.
-
-### Handoff Bus Protocol
-Standardized `bus/` file schema for agent → agent async handoffs. Useful but not blocking delight or reliability.
-
-### Builder Validation Gate
-Syntax/lint/test check before Accept. Valuable but Builder delight (streaming + inline Brief) is higher leverage.
-
-### Spend Dashboard
-Per-CEO cost breakdown with trend charts. Nice-to-have; current spend summary + cap enforcement already works.
-
-### Onboarding Tutorial
-Auto-run test job after first-run. Helpful but not critical; first-run wizard already guides setup.
-
-### Routine Scheduler
-Multi-step daily flows (e.g., standup = git status → summarize → post). Powerful but complex; defer until core Chat OS is rock-solid.
+These are **lower-priority** or **post-MVP** features. Ship WC-1 through WC-8 first, then revisit.
 
 ### Kanban UX Over INDEX
-Visual cards for Now/Next/Blocker instead of markdown editing. Improves memory UX but not urgent.
+Visual cards for Now/Next/Blocker instead of markdown editing. Improves memory UX but not urgent. Current Memory pane with edit fields + Save works.
 
-### ✅ Memory Pane Enhancements (SHIPPED)
-Memory pane with editable Now/Last/Next/Blocker cards + search across INDEX and job RESULT snippets. Edit fields and Save to patch INDEX/brains. Memory lives in files, not chat JSON.
+### Multi-Seat Fan-Out
+One handoff → multiple seats (e.g., "Research + Think both summarize this doc"). Useful but complex. WC-1 ships single-seat handoffs first.
 
-### Skills Catalog Polish
-UI for browsing and toggling Hermes skills. Already configurable in Settings; catalog is polish.
+### Full CI/CD Integration
+Webhook listeners for GitHub Actions, auto-rollback on test failures. Valuable but WC-2 ships manual rollback path first.
 
----
+### Spend Forecasting
+"At this rate, cap in 2 days" alerts. Nice-to-have; WC-3 ships per-CEO burn breakdown and 50% alerts first.
 
-## Reliability Bug Status (From Commit Messages)
+### Engine Version Compatibility Checks
+Hermes 0.x vs 1.x breaking change detection. Helpful but not critical; WC-4 ships auth checks first.
 
-| Bug | Status | Commit | Notes |
-|-----|--------|--------|-------|
-| **Cos Chat Muse fail** | ✅ **FIXED** | 500f218 | Hermes prompted `Use this model [y/N]` in non-interactive mode. Now auto-acks contributor-tier confirms when model is already seated. |
-| **CEO Chat bleed** | ✅ **FIXED** | a9d5f66 | Chat was a locked global live turn. Now allows CEO switch during runs, queues messages, keeps Chat as fresh Hermes oneshot (no Telegram mid-tool junk). |
-| **Pending-composer lock** | ✅ **FIXED** | a9d5f66 | Composer locked during any live run. Now queues messages per CEO/worker, unlocks after turn. |
-| **ListLogic SQLite history loss** | ⚠️ **UNKNOWN** | Mentioned in INDEX | "Do not `railway scale` old Hermes boxes — use `railway down -y`." Possible: scaling drops ephemeral volume. **Action:** Verify if Hermes homes persist on Railway, or if this is operator error (old boxes = stale snapshots). |
+### Distributed Tracing
+Correlation IDs across Hermes/OpenCode for cross-engine debugging. Powerful but complex; WC-5 ships log tail and replay verbose first.
 
-**Recommendation:**
-- ListLogic SQLite issue needs investigation: does Railway Hermes use ephemeral storage? If yes, document "use Hermes import → backup flow" in runbook.
-- If bug is "scaling doesn't preserve Hermes home," that's not OpenBot's bug (it's upstream Hermes deploy). Close as "won't fix, document workaround."
+### Custom Skill Creation
+User-defined Hermes skills. Advanced feature; WC-6 ships skill catalog polish first.
+
+### Auto-Merge Self-Build PRs
+OpenBot auto-merges its own PRs after tests pass. Risky; WC-7 ships operator-reviewed self-build first.
+
+### Performance Benchmarks
+Latency, throughput, load testing. Important for scale but not for world-class v1; WC-8 ships smoke tests first.
 
 ---
 
@@ -358,7 +423,7 @@ UI for browsing and toggling Hermes skills. Already configurable in Settings; ca
 These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 - ❌ **Vendoring Hermes/OpenCode source** — call binaries only, never merge upstream code
-- ❌ **Multi-tenant SaaS in v1** — Phase 1 is self-hosted, your-instance-only. Phase 2 per OPENBOT.md: others clone the repo and spin **their own** instance (not a shared multi-tenant cloud).
+- ❌ **Multi-tenant SaaS in v1** — Phase 1 is self-hosted, your-instance-only
 - ❌ **Cloning Grok Bot UI pixel-perfect** — inspired by shape, not a fork
 - ❌ **Shared cloud browser / CRD as default** — snapshot + refs, screenshots opt-in
 - ❌ **Eternal chat context** — no replaying 200-turn threads into every job
@@ -372,124 +437,27 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ## Success Metrics (How We Know We're Winning)
 
-1. **Builder delight:** One-file change → Accept → Brief updates, zero window switching. (**PR #1**)
-2. **Chat OS reliability:** 10 Cos + 5 CEO Chat sends, zero empty failures. (**PR #2**)
-3. **Sidebar Agent OS:** Named teammates feel present in <3s, busy/unread visible. (**PR #3**)
-4. **Operator never rewrites the same INDEX line twice** → memory is durable (ongoing)
-5. **Zero wallet-empty hangs** → keyring failover + error cards always surface issues (ongoing)
+1. **True parallel multi-agent:** Cos spawns 3 workers simultaneously, all make progress concurrently. (**WC-1**)
+2. **Coding worker hardening:** Builder retries transient failures, Accept → rollback path works. (**WC-2**)
+3. **Spend dashboard:** Per-CEO burn visible, 50% cap alert triggers proactively. (**WC-3**)
+4. **Onboarding:** First-run auth checks pass, sample job Accepts on first try. (**WC-4**)
+5. **Observability:** Hermes tool calls stream live, replay verbose shows full log. (**WC-5**)
+6. **Polish pack:** Skills catalog has descriptions, routine templates load presets. (**WC-6**)
+7. **Self-build loop:** OpenBot opens its own PR for next ROADMAP item. (**WC-7**)
+8. **E2E world-class audit:** Cloud Agent E2E test passes, Cos signs world-class. (**WC-8**)
 
 ---
 
 ## How to Use This Roadmap
 
-- **Cloud agents:** Implement locked PRs in order: #1 Builder delight, then #2 Chat OS reliability, then #3 Sidebar Agent OS.
+- **Cloud agents:** Implement locked PRs in order: WC-1 through WC-8.
 - **Human operators:** The CEO + CoS locked this ship order. Deferred items live in "Later Candidates."
 - **Contributors:** Follow AGENTS.md + OPENBOT.md. Do NOT implement features from Anti-Roadmap.
-- **Cursor session:** Paste this file + "implement PR #1" → agent follows acceptance criteria.
-
-**Note on renames:** CEO/worker rename already ships on master (org tree with Chief of Staff → CEOs → workers). Not a new PR.
-
-## Week 1+ Shipped (Post-Locked-Ship Order)
-
-### **@seat Mentions + Handoff Cards** ✅
-**Shipped in PR #11** — operator can @-mention seats (Cos/Auto, Code/Builder, Think, Research, Ops, CEO names) in composer with autocomplete dropdown, and agent-to-agent handoffs show as in-stream cards with task/status/output/next-owner fields.
-
-**What shipped:**
-- @seat autocomplete in composer — typing `@` offers seat list with labels + descriptions
-- Dropdown with arrow navigation, Tab/Enter to select, Escape to dismiss
-- Selecting a seat auto-routes to that preset (except Cos/CEO which stay Auto)
-- Handoff card in stream — when agent routes work to another seat (e.g. Builder → Research), shows from→to, task summary, status (complete/blocked), output snippet, and next owner
-- Backend writes handoff metadata in job response; card renders below job result
-- Telegram one-way lock already documented in Channels panel (no change needed)
-
-**Not shipped (deferred as noted in task):**
-- Multi-seat fan-out (one message to multiple seats) — single @mention path shipped for v1
-- Full handoff bus protocol overhaul, routines, or Builder validation
-
-### **Builder Validation Gate** ✅
-**Shipped in PR #14** — pre-Accept validation runs syntax/lint checks on pending Builder diffs; failures block Accept with clear error chip; Force Accept escape hatch allows operator to proceed despite errors.
-
-**What shipped:**
-- Validation runner (`openbot/validator.py`) — Python `py_compile` + JS `node --check`, optional ruff/eslint if configured in repo
-- `decide_diff` integration — validation gate runs before Accept (unless `force=True`)
-- Validation failure response — returns `validation_failed: true` + `validation_error` with first 10 errors
-- Web UI error card — shows validation errors in danger-styled card with Force Accept / Fix First buttons
-- Force Accept button — `force=true` parameter bypasses validation, records force in job/activity
-- Comprehensive tests — 11 test cases with real assertions, mock/subprocess where needed
-
-**Acceptance:**
-1. Before Accept: syntax/lint checks on changed files (Python, JS) ✓
-2. On failure: block Accept, show error card with failing command + short log ✓
-3. Force Accept escape: button records force and proceeds ✓
-4. On success: Accept proceeds as before ✓
-5. Focused tests with real assertions ✓
-6. ROADMAP + INDEX updated ✓
-7. PR against master ✓
+- **Cursor session:** Paste this file + "implement WC-1" → agent follows acceptance criteria.
 
 ---
 
-### **Handoff Bus Protocol** ✅
-**Shipped in PR #13** — standardized `bus/handoffs/` file schema with TASK/STATUS/OUTPUT/FROM/TO/NEXT OWNER fields, agents read open handoffs on job start, seats can create and claim work, Memory pane displays open handoffs with create form and claim button.
-
-**What shipped:**
-- Standardized handoff markdown schema: `TASK`, `STATUS` (open/claimed/blocked/complete/partial), `OUTPUT`, `FROM`, `TO`, `NEXT OWNER`, `SOURCES`, `DECISIONS`, `UNCERTAINTIES`
-- `create_handoff()` function to create open handoffs for async work
-- `load_open_handoffs()` in bus.py reads handoff files, filters by status (excludes complete/partial)
-- `claim_handoff()` updates STATUS to claimed, sets NEXT OWNER
-- `handoff_summary()` generates brief summary for job packets
-- Router integration: `_packet_extra()` includes `OPEN HANDOFFS` section in job packets for Think/Builder/Research/Ops
-- `POST /api/handoff/create` endpoint (Cos/board can create handoffs)
-- `POST /api/handoffs` endpoint returns open handoffs for a CEO scope
-- `POST /api/handoff/claim` endpoint lets seats claim handoffs
-- Memory pane UI: Create Handoff form (task + to seat), displays open handoffs with status badges, task preview, from→to routing, claim button
-- `data-job-id` attributes on job bubbles for Memory search jump to stream
-- Comprehensive tests: schema write/read, status filtering, claim workflow, multi-step handoff metadata, create→list→claim end-to-end
-- In-stream handoff cards preserve existing functionality from PR #11
-
-**Impact:**
-- Cos can create open handoffs for seats to claim (async work delegation)
-- Agents now see open handoffs at job start, enabling async work pickup
-- Seats can claim handoffs via Memory pane, making multi-agent collaboration explicit
-- Bus files are the source of truth for agent→agent coordination, not chat
-
-**Next steps (deferred):**
-- Auto-routing based on handoff TO field
-- Handoff workflow orchestration (automatic fan-out, dependency chains)
-- Full Kanban UX over bus/ instead of Memory list
-
----
-
-### **Routines** ✅
-**Shipped in PR #15** — multi-step scheduled flows for recurring work. Routines run ordered steps (e.g., morning: Code status → Think summarize → Ops note), owned by one cron job, with resume capability for failed steps.
-
-**What shipped:**
-- File-based routine schema: `bus/routines/{id}.md` with name, schedule, enabled flag, ordered steps (seat + instruction)
-- `routines.py` module: create/read/update/delete/list routines, parse/format markdown
-- `execute_routine()`: runs steps in order, carries RESULT forward to next step (like Keep-going chainContext)
-- Resume capability: on failure, returns `resume_step` and `resume_result` for Continue from failed step
-- Hermes cron integration: `attach_routine_cron()` calls `hermes cron create` (no second scheduler invented)
-- Server endpoints: `GET /api/routines`, `POST /api/routines`, `POST /api/routines/{id}/execute`, `POST /api/routines/{id}/resume`, `PATCH /api/routines/{id}`, `DELETE /api/routines/{id}`
-- Settings → Routines panel: create routine form (name, schedule, steps), list saved routines with Run Now / Delete buttons
-- Comprehensive tests: 15 test cases with real assertions (parse, format, create, update, delete, execute, resume, history)
-
-**Acceptance:**
-1. Routine definition stored in files (`bus/routines/`) ✓
-2. Schedule attaches or updates Hermes cron (no second scheduler) ✓
-3. Run executes steps in order, carries RESULT forward ✓
-4. Resume from failed step (reuse Keep-going UX) ✓
-5. Minimal Settings UI for routine management ✓
-6. Focused tests with real assertions ✓
-7. ROADMAP + INDEX updated ✓
-
-**Impact:**
-- Ops cron now supports multi-step flows instead of single jobs
-- Operators can define recurring multi-agent workflows (Code → Think → Research → Ops chains)
-- Failed routines can be resumed from the failed step, not restarted from scratch
-- Hermes remains the scheduler (OpenBot just creates cron jobs that execute routines)
-
----
-
-Next: Queue complete — operator directs next.
+Next: WC-1 True parallel multi-agent
 
 ---
 
