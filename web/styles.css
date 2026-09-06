@@ -272,6 +272,37 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.queue-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  background: var(--bronze-soft);
+  color: var(--bronze);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  vertical-align: middle;
+}
+.active-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  background: var(--bronze);
+  color: #1a140c;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  vertical-align: middle;
+  animation: active-pulse 1.5s ease-in-out infinite;
+}
+@keyframes active-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
 .org-btn.has-blocker .org-now {
   color: var(--danger);
 }

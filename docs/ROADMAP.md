@@ -67,27 +67,38 @@ Before the gap ship order, OpenBot had:
 
 **PR #15:** [Routines: multi-step scheduled flows](https://github.com/adamsch0100/openbot/pull/15) — ordered steps (e.g., morning: Code status → Think summarize → Ops note), Hermes cron integration, resume capability for failed steps, Settings UI
 
+**WC-1:** ✅ **True Parallel Multi-Agent (SHIPPED)** — multi-spawn from one message (`@Builder: add logging; @Research: fetch docs`), autonomous task queue where workers poll `bus/handoffs/` and claim work on idle, auto-handoff detection ("need docs" → create Research handoff), 3+ concurrent workers with live progress, queue visibility in sidebar showing queued task counts per CEO
+
 ---
 
 ## Gaps vs World-Class Multi-Agent Chat OS
 
-OpenBot has **Week 1 + gap ship order #2–#4 (Builder delight, Chat reliability, Sidebar Agent OS), chat gaps #6–#8 (Turn report, Hermes progress, Keep-going), and PRs #9–#15 (Attachments, Connectors, @mentions, Memory, Handoff bus, Validation, Routines) complete**.
+OpenBot has **Week 1 + gap ship order #2–#4 (Builder delight, Chat reliability, Sidebar Agent OS), chat gaps #6–#8 (Turn report, Hermes progress, Keep-going), and PRs #9–#15 (Attachments, Connectors, @mentions, Memory, Handoff bus, Validation, Routines), plus WC-1 (True Parallel Multi-Agent) complete**.
 
 Here's what remains to reach **world-class Chat OS** status:
 
-### 1. True Parallel Multi-Agent
-**Current state:**
-- ✅ Cos can @mention seats and create handoffs
-- ✅ Handoff bus protocol exists (`bus/handoffs/` with TASK/STATUS/OUTPUT)
-- ✅ Routines run multi-step flows, but one seat at a time
+### 1. True Parallel Multi-Agent ✅ **SHIPPED (WC-1)**
 
-**What's missing:**
-- Cos cannot spawn multiple workers simultaneously (no concurrent task queue)
-- Worker pool has no autonomous task queue (agents only work when user sends message)
-- No "Builder stuck, auto-route to Research" handoff detection
-- Agents don't autonomously pick up `bus/handoffs/` work without manual prompt
+**Shipped in WC-1** — Cos can spawn multiple workers simultaneously from one message, autonomous task queue where workers check bus/handoffs/ and claim open work, auto-handoff detection (e.g., "need docs" signals create Research handoffs), 3+ workers running concurrently with live progress visible in sidebar, queue visibility showing queued task counts per CEO.
 
-**Impact:** Operator must manually sequence multi-agent work. True parallel collaboration (e.g., Code + Research + Think all working at once on different subtasks) is not possible.
+**What shipped:**
+- Multi-spawn from one message: `@Builder: add logging; @Research: fetch API docs` spawns parallel workers
+- Autonomous task queue: workers poll `bus/handoffs/` and claim+execute open work on idle
+- Auto-handoff detection: `close_work_job` detects "need docs" signals and auto-creates handoffs to Research
+- Concurrent execution: `spawn_parallel` runs 3+ workers concurrently via threading
+- Queue visibility: sidebar displays queued task counts per CEO with badge chips
+- Comprehensive tests: 12 tests covering multi-spawn, queue worker, handoff detection, concurrent execution (all passing)
+
+**Files:**
+- `openbot/multispawn.py` — parse multi-seat messages and spawn parallel workers
+- `openbot/queueworker.py` — autonomous queue worker loop, detect handoff signals, claim+execute
+- `openbot/bus.py` — auto-handoff creation in `close_work_job`
+- `openbot/server.py` — `/api/queue/status` endpoint, multi-spawn integration in chat endpoints
+- `web/app.js` — queue chip display in sidebar
+- `web/styles.css` — `.queue-chip` styling
+- `tests/test_parallel_multiagent.py` — comprehensive test suite
+
+**Impact:** Operators can now send one message and spawn multiple workers simultaneously. Workers autonomously pick up open handoffs from `bus/handoffs/` without manual prompts. Auto-handoff detection routes work between agents (e.g., Builder → Research when docs needed).
 
 ### 2. Coding Worker Hardening
 **Current state:**
@@ -187,27 +198,9 @@ These are the **serial next 8 PRs** locked by the operator. Each scoped for focu
 
 ---
 
-### **WC-1: True Parallel Multi-Agent** ⭐
+### **WC-1: True Parallel Multi-Agent** ✅ SHIPPED
 
-**Why:**
-OpenBot has handoffs, routines, and @mentions but no autonomous task queue. Cos cannot spawn multiple workers to run simultaneously. Operators must manually sequence work that should run in parallel (e.g., Code diff + Research doc fetch + Think summarize all at once). This is the core Chat OS gap.
-
-**Acceptance criteria:**
-1. Cos can spawn multiple CEO workers simultaneously (e.g., "Builder: add logging; Research: fetch API docs" in one message)
-2. Worker pool has autonomous task queue: agents check `bus/handoffs/` on idle and claim open work
-3. Handoff detection: when Builder job emits "need docs", auto-route handoff to Research without operator prompt
-4. Concurrent execution: 3+ workers running at once, each with live progress visible in sidebar
-5. Queue visibility: sidebar shows queued tasks per CEO (e.g., "2 tasks queued for Nadia")
-6. Comprehensive tests: spawn 3 workers, verify all run concurrently, verify handoff auto-routing
-7. ROADMAP + INDEX updated
-
-**Out of scope:**
-- Dependency graphs (sequential task chains)
-- Multi-seat fan-out from one handoff (one handoff → one seat for v1)
-- Full Kanban UX over `bus/` (visual cards, drag-drop)
-
-**Estimated complexity:**
-High. Requires task queue implementation in board, concurrent worker management, handoff auto-routing logic, sidebar queue rendering. Touches router, board, sidebar UI, handoff bus integration. Core architectural change.
+See **"Gaps vs World-Class Multi-Agent Chat OS → 1. True Parallel Multi-Agent ✅ SHIPPED"** above for full implementation details. Multi-spawn from one message, autonomous task queue, auto-handoff detection, concurrent execution, queue visibility all shipped.
 
 ---
 
@@ -457,7 +450,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-1 True parallel multi-agent
+Next: WC-2 Coding worker hardening
 
 ---
 

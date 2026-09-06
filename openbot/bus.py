@@ -371,6 +371,14 @@ def close_work_job(receipt: dict, result: str) -> dict:
             receipt["handoff_task"] = str(receipt.get("message") or "")
             receipt["handoff_output"] = result
             receipt["handoff_next_owner"] = next_owner
+    
+    # Auto-create handoffs based on result signals
+    if status == "complete" and not receipt.get("blocker"):
+        from .queueworker import auto_create_handoffs
+        created = auto_create_handoffs(receipt, result, project_id)
+        if created:
+            receipt["auto_handoffs"] = created
+    
     if preset == "research" and (sources or result):
         ev = ensure_bus(project_id) / "evidence" / f"{job_id}.md"
         ev.write_text(
