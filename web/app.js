@@ -202,32 +202,29 @@ function cleanBotText(text) {
   if (!text) return "";
   let cleaned = String(text);
   
-  // Strip Meta contributor tier banners (exact common patterns only)
-  cleaned = cleaned.replace(/^!!!?\s*CONTRIBUTOR\s+TIER\s*—\s*TRAINS?\s+ON\s+YOUR\s+DATA.*$/gim, "");
-  cleaned = cleaned.replace(/^This\s+is\s+Meta'?s?\s+contributor\s+tier.*$/gim, "");
-  cleaned = cleaned.replace(/^Selecting\s+it\s+permits?\s+Meta.*train.*$/gim, "");
+  // Strip Meta contributor tier MULTILINE blocks: from !!! CONTRIBUTOR or "This is Meta's contributor tier"
+  // through the entire paragraph including pricing URL, confidential warning, and "standard v" mention.
+  // Use [\s\S]*? for non-greedy multiline match, stop at double newline or "Now:" INDEX marker.
+  cleaned = cleaned.replace(/!!!?\s*CONTRIBUTOR\s+TIER[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
+  cleaned = cleaned.replace(/This\s+is\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
   
-  // Strip "it permits Meta to use your prompts and completions to train future Meta models"
-  cleaned = cleaned.replace(/it\s+permits\s+Meta\s+to\s+use\s+your\s+prompts\s+and\s+completions\s+to\s+train\s+future\s+Meta\s+models\.?/gi, "");
+  // Strip mid-line CONTRIBUTOR mentions (INDEX Last: lines)
+  cleaned = cleaned.replace(/CONTRIBUTOR\s+TIER\s*—\s*TRAINS?\s+ON\s+YOUR\s+DATA/gi, "");
   
-  // Strip Meta Model API pricing/rate-limit boilerplate
-  // Pattern: "Meta Model API is free... pricing and rate limits... https://dev.meta.ai/docs/pricing-rate-limits/"
-  cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free.*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gis, "");
-  
-  // Strip "See current pricing and rate limits for the Meta Model API here: https://..."
-  cleaned = cleaned.replace(/See\s+current\s+pricing\s+and\s+rate\s+limits\s+for\s+the\s+Meta\s+Model\s+API.*?https?:\/\/[^\s]+/gi, "");
-  
-  // Strip standalone Meta pricing URLs
+  // Strip orphan fragments that survived multiline removal
+  cleaned = cleaned.replace(/prompts\s+and\s+completions\s+to\s+train\s+future\s+Meta\s+models\.?/gi, "");
+  cleaned = cleaned.replace(/See\s+current\s+pricing\s+and\s+rate\s+limits\s+for\s+the\s+Meta\s+Model\s+API[\s\S]*?https?:\/\/[^\s]+/gi, "");
   cleaned = cleaned.replace(/https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
-  
-  // Strip any long paragraph about Meta's acceptable use policy or training data
-  cleaned = cleaned.replace(/It\s+lowers\s+the\s+barrier\s+to\s+entry.*?acceptable\./gis, "");
-  
-  // Strip "Do NOT use it for confidential, proprietary, personal, or otherwise sensitive data"
   cleaned = cleaned.replace(/Do\s+NOT\s+use\s+it\s+for\s+confidential,\s+proprietary,\s+personal,\s+or\s+otherwise\s+sensitive\s+data\.?/gi, "");
+  cleaned = cleaned.replace(/For\s+the\s+same\s+model\s+with\s+no\s+training\s+on\s+your\s+data[\s\S]*?(?=\n\n|Now:|Last:|Next:|$)/gi, "");
+  cleaned = cleaned.replace(/It\s+lowers\s+the\s+barrier\s+to\s+entry[\s\S]*?acceptable\./gi, "");
   
-  // Strip "For the same model with no training on your data, select..."
-  cleaned = cleaned.replace(/For\s+the\s+same\s+model\s+with\s+no\s+training\s+on\s+your\s+data,?\s+.*$/gim, "");
+  // Strip Meta CLI banner artifacts
+  cleaned = cleaned.replace(/security\.allow_data_training_tiers_noninteractive/gi, "");
+  cleaned = cleaned.replace(/[┌┐└┘│─]+\s*Scheduled\s+Jobs\s*[┌┐└┘│─]+/gi, "");
+  
+  // Strip standalone Meta Model API pricing boilerplate
+  cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free[\s\S]*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
   
   // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
   const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
