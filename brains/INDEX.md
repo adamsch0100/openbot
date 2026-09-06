@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Hermes gateway+cron visibility shipping (SAA)
-Last: world-class v2 CoS GO (#35) + mobile #34
-Next: deploy verify gateway running + /api/routines hermes_count + migrate-delivery for saa-homes
+Now: revert PR #38 ready for CEO merge (clean/mergeable)
+Last: reverted d93eb6f cleanly (PR #36 gateway auto-start → Railway 502)
+Next: CEO merge https://github.com/adamsch0100/openbot/pull/38 to restore production
 Blocker: —
 
 ## Vault
