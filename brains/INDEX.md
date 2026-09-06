@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #41 MERGE-READY — Hermes multi-line cron parser + gateway fixes (rebased on master after #40 fail)
-Last: Rewrote cron parser for REAL multi-line format (hex job IDs, indented Name:/Schedule:/Deliver:); is_valid_job_id rejects label words; gateway_status hard timeout never 502; migrate filters by deliver=origin; all tests pass
-Next: Live verify on SAA Homes: hermes_count > 0, form-pipeline-health + daily-ranking-strike parsed correctly, no Name:/Next/Execution: junk IDs
+Now: PR #41 DRAFT (ready for live verify) — Hermes multi-line cron parser + gateway fixes
+Last: Rewrote parser for REAL multi-line block format (hex IDs, indented fields); is_valid_job_id guards 12+ hex chars + rejects label words; gateway_status try/except never 502; migrate filters deliver=origin; 19 tests pass; VERIFY-PR41.md
+Next: Live SAA Homes verify → undraft → merge. HOLD real migrate until CEO re-verify.
 Blocker: —
 
 ## Vault
