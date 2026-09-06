@@ -634,12 +634,142 @@ def import_backup(zip_path: str | Path, home: str | Path) -> dict:
     }
 
 
-def cron_list(cwd: str | None = None) -> dict:
+def cron_list(cwd: str | None = None, home: str | Path | None = None) -> dict:
+    """List Hermes cron jobs. Prefers JSON output; falls back to robust table parsing."""
     binary = which("hermes")
     if not binary:
-        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
-    code, out = _run([binary, "cron", "list"], cwd, 30)
-    return {"ok": code == 0, "code": code, "text": out.strip() or "(no cron jobs)"}
+        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing", "jobs": []}
+    
+    # Try JSON output first (if supported)
+    code, out = _run([binary, "cron", "list", "--json"], cwd, 30, home=home)
+    if code == 0 and out.strip():
+        try:
+            data = json.loads(out)
+            if isinstance(data, list):
+                return {"ok": True, "code": 0, "text": out.strip(), "jobs": data}
+            elif isinstance(data, dict) and "jobs" in data:
+                return {"ok": True, "code": 0, "text": out.strip(), "jobs": data.get("jobs", [])}
+        except json.JSONDecodeError:
+            pass
+    
+    # Fallback: try regular list and parse table carefully
+    code, out = _run([binary, "cron", "list"], cwd, 30, home=home)
+    text = out.strip() or "(no cron jobs)"
+    
+    # Parse table robustly: only extract real job data
+    jobs = _parse_cron_table(text)
+    
+    return {"ok": code == 0, "code": code, "text": text, "jobs": jobs}
+
+
+def is_valid_job_id(job_id: str) -> bool:
+    """Validate that a string looks like a real job ID, not table chrome.
+    
+    Real job IDs:
+    - At least 3 characters
+    - Contain at least one alphanumeric
+    - Not common table chrome words
+    
+    Use this guard before operating on job IDs from cron list output.
+    """
+    if not job_id or len(job_id) < 3:
+        return False
+    
+    # Must have at least one alphanumeric
+    if not any(c.isalnum() for c in job_id):
+        return False
+    
+    # Reject known table chrome
+    chrome = {"│", "├", "┤", "┬", "┴", "┼", "Schedule:", "Last", "Dispatch:", 
+              "Delivery:", "Enabled:", "Status:", "ID", "Name", "Created"}
+    if job_id in chrome:
+        return False
+    
+    # Reject if it's all punctuation (like "---")
+    if all(not c.isalnum() for c in job_id):
+        return False
+    
+    return True
+
+
+def _parse_cron_table(text: str) -> list[dict]:
+    """Parse hermes cron list table output into structured jobs.
+    
+    Only extracts rows with valid job IDs, names, schedules.
+    Ignores table chrome (borders, headers, separators).
+    """
+    if not text or "No cron" in text or "no cron" in text:
+        return []
+    
+    jobs = []
+    lines = text.strip().split("\n")
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Skip empty lines
+        if not stripped:
+            continue
+        
+        # Remove box drawing characters and vertical pipes for parsing
+        # Common box chars: │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ ─
+        clean = re.sub(r"[│┌┐└┘├┤┬┴┼─║╔╗╚╝╠╣╦╩╬═]", " ", stripped)
+        clean = clean.strip()
+        
+        if not clean:
+            continue
+        
+        # Skip separator lines (all dashes, equals, or spaces)
+        if set(clean) <= {"-", "=", " "}:
+            continue
+        
+        # Parse table row: extract fields by position or split
+        # Typical format: <id> <name> <schedule> [<enabled>] [<delivery>] [<last_run>]
+        parts = clean.split()
+        
+        # Skip header lines (common patterns) - check first word is a standalone header
+        if parts:
+            first_word_upper = parts[0].upper()
+            if first_word_upper in {"ID", "JOB", "NAME", "SCHEDULE", "STATUS", "ENABLED", "CREATED", "LAST", "DELIVERY"}:
+                continue
+        if "Schedule:" in clean and "Last" in clean:  # Header-like labels
+            continue
+        if len(parts) < 3:
+            continue
+        
+        # First part should be a reasonable job ID
+        job_id = parts[0]
+        # Skip if it's clearly table chrome
+        if job_id in {"Schedule:", "Last", "Dispatch:", "Delivery:", "Enabled:", "Status:", "ID", "Name"}:
+            continue
+        # Skip if it doesn't look like an ID (too short or all punctuation)
+        if len(job_id) < 3 or not any(c.isalnum() for c in job_id):
+            continue
+        
+        # Second part is name
+        name = parts[1] if len(parts) > 1 else ""
+        
+        # Third+ parts are schedule
+        # Clean up schedule: remove trailing status/delivery/enabled fields if present
+        # Common pattern: "every 1h" or "0 9 * * *"
+        schedule_parts = []
+        for p in parts[2:]:
+            # Stop if we hit status words
+            if p.lower() in {"enabled", "disabled", "true", "false", "local", "telegram", "running", "idle"}:
+                break
+            schedule_parts.append(p)
+        schedule = " ".join(schedule_parts)
+        
+        if not schedule:
+            continue
+        
+        jobs.append({
+            "id": job_id,
+            "name": name,
+            "schedule": schedule,
+        })
+    
+    return jobs
 
 
 def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None) -> dict:
