@@ -66,6 +66,32 @@ def write_job(receipt: dict) -> Path:
     return path
 
 
+def write_session_log(job_id: str, log_content: str) -> Path | None:
+    """Write raw session log for a job. Returns path if successful."""
+    if not JOB_ID_RE.match(job_id):
+        return None
+    JOBS.mkdir(exist_ok=True)
+    path = JOBS / f"{job_id}.log"
+    try:
+        path.write_text(log_content, encoding="utf-8", errors="replace")
+        return path
+    except OSError:
+        return None
+
+
+def read_session_log(job_id: str) -> str | None:
+    """Read raw session log for a job. Returns None if not found."""
+    if not JOB_ID_RE.match(job_id):
+        return None
+    path = JOBS / f"{job_id}.log"
+    if not path.is_file():
+        return None
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
 def job_path(job_id: str) -> Path | None:
     if not JOB_ID_RE.match(job_id):
         return None

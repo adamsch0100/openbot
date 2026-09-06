@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: WC-4 Onboarding shipped: auth checks for Hermes/OpenCode before first work, test job flow, authentication cards with instructions.
-Last: WC-3 Spend Dashboard (PR #19: per-CEO cost breakdown, 14-day trend chart, 50% weekly cap yellow alerts, cap-exceeded notices), WC-2 Coding Worker Hardening (PR #18: retry on transient failures, Accept→Revert rollback, branch/PR, test-after-accept), WC-1 True Parallel Multi-Agent.
-Next: WC-5 Observability — operator directs next.
+Now: WC-5 Observability shipped: Hermes tool-call progress streaming to UI, replay verbose modal with full session logs, View raw log links on job cards.
+Last: WC-4 Onboarding (auth checks, test job), WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
+Next: WC-6 Polish pack — operator directs next.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

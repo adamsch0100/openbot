@@ -70,6 +70,7 @@ from .store import (
     spend_summary,
     update_job,
     write_job,
+    write_session_log,
 )
 from .usage import parse_opencode_events
 
@@ -472,9 +473,9 @@ def run_opencode(
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     try:
-        proc = subprocess.Popen(cmd, **kwargs)
+            proc = subprocess.Popen(cmd, **kwargs)
     except FileNotFoundError:
-        return 127, "opencode not on PATH"
+        return 127, "opencode not on PATH", ""
     if run_id:
         from .live import attach
 
@@ -485,10 +486,10 @@ def run_opencode(
         while True:
             if cancel is not None and cancel.is_set():
                 proc.terminate()
-                return 130, "".join(chunks)[-24000:] or "Stopped."
+                return 130, "".join(chunks)[-24000:] or "Stopped.", "".join(chunks)
             if time.time() > deadline:
                 proc.kill()
-                return 124, "opencode run timed out"
+                return 124, "opencode run timed out", "".join(chunks)
             line = proc.stdout.readline() if proc.stdout else ""
             if line:
                 chunks.append(line)
@@ -543,14 +544,14 @@ def run_opencode(
                 env=env,
             )
             out = (proc2.stdout or "") + (("\n" + proc2.stderr) if proc2.stderr else "")
-            return proc2.returncode, out[-24000:]
+            return proc2.returncode, out[-24000:], out
         code = proc.returncode or 0
         out_text = out[-24000:]
         
         # Retry logic for transient failures
         if _attempt < 3 and _is_transient_failure(code, out_text):
             if cancel is not None and cancel.is_set():
-                return code, out_text
+                return code, out_text, out
             backoff = 2 ** (_attempt + 1)  # 0→2s, 1→4s, 2→8s
             if on_progress:
                 try:
@@ -575,9 +576,9 @@ def run_opencode(
                 _attempt + 1,
             )
         
-        return code, out_text
+        return code, out_text, out
     except subprocess.TimeoutExpired:
-        return 124, "opencode run timed out"
+        return 124, "opencode run timed out", ""
 
 
 def _receipt_base(job_id: str, preset: str, engine: str, message: str, folder: str | None) -> dict:
@@ -1118,6 +1119,8 @@ def _handle_preset(
                 usage_model = str(usage.get("model"))
             if not talk:
                 _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
+                if ran.get("raw_log"):
+                    write_session_log(job_id, ran["raw_log"])
             if ran.get("stopped"):
                 stopped = True
                 blocker = "stopped"
@@ -1325,7 +1328,7 @@ def _handle_preset(
                 else:
                     _activate("OpenCode", tools, attempt_model)
                 model = attempt_model
-                code, out = run_opencode(
+                code, out, raw_log = run_opencode(
                     work,
                     prompt,
                     engines["opencode"].get("path"),
@@ -1336,6 +1339,7 @@ def _handle_preset(
                     mcp_github=_effective_mcp_github(tools),
                     on_progress=on_progress,
                 )
+                write_session_log(job_id, raw_log)
                 parsed = parse_opencode_events(out)
                 text = parsed.text or out or "(no output)"
                 err = error_message_from_raw(out) or ""
@@ -1485,6 +1489,8 @@ def _handle_preset(
                 if usage.get("model"):
                     usage_model = str(usage.get("model"))
                 _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
+                if ran.get("raw_log"):
+                    write_session_log(job_id, ran["raw_log"])
                 if ran.get("stopped"):
                     stopped = True
                     blocker = "stopped"
@@ -1601,6 +1607,8 @@ def _handle_preset(
                 if usage.get("model"):
                     usage_model = str(usage.get("model"))
                 _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
+                if ran.get("raw_log"):
+                    write_session_log(job_id, ran["raw_log"])
                 if ran.get("stopped"):
                     stopped = True
                     blocker = "stopped"
