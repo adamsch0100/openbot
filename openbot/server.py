@@ -446,6 +446,57 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_header("Set-Cookie", set_cookie)
             self.end_headers()
             self.wfile.write(raw)
+        except Exception as e:
+            self.log_error(f"_json: {e}")
+
+    def _proxy(self, host: str, port: int, target_path: str):
+        """Proxy requests to localhost engines so they work from mobile."""
+        import http.client
+        
+        try:
+            # Build query string if present
+            parsed = urlparse(self.path)
+            full_path = target_path or "/"
+            if parsed.query:
+                full_path = f"{full_path}?{parsed.query}"
+            
+            # Connect to backend
+            conn = http.client.HTTPConnection(host, port, timeout=15)
+            conn.request(self.command, full_path, headers={
+                "Host": f"{host}:{port}",
+                "User-Agent": self.headers.get("User-Agent", ""),
+                "Accept": self.headers.get("Accept", "*/*"),
+            })
+            
+            response = conn.getresponse()
+            
+            # Forward response
+            self.send_response(response.status)
+            for header, value in response.getheaders():
+                # Skip headers that might break the proxy
+                if header.lower() not in ("transfer-encoding", "connection"):
+                    self.send_header(header, value)
+            self.end_headers()
+            
+            # Stream body
+            while True:
+                chunk = response.read(8192)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+            
+            conn.close()
+        except Exception as e:
+            self.log_error(f"_proxy: {e}")
+            try:
+                self.send_response(502)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                msg = f"Proxy error: {str(e)}\n"
+                self.send_header("Content-Length", str(len(msg)))
+                self.end_headers()
+                self.wfile.write(msg.encode("utf-8"))
+            except Exception:
+                pass
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
             return
 
@@ -548,6 +599,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        
+        # Proxy OpenCode web UI
+        if path.startswith("/opencode/"):
+            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
+        
+        # Proxy Hermes dashboard
+        if path.startswith("/hermes/"):
+            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
+        
         if path == "/api/health":
             return self._json(200, {"ok": True, "credit": CREDIT, "engines": detect()})
         if path == "/api/index":
