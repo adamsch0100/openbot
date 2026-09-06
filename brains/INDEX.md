@@ -5,7 +5,7 @@ Source of truth for this OpenBot instance. Status questions read this file only.
 Now: Hermes job argv drop --usage-file (not valid on hermes chat, only on hermes -z)
 Last: PR #29 merged (restored -z for talk), PR #28 merged (talk to chat --query-file), PR #27 deployed
 Next: Live Think re-smoke after merge
-Blocker: —
+Blocker: live Think re-smoke not done yet
 
 ## Vault
 
