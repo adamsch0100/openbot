@@ -5374,7 +5374,57 @@ if ($("saveMemory")) {
   loadRoutines();
 }
 
+// Mobile menu toggle
+function initMobileMenu() {
+  const toggle = $("mobileOrgToggle");
+  const rail = $("rail");
+  const scrim = $("railScrim");
+  
+  if (!toggle || !rail || !scrim) return;
+  
+  // Show hamburger on mobile
+  function updateMobileUI() {
+    const isMobile = window.innerWidth <= 860;
+    toggle.style.display = isMobile ? "flex" : "none";
+    if (!isMobile) {
+      rail.classList.remove("open");
+      scrim.classList.remove("open");
+    }
+  }
+  
+  // Toggle rail
+  toggle.addEventListener("click", () => {
+    rail.classList.toggle("open");
+    scrim.classList.toggle("open");
+  });
+  
+  // Close on scrim click
+  scrim.addEventListener("click", () => {
+    rail.classList.remove("open");
+    scrim.classList.remove("open");
+  });
+  
+  // Close on CEO selection (so user sees chat immediately)
+  const orgTree = $("orgTree");
+  if (orgTree) {
+    orgTree.addEventListener("click", (event) => {
+      const btn = event.target.closest(".org-btn");
+      if (btn && window.innerWidth <= 860) {
+        window.setTimeout(() => {
+          rail.classList.remove("open");
+          scrim.classList.remove("open");
+        }, 200);
+      }
+    });
+  }
+  
+  updateMobileUI();
+  window.addEventListener("resize", updateMobileUI);
+}
+
 boot().catch((err) => {
   renderIndex(String(err));
   loadOrgTree();
 });
+
+initMobileMenu();

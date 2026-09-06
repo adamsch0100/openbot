@@ -87,6 +87,7 @@
   </div>
 
   <header class="bar">
+    <button type="button" class="mobile-org-toggle" id="mobileOrgToggle" aria-label="Open menu" style="display: none;">☰</button>
     <div class="mark-row">
       <img class="mark-gem" src="/favicon.png?v=2" alt="" width="36" height="36" />
       <div>
@@ -116,7 +117,8 @@
   </header>
 
   <section id="stage-chat" class="workspace on">
-    <aside class="rail">
+    <div class="rail-scrim" id="railScrim"></div>
+    <aside class="rail" id="rail">
       <nav class="org" id="orgTree" aria-label="Projects"></nav>
       <p class="sr-only" id="orgStatus" aria-live="polite"></p>
       <div class="profile-dock" id="profileDock">
