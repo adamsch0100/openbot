@@ -3437,7 +3437,7 @@ async function startOpenCode() {
   }
   const url = data.url || "http://127.0.0.1:4096";
   const aimed = data.folder || folder || "";
-  $("ocStatus").innerHTML = `Workspace <a href="${url}" target="_blank" rel="noreferrer">${url}</a>${aimed ? ` · ${escapeHtml(aimed)}` : ""} · OpenCode chats are OpenCode’s own history, not Hermes.`;
+  $("ocStatus").innerHTML = `Workspace <a href="${url}" target="_blank" rel="noreferrer">${url}</a>${aimed ? ` · ${escapeHtml(aimed)}` : ""} · one OpenCode session per CEO · All files is the repo; git / branch / last turn are diffs only.`;
   reloadEngineFrame("ocFrame", url, aimed || aim.name);
   lastOcFolder = aimed;
   ocStarted = true;

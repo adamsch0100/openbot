@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import atexit
+import http.client
+import json
 import os
 import socket
 import subprocess
 import threading
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from .config import load_config
 from .detect import detect, hermes_home
@@ -24,6 +27,8 @@ _oc_lock = threading.Lock()
 _hermes_lock = threading.Lock()
 _warmed = False
 _warm_lock = threading.Lock()
+_opencode_session_id: str | None = None
+_opencode_sessions: dict[str, str] = {}
 
 
 def _port_open(host: str, port: int) -> bool:
@@ -182,6 +187,206 @@ def _public_engine(result: dict) -> dict:
     }
 
 
+def _session_id(payload: object) -> str:
+    if isinstance(payload, list):
+        for row in payload:
+            found = _session_id(row)
+            if found:
+                return found
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("id", "sessionID", "session_id"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for key in ("info", "data", "session", "sessions"):
+        nested = payload.get(key)
+        if isinstance(nested, (dict, list)):
+            found = _session_id(nested)
+            if found:
+                return found
+    return ""
+
+
+def _flatten_session_row(row: dict) -> dict:
+    info = row.get("info") if isinstance(row.get("info"), dict) else {}
+    out = dict(info)
+    out.update({key: value for key, value in row.items() if key != "info"})
+    return out
+
+
+def _session_rows(payload: object) -> list[dict]:
+    raw: list = []
+    if isinstance(payload, list):
+        raw = payload
+    elif isinstance(payload, dict):
+        for key in ("data", "sessions", "session"):
+            nested = payload.get(key)
+            if isinstance(nested, list):
+                raw = nested
+                break
+            if isinstance(nested, dict) and (nested.get("id") or nested.get("sessionID") or nested.get("info")):
+                raw = [nested]
+                break
+        if not raw and (payload.get("id") or payload.get("sessionID") or isinstance(payload.get("info"), dict)):
+            raw = [payload]
+    return [_flatten_session_row(row) for row in raw if isinstance(row, dict)]
+
+
+def _session_updated(row: dict) -> int:
+    stamp = row.get("time") if isinstance(row.get("time"), dict) else {}
+    for key in ("updated", "completed", "created"):
+        value = stamp.get(key) if isinstance(stamp, dict) else None
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str) and value.isdigit():
+            return int(value)
+    return 0
+
+
+def _folder_key(folder: str | None) -> str:
+    raw = str(folder or "").strip().rstrip("/\\")
+    if not raw:
+        return ""
+    try:
+        return str(Path(raw).expanduser().resolve())
+    except OSError:
+        return raw.replace("\\", "/")
+
+
+def _pick_session_id(payload: object, folder: str = "", prefer: str = "") -> str:
+    rows = _session_rows(payload)
+    target = _folder_key(folder)
+    if target:
+        rows = [row for row in rows if _folder_key(str(row.get("directory") or "")) == target]
+    prefer = str(prefer or "").strip()
+    if prefer:
+        for row in rows:
+            found = str(row.get("id") or row.get("sessionID") or "").strip()
+            if found == prefer:
+                return prefer
+    if not rows:
+        return ""
+    if any(_session_updated(row) for row in rows):
+        rows = sorted(rows, key=_session_updated, reverse=True)
+    else:
+        rows = list(reversed(rows))
+    for row in rows:
+        found = str(row.get("id") or row.get("sessionID") or "").strip()
+        if found:
+            return found
+    return ""
+
+
+def _opencode_http(method: str, path: str, body: dict | None = None, directory: str | None = None, timeout: float = 8.0):
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    target = path
+    if directory:
+        headers["X-Opencode-Directory"] = directory
+        joiner = "&" if "?" in target else "?"
+        target = f"{target}{joiner}directory={quote(directory)}"
+    raw = json.dumps(body).encode("utf-8") if body is not None else None
+    conn = http.client.HTTPConnection("127.0.0.1", OPENCODE_WEB_PORT, timeout=timeout)
+    try:
+        conn.request(method, target, body=raw, headers=headers)
+        resp = conn.getresponse()
+        blob = resp.read()
+        if resp.status >= 500:
+            return None
+        if not blob:
+            return {}
+        try:
+            return json.loads(blob.decode("utf-8"))
+        except json.JSONDecodeError:
+            return None
+    except (OSError, http.client.HTTPException):
+        return None
+    finally:
+        conn.close()
+
+
+def _bound_opencode_session(folder: str) -> str:
+    key = _folder_key(folder)
+    found = str(_opencode_sessions.get(key) or "").strip()
+    if found:
+        return found
+    try:
+        from .org import project_id_for_folder, project_tools
+
+        pid = project_id_for_folder(folder)
+        if pid:
+            found = str(project_tools(pid).get("opencode_session_id") or "").strip()
+            if found:
+                _opencode_sessions[key] = found
+                return found
+    except Exception:
+        pass
+    return ""
+
+
+def _remember_opencode_session(folder: str, sid: str) -> None:
+    global _opencode_session_id
+    sid = str(sid or "").strip()
+    if not sid:
+        return
+    _opencode_sessions[_folder_key(folder)] = sid
+    _opencode_session_id = sid
+    try:
+        from .org import patch_project_tools, project_id_for_folder
+
+        pid = project_id_for_folder(folder)
+        if pid:
+            patch_project_tools(pid, {"opencode_session_id": sid})
+    except Exception:
+        pass
+
+
+def _open_opencode_session(folder: str, title: str) -> str:
+    # One OpenCode session per CEO folder. Reopen it. Do not POST extras.
+    prefer = _bound_opencode_session(folder)
+    listed = _opencode_http("GET", "/session")
+    scoped = _opencode_http("GET", "/session", directory=folder)
+    listed_rows = _session_rows(listed)
+    scoped_rows = _session_rows(scoped)
+    combined = listed_rows + scoped_rows
+    if prefer:
+        ids = {str(row.get("id") or row.get("sessionID") or "").strip() for row in combined}
+        if prefer in ids:
+            _remember_opencode_session(folder, prefer)
+            return prefer
+    found = _pick_session_id({"data": combined}, folder, prefer)
+    if found:
+        _remember_opencode_session(folder, found)
+        return found
+    if scoped_rows:
+        found = _pick_session_id({"data": scoped_rows}, "", prefer)
+        if found:
+            _remember_opencode_session(folder, found)
+            return found
+    if prefer and listed is None and scoped is None:
+        _remember_opencode_session(folder, prefer)
+        return prefer
+    created = _opencode_http(
+        "POST",
+        "/session",
+        body={"title": title or Path(folder).name},
+        directory=folder,
+    )
+    found = _session_id(created)
+    if found:
+        _remember_opencode_session(folder, found)
+    return found
+
+
+def settle_opencode_session(folder: str | None = None, session_id: str | None = None) -> None:
+    sid = str(session_id or _opencode_session_id or "").strip()
+    directory = str(folder or _opencode_cwd or "").strip() or None
+    if not sid:
+        return
+    _opencode_http("POST", f"/session/{sid}/abort", body={}, directory=directory, timeout=4.0)
+
+
 def opencode_web_status() -> dict:
     engines = detect()
     running = _port_open("127.0.0.1", OPENCODE_WEB_PORT)
@@ -195,6 +400,7 @@ def opencode_web_status() -> dict:
         "install": engines["opencode"]["install"],
         "embed": "iframe_or_tab",
         "folder": _opencode_cwd or _work_dir(),
+        "session_id": _opencode_session_id or "",
         "note": "Official opencode web. OpenBot does not reimplement this UI.",
     }
 
@@ -220,24 +426,20 @@ def _start_opencode_web(folder: str | None = None) -> dict:
         target = str(Path(target).resolve())
     except OSError:
         target = folder or _work_dir()
-    same = _opencode_cwd and Path(_opencode_cwd) == Path(target)
-    if _port_open("127.0.0.1", OPENCODE_WEB_PORT) and same:
+    try:
+        from .gitutil import ensure_workspace_git
+
+        ensure_workspace_git(target)
+    except Exception:
+        pass
+    if _port_open("127.0.0.1", OPENCODE_WEB_PORT):
+        # Official OpenCode web can reuse OpenCode web across CEO folders.
+        _opencode_cwd = target
         status = opencode_web_status()
         status["ok"] = True
+        status["folder"] = target
+        status["session_id"] = _open_opencode_session(target, Path(target).name) or _opencode_session_id
         return status
-    if _port_open("127.0.0.1", OPENCODE_WEB_PORT):
-        _kill(_opencode_proc)
-        _opencode_proc = None
-        for _ in range(20):
-            if not _port_open("127.0.0.1", OPENCODE_WEB_PORT):
-                break
-            time.sleep(0.2)
-        if _port_open("127.0.0.1", OPENCODE_WEB_PORT):
-            _kill_port(OPENCODE_WEB_PORT)
-            for _ in range(20):
-                if not _port_open("127.0.0.1", OPENCODE_WEB_PORT):
-                    break
-                time.sleep(0.2)
     board = os.environ.get("OPENBOT_HOST", "127.0.0.1")
     board_port = os.environ.get("OPENBOT_PORT", "8787")
     origin = f"http://{board}:{board_port}"
@@ -285,6 +487,8 @@ def _start_opencode_web(folder: str | None = None) -> dict:
     status = opencode_web_status()
     status["ok"] = True
     status["pid"] = _opencode_proc.pid
+    status["folder"] = target
+    status["session_id"] = _open_opencode_session(target if Path(target).is_dir() else _work_dir(), Path(target).name)
     return status
 
 

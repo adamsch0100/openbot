@@ -133,6 +133,50 @@ def restore_snapshot(folder: str, before: dict) -> tuple[bool, str]:
     return True, "restored"
 
 
+def ensure_workspace_git(folder: str | None) -> dict:
+    """Init git in a CEO folder so OpenCode's tree and Accept/Reject have a repo.
+
+    OpenCode's Changes tab is git diffs only. Without .git it shows
+    'create git repository' and looks empty even when the folder is full.
+    """
+    path = str(Path(folder).expanduser()) if folder else ""
+    if not path or not Path(path).is_dir():
+        return {"ok": False, "is_repo": False, "error": "folder does not exist"}
+    status = git_status(path)
+    if is_repo(path):
+        status["ok"] = True
+        return status
+    git_dir = Path(path) / ".git"
+    if not git_dir.exists():
+        code, out = _run(path, ["init"])
+        if code != 0:
+            return {"ok": False, "is_repo": False, "error": (out or "git init failed")[-500:]}
+    ignore = Path(path) / ".gitignore"
+    if not ignore.is_file():
+        ignore.write_text(".env\n.env.*\nsecrets.local.json\nnode_modules/\n", encoding="utf-8")
+    _run(path, ["add", "-A"])
+    code, out = _run(
+        path,
+        [
+            "-c",
+            "user.name=OpenBot",
+            "-c",
+            "user.email=openbot@localhost",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "OpenBot workspace",
+        ],
+    )
+    status = git_status(path)
+    if code != 0 and not status.get("is_repo"):
+        status["ok"] = False
+        status["error"] = (out or "git commit failed")[-500:]
+        return status
+    status["ok"] = True
+    return status
+
+
 def create_branch(folder: str, branch_name: str) -> tuple[bool, str]:
     """Create and checkout a new branch."""
     if not is_repo(folder):

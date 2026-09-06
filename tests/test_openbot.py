@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from openbot.config import DEFAULT_SPEND_CAP_USD, load_config, save_settings, save_work_dir, verify_pin
-from openbot.gitutil import diff_against_head, restore_snapshot, snapshot
+from openbot.gitutil import diff_against_head, ensure_workspace_git, restore_snapshot, snapshot
+from openbot.engine_proxy import inject_opencode_tree
+from openbot.launch import _pick_session_id
 from openbot.router import classify, resolve_preset
 from openbot.store import in_spend_period, spend_summary, write_job, patch_index_line
 from openbot.usage import parse_opencode_events
@@ -270,6 +272,58 @@ class GitUtilTests(unittest.TestCase):
             self.assertTrue(ok)
             self.assertEqual((root / "app.txt").read_text(encoding="utf-8"), "one\n")
             self.assertFalse((root / "new.txt").exists())
+
+    def test_ensure_workspace_git_inits_and_commits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "readme.txt").write_text("hello\n", encoding="utf-8")
+            status = ensure_workspace_git(str(root))
+            self.assertTrue(status.get("ok"))
+            self.assertTrue(status.get("is_repo"))
+            self.assertTrue((root / ".git").exists())
+            self.assertTrue((root / ".gitignore").is_file())
+            again = ensure_workspace_git(str(root))
+            self.assertTrue(again.get("ok"))
+
+
+class OpenCodeSessionTests(unittest.TestCase):
+    def test_pick_session_id_skips_other_folder(self):
+        payload = {
+            "data": [
+                {"id": "ses_other", "directory": "/tmp/other", "time": {"updated": 9}},
+                {"id": "ses_here", "directory": "/tmp/here", "time": {"updated": 1}},
+            ]
+        }
+        self.assertEqual(_pick_session_id(payload, "/tmp/here"), "ses_here")
+        self.assertEqual(_pick_session_id(payload, "/tmp/missing"), "")
+
+    def test_pick_session_id_unwraps_sessions_and_info(self):
+        listed = {"sessions": [{"id": "ses_a", "directory": "/repo"}]}
+        wrapped = {"info": {"id": "ses_b", "directory": "/repo"}}
+        self.assertEqual(_pick_session_id(listed, "/repo"), "ses_a")
+        self.assertEqual(_pick_session_id(wrapped, "/repo"), "ses_b")
+
+    def test_pick_session_id_prefer_wins(self):
+        payload = {
+            "data": [
+                {"id": "ses_old", "directory": "/repo", "time": {"updated": 1}},
+                {"id": "ses_new", "directory": "/repo", "time": {"updated": 9}},
+            ]
+        }
+        self.assertEqual(_pick_session_id(payload, "/repo", prefer="ses_old"), "ses_old")
+
+
+class OpenCodeTreeInjectTests(unittest.TestCase):
+    def test_inject_opencode_tree_opens_all_files(self):
+        html = b"<html><head></head><body></body></html>"
+        out = inject_opencode_tree(html, "text/html")
+        self.assertIn(b"showFileTree", out)
+        self.assertIn(b"tab:'all'", out)
+        self.assertIn(b"clickAll", out)
+        self.assertIn(b"all files", out)
+        skip = inject_opencode_tree(out, "text/html")
+        self.assertEqual(skip, out)
+        self.assertEqual(inject_opencode_tree(html, "application/json"), html)
 
 
 class ConfigTests(unittest.TestCase):

@@ -84,6 +84,7 @@ from .org import (
     write_project_index,
     write_worker_brain,
 )
+from .engine_proxy import inject_opencode_tree
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
 from .router import decide_diff, revert_accept, handle, pending_approvals, public_job
 from .queueworker import active_workers, auto_create_handoffs
@@ -490,22 +491,29 @@ class Handler(SimpleHTTPRequestHandler):
             if response.status == 101 or "upgrade" in response.getheaders():
                 conn.close()
                 return self._proxy_fallback(f"http://{host}:{port}{target_path}")
-            
-            # Forward response
-            self.send_response(response.status)
-            for header, value in response.getheaders():
-                # Skip headers that might break the proxy
-                if header.lower() not in ("transfer-encoding", "connection"):
-                    self.send_header(header, value)
-            self.end_headers()
-            
-            # Stream body
-            while True:
-                chunk = response.read(8192)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-            
+
+            content_type = response.getheader("Content-Type") or ""
+            if port == 4096 and "html" in content_type.lower():
+                blob = inject_opencode_tree(response.read(), content_type)
+                self.send_response(response.status)
+                for header, value in response.getheaders():
+                    if header.lower() not in ("transfer-encoding", "connection", "content-length"):
+                        self.send_header(header, value)
+                self.send_header("Content-Length", str(len(blob)))
+                self.end_headers()
+                self.wfile.write(blob)
+            else:
+                self.send_response(response.status)
+                for header, value in response.getheaders():
+                    if header.lower() not in ("transfer-encoding", "connection"):
+                        self.send_header(header, value)
+                self.end_headers()
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+
             conn.close()
         except Exception as e:
             self.log_error(f"_proxy: {e}")

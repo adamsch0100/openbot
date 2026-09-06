@@ -347,6 +347,7 @@ def _public_tools(row: dict) -> dict:
         "hermes_home": str(row.get("hermes_home") or ""),
         "hermes_instance_id": str(row.get("hermes_instance_id") or ""),
         "hermes_session_id": str(row.get("hermes_session_id") or ""),
+        "opencode_session_id": str(row.get("opencode_session_id") or ""),
         "session_count": int(summary.get("session_count") or 0),
         "session_title": str(summary.get("session_title") or ""),
         "session_source": str(summary.get("session_source") or ""),
@@ -373,6 +374,28 @@ def is_board_folder(folder: str | None) -> bool:
         return Path(raw).expanduser().resolve() == ROOT.resolve()
     except OSError:
         return False
+
+
+def project_id_for_folder(folder: str | None) -> str:
+    raw = str(folder or "").strip()
+    if not raw:
+        return ""
+    try:
+        target = Path(raw).expanduser().resolve()
+    except OSError:
+        return ""
+    for row in (_load_saved().get("projects") or []):
+        if not isinstance(row, dict):
+            continue
+        work = str(row.get("work_dir") or "").strip()
+        if not work:
+            continue
+        try:
+            if Path(work).expanduser().resolve() == target:
+                return str(row.get("id") or "")
+        except OSError:
+            continue
+    return ""
 
 
 def is_primary_project(project_id: str | None) -> bool:
@@ -759,7 +782,7 @@ def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = 
                     continue
                 current[key] = {"model": str(item.get("model") or "").strip()}
             row["seats"] = current
-        for key in ("hermes_home", "hermes_instance_id", "hermes_session_id", "account_id", "site_url"):
+        for key in ("hermes_home", "hermes_instance_id", "hermes_session_id", "opencode_session_id", "account_id", "site_url"):
             if key not in patch:
                 continue
             value = str(patch.get(key) or "").strip()
@@ -785,7 +808,7 @@ def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = 
                 "primary": len(data.get("projects") or []) == 0,
                 "workers": [],
             }
-            for key in ("hermes_home", "hermes_instance_id", "hermes_session_id", "account_id", "site_url"):
+            for key in ("hermes_home", "hermes_instance_id", "hermes_session_id", "opencode_session_id", "account_id", "site_url"):
                 if key in patch:
                     value = str(patch.get(key) or "").strip()
                     if value:
