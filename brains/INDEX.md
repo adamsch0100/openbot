@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Mobile PR #31 clean + undraft, cache v=56 (a454e3a) — ready for merge to master + Railway deploy
-Last: Fixed all shot issues: rail→drawer, chat full-width, hamburger, no nested scroll, safe-area
-Next: Merge PR #31 to master → Railway auto-deploy → live phone smoke at 390×844
-Blocker: Railway serves master only (branch not live yet for CEO test)
+Now: Fixed sticky session + wallet rotation + Go model routing (PR #32)
+Last: Mobile PR #31 merged (6c465c4) — phone-first layout + cache v=56 live on Railway
+Next: Merge PR #32 → deploy → re-smoke Think/Research (should clear 20260906_030233_2ae479)
+Blocker: live Think/Research re-smoke not done yet
 
 ## Vault
 
