@@ -8,66 +8,70 @@ See `OPENBOT.md` for the spec and `AGENTS.md` for coding law.
 
 OpenBot is **shipping at https://openbot-production-9334.up.railway.app** with real operator usage.
 
-The following PRs (#1–#15) are **shipped on master** and form the v1 foundation:
+### Pre-Gap Foundation ✓
 
-### Core Infrastructure ✓
-- **PR #1–#4: Board + Engine + Railway + First-run** — Python stdlib HTTP server, engine detection (hermes/opencode binaries), Railway healthcheck + 0.0.0.0 binding, folder picker, PIN setup, credit lockup display
-
-### Memory & Routing ✓
-- **PR #5: INDEX + brains + Org tree** — `brains/INDEX.md` source of truth, 4-line brains (Now/Last/Next/Blocker) per bot, Chief of Staff + CEO projects + named workers (Think/Code/Research/Ops lanes)
+Before the gap ship order, OpenBot had:
+- **Board server** — Python stdlib HTTP server on loopback/Railway (8787), healthcheck, 0.0.0.0 binding
+- **Engine detection** — finds `hermes` and `opencode` binaries, offers install links
+- **First-run flow** — folder picker, engine setup, PIN setup, credit lockup display
+- **INDEX + brains** — `brains/INDEX.md` source of truth, 4-line brains (Now/Last/Next/Blocker) per bot
+- **Org tree** — Chief of Staff, CEO projects, named workers (Think/Code/Research/Ops lanes)
 - **Router** — message classification routes to Cos/Builder/Research/Ops/Think presets
 - **Thread storage** — UI chat history stored per CEO/worker, but NOT sent as prompt (job packets only)
 - **Job log** — receipts in `jobs/` with engine, model, tokens, USD estimate, diff metadata
-
-### Agent Execution ✓
-- **Cos (Chat)** — Hermes Agent chat with auto keyring fallback, files-first replies, staff briefing
-- **Builder** — `opencode run` with JSON event streaming, git snapshots, diff+untracked capture
-- **Think** — Hermes Agent job packets (INDEX + brain + extra), session resume, skills, login staging
-- **Research** — fetch + Hermes snapshot with accessibility trees, login wall detection
-- **Ops** — inbox tickets + Hermes cron creation (schedule parsing or Hermes-planned job)
-
-### Spend & Wallets ✓
-- **Keyring** — multiple OpenCode/OpenRouter/Nous accounts with fallback order, per-CEO overrides
-- **Spend tracking** — job receipts, wallet classification (Go included quota vs PAYG), empty wallet detection
-- **Spend caps** — configurable USD cap with period (week/month), staff + per-CEO overrides
-- **Wallet failover** — automatic keyring walk on "insufficient balance" errors, mark-empty persistence
-
-### UX & Approvals ✓
-- **PR #6: Builder delight** — folder → `opencode run` → streaming progress → Diff Accept/Reject → inline INDEX updates
-- **PR #7: Chat reliability** — Cos/CEO hang/bleed/silent fail hardening, Muse auto-ack (500f218), CEO chat bleed fix (a9d5f66)
-- **PR #8: Sidebar Agent OS** — avatars/initials, Now/Blocker chips from INDEX, busy/unread badges, fast CoS↔CEO switch
+- **Agent execution** — Cos (Hermes chat), Builder (`opencode run`), Think (Hermes job packets), Research (fetch + snapshot), Ops (inbox + cron)
+- **Keyring + spend** — multiple wallets with fallback, spend tracking, caps (week/month), wallet failover
 - **Diff cards** — Accept/Reject on Builder diffs, git restore on reject
 - **Login walls** — vault logins (username/pass per site), auto-fill staging, approval flow
 - **PIN unlock** — operator PIN gates the board (cookie-based unlock tokens)
 - **Model picker** — seat config (Chat/Think/Code/Research/Ops) with Auto ladder, per-CEO pins
 - **Live streaming** — SSE-based `chat/stream` with delta, progress, stop button
 - **Activity feed** — job cards, pending approvals (diff/login), Hermes cron ingestion
-
-### Advanced ✓
-- **PR #9: Composer attachments** — attach button, drag-drop, paste images; thumbnails in thread; paths in job packets for Hermes/OpenCode
-- **PR #10: Connectors UX** — Settings → Connectors panel, Hermes skills + MCP catalog, per-seat toggles, per-CEO overrides
-- **PR #11: @seat mentions + handoff cards** — @-mention seats in composer with autocomplete, agent-to-agent handoff cards (from→to, task/status/output)
-- **PR #12: Memory pane** — editable Now/Last/Next/Blocker cards, search across INDEX and job RESULT snippets, edit fields + Save to patch INDEX/brains
-- **PR #13: Handoff bus protocol** — standardized `bus/handoffs/` file schema (TASK/STATUS/OUTPUT/FROM/TO/NEXT OWNER), agents read open handoffs on job start, Memory pane displays open handoffs with claim button
-- **PR #14: Builder validation gate** — pre-Accept validation runs syntax/lint checks (Python `py_compile`, JS `node --check`, optional ruff/eslint), failures block Accept with Force Accept escape hatch
-- **PR #15: Routines** — multi-step scheduled flows (ordered steps like morning: Code status → Think summarize → Ops note), Hermes cron integration, resume capability for failed steps, Settings UI
 - **MCP toggles** — GitHub MCP on Builder (per-CEO), OAuth credential flow
 - **Hermes import** — import Railway Hermes backups, connect remote instances, pull Telegram sessions
 - **Skills config** — Hermes skill allowlist (Tools OFF for Cos, on-demand for Think/Research/Ops)
 - **Browser snapshots** — fetch-first ladder, snapshot worker, LOGIN_WALL marker, vault staging
 - **Git awareness** — status, diff against HEAD, untracked detection, snapshot/restore
 - **Multi-lane queueing** — concurrent CEO threads, message queuing during live runs
+- **Credit & branding** — NOTICE + README with MIT lockup, footer attribution, BRAND.md compliance
 
-### Credit & Branding ✓
-- **NOTICE + README** — required MIT credit lockup (Hermes Agent, OpenCode)
-- **Footer** — three-line attribution, engine links, "LOCAL ORG." on mark
-- **BRAND.md compliance** — no rebrand, no affiliation claim, engine name on every job card
+### Gap Ship Order (Shipped PRs #1–#15) ✓
+
+**PR #1:** [Add comprehensive ROADMAP.md documentation](https://github.com/adamsch0100/openbot/pull/1) — locked original ship order (Builder delight, Chat reliability, Sidebar Agent OS)
+
+**PR #2:** [ROADMAP PR #1: Builder Delight Loop](https://github.com/adamsch0100/openbot/pull/2) — folder → `opencode run` → streaming progress → Diff Accept/Reject → inline INDEX updates
+
+**PR #3:** [ROADMAP PR #2: Chat OS Reliability](https://github.com/adamsch0100/openbot/pull/3) — Cos/CEO hang/bleed/silent fail hardening, Muse auto-ack (500f218), CEO chat bleed fix (a9d5f66), timeout handling, fallback error cards
+
+**PR #4:** [PR #3: Sidebar Agent OS](https://github.com/adamsch0100/openbot/pull/4) — avatars/initials, Now/Blocker chips from INDEX, busy/unread badges, fast CoS↔CEO switch
+
+**PR #5:** [Update INDEX status: ship order complete, sidebar merged, Railway target](https://github.com/adamsch0100/openbot/pull/5) — INDEX milestone update after gap ship order #1–#3 complete
+
+**PR #6:** [Add Turn Report Card (Chat Gap #1)](https://github.com/adamsch0100/openbot/pull/6) — brief card after job turns, inline summary of work done, INDEX update visibility
+
+**PR #7:** [Chat gap #2: HERMES LIVE TOOL PROGRESS](https://github.com/adamsch0100/openbot/pull/7) — Hermes tool call progress chips, live streaming for Think/Research/Ops
+
+**PR #8:** [Implement keep-going step chain (Chat Gap #3)](https://github.com/adamsch0100/openbot/pull/8) — multi-step jobs, carry RESULT forward, "Continue from here" flow
+
+**PR #9:** [Composer attachments: files + photos](https://github.com/adamsch0100/openbot/pull/9) — attach button, drag-drop, paste images; thumbnails in thread; paths in job packets for Hermes/OpenCode
+
+**PR #10:** [Connector UX + shared tool plane](https://github.com/adamsch0100/openbot/pull/10) — Settings → Connectors panel, Hermes skills + MCP catalog, per-seat toggles, per-CEO overrides
+
+**PR #11:** [@seat mentions + in-stream handoff cards](https://github.com/adamsch0100/openbot/pull/11) — @-mention seats in composer with autocomplete, agent-to-agent handoff cards (from→to, task/status/output)
+
+**PR #12:** [Memory pane: structured INDEX cards + search](https://github.com/adamsch0100/openbot/pull/12) — editable Now/Last/Next/Blocker cards, search across INDEX and job RESULT snippets, edit fields + Save to patch INDEX/brains
+
+**PR #13:** [Handoff Bus Protocol](https://github.com/adamsch0100/openbot/pull/13) — standardized `bus/handoffs/` file schema (TASK/STATUS/OUTPUT/FROM/TO/NEXT OWNER), agents read open handoffs on job start, Memory pane displays open handoffs with claim button
+
+**PR #14:** [Builder validation gate with Force Accept](https://github.com/adamsch0100/openbot/pull/14) — pre-Accept validation runs syntax/lint checks (Python `py_compile`, JS `node --check`, optional ruff/eslint), failures block Accept with Force Accept escape hatch
+
+**PR #15:** [Routines: multi-step scheduled flows](https://github.com/adamsch0100/openbot/pull/15) — ordered steps (e.g., morning: Code status → Think summarize → Ops note), Hermes cron integration, resume capability for failed steps, Settings UI
 
 ---
 
 ## Gaps vs World-Class Multi-Agent Chat OS
 
-OpenBot has **Week 1 + foundational v1 ship complete**. PRs #1–#15 shipped the board, Builder delight, Chat reliability, Sidebar Agent OS, Turn report stream, Hermes progress visibility, Keep-going, Composer attachments, Connectors UX, @mentions + handoff cards, Memory pane, Handoff bus protocol, Builder validation, and Routines.
+OpenBot has **Week 1 + gap ship order #2–#4 (Builder delight, Chat reliability, Sidebar Agent OS), chat gaps #6–#8 (Turn report, Hermes progress, Keep-going), and PRs #9–#15 (Attachments, Connectors, @mentions, Memory, Handoff bus, Validation, Routines) complete**.
 
 Here's what remains to reach **world-class Chat OS** status:
 
