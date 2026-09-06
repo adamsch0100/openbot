@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #45 MERGE-READY — Fix Meta junk in brief panel (wire cleanBotText into all display paths)
-Last: Phone smoke FAIL on #44. Meta contributor/pricing/training text still appeared in CoS brief panel (not just chat bubbles). Root cause: renderBotMeta()/renderIndex()/emptyStreamHtml() bypassed sanitization. Fixed: wired cleanBotText into all 3 paths, added 3 new regexes matching screenshot text ("permits Meta to use your prompts", "Do NOT use it for confidential", "For the same model with no training"). v=61. Keep 16px textarea from #44.
-Next: Operator phone retest, merge when clean
+Now: PR #46 MERGE-READY — Fix Meta junk multiline blocks (rewrite cleanBotText with proper [\s\S] matching + tests)
+Last: Phone re-smoke FAIL on #45. Multi-line Meta contributor tier blocks from /api/jobs left orphan fragments ("prompts and completions", "See current pricing"). Root cause: #45 regexes line-anchored (^...$) or didn't match across newlines. Fixed: rewrote cleanBotText with [\s\S]*? multiline block removal from "!!! CONTRIBUTOR" through "standard v", strip mid-line CONTRIBUTOR, strip orphans. Added 2 test scripts (test-cleanBotText.js + edge-cases.js) with real fixture. All tests PASS. v=62.
+Next: Phone re-smoke with tests proven
 Blocker: —
 
 ## Vault
