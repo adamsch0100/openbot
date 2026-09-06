@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: WC-8 harness+partial live smoke (2/4; Builder/Research PIN-blocked; Ops GET /api/routines only, not create-cron).
-Last: WC-7 Self-Build Loop, WC-6 Polish Pack, WC-5 Observability, WC-4 Onboarding, WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: WC-8 live smoke (PIN unlock) OR operator directs next
-Blocker: PIN unlock required for Builder/Research chat paths (and Ops create-cron not exercised)
+Now: Docker engines + OPENBOT_DATA_DIR=/data (PR #27) — MERGE-READY pending CoS merge/deploy
+Last: WC-8 harness+partial live smoke, WC-7 Self-Build Loop, WC-6 Polish Pack, WC-5 Observability, WC-4 Onboarding, WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
+Next: CoS merge → Railway GitHub deploy → smoke Health+engines+org(saa/litlogic)+Builder/Research+Ops
+Blocker: live deploy + smoke not done yet
 
 ## Vault
 
