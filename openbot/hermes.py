@@ -415,26 +415,22 @@ def chat(
     with tempfile.TemporaryDirectory(prefix="openbot-hermes-") as tmp:
         root = Path(tmp)
         usage_path = root / "usage.json"
-        query = root / "query.txt"
-        query.write_text(prompt, encoding="utf-8")
         if talk:
-            # Talk mode: clean one-shot query for board Chat (no banners/tool previews).
-            # Use hermes chat -q with --quiet for programmatic output.
+            # Talk mode: hermes -z scripted one-shot (final reply only, no tool previews).
+            # Valid flags: --yolo, --ignore-rules, --usage-file, --provider, --model
             cmd = [
                 binary,
-                "chat",
-                "--query-file",
-                str(query),
-                "--quiet",
+                "-z",
+                prompt,
                 "--yolo",
                 "--ignore-rules",
-                "--source",
-                "openbot",
                 "--usage-file",
                 str(usage_path),
             ]
         else:
             # Job mode: full multi-turn session with toolsets and skills.
+            query = root / "query.txt"
+            query.write_text(prompt, encoding="utf-8")
             cmd = [
                 binary,
                 "chat",
@@ -455,7 +451,7 @@ def chat(
             if resume:
                 cmd.extend(["--resume", resume])
             elif session:
-                cmd.extend(["--continue", session, "--create-if-missing"])
+                cmd.extend(["--continue", session])
             cmd.extend(["--usage-file", str(usage_path)])
         if provider and model_id:
             cmd.extend(["--provider", provider, "-m", model_id])
