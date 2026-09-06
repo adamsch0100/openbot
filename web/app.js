@@ -2701,7 +2701,8 @@ function renderReportCard(job) {
   // RESULT section (≤20 lines or clear empty/error)
   const result = document.createElement("div");
   result.className = "report-result";
-  const text = String(job.text || "").trim();
+  // Clean bot text before display (ops/think/research jobs can have Meta junk)
+  const text = cleanBotText(String(job.text || "")).trim();
   if (text) {
     const lines = text.split("\n");
     const displayLines = lines.slice(0, 20);
@@ -2721,19 +2722,19 @@ function renderReportCard(job) {
     delta.className = "report-index-delta";
     const rows = [];
     if (job.index_now) {
-      const val = String(job.index_now).trim();
+      const val = cleanBotText(String(job.index_now)).trim();
       rows.push(`<div><dt>Now</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
     }
     if (job.index_last) {
-      const val = String(job.index_last).trim();
+      const val = cleanBotText(String(job.index_last)).trim();
       rows.push(`<div><dt>Last</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
     }
     if (job.next) {
-      const val = String(job.next).trim();
+      const val = cleanBotText(String(job.next)).trim();
       rows.push(`<div><dt>Next</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
     }
     if (job.index_blocker) {
-      const val = String(job.index_blocker).trim();
+      const val = cleanBotText(String(job.index_blocker)).trim();
       const isBlocked = val && val !== "—";
       rows.push(`<div><dt>Blocker</dt><dd class="${isBlocked ? "blocker" : "empty"}">${escapeHtml(val)}</dd></div>`);
     }

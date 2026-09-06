@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #47 MERGE-READY — Fix card() bypass (wire cleanBotText into job card render path)
-Last: Phone smoke FAIL on #46. cleanBotText works on fixtures but ops/think/research job cards still show Meta junk. Root cause: renderJob() → card(kind, body) with raw job.text, card() does escapeHtml(body) without cleanBotText. Fixed: one-line in card() — const cleaned = kind.includes('bot') ? cleanBotText(body) : body. Documented all 5 render paths in test-cleanBotText.js. v=63.
-Next: Phone re-smoke on all job types (talk/ops/think/research)
+Now: PR #49 MERGE-READY — Fix renderReportCard bypass (wire cleanBotText into report card render path)
+Last: Phone smoke FAIL on #47. Research card still shows Meta junk in report RESULT box. Root cause: renderReportCard(job) dumps raw job.text into .report-result without cleanBotText. Fixed: line 2704 const text = cleanBotText(String(job.text || '')).trim(), also clean INDEX delta fields (index_now/last/next/blocker). All 6 render paths now covered. v=64. Also PR #48 open: world-class mobile UX redesign.
+Next: Phone re-smoke on Research/Ops/Think jobs
 Blocker: —
 
 ## Vault
