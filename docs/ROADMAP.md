@@ -456,7 +456,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-2 Coding worker hardening
+Next: WC-3 Spend dashboard
 
 ---
 
