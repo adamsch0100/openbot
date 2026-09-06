@@ -132,7 +132,70 @@ def test_ensure_gateways_starts_for_all_ceos():
     assert mock_ensure.call_count == 2
 
 
-def test_gateway_api_endpoint(client):
+def test_cron_list_parses_schedules():
+    """cron_list should parse Hermes cron output into structured schedules."""
+    from openbot.hermes import cron_list
+    
+    mock_output = """
+job-1  saa-daily-rank  0 9 * * *  enabled   2026-09-06
+job-2  saa-cleanup     */30 * * * *  enabled   2026-09-06
+job-3  old-job         0 0 * * *  disabled  2026-09-05
+    """
+    
+    with patch("openbot.hermes.which", return_value="/usr/bin/hermes"):
+        with patch("openbot.hermes._run", return_value=(0, mock_output)):
+            result = cron_list()
+    
+    assert result["ok"] is True
+    schedules = result.get("schedules") or []
+    assert len(schedules) == 3
+    
+    # Check first schedule
+    assert schedules[0]["id"] == "job-1"
+    assert schedules[0]["name"] == "saa-daily-rank"
+    assert schedules[0]["schedule"] == "0 9 * * *"
+    assert schedules[0]["enabled"] is True
+    assert schedules[0]["source"] == "hermes"
+    
+    # Check disabled schedule
+    assert schedules[2]["enabled"] is False
+
+
+def test_migrate_crons_to_local():
+    """migrate_crons_to_local should update all crons to deliver=local."""
+    from openbot.hermes import migrate_crons_to_local
+    
+    mock_schedules = [
+        {"id": "job-1", "name": "saa-daily", "schedule": "0 9 * * *"},
+        {"id": "job-2", "name": "saa-hourly", "schedule": "0 * * * *"},
+    ]
+    
+    with patch("openbot.hermes.cron_list", return_value={"ok": True, "schedules": mock_schedules}):
+        with patch("openbot.hermes.cron_update_delivery", return_value={"ok": True}) as mock_update:
+            result = migrate_crons_to_local("/data/hermes-homes/saa-homes")
+    
+    assert result["ok"] is True
+    assert len(result["migrated"]) == 2
+    assert result["total"] == 2
+    assert mock_update.call_count == 2
+
+
+def test_routines_api_includes_hermes_crons(client):
+    """GET /api/routines should include both OpenBot routines and Hermes crons."""
+    mock_openbot_routines = [{"id": "routine-1", "name": "OpenBot Routine", "source": "openbot"}]
+    mock_hermes_crons = [{"id": "job-1", "name": "SAA Daily", "source": "hermes"}]
+    
+    with patch("openbot.server.list_routines", return_value=mock_openbot_routines):
+        with patch("openbot.server.project_tools", return_value={"hermes_home": "/data/hermes-homes/saa"}):
+            with patch("openbot.server.cron_list", return_value={"ok": True, "schedules": mock_hermes_crons}):
+                response = client.get("/api/routines?project_id=saa-homes")
+    
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "routines" in data
+    assert data["openbot_count"] == 1
+    assert data["hermes_count"] == 1
+    assert len(data["routines"]) == 2
     """GET /api/hermes/gateway/status should return status."""
     with patch("openbot.server.gateway_status", return_value={"ok": True, "running": True, "enabled_count": 33}):
         response = client.get("/api/hermes/gateway/status?project_id=saa-homes")

@@ -634,15 +634,93 @@ def import_backup(zip_path: str | Path, home: str | Path) -> dict:
     }
 
 
-def cron_list(cwd: str | None = None) -> dict:
+def cron_list(cwd: str | None = None, home: str | Path | None = None) -> dict:
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing", "schedules": []}
+    code, out = _run([binary, "cron", "list"], cwd, 30, home=home)
+    
+    # Parse cron list into structured schedules
+    schedules = []
+    lines = (out or "").strip().splitlines()
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("-") or "job" in line.lower() and "schedule" in line.lower():
+            continue
+        
+        # Parse cron list format (typically: job_id  name  schedule  status  last_run)
+        parts = line.split(maxsplit=4)
+        if len(parts) >= 3:
+            job_id = parts[0]
+            name = parts[1]
+            schedule = parts[2] if len(parts) > 2 else ""
+            status = parts[3] if len(parts) > 3 else "unknown"
+            last_run = parts[4] if len(parts) > 4 else ""
+            
+            schedules.append({
+                "id": job_id,
+                "name": name,
+                "schedule": schedule,
+                "enabled": "disabled" not in status.lower(),
+                "status": status,
+                "last_run": last_run,
+                "source": "hermes",
+            })
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": out.strip() if out else "(no cron jobs)",
+        "schedules": schedules,
+    }
+
+
+def cron_update_delivery(job_id: str, delivery: str = "local", cwd: str | None = None, home: str | Path | None = None) -> dict:
+    """Update an existing cron's delivery method. Migrates deliver=origin to deliver=local."""
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
-    code, out = _run([binary, "cron", "list"], cwd, 30)
-    return {"ok": code == 0, "code": code, "text": out.strip() or "(no cron jobs)"}
+    
+    # hermes cron update <job_id> --deliver <method>
+    code, out = _run([binary, "cron", "update", job_id, "--deliver", delivery], cwd, 30, home=home)
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": out.strip() or ("updated delivery" if code == 0 else "update failed"),
+        "job_id": job_id,
+        "delivery": delivery,
+    }
 
 
-def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None) -> dict:
+def migrate_crons_to_local(home: str | Path | None = None) -> dict:
+    """Migrate all crons in a Hermes home from deliver=origin to deliver=local."""
+    result = cron_list(home=home)
+    if not result.get("ok"):
+        return {"ok": False, "error": "could not list crons", "migrated": []}
+    
+    schedules = result.get("schedules") or []
+    migrated = []
+    failed = []
+    
+    for sched in schedules:
+        job_id = sched.get("id")
+        if not job_id:
+            continue
+        
+        # Update to deliver=local
+        update_result = cron_update_delivery(job_id, "local", home=home)
+        if update_result.get("ok"):
+            migrated.append(job_id)
+        else:
+            failed.append({"id": job_id, "error": update_result.get("text")})
+    
+    return {
+        "ok": len(failed) == 0,
+        "migrated": migrated,
+        "failed": failed,
+        "total": len(schedules),
+    }
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}

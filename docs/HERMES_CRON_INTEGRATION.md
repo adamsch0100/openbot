@@ -84,6 +84,73 @@ Response:
    - Posts snippet to INDEX
    - Writes to `threads/{ceo}.json`
 
+### Migrating Existing Crons from deliver=origin
+
+If SAA Homes crons were created with `--deliver origin` (old Hermes chat), migrate them:
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/hermes/crons/migrate-delivery \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id": "saa-homes"}'
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "migrated": ["job-1", "job-2", "job-3"],
+  "failed": [],
+  "total": 50
+}
+```
+
+This updates all crons in the SAA Homes Hermes home to `--deliver local`.
+
+### Listing Crons in OpenBot UI
+
+The `/api/routines` endpoint now includes both OpenBot routines **and** Hermes crons:
+
+```bash
+curl http://127.0.0.1:8787/api/routines?project_id=saa-homes
+```
+
+Response:
+
+```json
+{
+  "routines": [
+    {
+      "id": "routine-abc",
+      "name": "Weekly Report",
+      "schedule": "0 9 * * 1",
+      "enabled": true,
+      "source": "openbot"
+    },
+    {
+      "id": "job-123",
+      "name": "saa-daily-rank",
+      "schedule": "0 9 * * *",
+      "enabled": true,
+      "status": "enabled",
+      "last_run": "2026-09-06",
+      "source": "hermes"
+    }
+  ],
+  "openbot_count": 1,
+  "hermes_count": 49
+}
+```
+
+**Fields for Hermes crons:**
+- `id`: Hermes job ID
+- `name`: Cron name
+- `schedule`: Schedule expression
+- `enabled`: true if not disabled
+- `status`: Hermes status string
+- `last_run`: Last execution timestamp
+- `source`: "hermes" (vs "openbot" for routines)
+
 ### Verification
 
 Check that cron results appear in the CEO chat:
@@ -127,13 +194,32 @@ curl http://127.0.0.1:8787/api/org | jq '.projects[] | select(.id=="saa-homes") 
 
 ### 3. List Active Schedules
 
+Via OpenBot API (includes both OpenBot routines and Hermes crons):
+
+```bash
+curl http://127.0.0.1:8787/api/routines?project_id=saa-homes
+```
+
+Should show ~50 total schedules (OpenBot routines + Hermes crons), 33 enabled.
+
+Or directly via Hermes CLI:
+
 ```bash
 # Inside the SAA Homes Hermes home
 cd /data/hermes-homes/saa-homes
 hermes cron list
 ```
 
-You should see ~50 crons, 33 enabled.
+### 3a. Migrate Existing Crons to deliver=local
+
+If SAA crons are still using `deliver=origin` (results go to old Hermes chat):
+
+```bash
+curl -X POST http://127.0.0.1:8787/api/hermes/crons/migrate-delivery \
+  -d '{"project_id": "saa-homes"}'
+```
+
+Expect: `"migrated": [...]` with all job IDs.
 
 ### 4. Watch for Cron Results
 
@@ -285,7 +371,43 @@ Returns:
 }
 ```
 
-## See Also
+### POST `/api/hermes/crons/migrate-delivery`
+
+Migrate all crons in a CEO's Hermes home from `deliver=origin` to `deliver=local`.
+
+Body:
+
+```json
+{
+  "project_id": "saa-homes"
+}
+```
+
+Returns:
+
+```json
+{
+  "ok": true,
+  "migrated": ["job-1", "job-2", ...],
+  "failed": [],
+  "total": 50
+}
+```
+
+### GET `/api/routines`
+
+Query params:
+- `project_id` (optional): CEO scope. Omit for staff.
+
+Returns both OpenBot routines and Hermes crons:
+
+```json
+{
+  "routines": [...],
+  "openbot_count": 1,
+  "hermes_count": 49
+}
+```
 
 - `openbot/hermes.py` — Gateway functions (`gateway_status`, `gateway_start`, `gateway_stop`)
 - `openbot/cronwatch.py` — Polls cron runs and routes to threads
