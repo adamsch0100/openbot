@@ -211,6 +211,27 @@ class TestRoutinesMerge(unittest.TestCase):
         self.assertEqual(result["total"], len(result["routines"]) + 2)
         self.assertEqual(result["hermes_crons"][0]["source"], "hermes")
         self.assertEqual(result["hermes_crons"][0]["name"], "saa-check")
+    
+    @patch("openbot.org.project_tools")
+    @patch("openbot.hermes.cron_list")
+    def test_list_routines_calls_cron_list_with_home_kwarg(self, mock_cron_list, mock_project_tools):
+        """list_routines calls cron_list with home= keyword argument, not positional timeout."""
+        from openbot.routines import list_routines
+        
+        # Setup: mock project_tools to return a hermes_home
+        mock_project_tools.return_value = {"hermes_home": "/path/to/hermes"}
+        mock_cron_list.return_value = {
+            "ok": True,
+            "jobs": [
+                {"id": "test123", "name": "test-cron", "schedule": "0 9 * * *", "deliver": "local"},
+            ]
+        }
+        
+        result = list_routines(project_id="test-project", include_hermes=True)
+        
+        # Verify: cron_list was called with home= keyword (no timeout kwarg)
+        mock_cron_list.assert_called_once_with(home="/path/to/hermes")
+        self.assertEqual(result["hermes_count"], 1)
 
 
 class TestNonBlocking(unittest.TestCase):
