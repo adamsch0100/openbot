@@ -2380,7 +2380,9 @@ function setRoute(name) {
 function card(kind, body, meta) {
   const el = document.createElement("article");
   el.className = `card ${kind}`;
-  el.innerHTML = `<div class="meta">${escapeHtml(meta || kind)}</div><pre>${escapeHtml(body)}</pre>`;
+  // Clean bot responses (ops/think/research jobs) before display
+  const cleaned = kind.includes("bot") ? cleanBotText(body) : body;
+  el.innerHTML = `<div class="meta">${escapeHtml(meta || kind)}</div><pre>${escapeHtml(cleaned)}</pre>`;
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
   return el;

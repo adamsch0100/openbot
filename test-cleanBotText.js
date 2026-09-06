@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 // Test cleanBotText against real multi-line Meta contributor tier fixture
+//
+// RENDER PATHS THAT MUST CALL cleanBotText:
+// 1. bubble() - chat bubbles (kind === "bot") ✅
+// 2. card() - job cards for ops/think/research (kind.includes("bot")) ✅
+// 3. renderBotMeta() - brief panel (org.staff/project.index) ✅
+// 4. renderIndex() - generic brief render ✅
+// 5. emptyStreamHtml() - empty stream state ✅
+//
+// If adding new render paths, wire cleanBotText or Meta junk will reappear.
 
 function cleanBotText(text) {
   if (!text) return "";
