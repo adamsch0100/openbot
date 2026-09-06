@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Hermes cron/gateway integration MERGE-READY — visibility, supervision, delivery routing for SAA Homes
-Last: Added gateway status API, auto-start on boot, cron-to-thread routing, docs/tests
-Next: Verify SAA Homes crons fire + appear in CEO chat after deploy, then railway-down old boxes when 48h clean
+Now: Hermes gateway+cron visibility shipping (SAA)
+Last: world-class v2 CoS GO (#35) + mobile #34
+Next: deploy verify gateway running + /api/routines hermes_count + migrate-delivery for saa-homes
 Blocker: —
 
 ## Vault
