@@ -1841,7 +1841,7 @@ footer a { color: var(--bronze); }
     gap: 4px;
   }
   .composer textarea {
-    font-size: 15px; /* Readable but compact, prevents iOS zoom */
+    font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
     min-height: 42px;
     max-height: 120px;
     padding: 6px 0;
@@ -2123,7 +2123,7 @@ footer a { color: var(--bronze); }
   .composer textarea {
     min-height: 40px;
     max-height: 100px;
-    font-size: 14px;
+    font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
   }
   .composer-input-row {
     gap: 5px;
