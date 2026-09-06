@@ -551,7 +551,7 @@ def run_opencode(
         if _attempt < 3 and _is_transient_failure(code, out_text):
             if cancel is not None and cancel.is_set():
                 return code, out_text
-            backoff = 2 ** _attempt  # 1→2s, 2→4s, 3→8s
+            backoff = 2 ** (_attempt + 1)  # 0→2s, 1→4s, 2→8s
             if on_progress:
                 try:
                     _call_progress(
@@ -1784,6 +1784,36 @@ def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: boo
             remote_url = get_remote_url(folder)
             if remote_url:
                 update_fields["remote_url"] = remote_url
+            
+            # Open PR with gh CLI
+            pr_title = f"Builder job {job_id}"
+            pr_body = f"Automated PR from OpenBot Builder\n\nJob ID: {job_id}\nMessage: {str(job.get('message') or 'code changes')[:200]}"
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["gh", "pr", "create", "--title", pr_title, "--body", pr_body, "--head", branch_name],
+                    cwd=folder,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+                if result.returncode == 0:
+                    # Extract PR URL from output
+                    pr_url = result.stdout.strip().split("\n")[-1] if result.stdout else ""
+                    if pr_url.startswith("http"):
+                        update_fields["pr_url"] = pr_url
+                        update_fields["pr_opened"] = True
+                    else:
+                        update_fields["pr_error"] = "PR created but no URL returned"
+                else:
+                    update_fields["pr_error"] = result.stderr[:500] if result.stderr else "gh pr create failed"
+            except subprocess.TimeoutExpired:
+                update_fields["pr_error"] = "gh pr create timed out"
+            except FileNotFoundError:
+                update_fields["pr_error"] = "gh CLI not found"
+            except Exception as e:
+                update_fields["pr_error"] = str(e)[:500]
         
         updated = update_job(job_id, update_fields)
         patch_lines("Last", f"accepted diff {job_id}")

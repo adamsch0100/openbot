@@ -86,14 +86,14 @@ class TestOpenCodeRetry(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("network error", out)
             self.assertEqual(mock_popen.call_count, 4)  # initial + 3 retries
-            # Check that sleep was called with backoff values (may have extra 0.05 sleeps from loop)
+            # Check that sleep was called with backoff values 2, 4, 8 (may have extra 0.05 sleeps from loop)
             self.assertGreaterEqual(mock_sleep.call_count, 3)
-            # Check that backoff values are present in the calls
+            # Check that backoff values 2, 4, 8 are present in the calls
             sleep_args = [call[0][0] for call in mock_sleep.call_args_list if call[0][0] >= 1]
             self.assertGreaterEqual(len(sleep_args), 3)
-            self.assertIn(1, sleep_args)
             self.assertIn(2, sleep_args)
             self.assertIn(4, sleep_args)
+            self.assertIn(8, sleep_args)
 
 
 class TestRevertAccept(unittest.TestCase):
