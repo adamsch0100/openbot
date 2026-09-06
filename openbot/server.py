@@ -29,7 +29,7 @@ from .config import (
 from .cronwatch import ingest_cron_runs
 from .detect import detect
 from .gitutil import git_status
-from .hermes import mcp_catalog, skills_list
+from .hermes import mcp_catalog, skills_list, gateway_status, gateway_start, gateway_stop, migrate_crons_to_local
 from .onboarding import onboarding_status, test_job_prompt
 from .hermes_import import (
     add_instance,
@@ -737,6 +737,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, public_keyring())
         if path == "/api/hermes/instances":
             return self._json(200, {"instances": public_instances()})
+        if path == "/api/hermes/gateway/status":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            hermes_home = None
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+            return self._json(200, gateway_status(hermes_home))
         instance_sessions = INSTANCE_SESSIONS.match(path)
         if instance_sessions:
             try:
@@ -749,7 +757,29 @@ class Handler(SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             from .routines import list_routines
-            return self._json(200, {"routines": list_routines(project_id)})
+            
+            # Get OpenBot routines
+            openbot_routines = list_routines(project_id)
+            
+            # Get Hermes crons for this CEO
+            hermes_crons = []
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+                if hermes_home:
+                    from .hermes import cron_list
+                    cron_result = cron_list(home=hermes_home)
+                    if cron_result.get("ok"):
+                        hermes_crons = cron_result.get("schedules") or []
+            
+            # Merge both lists
+            all_routines = openbot_routines + hermes_crons
+            
+            return self._json(200, {
+                "routines": all_routines,
+                "openbot_count": len(openbot_routines),
+                "hermes_count": len(hermes_crons),
+            })
         if path == "/api/routines/templates":
             from .routine_templates import get_routine_templates
             return self._json(200, {"templates": get_routine_templates()})
@@ -1022,6 +1052,30 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/engines/hermes/open":
             result = open_hermes()
+            return self._json(200 if result.get("ok") else 400, result)
+        if path == "/api/hermes/gateway/start":
+            project_id = str(data.get("project_id") or "").strip() or None
+            hermes_home = None
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+            result = gateway_start(hermes_home, wait=bool(data.get("wait")))
+            return self._json(200 if result.get("ok") else 400, result)
+        if path == "/api/hermes/gateway/stop":
+            project_id = str(data.get("project_id") or "").strip() or None
+            hermes_home = None
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+            result = gateway_stop(hermes_home)
+            return self._json(200 if result.get("ok") else 400, result)
+        if path == "/api/hermes/crons/migrate-delivery":
+            project_id = str(data.get("project_id") or "").strip() or None
+            hermes_home = None
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+            result = migrate_crons_to_local(hermes_home)
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/org/projects":
             try:

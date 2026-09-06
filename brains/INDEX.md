@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: world-class v2 signed by CoS (2026-09-06)
-Last: Chat smoke PASS (#33 Think/Research/Builder) + mobile phone proof PASS (#34 v=57 @390×844 hamburger/overlay/scrim)
-Next: operator directs / optional polish (Meta contributor banner strip; Builder Hermes/muse label oddity)
+Now: Hermes gateway+cron visibility shipping (SAA)
+Last: world-class v2 CoS GO (#35) + mobile #34
+Next: deploy verify gateway running + /api/routines hermes_count + migrate-delivery for saa-homes
 Blocker: —
 
 ## Vault
