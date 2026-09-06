@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Restore --create-if-missing for job mode --continue
-Last: PR #32 + #31 merged (sticky session + mobile layout live)
-Next: Deploy + re-smoke Think/Research/Ops
-Blocker: live Think/Research re-smoke not done yet
+Now: PR #34 rebased, MERGE-READY — fix mobile rail CSS specificity (remove inline style)
+Last: Resolved rebase conflicts, fix intact: no inline style, no JS display toggle, v=57
+Next: Merge #34 → Railway deploy → live phone smoke at 390×844 verify hamburger+overlay
+Blocker: none
 
 ## Vault
 
