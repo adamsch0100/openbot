@@ -63,6 +63,7 @@ from .threadstore import search_quote, thread_key, wants_quote
 from .research import fetch_page, first_url
 from .store import (
     list_jobs,
+    mark_job_has_log,
     now_iso,
     read_brain,
     read_index,
@@ -1120,7 +1121,8 @@ def _handle_preset(
             if not talk:
                 _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                 if ran.get("raw_log"):
-                    write_session_log(job_id, ran["raw_log"])
+                    if write_session_log(job_id, ran["raw_log"]):
+                        mark_job_has_log(job_id)
             if ran.get("stopped"):
                 stopped = True
                 blocker = "stopped"
@@ -1340,6 +1342,7 @@ def _handle_preset(
                     on_progress=on_progress,
                 )
                 write_session_log(job_id, raw_log)
+                mark_job_has_log(job_id)
                 parsed = parse_opencode_events(out)
                 text = parsed.text or out or "(no output)"
                 err = error_message_from_raw(out) or ""
@@ -1490,7 +1493,8 @@ def _handle_preset(
                     usage_model = str(usage.get("model"))
                 _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                 if ran.get("raw_log"):
-                    write_session_log(job_id, ran["raw_log"])
+                    if write_session_log(job_id, ran["raw_log"]):
+                        mark_job_has_log(job_id)
                 if ran.get("stopped"):
                     stopped = True
                     blocker = "stopped"
@@ -1608,7 +1612,8 @@ def _handle_preset(
                     usage_model = str(usage.get("model"))
                 _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                 if ran.get("raw_log"):
-                    write_session_log(job_id, ran["raw_log"])
+                    if write_session_log(job_id, ran["raw_log"]):
+                        mark_job_has_log(job_id)
                 if ran.get("stopped"):
                     stopped = True
                     blocker = "stopped"

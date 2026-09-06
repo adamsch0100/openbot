@@ -471,4 +471,8 @@ Next: WC-5 Observability
 
 ---
 
+Next: WC-6 Polish pack
+
+---
+
 *OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly). Not affiliated with, sponsored by, or endorsed by those projects.*

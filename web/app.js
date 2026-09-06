@@ -2763,7 +2763,7 @@ function renderJob(job) {
   actions.className = "job-actions";
   
   // Add Replay verbose and View raw log buttons for jobs with session logs
-  if (job.id && job.engine && (job.engine.toLowerCase().includes("hermes") || job.engine.toLowerCase().includes("opencode"))) {
+  if (job.id && job.has_session_log) {
     const replayBtn = document.createElement("button");
     replayBtn.type = "button";
     replayBtn.className = "ghost-btn";

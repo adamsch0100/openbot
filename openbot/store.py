@@ -79,6 +79,16 @@ def write_session_log(job_id: str, log_content: str) -> Path | None:
         return None
 
 
+def mark_job_has_log(job_id: str) -> bool:
+    """Mark a job receipt as having a session log. Returns True if successful."""
+    receipt = read_job(job_id)
+    if receipt is None:
+        return False
+    receipt["has_session_log"] = True
+    write_job(receipt)
+    return True
+
+
 def read_session_log(job_id: str) -> str | None:
     """Read raw session log for a job. Returns None if not found."""
     if not JOB_ID_RE.match(job_id):
