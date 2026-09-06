@@ -46,7 +46,45 @@ def parse_run_lines(text: str) -> list[str]:
 
 
 def ingest_cron_runs() -> list[dict]:
-    ran = cron_runs(limit=40)
+    """
+    Poll all CEO Hermes homes for cron runs and route to correct threads.
+    
+    Returns list of job receipts posted to threads.
+    """
+    from .org import ensure_org
+    
+    known_projects = set(project_ids())
+    jobs: list[dict] = []
+    
+    # Staff crons (default home)
+    staff_runs = _ingest_home_runs(None, known_projects)
+    jobs.extend(staff_runs)
+    
+    # Per-CEO crons
+    org = ensure_org()
+    for project in org.get("projects") or []:
+        project_id = project.get("id")
+        if not project_id:
+            continue
+        
+        from .org import project_tools
+        tools = project_tools(project_id)
+        hermes_home = str(tools.get("hermes_home") or "").strip() or None
+        
+        if hermes_home:
+            ceo_runs = _ingest_home_runs(project_id, known_projects, hermes_home)
+            jobs.extend(ceo_runs)
+    
+    return jobs
+
+
+def _ingest_home_runs(project_id: str | None, known_projects: set, hermes_home: str | None = None) -> list[dict]:
+    """Ingest cron runs from a specific Hermes home."""
+    try:
+        ran = cron_runs(limit=40, cwd=None, home=hermes_home) if hermes_home else cron_runs(limit=40)
+    except Exception:
+        return []
+    
     text = ran.get("text") or ""
     lines = parse_run_lines(text)
     seen = _load_seen()
@@ -57,7 +95,7 @@ def ingest_cron_runs() -> list[dict]:
     known.update(fresh)
     seen["lines"] = list(known)[-200:]
     _save_seen(seen)
-    known_projects = set(project_ids())
+    
     jobs: list[dict] = []
     for line in fresh:
         # Check if this is a routine cron first
@@ -68,23 +106,23 @@ def ingest_cron_runs() -> list[dict]:
         if routine_match:
             scope = routine_match.group(1)
             routine_id = routine_match.group(2)
-            project_id = None if scope == "staff" else scope
+            target_project_id = None if scope == "staff" else scope
             
             # Execute the routine
             from .routines import execute_routine
-            result = execute_routine(routine_id, project_id)
+            result = execute_routine(routine_id, target_project_id)
             
             job_id = f"cron{abs(hash(line)) % 10**8:08x}"
             if result.get("ok"):
                 snippet = f"Routine {routine_id} completed ({result.get('completed_steps')}/{result.get('total_steps')} steps)"
-                patch_scope(project_id, None, "Last", f"routine {routine_id} completed")
-                patch_scope(project_id, None, "Now", "Routine finished")
+                patch_scope(target_project_id, None, "Last", f"routine {routine_id} completed")
+                patch_scope(target_project_id, None, "Now", "Routine finished")
             else:
                 error = result.get("error") or result.get("blocker") or "failed"
                 failed_step = result.get("failed_at_step")
                 snippet = f"Routine {routine_id} failed at step {failed_step}: {error}"
-                patch_scope(project_id, None, "Blocker", f"routine {routine_id} step {failed_step}")
-                patch_scope(project_id, None, "Now", "Routine blocked")
+                patch_scope(target_project_id, None, "Blocker", f"routine {routine_id} step {failed_step}")
+                patch_scope(target_project_id, None, "Now", "Routine blocked")
             
             receipt = {
                 "id": job_id,
@@ -94,7 +132,7 @@ def ingest_cron_runs() -> list[dict]:
                 "model": "cron",
                 "text": snippet,
                 "message": snippet,
-                "project_id": project_id,
+                "project_id": target_project_id,
                 "worker_id": None,
                 "usd_estimate": 0.0,
                 "cron": True,
@@ -103,15 +141,15 @@ def ingest_cron_runs() -> list[dict]:
                 "next": "Resume routine from failed step" if not result.get("ok") else "Routine complete",
             }
             write_job(receipt)
-            rollup_staff(project_id, None, snippet)
-            append_turn(thread_key(project_id, None), {"role": "bot", "job": receipt})
+            rollup_staff(target_project_id, None, snippet)
+            append_turn(thread_key(target_project_id, None), {"role": "bot", "job": receipt})
             jobs.append(receipt)
             continue
         
         # Regular OpenBot cron (not a routine)
         match = OPENBOT_JOB.search(line)
-        project_id = match.group(1) if match and match.group(1) in known_projects else None
-        if not project_id:
+        target_project_id = match.group(1) if match and match.group(1) in known_projects else project_id
+        if not target_project_id:
             continue
         job_id = f"cron{abs(hash(line)) % 10**8:08x}"
         snippet = re.sub(r"\s+", " ", line)[:400]
@@ -123,7 +161,7 @@ def ingest_cron_runs() -> list[dict]:
             "model": "cron",
             "text": f"Scheduled run\n{snippet}",
             "message": snippet,
-            "project_id": project_id,
+            "project_id": target_project_id,
             "worker_id": None,
             "usd_estimate": 0.0,
             "cron": True,
@@ -131,9 +169,9 @@ def ingest_cron_runs() -> list[dict]:
             "next": "Review the run, or ask the CEO to keep going",
         }
         write_job(receipt)
-        patch_scope(project_id, None, "Last", f"cron {job_id}")
-        patch_scope(project_id, None, "Now", "Scheduled work reported")
-        rollup_staff(project_id, None, snippet)
-        append_turn(thread_key(project_id, None), {"role": "bot", "job": receipt})
+        patch_scope(target_project_id, None, "Last", f"cron {job_id}")
+        patch_scope(target_project_id, None, "Now", "Scheduled work reported")
+        rollup_staff(target_project_id, None, snippet)
+        append_turn(thread_key(target_project_id, None), {"role": "bot", "job": receipt})
         jobs.append(receipt)
     return jobs

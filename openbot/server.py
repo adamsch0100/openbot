@@ -895,10 +895,23 @@ class Handler(SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             from .routines import list_routines
-            return self._json(200, {"routines": list_routines(project_id)})
+            result = list_routines(project_id, include_hermes=True)
+            return self._json(200, result)
         if path == "/api/routines/templates":
             from .routine_templates import get_routine_templates
             return self._json(200, {"templates": get_routine_templates()})
+        if path == "/api/hermes/gateway/status":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            from .hermes import gateway_status
+            from .org import project_tools
+            
+            tools = project_tools(project_id) if project_id else {}
+            hermes_home = str(tools.get("hermes_home") or "").strip() or None
+            
+            status = gateway_status(hermes_home, timeout=5)
+            status["project_id"] = project_id
+            return self._json(200, status)
         if path == "/api/selfbuild/status":
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
@@ -1245,6 +1258,48 @@ class Handler(SimpleHTTPRequestHandler):
             from .bus import claim_handoff
             result = claim_handoff(handoff_id, project_id, claimant)
             return self._json(200 if result["ok"] else 400, result)
+        
+        if path == "/api/hermes/gateway/start":
+            project_id = str(data.get("project_id") or "").strip() or None
+            wait = bool(data.get("wait", False))
+            timeout = int(data.get("timeout", 30))
+            
+            from .hermes import gateway_start
+            from .org import project_tools
+            
+            tools = project_tools(project_id) if project_id else {}
+            hermes_home = str(tools.get("hermes_home") or "").strip() or None
+            
+            result = gateway_start(hermes_home, wait=wait, timeout=timeout)
+            result["project_id"] = project_id
+            return self._json(200 if result.get("ok") else 400, result)
+        
+        if path == "/api/hermes/gateway/stop":
+            project_id = str(data.get("project_id") or "").strip() or None
+            
+            from .hermes import gateway_stop
+            from .org import project_tools
+            
+            tools = project_tools(project_id) if project_id else {}
+            hermes_home = str(tools.get("hermes_home") or "").strip() or None
+            
+            result = gateway_stop(hermes_home)
+            result["project_id"] = project_id
+            return self._json(200 if result.get("ok") else 400, result)
+        
+        if path == "/api/hermes/crons/migrate-delivery":
+            project_id = str(data.get("project_id") or "").strip() or None
+            dry_run = bool(data.get("dry_run", False))
+            
+            from .hermes import migrate_cron_delivery
+            from .org import project_tools
+            
+            tools = project_tools(project_id) if project_id else {}
+            hermes_home = str(tools.get("hermes_home") or "").strip() or None
+            
+            result = migrate_cron_delivery(hermes_home, dry_run=dry_run)
+            result["project_id"] = project_id
+            return self._json(200 if result.get("ok") else 400, result)
         
         if path == "/api/routines":
             name = str(data.get("name") or "").strip()
