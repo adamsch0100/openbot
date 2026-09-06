@@ -33,24 +33,72 @@ def routine_path(routine_id: str, project_id: str | None) -> Path:
     return routine_dir(project_id) / f"{routine_id}.md"
 
 
-def list_routines(project_id: str | None = None) -> list[dict]:
-    """List all routines for a CEO or staff. Returns list of routine metadata."""
+def list_routines(project_id: str | None = None, include_hermes: bool = True) -> dict:
+    """
+    List all routines for a CEO or staff, optionally including Hermes crons.
+    
+    Args:
+        project_id: CEO scope (None for staff)
+        include_hermes: If True, also fetch Hermes crons from the CEO's home
+    
+    Returns:
+        {
+            "routines": [list of OpenBot routine metadata],
+            "hermes_crons": [list of Hermes cron metadata],
+            "openbot_count": int,
+            "hermes_count": int,
+            "total": int
+        }
+    """
     folder = routine_dir(project_id)
-    if not folder.exists():
-        return []
-    
     routines = []
-    for path in folder.glob("*.md"):
-        try:
-            content = path.read_text(encoding="utf-8")
-            meta = parse_routine(content)
-            meta["id"] = path.stem
-            meta["project_id"] = project_id
-            routines.append(meta)
-        except Exception:
-            continue
     
-    return sorted(routines, key=lambda r: r.get("name", ""))
+    if folder.exists():
+        for path in folder.glob("*.md"):
+            try:
+                content = path.read_text(encoding="utf-8")
+                meta = parse_routine(content)
+                meta["id"] = path.stem
+                meta["project_id"] = project_id
+                meta["source"] = "openbot"
+                routines.append(meta)
+            except Exception:
+                continue
+    
+    routines = sorted(routines, key=lambda r: r.get("name", ""))
+    
+    hermes_crons = []
+    if include_hermes:
+        try:
+            from .hermes import cron_list
+            from .org import project_tools
+            
+            tools = project_tools(project_id) if project_id else {}
+            hermes_home = str(tools.get("hermes_home") or "").strip() or None
+            
+            cron_data = cron_list(hermes_home, timeout=8)
+            if cron_data.get("ok"):
+                for cron in cron_data.get("crons", []):
+                    hermes_crons.append({
+                        "id": cron.get("id", ""),
+                        "name": cron.get("name", ""),
+                        "schedule": cron.get("schedule", ""),
+                        "enabled": cron.get("enabled", False),
+                        "source": "hermes",
+                        "project_id": project_id,
+                        "raw": cron.get("raw", "")
+                    })
+        except Exception:
+            # Silently skip Hermes crons if fetch fails (gateway may not be running)
+            pass
+    
+    return {
+        "routines": routines,
+        "hermes_crons": hermes_crons,
+        "openbot_count": len(routines),
+        "hermes_count": len(hermes_crons),
+        "total": len(routines) + len(hermes_crons)
+    }
 
 
 def parse_routine(text: str) -> dict:

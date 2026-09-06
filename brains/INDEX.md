@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Mobile UX polish PR #37 MERGE-READY rebased (2026-09-06)
-Last: Rebased onto master post-revert #38, same-origin proxy URLs, POST/PUT/PATCH/DELETE, WS fallback
-Next: Deploy to Railway, verify @390×844, merge if tabs load
+Now: PR #39 MERGE-READY — Hermes gateway lazy+non-blocking (fixes #36 outage, rebased on master)
+Last: Mobile UX polish #37 merged; Revert #36 outage fix (#38)
+Next: Deploy to Railway → verify SAA Homes crons → 48h clean run → railway-down old boxes
 Blocker: —
 
 ## Vault
