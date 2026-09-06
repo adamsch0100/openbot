@@ -78,15 +78,16 @@ def list_routines(project_id: str | None = None, include_hermes: bool = True) ->
             
             cron_data = cron_list(hermes_home, timeout=8)
             if cron_data.get("ok"):
-                for cron in cron_data.get("crons", []):
+                # cron_list now returns "jobs" list with multi-line format
+                for cron in cron_data.get("jobs", []):
                     hermes_crons.append({
                         "id": cron.get("id", ""),
                         "name": cron.get("name", ""),
                         "schedule": cron.get("schedule", ""),
-                        "enabled": cron.get("enabled", False),
+                        "enabled": True,  # Multi-line format doesn't have enabled field; assume active
                         "source": "hermes",
                         "project_id": project_id,
-                        "raw": cron.get("raw", "")
+                        "deliver": cron.get("deliver", "")
                     })
         except Exception:
             # Silently skip Hermes crons if fetch fails (gateway may not be running)
