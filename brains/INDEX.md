@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #43 MERGE-READY — Fix Hermes cron delivery migration CLI command (edit not update)
-Last: Discovered real migrate failure: hermes cron update → usage dump. Fixed to hermes cron edit + tests green.
-Next: CEO review + merge
+Now: PR #44 MERGE-READY — Mobile UX fix (compact composer, strip Meta pricing junk, readable chat history)
+Last: CEO review blocker resolved. iOS Safari auto-zooms when textarea font-size < 16px. Changed mobile/phone textarea back to 16px (kept compact heights, UI font, padding). All other fixes intact: 9px "Talking to" label, stream padding max(140px,25vh), Meta pricing stripped, 36-38px controls. v=60.
+Next: Merge when CEO approves
 Blocker: —
 
 ## Vault

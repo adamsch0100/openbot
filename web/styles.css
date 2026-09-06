@@ -1673,6 +1673,15 @@ footer a { color: var(--bronze); }
   .word { font-size: 11px; letter-spacing: 0.18em; }
   .mark-gem { width: 26px; height: 26px; }
   
+  /* MOBILE COMPOSER FIX: Compact "Talking to" label */
+  .composer-who {
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    padding: 0 4px;
+    margin: 0;
+    opacity: 0.7;
+  }
+  
   /* Stage tabs horizontal scroll */
   .stages { 
     grid-column: 2; 
@@ -1744,15 +1753,23 @@ footer a { color: var(--bronze); }
   /* Tighter chat head */
   .chat-head {
     padding: 10px 4px 6px;
-    gap: 1px;
+    gap: 2px;
   }
-  .chat-where { font-size: 12px; letter-spacing: 0.14em; }
-  .chat-folder { font-size: 10px; }
+  .chat-where { 
+    font-size: 11px; 
+    letter-spacing: 0.12em; 
+  }
+  .chat-folder { 
+    font-size: 10px;
+    line-height: 1.3;
+  }
   
-  /* Tighter stream spacing */
+  /* Tighter stream spacing with composer clearance */
   .stream {
     padding: 12px 4px 14px;
     gap: 10px;
+    /* Add bottom padding to ensure chat doesn't get clipped by floating composer */
+    padding-bottom: max(140px, 25vh);
   }
   
   /* Compact bubbles */
@@ -1792,14 +1809,16 @@ footer a { color: var(--bronze); }
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     padding: 3px;
-    margin-top: 8px;
+    margin-top: 6px;
+    max-width: 100%;
   }
   .lane { 
-    padding: 6px 11px;
-    font-size: 11px;
-    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 10px;
+    min-height: 34px;
     display: flex;
     align-items: center;
+    white-space: nowrap;
   }
   
   /* Route buttons: better tap targets */
@@ -1815,24 +1834,42 @@ footer a { color: var(--bronze); }
     align-items: center;
   }
   
-  /* Composer: ensure above safe area */
+  /* Composer: ensure above safe area, compact layout */
   .composer {
-    padding: 8px 10px;
+    padding: 6px 8px;
     margin-bottom: env(safe-area-inset-bottom, 8px);
+    gap: 4px;
   }
   .composer textarea {
-    font-size: 16px; /* Prevent iOS zoom */
-    min-height: 48px;
+    font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
+    min-height: 42px;
+    max-height: 120px;
+    padding: 6px 0;
+    font-family: var(--ui); /* Use UI font, not serif display font */
   }
   .composer-input-row {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
-    gap: 8px;
+    gap: 6px;
+    align-items: center;
   }
   .route-select {
     font-size: 11px;
-    padding: 10px 24px 10px 10px;
-    min-width: 80px;
+    padding: 8px 22px 8px 8px;
+    min-width: 70px;
     background-position: right 6px center;
+    height: 38px;
+  }
+  .composer .send {
+    height: 38px;
+    min-width: 68px;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  .attach-btn {
+    padding: 8px 10px;
+    font-size: 16px;
+    height: 38px;
+    min-width: 38px;
   }
   
   /* Compact footer: collapse engines info */
@@ -2062,20 +2099,57 @@ footer a { color: var(--bronze); }
   .rail { width: min(260px, 85vw); }
   
   .chat-shell { padding: 0 10px 10px; }
-  .chat-head { padding: 12px 4px 6px; }
+  .chat-head { padding: 10px 4px 6px; gap: 1px; }
+  .chat-where { font-size: 11px; letter-spacing: 0.12em; }
+  .chat-folder { font-size: 10px; }
   
+  /* Tighter lane pills */
   .lane, .route-btn { 
-    padding: 7px 12px;
-    font-size: 12px;
-    min-height: 40px;
+    padding: 6px 10px;
+    font-size: 11px;
+    min-height: 36px;
   }
   
+  /* Even more compact composer on phones */
   .composer { 
-    padding: 8px 10px;
-    gap: 6px;
+    padding: 5px 8px;
+    gap: 3px;
+  }
+  .composer-who {
+    font-size: 8px;
+    letter-spacing: 0.04em;
+    padding: 0 2px;
   }
   .composer textarea {
-    min-height: 44px;
+    min-height: 40px;
+    max-height: 100px;
+    font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
+  }
+  .composer-input-row {
+    gap: 5px;
+  }
+  .route-select {
+    font-size: 10px;
+    padding: 7px 20px 7px 7px;
+    min-width: 65px;
+    height: 36px;
+  }
+  .composer .send {
+    height: 36px;
+    min-width: 60px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .attach-btn {
+    padding: 7px 9px;
+    font-size: 15px;
+    height: 36px;
+    min-width: 36px;
+  }
+  
+  /* Ensure stream has enough bottom padding */
+  .stream {
+    padding-bottom: max(120px, 22vh);
   }
   
   /* Tap target: minimum 44px for primary controls */
