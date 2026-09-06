@@ -3,9 +3,40 @@
 from __future__ import annotations
 
 
+def expand_self_build_instruction() -> str:
+    """Generate dynamic instruction for self-build routine based on next ROADMAP item."""
+    from .roadmap import next_roadmap_item, roadmap_instruction
+    
+    item = next_roadmap_item()
+    if not item:
+        return "No unshipped ROADMAP items found. Check docs/ROADMAP.md to add next work item."
+    
+    return roadmap_instruction(item)
+
+
 def get_routine_templates() -> list[dict]:
     """Return predefined routine templates for common workflows."""
     return [
+        {
+            "id": "self-build",
+            "name": "Weekly Self-Build",
+            "description": "OpenBot implements next ROADMAP item and opens PR (dogfooding)",
+            "schedule": "every Monday at 10am",
+            "steps": [
+                {
+                    "seat": "builder",
+                    "instruction": "SELF_BUILD_PLACEHOLDER"
+                },
+                {
+                    "seat": "think",
+                    "instruction": "Review the diff for correctness: check that changes follow AGENTS.md and OPENBOT.md, verify no secrets in files, confirm tests exist, ensure documentation is updated"
+                },
+                {
+                    "seat": "ops",
+                    "instruction": "Open a PR with the title from ROADMAP item and body including acceptance checklist. Use gh CLI: gh pr create --title '[TITLE]' --body '[BODY]' --draft"
+                }
+            ]
+        },
         {
             "id": "morning-standup",
             "name": "Morning Standup",
@@ -118,5 +149,13 @@ def get_template_by_id(template_id: str) -> dict | None:
     templates = get_routine_templates()
     for template in templates:
         if template["id"] == template_id:
+            # Expand self-build instruction dynamically
+            if template_id == "self-build":
+                expanded = dict(template)
+                expanded["steps"] = [dict(step) for step in template["steps"]]
+                for step in expanded["steps"]:
+                    if step.get("instruction") == "SELF_BUILD_PLACEHOLDER":
+                        step["instruction"] = expand_self_build_instruction()
+                return expanded
             return template
     return None

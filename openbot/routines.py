@@ -157,9 +157,23 @@ def create_routine(
     steps: list[dict],
     project_id: str | None = None,
     enabled: bool = True,
+    routine_id: str | None = None,
 ) -> str:
-    """Create a new routine. Returns routine_id."""
-    routine_id = f"routine-{uuid.uuid4().hex[:8]}"
+    """Create a new routine. Returns routine_id.
+    
+    Args:
+        name: Routine name
+        schedule: Schedule string (e.g., "every Monday at 10am")
+        steps: List of step dicts with seat and instruction
+        project_id: CEO scope (None for staff)
+        enabled: Whether routine is enabled
+        routine_id: Optional fixed routine ID (default: generate random UUID)
+    
+    Returns:
+        routine_id
+    """
+    if routine_id is None:
+        routine_id = f"routine-{uuid.uuid4().hex[:8]}"
     ensure_routine_dir(project_id)
     
     meta = {

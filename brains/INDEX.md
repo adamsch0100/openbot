@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: WC-6 Polish Pack shipped: skills catalog with descriptions + popular skills, routine templates (Morning standup, Weekly review), Memory search → stream jump verified.
-Last: WC-5 Observability (Hermes tool-call progress, replay verbose modal, job receipts link raw logs), WC-4 Onboarding (auth checks, test job), WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: WC-7 Self-build loop — operator directs next.
+Now: WC-7 Self-Build Loop shipped: OpenBot dogfoods itself with weekly routine implementing next ROADMAP item, OpenCode Go seat enforcement, Settings → Advanced toggle.
+Last: WC-6 Polish Pack (skills catalog, routine templates), WC-5 Observability, WC-4 Onboarding, WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
+Next: WC-8 E2E World-Class Audit
 Blocker: —
 
 ## Vault

@@ -222,6 +222,7 @@
           <button type="button" class="drawer-tab" data-panel="git">Git</button>
           <button type="button" class="drawer-tab" data-panel="memory">Memory</button>
           <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
+          <button type="button" class="drawer-tab" data-panel="advanced">Advanced</button>
           <button type="button" class="drawer-tab" data-panel="about">About</button>
         </nav>
         <div class="drawer-body">
@@ -543,6 +544,23 @@
             <div id="walletList" class="spend-break"></div>
             <div id="spendBreak" class="spend-break"></div>
             <div id="jobLog" class="job-log"></div>
+          </section>
+          <section class="drawer-panel" id="panel-advanced">
+            <p class="lede">Advanced features and experimental settings. Handle with care.</p>
+            <h4>Self-Build Loop</h4>
+            <p class="muted">
+              OpenBot dogfoods itself: weekly routine implements the next ROADMAP item and opens a PR. 
+              Uses cheap OpenCode Go seats (not PAYG). Default OFF — enable to let OpenBot improve itself.
+            </p>
+            <label class="check">
+              <input id="enableSelfBuild" type="checkbox" />
+              Enable self-build loop
+            </label>
+            <div id="selfBuildStatus" class="muted"></div>
+            <div class="actions">
+              <button type="button" class="send" id="saveAdvanced">Save</button>
+              <p class="muted" id="advancedStatus"></p>
+            </div>
           </section>
           <section class="drawer-panel" id="panel-about">
             <p class="credit">

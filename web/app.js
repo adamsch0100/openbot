@@ -2029,6 +2029,8 @@ function fillSettings(data) {
   if ($("hermesSkills") && document.activeElement !== $("hermesSkills")) {
     $("hermesSkills").value = data.hermes_skills || "";
   }
+  if ($("enableSelfBuild")) $("enableSelfBuild").checked = Boolean(data.enable_self_build);
+  loadSelfBuildStatus();
   if (data.org) renderOrg(data.org);
   fillKeys(data.keyring || {});
   fillImport(data.hermes_instances || []);
@@ -3689,6 +3691,50 @@ if ($("clearLicense")) {
     const data = await res.json();
     $("youStatus").textContent = res.ok ? "license cleared" : (data.error || "save failed");
     if (res.ok) applyConfig(data);
+  });
+}
+
+async function loadSelfBuildStatus() {
+  try {
+    const res = await fetch(`/api/selfbuild/status?project_id=`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const statusEl = $("selfBuildStatus");
+    if (statusEl) {
+      const parts = [];
+      if (data.next_item) {
+        parts.push(`Next: ${data.next_item.id} - ${data.next_item.name}`);
+      } else {
+        parts.push("Next: No unshipped ROADMAP items");
+      }
+      if (data.routine_exists) {
+        parts.push(data.routine_enabled ? "Routine enabled" : "Routine disabled");
+      } else {
+        parts.push("Routine not created");
+      }
+      statusEl.textContent = parts.join(" · ");
+    }
+  } catch (err) {
+    console.error("load self-build status failed:", err);
+  }
+}
+
+if ($("saveAdvanced")) {
+  $("saveAdvanced").addEventListener("click", async () => {
+    const statusEl = $("advancedStatus");
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        enable_self_build: $("enableSelfBuild").checked
+      })
+    });
+    const data = await res.json();
+    if (statusEl) statusEl.textContent = res.ok ? "saved" : (data.error || "save failed");
+    if (res.ok) {
+      applyConfig(data);
+      loadSelfBuildStatus();
+    }
   });
 }
 
