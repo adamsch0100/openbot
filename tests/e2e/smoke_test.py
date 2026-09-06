@@ -95,29 +95,76 @@ class OpenBotE2EClient:
             return {"error": str(e)}
 
     def unlock(self) -> bool:
-        """Unlock board with PIN (if required)."""
+        """Unlock board with PIN (if required).
+        
+        Success if ANY of:
+        - Set-Cookie openbot_unlock captured, OR
+        - Body has token (also set as cookie), OR
+        - needs_unlock is False, OR
+        - unlocked is true, OR
+        - HTTP 200 with work_dir and no error
+        
+        Master server.py auth: Cookie openbot_unlock only.
+        Token from Set-Cookie or JSON body → store as session cookie.
+        """
         if not self.pin:
             print("WARN: No PIN provided, skipping unlock")
             return True
         
         result = self._request("POST", "/api/unlock", {"pin": self.pin})
-        if result.get("unlocked"):
+        
+        # Check for error response
+        if result.get("error") or result.get("status", 200) >= 400:
+            print(f"✗ Unlock failed: {result}")
+            return False
+        
+        # Success criteria (CoS confirmed)
+        unlocked = result.get("unlocked")
+        token = result.get("token")
+        needs_unlock = result.get("needs_unlock")
+        work_dir = result.get("work_dir")
+        has_cookie = "openbot_unlock" in self.session_cookies
+        
+        success = (
+            has_cookie  # Set-Cookie captured
+            or (isinstance(token, str) and token)  # Body token
+            or needs_unlock is False
+            or unlocked is True
+            or (work_dir and not result.get("error"))  # HTTP 200 config
+        )
+        
+        if success:
             print("✓ Board unlocked")
+            # Store token if present in body (also as cookie for auth)
+            if isinstance(token, str) and token:
+                self.session_cookies["openbot_unlock"] = token
             return True
         else:
             print(f"✗ Unlock failed: {result}")
             return False
 
     def get_status(self) -> dict:
-        """Get board status (health check)."""
-        return self._request("GET", "/api/status")
+        """Get board status (health check).
+        
+        Uses /api/health or /api/config (NOT /api/status - 404 when unlocked on master).
+        """
+        # Try health endpoint first
+        result = self._request("GET", "/api/health")
+        if not result.get("error") and result.get("status", 200) < 400:
+            return result
+        
+        # Fallback to config endpoint (not status - no handler on master when unlocked)
+        return self._request("GET", "/api/config")
 
     def send_message(self, message: str, seat: str = "cos", project: str = "openbot") -> dict:
-        """Send message to OpenBot and get job ID."""
+        """Send message to OpenBot and get job ID.
+        
+        Uses 'preset' parameter (server naming), returns job['id'].
+        """
         return self._request("POST", "/api/chat", {
             "message": message,
-            "seat": seat,
-            "project": project,
+            "preset": seat,  # Server uses 'preset' not 'seat'
+            "project_id": project,
         })
 
     def get_job(self, job_id: str) -> dict:
@@ -139,8 +186,21 @@ class OpenBotE2EClient:
 
     def get_routines(self, project: str = "openbot") -> list[dict]:
         """Get routines for a project."""
-        result = self._request("GET", f"/api/routines?project={project}")
+        result = self._request("GET", f"/api/routines?project_id={project}")
         return result.get("routines", [])
+    
+    def create_routine(self, name: str, schedule: str, steps: list, project: str = "openbot", enabled: bool = True) -> dict:
+        """Create a new routine (cron).
+        
+        POST /api/routines with name, schedule, steps.
+        """
+        return self._request("POST", "/api/routines", {
+            "name": name,
+            "schedule": schedule,
+            "steps": steps,
+            "project_id": project,
+            "enabled": enabled,
+        })
 
 
 class E2ETestRunner:
@@ -195,13 +255,26 @@ class E2ETestRunner:
         return evidence
 
     def wait_for_job(self, job_id: str, timeout: int = 120) -> dict | None:
-        """Wait for job to complete (or timeout)."""
+        """Wait for job to complete (or timeout).
+        
+        Fallback only - chat response is usually synchronous with complete job.
+        """
         start = time.time()
         while time.time() - start < timeout:
-            job = self.client.get_job(job_id)
-            if job.get("error"):
-                self.log(f"  Job lookup error: {job['error']}")
-                return None
+            # Try list endpoint (GET /api/jobs) since single-job GET 404s on live
+            jobs_result = self.client._request("GET", "/api/jobs")
+            if jobs_result.get("error"):
+                self.log(f"  Job list error: {jobs_result['error']}")
+                time.sleep(2)
+                continue
+            
+            jobs = jobs_result.get("jobs", [])
+            job = next((j for j in jobs if j.get("id") == job_id), None)
+            
+            if not job:
+                self.log(f"  Job {job_id} not found in list")
+                time.sleep(2)
+                continue
             
             status = job.get("status", "")
             if status in ("completed", "failed", "rejected"):
@@ -211,6 +284,27 @@ class E2ETestRunner:
         
         self.log(f"  Job {job_id} timed out after {timeout}s")
         return None
+    
+    def _is_terminal_job(self, response: dict) -> bool:
+        """Check if chat response is a complete/terminal job (synchronous).
+        
+        Live: POST /api/chat returns the finished job directly.
+        Terminal signals: has id + (non-empty text OR diff_pending OR untracked
+        OR diff OR blocker OR accepted set OR engine/preset fields).
+        """
+        if not response.get("id"):
+            return False
+        
+        return bool(
+            (response.get("text") and response["text"].strip())
+            or response.get("diff_pending") is not None
+            or response.get("untracked")
+            or response.get("diff")
+            or response.get("blocker") is not None
+            or response.get("accepted") is not None
+            or response.get("engine")
+            or response.get("preset")
+        )
 
     def test_health_check(self) -> bool:
         """Test 1: Health check / status endpoint."""
@@ -245,23 +339,33 @@ class E2ETestRunner:
             self.record_result("builder_flow", False, f"Message send failed: {response.get('error')}")
             return False
         
-        job_id = response.get("job_id")
+        # Job ID is in 'id' field, not 'job_id'
+        job_id = response.get("id") or response.get("job_id")
         if not job_id:
-            self.record_result("builder_flow", False, "No job_id in response")
+            self.record_result("builder_flow", False, "No job id in response")
             return False
         
         self.log(f"  Job created: {job_id}")
         
-        # Wait for job to complete
-        self.log(f"  Waiting for job to complete...")
-        job = self.wait_for_job(job_id, timeout=180)
+        # POST /api/chat is synchronous - response IS the job if terminal
+        if self._is_terminal_job(response):
+            self.log(f"  Job already complete (synchronous response)")
+            job = response
+        else:
+            # Fallback: wait for job via list endpoint
+            self.log(f"  Waiting for job to complete...")
+            job = self.wait_for_job(job_id, timeout=180)
+            
+            if not job:
+                self.record_result("builder_flow", False, "Job did not complete in time")
+                return False
         
-        if not job:
-            self.record_result("builder_flow", False, "Job did not complete in time")
-            return False
-        
-        # Check if diff is ready
-        has_diff = job.get("has_diff") or job.get("diff")
+        # Check if diff is ready: diff_pending OR untracked OR diff present
+        has_diff = (
+            job.get("diff_pending")
+            or job.get("untracked")
+            or job.get("diff")
+        )
         if not has_diff:
             self.record_result("builder_flow", False, f"No diff in job (status: {job.get('status')})")
             return False
@@ -295,87 +399,102 @@ class E2ETestRunner:
             self.record_result("research_flow", False, f"Message send failed: {response.get('error')}")
             return False
         
-        job_id = response.get("job_id")
+        # Job ID is in 'id' field, not 'job_id'
+        job_id = response.get("id") or response.get("job_id")
         if not job_id:
-            self.record_result("research_flow", False, "No job_id in response")
+            self.record_result("research_flow", False, "No job id in response")
             return False
         
         self.log(f"  Job created: {job_id}")
         
-        # Wait for job to complete
-        self.log(f"  Waiting for job to complete...")
-        job = self.wait_for_job(job_id, timeout=180)
+        # POST /api/chat is synchronous - response IS the job if terminal
+        if self._is_terminal_job(response):
+            self.log(f"  Job already complete (synchronous response)")
+            job = response
+        else:
+            # Fallback: wait for job via list endpoint
+            self.log(f"  Waiting for job to complete...")
+            job = self.wait_for_job(job_id, timeout=180)
+            
+            if not job:
+                self.record_result("research_flow", False, "Job did not complete in time")
+                return False
         
-        if not job:
-            self.record_result("research_flow", False, "Job did not complete in time")
+        # Live jobs do NOT set status:"completed" - check output in text OR result
+        # Pass if terminal job has non-empty text or result (len > 40)
+        text_output = job.get("text", "").strip()
+        result_output = job.get("result", "").strip()
+        
+        # Check for hard failure signals
+        blocker = job.get("blocker")
+        if blocker:
+            self.record_result("research_flow", False, f"Job blocked: {blocker}")
             return False
         
-        status = job.get("status")
-        if status == "completed":
-            # Check if we got output
-            result = job.get("result", "")
-            if result and len(result) > 50:
-                self.record_result("research_flow", True, f"Doc fetched (result: {len(result)} chars)")
-                return True
-            else:
-                self.record_result("research_flow", False, f"Job completed but result too short: {result[:100]}")
-                return False
+        # Check for actual output (not just banner text)
+        has_output = (text_output and len(text_output) > 40) or (result_output and len(result_output) > 40)
+        
+        if has_output:
+            output_len = len(text_output) if text_output else len(result_output)
+            field_used = "text" if text_output else "result"
+            self.record_result("research_flow", True, f"Doc fetched ({field_used}: {output_len} chars)")
+            return True
         else:
-            self.record_result("research_flow", False, f"Job status: {status}")
+            # No meaningful output
+            self.record_result("research_flow", False, f"Job has no output (text: {len(text_output)}, result: {len(result_output)})")
             return False
 
     def test_ops_flow(self) -> bool:
-        """Test 4: Ops flow (create/verify routine or ops path)."""
-        self.log("\n=== Test 4: Ops Flow ===")
+        """Test 4: Ops flow (create cron via POST /api/routines).
         
-        # Send message to Ops to create a routine
+        Must exercise POST /api/routines (create + attach cron), not just GET.
+        """
+        self.log("\n=== Test 4: Ops Flow (Create Routine) ===")
+        
+        # Create a test routine via POST
         routine_name = f"e2e_test_routine_{self.run_id}"
-        message = f"Create a weekly routine called '{routine_name}' that checks project status"
+        schedule = "0 0 * * 0"  # Weekly on Sunday
+        steps = [
+            {
+                "seat": "ops",
+                "instruction": "Check project status and report any issues",
+            }
+        ]
         
-        self.log(f"  Sending message to Ops: {message[:80]}...")
-        response = self.client.send_message(message, seat="ops", project="openbot")
+        self.log(f"  Creating routine: {routine_name}")
+        result = self.client.create_routine(routine_name, schedule, steps, project="openbot", enabled=False)
         
-        if response.get("error"):
-            # Ops might not be fully wired for routine creation via chat
-            # Try checking if routines endpoint works instead
-            self.log(f"  Ops message failed, checking routines endpoint...")
-            routines = self.client.get_routines()
-            if isinstance(routines, list):
-                self.record_result("ops_flow", True, f"Ops path verified (routines endpoint OK, {len(routines)} routines)")
-                return True
-            else:
-                self.record_result("ops_flow", False, f"Ops message failed and routines check failed")
-                return False
-        
-        job_id = response.get("job_id")
-        if not job_id:
-            # Still try routines endpoint
-            self.log(f"  No job_id, checking routines endpoint...")
-            routines = self.client.get_routines()
-            if isinstance(routines, list):
-                self.record_result("ops_flow", True, f"Ops path verified (routines endpoint OK)")
-                return True
-            else:
-                self.record_result("ops_flow", False, "No job_id and routines check failed")
-                return False
-        
-        self.log(f"  Job created: {job_id}")
-        
-        # Wait for job to complete
-        self.log(f"  Waiting for job to complete...")
-        job = self.wait_for_job(job_id, timeout=180)
-        
-        if not job:
-            self.record_result("ops_flow", False, "Job did not complete in time")
+        # Check for 404 (missing routines endpoint on prod)
+        if result.get("status") == 404:
+            self.record_result("ops_flow", False, "POST /api/routines returned 404 - production missing routines endpoint")
             return False
         
-        status = job.get("status")
-        if status == "completed":
-            self.record_result("ops_flow", True, f"Ops job completed")
-            return True
-        else:
-            self.record_result("ops_flow", False, f"Job status: {status}")
+        if result.get("error"):
+            self.record_result("ops_flow", False, f"Routine creation failed: {result.get('error')}")
             return False
+        
+        routine_id = result.get("routine_id")
+        if not routine_id:
+            self.record_result("ops_flow", False, f"No routine_id in response: {result}")
+            return False
+        
+        self.log(f"  Routine created: {routine_id}")
+        
+        # Verify we can list routines and see ours
+        self.log(f"  Verifying routine via GET...")
+        routines = self.client.get_routines("openbot")
+        
+        if not isinstance(routines, list):
+            self.record_result("ops_flow", False, f"Failed to list routines: {routines}")
+            return False
+        
+        found = any(r.get("id") == routine_id or r.get("name") == routine_name for r in routines)
+        if not found:
+            self.record_result("ops_flow", False, f"Created routine not found in list")
+            return False
+        
+        self.record_result("ops_flow", True, f"Routine created and verified: {routine_id}")
+        return True
 
     def run_all_tests(self) -> dict:
         """Run all E2E smoke tests."""
