@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Mobile UX polish PR #37 rebased post-revert (2026-09-06)
-Last: revert #38 restored production, rebased #37 onto clean master
-Next: verify PR #37 @390×844 on Railway, merge if tabs load
+Now: Mobile UX polish PR #37 MERGE-READY rebased (2026-09-06)
+Last: Rebased onto master post-revert #38, same-origin proxy URLs, POST/PUT/PATCH/DELETE, WS fallback
+Next: Deploy to Railway, verify @390×844, merge if tabs load
 Blocker: —
 
 ## Vault
