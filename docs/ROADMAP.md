@@ -4,6 +4,14 @@ Product map for OpenBot — the self-hosted control plane routing to Hermes Agen
 
 See `OPENBOT.md` for the spec and `AGENTS.md` for coding law.
 
+---
+
+## Status: World-Class v2 CoS-Signed (2026-09-06)
+
+**World-class v2 received CoS GO on 2026-09-06.** Chat+mobile gates are green (chat smoke Think/Research/Builder PASS per #33 a7ebdb1; mobile phone proof PASS per #34 dfd361c v=57 @390×844 hamburger/overlay/scrim). Optional polish remains (Meta contributor banner strip; Builder engine label oddity).
+
+---
+
 ## What Already Works (Shipped on Master)
 
 OpenBot is **shipping at https://openbot-production-9334.up.railway.app** with real operator usage.
