@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: revert PR #38 ready for CEO merge (clean/mergeable)
-Last: reverted d93eb6f cleanly (PR #36 gateway auto-start → Railway 502)
-Next: CEO merge https://github.com/adamsch0100/openbot/pull/38 to restore production
+Now: Mobile UX polish PR #37 rebased post-revert (2026-09-06)
+Last: revert #38 restored production, rebased #37 onto clean master
+Next: verify PR #37 @390×844 on Railway, merge if tabs load
 Blocker: —
 
 ## Vault
