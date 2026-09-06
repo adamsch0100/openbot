@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Docker engine install (PR #27 ready)
+Now: Docker engine install + /data volume support (PR #27 ready, comprehensive)
 Last: WC-8 harness+partial live smoke, WC-7 Self-Build Loop, WC-6 Polish Pack, WC-5 Observability, WC-4 Onboarding, WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: Railway deploy PR #27, verify /api/health engines.present=true
+Next: Railway deploy PR #27, configure /data volume, verify engines + persistence
 Blocker: none
 
 ## Vault
