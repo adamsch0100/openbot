@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #40 CLEAN MERGE-READY — Hermes cron robust + gateway status sticky (rebased on master)
-Last: Robust cron parsing (JSON→table fallback, reject chrome), gateway start/status/stop APIs, migrate-delivery with is_valid_job_id guard, junk docs deleted
-Next: Live verify: POST gateway/start → GET gateway/status shows running:true; SAA Homes cron parse clean (daily-ranking-strike not junk)
+Now: PR #41 MERGE-READY — Hermes multi-line cron parser + gateway fixes (rebased on master after #40 fail)
+Last: Rewrote cron parser for REAL multi-line format (hex job IDs, indented Name:/Schedule:/Deliver:); is_valid_job_id rejects label words; gateway_status hard timeout never 502; migrate filters by deliver=origin; all tests pass
+Next: Live verify on SAA Homes: hermes_count > 0, form-pipeline-health + daily-ranking-strike parsed correctly, no Name:/Next/Execution: junk IDs
 Blocker: —
 
 ## Vault

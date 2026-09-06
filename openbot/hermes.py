@@ -663,111 +663,122 @@ def cron_list(cwd: str | None = None, home: str | Path | None = None) -> dict:
 
 
 def is_valid_job_id(job_id: str) -> bool:
-    """Validate that a string looks like a real job ID, not table chrome.
+    """Validate that a string looks like a real job ID (hex-like), not label words.
     
-    Real job IDs:
-    - At least 3 characters
-    - Contain at least one alphanumeric
-    - Not common table chrome words
+    Real Hermes job IDs are hex-like strings (12+ hex chars).
+    Reject label words like "Name:", "Schedule:", "Next", "Execution:", "Skills:".
     
     Use this guard before operating on job IDs from cron list output.
     """
-    if not job_id or len(job_id) < 3:
+    if not job_id or len(job_id) < 12:
         return False
     
-    # Must have at least one alphanumeric
-    if not any(c.isalnum() for c in job_id):
+    # Reject common label words that appear in multi-line cron output
+    label_words = {
+        "Name:", "Schedule:", "Next", "Execution:", "Skills:", "Deliver:",
+        "Repeat:", "Workdir:", "Dispatch:", "Last", "Status:", "ID", "Created",
+        "│", "├", "┤", "┬", "┴", "┼", "[active]", "[paused]"
+    }
+    if job_id in label_words or job_id.endswith(":"):
         return False
     
-    # Reject known table chrome
-    chrome = {"│", "├", "┤", "┬", "┴", "┼", "Schedule:", "Last", "Dispatch:", 
-              "Delivery:", "Enabled:", "Status:", "ID", "Name", "Created"}
-    if job_id in chrome:
-        return False
-    
-    # Reject if it's all punctuation (like "---")
-    if all(not c.isalnum() for c in job_id):
+    # Must be primarily hex-like (allow some punctuation for real IDs like "job-abc123")
+    hex_count = sum(1 for c in job_id if c in "0123456789abcdefABCDEF")
+    if hex_count < 8:  # At least 8 hex chars
         return False
     
     return True
 
 
 def _parse_cron_table(text: str) -> list[dict]:
-    """Parse hermes cron list table output into structured jobs.
+    """Parse hermes cron list output into structured jobs.
     
-    Only extracts rows with valid job IDs, names, schedules.
-    Ignores table chrome (borders, headers, separators).
+    Real Hermes format is MULTI-LINE blocks:
+    
+      7cb2a72c1cc8 [active]
+        Name:      form-pipeline-health
+        Schedule:  0 14 * * *
+        Repeat:    ∞
+        Next run:  2026-09-06T14:00:00+00:00
+        Deliver:   origin
+    
+    Job ID = hex ID on the [active]/[paused] line.
+    Name/Schedule/Deliver are indented labeled fields.
+    NEVER treat "Name:", "Schedule:", "Next", "Execution:", "Skills:" as IDs.
     """
     if not text or "No cron" in text or "no cron" in text:
         return []
     
     jobs = []
     lines = text.strip().split("\n")
+    i = 0
     
-    for line in lines:
-        stripped = line.strip()
+    while i < len(lines):
+        line = lines[i]
         
-        # Skip empty lines
-        if not stripped:
-            continue
-        
-        # Remove box drawing characters and vertical pipes for parsing
-        # Common box chars: │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ ─
-        clean = re.sub(r"[│┌┐└┘├┤┬┴┼─║╔╗╚╝╠╣╦╩╬═]", " ", stripped)
-        clean = clean.strip()
-        
-        if not clean:
-            continue
-        
-        # Skip separator lines (all dashes, equals, or spaces)
-        if set(clean) <= {"-", "=", " "}:
-            continue
-        
-        # Parse table row: extract fields by position or split
-        # Typical format: <id> <name> <schedule> [<enabled>] [<delivery>] [<last_run>]
-        parts = clean.split()
-        
-        # Skip header lines (common patterns) - check first word is a standalone header
-        if parts:
-            first_word_upper = parts[0].upper()
-            if first_word_upper in {"ID", "JOB", "NAME", "SCHEDULE", "STATUS", "ENABLED", "CREATED", "LAST", "DELIVERY"}:
+        # Look for job ID line: "<hex-id> [active]" or "<hex-id> [paused]"
+        # These lines are NOT indented (or only lightly indented with 2 spaces)
+        if ("[active]" in line or "[paused]" in line) and not line.startswith("    "):
+            # Extract job ID (everything before [active]/[paused])
+            parts = line.split()
+            job_id = None
+            for part in parts:
+                if part.startswith("["):
+                    break
+                if is_valid_job_id(part):
+                    job_id = part
+                    break
+            
+            if not job_id:
+                i += 1
                 continue
-        if "Schedule:" in clean and "Last" in clean:  # Header-like labels
-            continue
-        if len(parts) < 3:
-            continue
-        
-        # First part should be a reasonable job ID
-        job_id = parts[0]
-        # Skip if it's clearly table chrome
-        if job_id in {"Schedule:", "Last", "Dispatch:", "Delivery:", "Enabled:", "Status:", "ID", "Name"}:
-            continue
-        # Skip if it doesn't look like an ID (too short or all punctuation)
-        if len(job_id) < 3 or not any(c.isalnum() for c in job_id):
-            continue
-        
-        # Second part is name
-        name = parts[1] if len(parts) > 1 else ""
-        
-        # Third+ parts are schedule
-        # Clean up schedule: remove trailing status/delivery/enabled fields if present
-        # Common pattern: "every 1h" or "0 9 * * *"
-        schedule_parts = []
-        for p in parts[2:]:
-            # Stop if we hit status words
-            if p.lower() in {"enabled", "disabled", "true", "false", "local", "telegram", "running", "idle"}:
-                break
-            schedule_parts.append(p)
-        schedule = " ".join(schedule_parts)
-        
-        if not schedule:
-            continue
-        
-        jobs.append({
-            "id": job_id,
-            "name": name,
-            "schedule": schedule,
-        })
+            
+            # Now parse the indented fields that follow
+            name = None
+            schedule = None
+            deliver = None
+            
+            i += 1
+            while i < len(lines):
+                field_line = lines[i]
+                
+                # Check if this line belongs to the current job block
+                # Job block fields are indented with at least 4 spaces
+                if field_line.strip() and not field_line.startswith("    "):
+                    # This line is not indented enough = new job block starting
+                    break
+                
+                stripped = field_line.strip()
+                if not stripped:
+                    # Empty line - continue but don't break
+                    i += 1
+                    continue
+                
+                # Parse "Label: value" format
+                if ":" in stripped:
+                    label, _, value = stripped.partition(":")
+                    label = label.strip()
+                    value = value.strip()
+                    
+                    if label.lower() == "name":
+                        name = value
+                    elif label.lower() == "schedule":
+                        schedule = value
+                    elif label.lower() == "deliver":
+                        deliver = value
+                
+                i += 1
+            
+            # Only add if we have at least name and schedule
+            if name and schedule:
+                jobs.append({
+                    "id": job_id,
+                    "name": name,
+                    "schedule": schedule,
+                    "deliver": deliver,
+                })
+        else:
+            i += 1
     
     return jobs
 
@@ -784,23 +795,37 @@ def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None
 
 
 def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
-    """Check Hermes gateway status. Does NOT start gateway. Returns immediately."""
+    """Check Hermes gateway status. Does NOT start gateway. Returns immediately.
+    
+    Never throws or returns 502. On timeout or error, returns running=False with error string.
+    """
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
     
-    code, out = _run([binary, "gateway", "status"], None, timeout, home=home)
-    text = out.strip()
-    
-    # Parse running status from output
-    running = code == 0 and "running" in text.lower()
-    
-    return {
-        "ok": code == 0,
-        "code": code,
-        "text": text or "(no output)",
-        "running": running,
-    }
+    try:
+        code, out = _run([binary, "gateway", "status"], None, timeout, home=home)
+        text = out.strip()
+        
+        # Parse running status from output
+        running = code == 0 and "running" in text.lower()
+        
+        return {
+            "ok": code == 0,
+            "code": code,
+            "text": text or "(no output)",
+            "running": running,
+            "error": None if code == 0 else text[:200],
+        }
+    except Exception as err:
+        # Hard timeout or subprocess error: return running=False, never throw
+        return {
+            "ok": False,
+            "code": 124,
+            "text": "",
+            "running": False,
+            "error": f"Gateway status check failed: {str(err)[:200]}",
+        }
 
 
 def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: int = 30) -> dict:
@@ -903,6 +928,7 @@ def migrate_cron_delivery(home: str | Path | None = None, dry_run: bool = False)
     
     for job in jobs:
         job_id = job.get("id", "")
+        deliver = job.get("deliver", "")
         
         # Guard: only migrate valid job IDs
         if not is_valid_job_id(job_id):
@@ -912,12 +938,15 @@ def migrate_cron_delivery(home: str | Path | None = None, dry_run: bool = False)
             })
             continue
         
+        # Only migrate jobs with deliver=origin (skip already-local jobs)
+        if deliver and deliver.lower() != "origin":
+            continue
+        
         if dry_run:
             # Dry run: just record what would be migrated
             migrated.append(job_id)
         else:
             # Real migration: update delivery setting
-            # Note: `hermes cron update` command may vary; adjust as needed
             cmd = [binary, "cron", "update", job_id, "--deliver", "local"]
             code, out = _run(cmd, None, 30, home=home)
             if code == 0:

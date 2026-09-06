@@ -1,4 +1,4 @@
-"""Test Hermes cron list parsing (robust against table chrome)."""
+"""Test Hermes cron list parsing (multi-line block format)."""
 
 import unittest
 from openbot.hermes import _parse_cron_table, is_valid_job_id
@@ -11,94 +11,108 @@ class TestHermesCronParsing(unittest.TestCase):
         self.assertEqual(_parse_cron_table("No cron jobs"), [])
         self.assertEqual(_parse_cron_table("no cron execution"), [])
     
-    def test_parse_clean_table(self):
-        """Parse a clean ASCII table with job data."""
-        table = """
-┌──────────┬─────────────────┬──────────┬─────────┐
-│ ID       │ Name            │ Schedule │ Enabled │
-├──────────┼─────────────────┼──────────┼─────────┤
-│ job-abc  │ daily-ranking   │ 0 9 * * *│ true    │
-│ job-def  │ weekly-report   │ 0 0 * * 0│ true    │
-└──────────┴─────────────────┴──────────┴─────────┘
+    def test_parse_real_multiline_format(self):
+        """Parse real Hermes multi-line block format."""
+        output = """
+  7cb2a72c1cc8 [active]
+    Name:      form-pipeline-health
+    Schedule:  0 14 * * *
+    Repeat:    ∞
+    Next run:  2026-09-06T14:00:00+00:00
+    Deliver:   origin
+    Workdir:   /data/workspaces/saa-homes
+    Last run:  2026-09-05T14:00:10.773343+00:00  ok
+    Dispatch:  on time (...)
+    Execution: completed  b47c6c018b4348239ae05959c50d5e22
+
+  240631fc9f22 [active]
+    Name:      daily-ranking-strike
+    Schedule:  0 13 * * 1-5
+    Deliver:   origin
+    Workdir:   /data/workspaces/saa-homes
 """
-        jobs = _parse_cron_table(table)
+        jobs = _parse_cron_table(output)
         self.assertEqual(len(jobs), 2)
-        self.assertEqual(jobs[0]["id"], "job-abc")
-        self.assertEqual(jobs[0]["name"], "daily-ranking")
-        self.assertEqual(jobs[0]["schedule"], "0 9 * * *")
-        self.assertEqual(jobs[1]["id"], "job-def")
-        self.assertEqual(jobs[1]["name"], "weekly-report")
+        
+        # First job
+        self.assertEqual(jobs[0]["id"], "7cb2a72c1cc8")
+        self.assertEqual(jobs[0]["name"], "form-pipeline-health")
+        self.assertEqual(jobs[0]["schedule"], "0 14 * * *")
+        self.assertEqual(jobs[0]["deliver"], "origin")
+        
+        # Second job
+        self.assertEqual(jobs[1]["id"], "240631fc9f22")
+        self.assertEqual(jobs[1]["name"], "daily-ranking-strike")
+        self.assertEqual(jobs[1]["schedule"], "0 13 * * 1-5")
     
-    def test_parse_with_table_chrome(self):
-        """Skip table borders and headers."""
-        table = """
-│ Schedule:  Last Dispatch:            │
-│ job-abc    daily-ranking    every 1h │
-│ job-def    weekly-summary   0 9 * * *│
+    def test_parse_paused_job(self):
+        """Parse paused jobs correctly."""
+        output = """
+  abc123def456 [paused]
+    Name:      test-job
+    Schedule:  every 1h
+    Deliver:   local
 """
-        jobs = _parse_cron_table(table)
-        # Should skip "Schedule:" line and parse the two real jobs
-        self.assertEqual(len(jobs), 2)
-        self.assertEqual(jobs[0]["id"], "job-abc")
-        self.assertEqual(jobs[1]["id"], "job-def")
-    
-    def test_reject_garbage_ids(self):
-        """Reject table chrome mistaken for job IDs."""
-        table = """
-│ Last    daily-ranking    0 9 * * *
-Schedule: weekly-report   every 1h
-Dispatch: summary         0 0 * * 0
-job-real  real-job        every 2h
-"""
-        jobs = _parse_cron_table(table)
-        # Only "job-real" is a valid job ID
+        jobs = _parse_cron_table(output)
         self.assertEqual(len(jobs), 1)
-        self.assertEqual(jobs[0]["id"], "job-real")
-        self.assertEqual(jobs[0]["name"], "real-job")
-    
-    def test_parse_simple_space_separated(self):
-        """Parse simple space-separated format (no box drawing)."""
-        table = """
-job-abc daily-ranking every 1h
-job-def weekly-report 0 9 * * *
-job-ghi monthly-audit every 30d
-"""
-        jobs = _parse_cron_table(table)
-        self.assertEqual(len(jobs), 3)
+        self.assertEqual(jobs[0]["id"], "abc123def456")
+        self.assertEqual(jobs[0]["name"], "test-job")
         self.assertEqual(jobs[0]["schedule"], "every 1h")
-        self.assertEqual(jobs[1]["schedule"], "0 9 * * *")
-        self.assertEqual(jobs[2]["schedule"], "every 30d")
     
-    def test_skip_header_lines(self):
-        """Skip common header patterns."""
-        table = """
-ID        Name            Schedule      Enabled
---------- --------------- ------------- -------
-job-abc   daily-ranking   every 1h      true
-"""
-        jobs = _parse_cron_table(table)
-        self.assertEqual(len(jobs), 1)
-        self.assertEqual(jobs[0]["id"], "job-abc")
+    def test_reject_label_words(self):
+        """Reject lines with label words, not hex job IDs."""
+        output = """
+  Name: form-pipeline [active]
+    Name:      fake-job
+    Schedule:  0 14 * * *
+  
+  Next [active]
+    Name:      another-fake
+    Schedule:  every 1h
     
-    def test_real_saa_homes_example(self):
-        """Parse real SAA Homes cron jobs (not garbage)."""
-        # This is what SHOULD be returned, not the junk IDs
-        table = """
-job-12345678  daily-ranking-strike   0 9 * * *    enabled  local
-job-23456789  weekly-report          0 0 * * 0    enabled  local
-job-34567890  hourly-sync            every 1h     enabled  telegram
+  Execution: something [active]
+    Name:      also-fake
+    Schedule:  0 9 * * *
 """
-        jobs = _parse_cron_table(table)
-        self.assertEqual(len(jobs), 3)
+        jobs = _parse_cron_table(output)
+        # Should reject all because "Name:", "Next", "Execution:" are not valid hex IDs
+        self.assertEqual(len(jobs), 0)
+    
+    def test_real_saa_homes_fixture(self):
+        """Parse real SAA Homes cron jobs (multi-line format)."""
+        output = """
+  7cb2a72c1cc8 [active]
+    Name:      form-pipeline-health
+    Schedule:  0 14 * * *
+    Repeat:    ∞
+    Next run:  2026-09-06T14:00:00+00:00
+    Deliver:   origin
+    Workdir:   /data/workspaces/saa-homes
+    Last run:  2026-09-05T14:00:10.773343+00:00  ok
+    Dispatch:  on time (...)
+    Execution: completed  b47c6c018b4348239ae05959c50d5e22
+
+  240631fc9f22 [active]
+    Name:      daily-ranking-strike
+    Schedule:  0 13 * * 1-5
+    Deliver:   origin
+"""
+        jobs = _parse_cron_table(output)
+        self.assertEqual(len(jobs), 2)
+        
         # Verify real job names are extracted
         names = [j["name"] for j in jobs]
+        self.assertIn("form-pipeline-health", names)
         self.assertIn("daily-ranking-strike", names)
-        self.assertIn("weekly-report", names)
-        self.assertIn("hourly-sync", names)
-        # Verify schedules are clean (no "enabled" or "local" suffix)
-        self.assertEqual(jobs[0]["schedule"], "0 9 * * *")
-        self.assertEqual(jobs[1]["schedule"], "0 0 * * 0")
-        self.assertEqual(jobs[2]["schedule"], "every 1h")
+        
+        # Verify schedules are clean
+        schedules = [j["schedule"] for j in jobs]
+        self.assertIn("0 14 * * *", schedules)
+        self.assertIn("0 13 * * 1-5", schedules)
+        
+        # IDs should be hex-like
+        self.assertEqual(jobs[0]["id"], "7cb2a72c1cc8")
+        self.assertEqual(jobs[1]["id"], "240631fc9f22")
 
 
 class TestCronListJSONFallback(unittest.TestCase):
@@ -120,23 +134,30 @@ class TestCronListJSONFallback(unittest.TestCase):
 
 
 class TestJobIdValidation(unittest.TestCase):
-    """Test guard against junk job IDs."""
+    """Test guard against junk job IDs (hex-like, 12+ chars)."""
     
     def test_is_valid_job_id(self):
         """Helper to validate job IDs before using them."""
-        # Good IDs
-        self.assertTrue(is_valid_job_id("job-abc123"))
-        self.assertTrue(is_valid_job_id("routine-abcd1234"))
-        self.assertTrue(is_valid_job_id("12345678"))
+        # Good IDs (hex-like, 12+ chars)
+        self.assertTrue(is_valid_job_id("7cb2a72c1cc8"))
+        self.assertTrue(is_valid_job_id("240631fc9f22"))
+        self.assertTrue(is_valid_job_id("abc123def456"))
+        self.assertTrue(is_valid_job_id("b47c6c018b4348239ae05959c50d5e22"))
         
-        # Bad IDs (table chrome)
-        self.assertFalse(is_valid_job_id("│"))
+        # Bad IDs (label words, too short, or not hex-like)
+        self.assertFalse(is_valid_job_id("Name:"))
         self.assertFalse(is_valid_job_id("Schedule:"))
+        self.assertFalse(is_valid_job_id("Next"))
+        self.assertFalse(is_valid_job_id("Execution:"))
+        self.assertFalse(is_valid_job_id("Skills:"))
+        self.assertFalse(is_valid_job_id("Deliver:"))
         self.assertFalse(is_valid_job_id("Last"))
         self.assertFalse(is_valid_job_id("Dispatch:"))
+        self.assertFalse(is_valid_job_id("│"))
         self.assertFalse(is_valid_job_id("--"))
         self.assertFalse(is_valid_job_id(""))
-        self.assertFalse(is_valid_job_id("a"))  # Too short
+        self.assertFalse(is_valid_job_id("abc"))  # Too short
+        self.assertFalse(is_valid_job_id("form-pipeline-health"))  # Name, not ID
 
 
 if __name__ == "__main__":

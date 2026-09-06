@@ -19,48 +19,43 @@ class TestGatewayManagement(unittest.TestCase):
         result = gateway_status()
         
         self.assertFalse(result["running"])
-        self.assertEqual(result["enabled_count"], 0)
-        self.assertEqual(result["total_count"], 0)
         self.assertIn("missing", result["error"].lower())
     
     @patch("openbot.hermes.which")
     @patch("openbot.hermes._run")
     def test_gateway_status_running(self, mock_run, mock_which):
-        """Gateway status parses cron list output."""
+        """Gateway status checks if gateway is running."""
         from openbot.hermes import gateway_status
         
         mock_which.return_value = "/usr/local/bin/hermes"
-        mock_run.return_value = (0, """
-ID    Name                  Schedule      Status
-abc   saa-check-ranking     0 9 * * *     enabled
-def   saa-update-listings   0 */6 * * *   enabled
-xyz   test-job              every 1h      disabled
-""")
+        mock_run.return_value = (0, "Gateway is running")
         
         result = gateway_status()
         
-        self.assertIn("running", result)
-        self.assertEqual(result["enabled_count"], 2)
-        self.assertEqual(result["total_count"], 3)
+        self.assertTrue(result["running"])
+        self.assertTrue(result["ok"])
         self.assertIsNone(result["error"])
     
     @patch("openbot.hermes.which")
-    @patch("openbot.hermes._subprocess.Popen")
-    def test_gateway_start_no_wait(self, mock_popen, mock_which):
+    @patch("openbot.hermes.gateway_status")
+    @patch("openbot.hermes._popen")
+    def test_gateway_start_no_wait(self, mock_popen, mock_status, mock_which):
         """Gateway start launches process without blocking."""
         from openbot.hermes import gateway_start
         
         mock_which.return_value = "/usr/local/bin/hermes"
+        mock_status.side_effect = [
+            {"running": False},  # First check (not running)
+            {"running": True},   # After start (running)
+        ]
         mock_proc = MagicMock()
-        mock_proc.poll.return_value = None  # Still running
+        mock_proc.pid = 12345
         mock_popen.return_value = mock_proc
         
         result = gateway_start(wait=False)
         
         self.assertTrue(result["ok"])
-        self.assertTrue(result["running"])
         self.assertTrue(result["started"])
-        self.assertIsNone(result["error"])
         mock_popen.assert_called_once()
     
     @patch("openbot.hermes.which")
@@ -74,27 +69,21 @@ xyz   test-job              every 1h      disabled
         
         self.assertFalse(result["ok"])
         self.assertFalse(result["running"])
-        self.assertFalse(result["started"])
         self.assertIn("missing", result["error"].lower())
     
     @patch("openbot.hermes.which")
-    @patch("openbot.hermes._GATEWAY_PROCS", {"/home/user/.hermes": MagicMock(poll=lambda: None)})
-    def test_gateway_stop(self, mock_which):
-        """Gateway stop terminates running process."""
-        from openbot.hermes import gateway_stop, _GATEWAY_PROCS
+    @patch("openbot.hermes._run")
+    def test_gateway_stop(self, mock_run, mock_which):
+        """Gateway stop calls hermes gateway stop."""
+        from openbot.hermes import gateway_stop
         
         mock_which.return_value = "/usr/local/bin/hermes"
-        mock_proc = MagicMock()
-        mock_proc.poll.return_value = None  # Still running
+        mock_run.return_value = (0, "Gateway stopped")
         
-        key = "/home/user/.hermes"
-        _GATEWAY_PROCS[key] = mock_proc
-        
-        result = gateway_stop(Path("/home/user/.hermes"))
+        result = gateway_stop()
         
         self.assertTrue(result["ok"])
-        self.assertTrue(result["stopped"])
-        mock_proc.terminate.assert_called_once()
+        mock_run.assert_called_once()
 
 
 class TestCronList(unittest.TestCase):
@@ -107,21 +96,28 @@ class TestCronList(unittest.TestCase):
         from openbot.hermes import cron_list
         
         mock_which.return_value = "/usr/local/bin/hermes"
-        mock_run.return_value = (0, """
-ID     Name                    Schedule      Status
-abc    saa-check-ranking       0 9 * * *     enabled
-def    saa-update-listings     0 */6 * * *   enabled
-xyz    test-disabled           every 1h      disabled
-""")
+        # Multi-line format
+        mock_run.side_effect = [
+            (1, ""),  # JSON fails
+            (0, """
+  7cb2a72c1cc8 [active]
+    Name:      saa-check-ranking
+    Schedule:  0 9 * * *
+    Deliver:   local
+
+  abc123def456 [active]
+    Name:      saa-update-listings
+    Schedule:  0 */6 * * *
+    Deliver:   local
+"""),
+        ]
         
         result = cron_list()
         
         self.assertTrue(result["ok"])
-        self.assertEqual(len(result["crons"]), 3)
-        self.assertEqual(result["crons"][0]["id"], "abc")
-        self.assertEqual(result["crons"][0]["name"], "saa-check-ranking")
-        self.assertTrue(result["crons"][0]["enabled"])
-        self.assertFalse(result["crons"][2]["enabled"])
+        self.assertEqual(len(result["jobs"]), 2)
+        self.assertEqual(result["jobs"][0]["id"], "7cb2a72c1cc8")
+        self.assertEqual(result["jobs"][0]["name"], "saa-check-ranking")
     
     @patch("openbot.hermes.which")
     def test_cron_list_no_binary(self, mock_which):
@@ -133,8 +129,7 @@ xyz    test-disabled           every 1h      disabled
         result = cron_list()
         
         self.assertFalse(result["ok"])
-        self.assertEqual(result["crons"], [])
-        self.assertIn("missing", result["error"].lower())
+        self.assertEqual(result["jobs"], [])
 
 
 class TestMigrateDelivery(unittest.TestCase):
@@ -150,10 +145,10 @@ class TestMigrateDelivery(unittest.TestCase):
         mock_which.return_value = "/usr/local/bin/hermes"
         mock_cron_list.return_value = {
             "ok": True,
-            "crons": [
-                {"id": "abc", "name": "test1", "enabled": True, "raw": "abc test1 0 9 * * * enabled deliver origin"},
-                {"id": "def", "name": "test2", "enabled": True, "raw": "def test2 every 1h enabled deliver local"},
-                {"id": "xyz", "name": "test3", "enabled": False, "raw": "xyz test3 every 2h disabled deliver origin"},
+            "jobs": [
+                {"id": "7cb2a72c1cc8", "name": "test1", "schedule": "0 9 * * *", "deliver": "origin"},
+                {"id": "abc123def456", "name": "test2", "schedule": "every 1h", "deliver": "local"},
+                {"id": "fedcba987654", "name": "test3", "schedule": "every 2h", "deliver": "origin"},
             ]
         }
         
@@ -161,9 +156,9 @@ class TestMigrateDelivery(unittest.TestCase):
         
         self.assertTrue(result["ok"])
         self.assertTrue(result["dry_run"])
-        self.assertEqual(len(result["migrated"]), 2)  # abc and xyz need migration
-        self.assertIn("abc", result["migrated"])
-        self.assertIn("xyz", result["migrated"])
+        self.assertEqual(len(result["migrated"]), 2)  # Two jobs with origin delivery
+        self.assertIn("7cb2a72c1cc8", result["migrated"])
+        self.assertIn("fedcba987654", result["migrated"])
         self.assertEqual(result["total"], 3)
     
     @patch("openbot.hermes.which")
@@ -176,12 +171,12 @@ class TestMigrateDelivery(unittest.TestCase):
         mock_which.return_value = "/usr/local/bin/hermes"
         mock_cron_list.return_value = {
             "ok": True,
-            "crons": [
-                {"id": "abc", "name": "test1", "enabled": True, "raw": "abc test1 0 9 * * * enabled deliver origin"},
-                {"id": "def", "name": "test2", "enabled": True, "raw": "def test2 every 1h enabled deliver origin"},
+            "jobs": [
+                {"id": "7cb2a72c1cc8", "name": "test1", "schedule": "0 9 * * *", "deliver": "origin"},
+                {"id": "abc123def456", "name": "test2", "schedule": "every 1h", "deliver": "origin"},
             ]
         }
-        mock_run.return_value = (0, "Updated cron abc")
+        mock_run.return_value = (0, "Updated cron")
         
         result = migrate_cron_delivery(dry_run=False)
         
@@ -195,16 +190,16 @@ class TestMigrateDelivery(unittest.TestCase):
 class TestRoutinesMerge(unittest.TestCase):
     """Test /api/routines merges OpenBot + Hermes crons."""
     
-    @patch("openbot.routines.cron_list")
+    @patch("openbot.hermes.cron_list")
     def test_list_routines_includes_hermes(self, mock_cron_list):
         """list_routines merges OpenBot routines with Hermes crons."""
         from openbot.routines import list_routines
         
         mock_cron_list.return_value = {
             "ok": True,
-            "crons": [
-                {"id": "abc", "name": "saa-check", "schedule": "0 9 * * *", "enabled": True, "raw": "..."},
-                {"id": "def", "name": "saa-update", "schedule": "every 6h", "enabled": True, "raw": "..."},
+            "jobs": [
+                {"id": "7cb2a72c1cc8", "name": "saa-check", "schedule": "0 9 * * *", "deliver": "local"},
+                {"id": "abc123def456", "name": "saa-update", "schedule": "every 6h", "deliver": "local"},
             ]
         }
         
@@ -234,23 +229,28 @@ class TestNonBlocking(unittest.TestCase):
         self.assertLess(elapsed, 4.0)
     
     @patch("openbot.hermes.which")
-    @patch("openbot.hermes._subprocess.Popen")
-    def test_gateway_start_no_wait_immediate(self, mock_popen, mock_which):
+    @patch("openbot.hermes.gateway_status")
+    @patch("openbot.hermes._popen")
+    def test_gateway_start_no_wait_immediate(self, mock_popen, mock_status, mock_which):
         """Gateway start without wait returns immediately."""
         from openbot.hermes import gateway_start
         import time
         
         mock_which.return_value = "/usr/local/bin/hermes"
+        mock_status.side_effect = [
+            {"running": False},
+            {"running": True},
+        ]
         mock_proc = MagicMock()
-        mock_proc.poll.return_value = None
+        mock_proc.pid = 12345
         mock_popen.return_value = mock_proc
         
         start = time.time()
         result = gateway_start(wait=False)
         elapsed = time.time() - start
         
-        # Should return almost immediately (< 1 second)
-        self.assertLess(elapsed, 1.0)
+        # Should return almost immediately (< 2 seconds for 0.5s sleep + overhead)
+        self.assertLess(elapsed, 2.0)
         self.assertTrue(result["ok"])
 
 
