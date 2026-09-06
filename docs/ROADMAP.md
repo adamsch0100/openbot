@@ -204,6 +204,8 @@ Here's what remains to reach **world-class Chat OS** status:
 
 These are the **serial next 8 PRs** locked by the operator. Each scoped for focused implementation. Ship in this order.
 
+**Status:** WC-1 ✅ SHIPPED, WC-2 ✅ SHIPPED, WC-3 ✅ SHIPPED, WC-4 ✅ SHIPPED, WC-5 pending.
+
 ---
 
 ### **WC-1: True Parallel Multi-Agent** ✅ SHIPPED
@@ -261,24 +263,27 @@ Spend caps work but operators only see global spend summary. No per-CEO burn bre
 
 ---
 
-### **WC-4: Onboarding** ⭐
+### **WC-4: Onboarding** ✅ SHIPPED
 
-**Why:**
-First-run setup works but doesn't verify engine auth before first real job. New users hit "OpenCode not authenticated" or "Hermes portal missing" errors on first Builder/Think job instead of at setup time. No sample job to verify board works.
+**Shipped:** WC-4 onboarding complete. After first-run, board verifies Hermes/OpenCode auth and offers test job.
 
-**Acceptance criteria:**
-1. After first-run folder picker + PIN setup, offer "Run test job" button (e.g., "Create a hello.txt file with Builder")
-2. Test job runs Builder, creates file, shows diff card, operator Accepts, INDEX updates
-3. Before test job: check Hermes auth (`hermes portal status` or session check), show "Hermes not authenticated" card if missing
-4. Before test job: check OpenCode auth (`opencode auth status`), show "OpenCode not authenticated" card if missing
-5. Auth check cards have "Authenticate now" button (opens `hermes portal` or `opencode auth login` instructions)
-6. Comprehensive tests: mock unauthenticated engines, verify auth check cards appear; mock authenticated engines, verify test job runs
-7. ROADMAP + INDEX updated
+**What shipped:**
+- Auth check flow: `/api/onboarding/status` endpoint checks `hermes portal status` and `opencode auth status`
+- Auth cards: UI shows ✅/❌ for Hermes and OpenCode, with instructions (`hermes portal`, `opencode auth login`)
+- Test job: `/api/onboarding/test-job` endpoint runs Builder to create `hello.txt`, shows diff card for Accept
+- Wizard extension: first-run flow now includes auth step and test step after folder/key setup
+- Comprehensive tests: 14 tests covering auth checks (portal/session/oauth), onboarding status, unauthenticated/authenticated paths
+- ROADMAP + INDEX + org/projects/openbot/INDEX updated: Now=WC-4 shipped, Last includes WC-1..WC-3, Next=WC-5
 
-**Out of scope:**
-- Full tutorial flow (multi-step wizard)
-- Sample project template (repo scaffolding)
-- Engine version compatibility checks (Hermes 0.x vs 1.x)
+**Files:**
+- `openbot/onboarding.py` — auth check functions, test job prompt
+- `openbot/server.py` — `/api/onboarding/status`, `/api/onboarding/test-job` endpoints
+- `web/index.html` — auth and test wizard steps
+- `web/app.js` — `checkEngineAuth()`, test job flow, wizard navigation
+- `web/styles.css` — `.auth-status-card` styling
+- `tests/test_onboarding.py` — comprehensive test suite
+
+**Impact:** New operators verify engines work before first real job. Auth errors surface at setup time, not mid-work.
 
 **Estimated complexity:**
 Low-Medium. Requires auth check calls to Hermes/OpenCode, test job definition, auth card rendering, first-run flow extension. Touches server.py (first-run), hermes.py, builder.py, web UI (auth cards).
@@ -461,7 +466,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-4 Onboarding
+Next: WC-5 Observability
 
 ---
 

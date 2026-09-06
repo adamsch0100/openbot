@@ -1784,3 +1784,49 @@ footer a { color: var(--bronze); }
   0%, 100% { background: var(--bg); }
   50% { background: var(--bg-3); }
 }
+
+.auth-status-card {
+  padding: 16px;
+  background: var(--bg-rail);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.auth-status-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.auth-status-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.auth-status-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.auth-status-card .muted {
+  margin-top: 8px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+.auth-status-card code {
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+}
+
+.auth-status-card .ghost-btn {
+  margin-top: 8px;
+}

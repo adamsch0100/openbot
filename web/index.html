@@ -44,6 +44,30 @@
           <button type="button" class="ghost-btn" id="skipWizardKey">Skip</button>
         </div>
       </section>
+      <section class="wizard-step hidden" data-step="auth">
+        <h3>Verify Engine Authentication</h3>
+        <div id="hermesAuthStatus" class="auth-status-card">
+          <div class="auth-status-icon">⏳</div>
+          <div class="auth-status-label">Checking Hermes Agent...</div>
+        </div>
+        <div id="opencodeAuthStatus" class="auth-status-card">
+          <div class="auth-status-icon">⏳</div>
+          <div class="auth-status-label">Checking OpenCode...</div>
+        </div>
+        <div class="actions">
+          <button type="button" class="send hidden" id="wizardAuthNext">Continue to Test</button>
+          <button type="button" class="ghost-btn" id="wizardAuthSkip">Skip for Now</button>
+        </div>
+      </section>
+      <section class="wizard-step hidden" data-step="test">
+        <h3>Test Builder</h3>
+        <p class="muted">Run a quick test to verify Builder (OpenCode) works correctly. This will create a small test file in your work folder.</p>
+        <div class="actions">
+          <button type="button" class="send" id="runTestJob">Run Test Job</button>
+          <button type="button" class="ghost-btn" id="skipTestJob">Skip Test</button>
+        </div>
+        <p class="muted" id="testJobStatus"></p>
+      </section>
       <p class="muted" id="firstRunError"></p>
     </div>
   </div>

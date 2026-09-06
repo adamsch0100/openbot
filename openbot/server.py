@@ -12,6 +12,7 @@ import time
 import uuid
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .channel import public_channel
@@ -29,6 +30,7 @@ from .cronwatch import ingest_cron_runs
 from .detect import detect
 from .gitutil import git_status
 from .hermes import mcp_catalog, skills_list
+from .onboarding import onboarding_status, test_job_prompt
 from .hermes_import import (
     add_instance,
     delete_instance,
@@ -583,6 +585,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {"jobs": [public_job(job) for job in jobs[:30]]})
         if path == "/api/activity":
             return self._json(200, _activity(ingest_cron=True))
+        if path == "/api/onboarding/status":
+            if not self._unlocked():
+                return self._json(200, _locked_payload())
+            status = onboarding_status()
+            return self._json(200, status)
         if path == "/api/thread":
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
@@ -747,6 +754,59 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        
+        if path == "/api/onboarding/test-job":
+            if not self._unlocked():
+                return self._json(403, {"error": "unlock required"})
+            try:
+                data = self._read_json()
+                project_id = data.get("project_id") or None
+                worker_id = data.get("worker_id") or None
+                
+                from .config import load_config
+                
+                prompt = test_job_prompt()
+                cfg = load_config()
+                
+                # Resolve folder: project folder if present, else work_dir
+                folder = None
+                if project_id:
+                    org_data = ensure_org()
+                    project = next((p for p in org_data.get("projects", []) if p.get("id") == project_id), None)
+                    if project and project.get("folder"):
+                        project_folder = Path(project["folder"]).expanduser()
+                        if project_folder.is_dir():
+                            folder = str(project_folder)
+                
+                if not folder:
+                    if cfg["work_dir_ok"]:
+                        folder = cfg["work_dir"]
+                    else:
+                        return self._json(400, {"error": "no valid work directory configured"})
+                
+                job = handle(
+                    message=prompt,
+                    folder=folder,
+                    preset="builder",
+                    project_id=project_id,
+                    worker_id=worker_id,
+                    quote="",
+                    attachments=None,
+                )
+                
+                _record_job(job, prompt, project_id, worker_id, quote="", attachments=None)
+                job["activity"] = _activity()
+                
+                return self._json(200, {
+                    "ok": True,
+                    "job": job,
+                    "message": "Test job complete"
+                })
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return self._json(500, {"error": str(e)})
+        
         ctype = self.headers.get("Content-Type", "")
         is_multipart = ctype.startswith("multipart/form-data")
         
