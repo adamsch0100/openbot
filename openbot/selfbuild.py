@@ -43,7 +43,7 @@ def ensure_self_build_routine(project_id: str | None = None) -> dict:
     exists = self_build_routine_exists(project_id)
     
     if enabled and not exists:
-        # Create the routine from template
+        # Create the routine from template with fixed ID
         template = get_template_by_id("self-build")
         if not template:
             return {"ok": False, "error": "self-build template not found"}
@@ -54,6 +54,7 @@ def ensure_self_build_routine(project_id: str | None = None) -> dict:
             steps=template["steps"],
             project_id=project_id,
             enabled=True,
+            routine_id=SELF_BUILD_ROUTINE_ID,
         )
         
         # Attach to Hermes cron

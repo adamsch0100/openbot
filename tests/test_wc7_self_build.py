@@ -224,15 +224,16 @@ class TestSelfBuildManagement:
         assert result["action"] in {"skipped", "disabled"}
     
     def test_ensure_routine_when_enabled(self, temp_roadmap):
-        """When enabled, routine is created."""
+        """When enabled, routine is created with fixed ID."""
         save_settings({"enable_self_build": True})
         
         result = ensure_self_build_routine()
         
         assert result["ok"] is True
         assert result["action"] in {"created", "exists", "enabled"}
+        assert result["routine_id"] == "routine-selfbuild"
         
-        # Check routine was created
+        # Check routine was created with fixed ID
         assert self_build_routine_exists() is True
         
         routine = read_routine("routine-selfbuild", None)
@@ -240,6 +241,41 @@ class TestSelfBuildManagement:
         assert routine["name"] == "Weekly Self-Build"
         assert routine["enabled"] is True
         assert len(routine["steps"]) == 3
+        
+        # Verify file path uses fixed ID
+        from openbot.routines import routine_path
+        path = routine_path("routine-selfbuild", None)
+        assert path.exists()
+        assert path.name == "routine-selfbuild.md"
+        
+        # Cleanup
+        save_settings({"enable_self_build": False})
+        ensure_self_build_routine()
+    
+    def test_stable_routine_id_no_duplicates(self, temp_roadmap):
+        """Enabling twice does not create duplicate routines."""
+        save_settings({"enable_self_build": False})
+        
+        # Enable first time
+        save_settings({"enable_self_build": True})
+        result1 = ensure_self_build_routine()
+        assert result1["ok"] is True
+        assert result1["action"] == "created"
+        assert result1["routine_id"] == "routine-selfbuild"
+        
+        # Enable second time (should not create duplicate)
+        result2 = ensure_self_build_routine()
+        assert result2["ok"] is True
+        assert result2["action"] in {"exists", "enabled"}
+        assert result2["routine_id"] == "routine-selfbuild"
+        
+        # Verify only one routine file exists
+        from openbot.routines import routine_dir
+        folder = routine_dir(None)
+        routine_files = list(folder.glob("routine-*.md"))
+        selfbuild_files = [f for f in routine_files if "selfbuild" in f.name]
+        assert len(selfbuild_files) == 1
+        assert selfbuild_files[0].name == "routine-selfbuild.md"
         
         # Cleanup
         save_settings({"enable_self_build": False})

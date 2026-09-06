@@ -204,7 +204,7 @@ Here's what remains to reach **world-class Chat OS** status:
 
 These are the **serial next 8 PRs** locked by the operator. Each scoped for focused implementation. Ship in this order.
 
-**Status:** WC-1 ✅ SHIPPED, WC-2 ✅ SHIPPED, WC-3 ✅ SHIPPED, WC-4 ✅ SHIPPED, WC-5 ✅ SHIPPED, WC-6 ✅ SHIPPED.
+**Status:** WC-1 ✅ SHIPPED, WC-2 ✅ SHIPPED, WC-3 ✅ SHIPPED, WC-4 ✅ SHIPPED, WC-5 ✅ SHIPPED, WC-6 ✅ SHIPPED, WC-7 ✅ SHIPPED.
 
 ---
 
