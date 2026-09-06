@@ -467,10 +467,6 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-5 Observability
-
----
-
 Next: WC-6 Polish pack
 
 ---
