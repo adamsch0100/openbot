@@ -127,15 +127,40 @@ class TestQueueWorker(unittest.TestCase):
         workers = queueworker.active_workers()
         self.assertEqual(len(workers), 1)
         self.assertTrue(workers[0]["alive"])
+        self.assertEqual(workers[0]["key"], "staff::test-worker")
 
         # Stop all workers
         queueworker.stop_queue_workers()
 
-        # Check it's stopped
+        # Give threads a moment to join
+        time.sleep(0.1)
+
+        # Check workers list is cleared
         workers = queueworker.active_workers()
-        # Workers may still be in the list but not alive, or list may be empty after cleanup
-        # Just verify stop was called without errors
-        self.assertTrue(True)
+        self.assertEqual(len(workers), 0)
+    
+    def test_boot_path_starts_workers(self):
+        """Boot path in server.main() starts queue workers."""
+        # This test verifies that start_queue_worker is callable and workers start
+        # The actual boot integration is tested by server startup
+        
+        # Start workers like boot does
+        key_staff = queueworker.start_queue_worker(None, "boot-test-staff")
+        key_ceo = queueworker.start_queue_worker("test-ceo", "boot-test-ceo")
+        
+        self.assertIsNotNone(key_staff)
+        self.assertIsNotNone(key_ceo)
+        
+        workers = queueworker.active_workers()
+        self.assertGreaterEqual(len(workers), 2)
+        
+        # Verify workers are alive
+        for w in workers:
+            if "boot-test" in w["key"]:
+                self.assertTrue(w["alive"])
+        
+        # Clean up
+        queueworker.stop_queue_workers()
 
     @patch("openbot.queueworker.load_open_handoffs")
     @patch("openbot.queueworker.claim_and_execute")

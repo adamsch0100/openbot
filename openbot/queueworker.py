@@ -94,7 +94,7 @@ def claim_and_execute(
     
     Returns job result dict or None if claim failed.
     """
-    from .bus import claim_handoff
+    from .bus import ensure_bus
     from .org import ensure_ceo_engines
     
     # Claim the handoff
@@ -103,20 +103,36 @@ def claim_and_execute(
     if not claim_result.get("ok"):
         return None
     
-    # Load the handoff to get task details
-    handoffs = load_open_handoffs(project_id, limit=100)
-    handoff = next((h for h in handoffs if h["id"] == handoff_id), None)
+    # Read the handoff file directly by id (don't rely on load_open_handoffs + status filter)
+    bus_dir = ensure_bus(project_id)
+    handoff_path = bus_dir / "handoffs" / f"{handoff_id}.md"
     
-    if not handoff or handoff["status"] != "claimed":
+    if not handoff_path.is_file():
+        return None
+    
+    try:
+        text = handoff_path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        
+        # Parse fields
+        task = ""
+        to_seat = ""
+        
+        for line in lines:
+            if line.startswith("TASK:"):
+                task = line[5:].strip()
+            elif line.startswith("TO:"):
+                to_seat = line[3:].strip()
+        
+        if not task or not to_seat:
+            return None
+        
+    except (OSError, UnicodeDecodeError):
         return None
     
     # Ensure CEO engines are warmed
     if project_id:
         ensure_ceo_engines(project_id)
-    
-    # Execute the task
-    task = handoff["task"]
-    to_seat = handoff["to_seat"]
     
     # Map to_seat to preset
     preset_map = {
@@ -145,10 +161,6 @@ def claim_and_execute(
         )
         
         # Update handoff to complete
-        from .bus import ensure_bus
-        bus_dir = ensure_bus(project_id)
-        handoff_path = bus_dir / "handoffs" / f"{handoff_id}.md"
-        
         if handoff_path.is_file():
             text = handoff_path.read_text(encoding="utf-8")
             lines = text.splitlines()
@@ -167,10 +179,6 @@ def claim_and_execute(
         return result
     except Exception as err:
         # Update handoff to blocked
-        from .bus import ensure_bus
-        bus_dir = ensure_bus(project_id)
-        handoff_path = bus_dir / "handoffs" / f"{handoff_id}.md"
-        
         if handoff_path.is_file():
             text = handoff_path.read_text(encoding="utf-8")
             lines = text.splitlines()

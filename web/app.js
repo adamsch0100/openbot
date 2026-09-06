@@ -1701,6 +1701,14 @@ function renderOrgWithQueue(org, queueData) {
     queueByProject.set(q.project_id || "_staff", q.queued_count || 0);
   }
   
+  // Count active workers per project (from lives map)
+  const activeByProject = new Map();
+  for (const [key, live] of lives.entries()) {
+    const parts = key.split("::");
+    const pid = parts[0] || "_staff";
+    activeByProject.set(pid, (activeByProject.get(pid) || 0) + 1);
+  }
+  
   const projectBits = projects.map((project) => {
     const open = expanded.has(project.id);
     const workers = (project.workers || []).map((worker) => `
@@ -1719,7 +1727,16 @@ function renderOrgWithQueue(org, queueData) {
     const initials = ceoInitials(project.name);
     const hasBlocker = (project.index_blocker || "").trim() && (project.index_blocker || "").trim() !== "—";
     const queuedCount = queueByProject.get(project.id) || 0;
-    const queueChip = queuedCount > 0 ? `<span class="queue-chip" title="${queuedCount} task(s) queued">${queuedCount}</span>` : "";
+    const activeCount = activeByProject.get(project.id) || 0;
+    
+    // Show queue chip if queued, or active workers chip if running
+    let statusChip = "";
+    if (activeCount > 0) {
+      statusChip = `<span class="active-chip" title="${activeCount} worker(s) running">▸ ${activeCount}</span>`;
+    } else if (queuedCount > 0) {
+      statusChip = `<span class="queue-chip" title="${queuedCount} task(s) queued">${queuedCount}</span>`;
+    }
+    
     return `
       <div class="org-project${open ? " open" : ""}" data-project-wrap="${escapeHtml(project.id)}">
         <div class="org-row">
@@ -1727,7 +1744,7 @@ function renderOrgWithQueue(org, queueData) {
           <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}${hasBlocker ? " has-blocker" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}${busy ? " · working" : ""}">
             <span class="org-avatar" aria-hidden="true">${escapeHtml(initials)}</span>
             <span class="org-btn-text">
-              <b>${escapeHtml(project.name)}${queueChip}</b>
+              <b>${escapeHtml(project.name)}${statusChip}</b>
               ${wire ? `<span class="org-now">${escapeHtml(wire)}</span>` : ""}
             </span>
           </button>
@@ -1739,12 +1756,21 @@ function renderOrgWithQueue(org, queueData) {
   const staffBusy = lives.has(aimKey("", ""));
   const cosInitials = ceoInitials("Chief of Staff");
   const staffQueuedCount = queueByProject.get("_staff") || 0;
-  const staffQueueChip = staffQueuedCount > 0 ? `<span class="queue-chip" title="${staffQueuedCount} task(s) queued">${staffQueuedCount}</span>` : "";
+  const staffActiveCount = activeByProject.get("_staff") || 0;
+  
+  // Show active or queue chip for staff
+  let staffStatusChip = "";
+  if (staffActiveCount > 0) {
+    staffStatusChip = `<span class="active-chip" title="${staffActiveCount} worker(s) running">▸ ${staffActiveCount}</span>`;
+  } else if (staffQueuedCount > 0) {
+    staffStatusChip = `<span class="queue-chip" title="${staffQueuedCount} task(s) queued">${staffQueuedCount}</span>`;
+  }
+  
   tree.innerHTML = `
     <button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
       <span class="org-avatar" aria-hidden="true">${escapeHtml(cosInitials)}</span>
       <span class="org-btn-text">
-        <b>Chief of Staff${staffQueueChip}</b>
+        <b>Chief of Staff${staffStatusChip}</b>
         <span class="org-now">runs the CEOs</span>
       </span>
     </button>

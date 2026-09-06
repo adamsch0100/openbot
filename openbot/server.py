@@ -1274,6 +1274,23 @@ def main() -> None:
     apply_env_file()
     host, port = listen_addr()
     WEB.mkdir(exist_ok=True)
+    
+    # Start autonomous queue workers for staff and all CEOs
+    from .queueworker import start_queue_worker
+    org_data = ensure_org()
+    
+    # Start staff queue worker
+    start_queue_worker(None, "staff-queue-worker")
+    print("Started queue worker: staff", flush=True)
+    
+    # Start CEO queue workers
+    for project in org_data.get("projects") or []:
+        pid = project.get("id")
+        if pid:
+            worker_name = f"{pid}-queue-worker"
+            start_queue_worker(pid, worker_name)
+            print(f"Started queue worker: {pid}", flush=True)
+    
     httpd = BoardServer((host, port), Handler)
     url = f"http://{host}:{port}"
     print(f"OpenBot board {url}", flush=True)
@@ -1301,7 +1318,11 @@ def main() -> None:
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\nbye")
+        # Clean shutdown of queue workers
+        from .queueworker import stop_queue_workers
+        print("\nStopping queue workers...")
+        stop_queue_workers()
+        print("bye")
 
 
 if __name__ == "__main__":

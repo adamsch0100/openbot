@@ -67,15 +67,17 @@ Before the gap ship order, OpenBot had:
 
 **PR #15:** [Routines: multi-step scheduled flows](https://github.com/adamsch0100/openbot/pull/15) — ordered steps (e.g., morning: Code status → Think summarize → Ops note), Hermes cron integration, resume capability for failed steps, Settings UI
 
+**WC-1:** ✅ **True Parallel Multi-Agent (SHIPPED)** — multi-spawn from one message (`@Builder: add logging; @Research: fetch docs`), autonomous task queue where workers poll `bus/handoffs/` and claim work on idle, auto-handoff detection ("need docs" → create Research handoff), 3+ concurrent workers with live progress, queue visibility in sidebar showing queued task counts per CEO
+
 ---
 
 ## Gaps vs World-Class Multi-Agent Chat OS
 
-OpenBot has **Week 1 + gap ship order #2–#4 (Builder delight, Chat reliability, Sidebar Agent OS), chat gaps #6–#8 (Turn report, Hermes progress, Keep-going), and PRs #9–#15 (Attachments, Connectors, @mentions, Memory, Handoff bus, Validation, Routines) complete**.
+OpenBot has **Week 1 + gap ship order #2–#4 (Builder delight, Chat reliability, Sidebar Agent OS), chat gaps #6–#8 (Turn report, Hermes progress, Keep-going), and PRs #9–#15 (Attachments, Connectors, @mentions, Memory, Handoff bus, Validation, Routines), plus WC-1 (True Parallel Multi-Agent) complete**.
 
 Here's what remains to reach **world-class Chat OS** status:
 
-### 1. True Parallel Multi-Agent ✅ **SHIPPED**
+### 1. True Parallel Multi-Agent ✅ **SHIPPED (WC-1)**
 
 **Shipped in WC-1** — Cos can spawn multiple workers simultaneously from one message, autonomous task queue where workers check bus/handoffs/ and claim open work, auto-handoff detection (e.g., "need docs" signals create Research handoffs), 3+ workers running concurrently with live progress visible in sidebar, queue visibility showing queued task counts per CEO.
 
@@ -466,7 +468,7 @@ These are **explicitly excluded** per OPENBOT.md and AGENTS.md:
 
 ---
 
-Next: WC-1 True parallel multi-agent
+Next: WC-2 Coding worker hardening
 
 ---
 
