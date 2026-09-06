@@ -317,10 +317,12 @@ class TestE2ETestRunner(unittest.TestCase):
         from tests.e2e.smoke_test import E2ETestRunner
         
         mock_client = Mock()
-        mock_client.send_message.return_value = {"id": "job123"}
-        mock_client.get_job.return_value = {
-            "status": "completed",
-            "has_diff": True,
+        # Chat response is synchronous - returns complete job
+        mock_client.send_message.return_value = {
+            "id": "job123",
+            "diff_pending": True,
+            "text": "Created file",
+            "preset": "builder",
         }
         mock_client.accept_diff.return_value = {"accepted": True}
         mock_client_class.return_value = mock_client
@@ -340,10 +342,13 @@ class TestE2ETestRunner(unittest.TestCase):
         from tests.e2e.smoke_test import E2ETestRunner
         
         mock_client = Mock()
-        mock_client.send_message.return_value = {"id": "job456"}
-        mock_client.get_job.return_value = {
+        # Chat response is synchronous - returns complete job
+        mock_client.send_message.return_value = {
+            "id": "job456",
             "status": "completed",
             "result": "This is a summary of the README file with lots of content.",
+            "text": "Fetched and summarized",
+            "preset": "research",
         }
         mock_client_class.return_value = mock_client
         
@@ -396,11 +401,14 @@ class TestE2ETestRunner(unittest.TestCase):
 
     @patch("tests.e2e.smoke_test.OpenBotE2EClient")
     def test_runner_wait_for_job_timeout(self, mock_client_class):
-        """Test job wait timeout."""
+        """Test job wait timeout (fallback for async jobs)."""
         from tests.e2e.smoke_test import E2ETestRunner
         
         mock_client = Mock()
-        mock_client.get_job.return_value = {"status": "running"}
+        # List endpoint returns running job (never completes)
+        mock_client._request.return_value = {
+            "jobs": [{"id": "job123", "status": "running"}]
+        }
         mock_client_class.return_value = mock_client
         
         runner = E2ETestRunner("https://test.example.com", evidence_dir=self.evidence_dir)

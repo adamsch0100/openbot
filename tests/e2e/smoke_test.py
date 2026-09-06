@@ -255,13 +255,26 @@ class E2ETestRunner:
         return evidence
 
     def wait_for_job(self, job_id: str, timeout: int = 120) -> dict | None:
-        """Wait for job to complete (or timeout)."""
+        """Wait for job to complete (or timeout).
+        
+        Fallback only - chat response is usually synchronous with complete job.
+        """
         start = time.time()
         while time.time() - start < timeout:
-            job = self.client.get_job(job_id)
-            if job.get("error"):
-                self.log(f"  Job lookup error: {job['error']}")
-                return None
+            # Try list endpoint (GET /api/jobs) since single-job GET 404s on live
+            jobs_result = self.client._request("GET", "/api/jobs")
+            if jobs_result.get("error"):
+                self.log(f"  Job list error: {jobs_result['error']}")
+                time.sleep(2)
+                continue
+            
+            jobs = jobs_result.get("jobs", [])
+            job = next((j for j in jobs if j.get("id") == job_id), None)
+            
+            if not job:
+                self.log(f"  Job {job_id} not found in list")
+                time.sleep(2)
+                continue
             
             status = job.get("status", "")
             if status in ("completed", "failed", "rejected"):
@@ -271,6 +284,27 @@ class E2ETestRunner:
         
         self.log(f"  Job {job_id} timed out after {timeout}s")
         return None
+    
+    def _is_terminal_job(self, response: dict) -> bool:
+        """Check if chat response is a complete/terminal job (synchronous).
+        
+        Live: POST /api/chat returns the finished job directly.
+        Terminal signals: has id + (non-empty text OR diff_pending OR untracked
+        OR diff OR blocker OR accepted set OR engine/preset fields).
+        """
+        if not response.get("id"):
+            return False
+        
+        return bool(
+            (response.get("text") and response["text"].strip())
+            or response.get("diff_pending") is not None
+            or response.get("untracked")
+            or response.get("diff")
+            or response.get("blocker") is not None
+            or response.get("accepted") is not None
+            or response.get("engine")
+            or response.get("preset")
+        )
 
     def test_health_check(self) -> bool:
         """Test 1: Health check / status endpoint."""
@@ -313,16 +347,25 @@ class E2ETestRunner:
         
         self.log(f"  Job created: {job_id}")
         
-        # Wait for job to complete
-        self.log(f"  Waiting for job to complete...")
-        job = self.wait_for_job(job_id, timeout=180)
+        # POST /api/chat is synchronous - response IS the job if terminal
+        if self._is_terminal_job(response):
+            self.log(f"  Job already complete (synchronous response)")
+            job = response
+        else:
+            # Fallback: wait for job via list endpoint
+            self.log(f"  Waiting for job to complete...")
+            job = self.wait_for_job(job_id, timeout=180)
+            
+            if not job:
+                self.record_result("builder_flow", False, "Job did not complete in time")
+                return False
         
-        if not job:
-            self.record_result("builder_flow", False, "Job did not complete in time")
-            return False
-        
-        # Check if diff is ready
-        has_diff = job.get("has_diff") or job.get("diff")
+        # Check if diff is ready: diff_pending OR untracked OR diff present
+        has_diff = (
+            job.get("diff_pending")
+            or job.get("untracked")
+            or job.get("diff")
+        )
         if not has_diff:
             self.record_result("builder_flow", False, f"No diff in job (status: {job.get('status')})")
             return False
@@ -364,13 +407,18 @@ class E2ETestRunner:
         
         self.log(f"  Job created: {job_id}")
         
-        # Wait for job to complete
-        self.log(f"  Waiting for job to complete...")
-        job = self.wait_for_job(job_id, timeout=180)
-        
-        if not job:
-            self.record_result("research_flow", False, "Job did not complete in time")
-            return False
+        # POST /api/chat is synchronous - response IS the job if terminal
+        if self._is_terminal_job(response):
+            self.log(f"  Job already complete (synchronous response)")
+            job = response
+        else:
+            # Fallback: wait for job via list endpoint
+            self.log(f"  Waiting for job to complete...")
+            job = self.wait_for_job(job_id, timeout=180)
+            
+            if not job:
+                self.record_result("research_flow", False, "Job did not complete in time")
+                return False
         
         status = job.get("status")
         if status == "completed":
@@ -398,8 +446,8 @@ class E2ETestRunner:
         schedule = "0 0 * * 0"  # Weekly on Sunday
         steps = [
             {
+                "seat": "ops",
                 "instruction": "Check project status and report any issues",
-                "preset": "cos",
             }
         ]
         
