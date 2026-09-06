@@ -198,27 +198,9 @@ These are the **serial next 8 PRs** locked by the operator. Each scoped for focu
 
 ---
 
-### **WC-1: True Parallel Multi-Agent** ⭐
+### **WC-1: True Parallel Multi-Agent** ✅ SHIPPED
 
-**Why:**
-OpenBot has handoffs, routines, and @mentions but no autonomous task queue. Cos cannot spawn multiple workers to run simultaneously. Operators must manually sequence work that should run in parallel (e.g., Code diff + Research doc fetch + Think summarize all at once). This is the core Chat OS gap.
-
-**Acceptance criteria:**
-1. Cos can spawn multiple CEO workers simultaneously (e.g., "Builder: add logging; Research: fetch API docs" in one message)
-2. Worker pool has autonomous task queue: agents check `bus/handoffs/` on idle and claim open work
-3. Handoff detection: when Builder job emits "need docs", auto-route handoff to Research without operator prompt
-4. Concurrent execution: 3+ workers running at once, each with live progress visible in sidebar
-5. Queue visibility: sidebar shows queued tasks per CEO (e.g., "2 tasks queued for Nadia")
-6. Comprehensive tests: spawn 3 workers, verify all run concurrently, verify handoff auto-routing
-7. ROADMAP + INDEX updated
-
-**Out of scope:**
-- Dependency graphs (sequential task chains)
-- Multi-seat fan-out from one handoff (one handoff → one seat for v1)
-- Full Kanban UX over `bus/` (visual cards, drag-drop)
-
-**Estimated complexity:**
-High. Requires task queue implementation in board, concurrent worker management, handoff auto-routing logic, sidebar queue rendering. Touches router, board, sidebar UI, handoff bus integration. Core architectural change.
+See **"Gaps vs World-Class Multi-Agent Chat OS → 1. True Parallel Multi-Agent ✅ SHIPPED"** above for full implementation details. Multi-spawn from one message, autonomous task queue, auto-handoff detection, concurrent execution, queue visibility all shipped.
 
 ---
 
