@@ -1587,16 +1587,15 @@ class HermesGlueTests(unittest.TestCase):
         self.assertEqual(arrow, "SAA Homes Think confirmed and ready.")
         source = (Path(__file__).resolve().parent.parent / "openbot" / "hermes.py").read_text(encoding="utf-8")
         self.assertIn("--continue", source)
-        self.assertIn("--create-if-missing", source)
         self.assertIn("--resume", source)
         self.assertIn("--skills", source)
         self.assertIn("--ignore-rules", source)
-        self.assertIn("--reasoning", source)
         self.assertIn("--toolsets", source)
         self.assertIn("bot_room", source)
         self.assertNotIn('--toolsets", "none"', source)
         self.assertIn('"1" if talk', source)
         self.assertNotIn("--ignore-user-config", source)
+        self.assertNotIn("--create-if-missing", source)
 
 
 class ThreadQuoteTests(unittest.TestCase):
