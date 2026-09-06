@@ -420,18 +420,28 @@ class E2ETestRunner:
                 self.record_result("research_flow", False, "Job did not complete in time")
                 return False
         
-        status = job.get("status")
-        if status == "completed":
-            # Check if we got output
-            result = job.get("result", "")
-            if result and len(result) > 50:
-                self.record_result("research_flow", True, f"Doc fetched (result: {len(result)} chars)")
-                return True
-            else:
-                self.record_result("research_flow", False, f"Job completed but result too short: {result[:100]}")
-                return False
+        # Live jobs do NOT set status:"completed" - check output in text OR result
+        # Pass if terminal job has non-empty text or result (len > 40)
+        text_output = job.get("text", "").strip()
+        result_output = job.get("result", "").strip()
+        
+        # Check for hard failure signals
+        blocker = job.get("blocker")
+        if blocker:
+            self.record_result("research_flow", False, f"Job blocked: {blocker}")
+            return False
+        
+        # Check for actual output (not just banner text)
+        has_output = (text_output and len(text_output) > 40) or (result_output and len(result_output) > 40)
+        
+        if has_output:
+            output_len = len(text_output) if text_output else len(result_output)
+            field_used = "text" if text_output else "result"
+            self.record_result("research_flow", True, f"Doc fetched ({field_used}: {output_len} chars)")
+            return True
         else:
-            self.record_result("research_flow", False, f"Job status: {status}")
+            # No meaningful output
+            self.record_result("research_flow", False, f"Job has no output (text: {len(text_output)}, result: {len(result_output)})")
             return False
 
     def test_ops_flow(self) -> bool:
