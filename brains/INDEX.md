@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR fix-cron-list-call-gateway-status MERGE-READY (fixed TypeError in routines.py, removed duplicate gateway/status route)
-Last: Fixed cron_list call to use home= kwarg (not timeout); removed duplicate /api/hermes/gateway/status handler; added test
-Next: CEO live-verify hermes_count>0 with SAA Homes crons (form-pipeline-health, daily-ranking-strike); then merge
+Now: PR #43 MERGE-READY — Fix Hermes cron delivery migration CLI command (edit not update)
+Last: Discovered real migrate failure: hermes cron update → usage dump. Fixed to hermes cron edit + tests green.
+Next: CEO review + merge
 Blocker: —
 
 ## Vault

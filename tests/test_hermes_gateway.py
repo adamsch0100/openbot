@@ -185,6 +185,42 @@ class TestMigrateDelivery(unittest.TestCase):
         self.assertEqual(len(result["migrated"]), 2)
         self.assertEqual(len(result["failed"]), 0)
         self.assertEqual(mock_run.call_count, 2)
+    
+    @patch("openbot.hermes.which")
+    @patch("openbot.hermes.cron_list")
+    @patch("openbot.hermes._run")
+    def test_migrate_delivery_uses_edit_command(self, mock_run, mock_cron_list, mock_which):
+        """Migration uses 'hermes cron edit' (not 'update') with --deliver flag."""
+        from openbot.hermes import migrate_cron_delivery
+        
+        mock_which.return_value = "/usr/local/bin/hermes"
+        mock_cron_list.return_value = {
+            "ok": True,
+            "jobs": [
+                {"id": "7cb2a72c1cc8", "name": "test-job", "schedule": "0 9 * * *", "deliver": "origin"}
+            ]
+        }
+        mock_run.return_value = (0, "Job updated successfully")
+        
+        result = migrate_cron_delivery(dry_run=False)
+        
+        # Verify _run was called with correct command structure
+        self.assertEqual(mock_run.call_count, 1)
+        call_args = mock_run.call_args[0][0]  # First positional arg is the command list
+        
+        # Assert the command uses 'edit' subcommand, not 'update'
+        self.assertIn("cron", call_args)
+        self.assertIn("edit", call_args)
+        self.assertNotIn("update", call_args)
+        
+        # Assert job ID and --deliver local are present
+        self.assertIn("7cb2a72c1cc8", call_args)
+        self.assertIn("--deliver", call_args)
+        self.assertIn("local", call_args)
+        
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["migrated"]), 1)
+        self.assertIn("7cb2a72c1cc8", result["migrated"])
 
 
 class TestRoutinesMerge(unittest.TestCase):

@@ -946,8 +946,8 @@ def migrate_cron_delivery(home: str | Path | None = None, dry_run: bool = False)
             # Dry run: just record what would be migrated
             migrated.append(job_id)
         else:
-            # Real migration: update delivery setting
-            cmd = [binary, "cron", "update", job_id, "--deliver", "local"]
+            # Real migration: edit delivery setting using correct CLI command
+            cmd = [binary, "cron", "edit", job_id, "--deliver", "local"]
             code, out = _run(cmd, None, 30, home=home)
             if code == 0:
                 migrated.append(job_id)
