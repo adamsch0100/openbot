@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #34 fixing mobile rail stacking (CSS specificity bug from inline style)
-Last: PR #32 + #33 merged (--create-if-missing + sticky session), now fixing #31 phone layout
-Next: Live phone smoke at 390×844 after PR #34 merges — verify hamburger+overlay work
+Now: PR #34 rebased, MERGE-READY — fix mobile rail CSS specificity (remove inline style)
+Last: Resolved rebase conflicts, fix intact: no inline style, no JS display toggle, v=57
+Next: Merge #34 → Railway deploy → live phone smoke at 390×844 verify hamburger+overlay
 Blocker: none
 
 ## Vault
