@@ -140,6 +140,26 @@ def get_routine_templates() -> list[dict]:
                     "instruction": "Post dependency update recommendations to INDEX"
                 }
             ]
+        },
+        {
+            "id": "e2e-regression",
+            "name": "E2E Regression Suite",
+            "description": "Weekly E2E smoke test against live Railway OpenBot",
+            "schedule": "every Sunday at 11pm",
+            "steps": [
+                {
+                    "seat": "ops",
+                    "instruction": "Run E2E smoke test against Railway: python3 tests/e2e/smoke_test.py https://openbot-production-9334.up.railway.app"
+                },
+                {
+                    "seat": "think",
+                    "instruction": "Review E2E test results and identify any failures or regressions"
+                },
+                {
+                    "seat": "ops",
+                    "instruction": "Post E2E regression results to activity feed: passed/failed counts, any blockers"
+                }
+            ]
         }
     ]
 
