@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: WC-2 Coding Worker Hardening shipped: retry on transient failures (3×exponential backoff), Accept→Revert rollback, optional branch/PR, test-after-accept, comprehensive tests.
-Last: WC-1 True Parallel Multi-Agent (autonomous task queue, auto-handoff, concurrent execution). World-class v2 ship order locked (ROADMAP). Routines (PR #15). Builder validation gate (PR #14). Handoff bus (PR #13).
-Next: WC-3 Spend dashboard (per-CEO cost breakdown with trend charts).
+Now: WC-3 Spend Dashboard shipped: per-CEO cost breakdown, 14-day trend chart, 50% weekly cap yellow alerts, cap-exceeded notices, sidebar badges, comprehensive tests (7 tests passing).
+Last: WC-2 Coding Worker Hardening (PR #18): retry on transient failures (3×exponential backoff), Accept→Revert rollback, optional branch/PR, test-after-accept. WC-1 True Parallel Multi-Agent.
+Next: WC-4 Onboarding — run test job, auth checks (Hermes/OpenCode), first-run flow extension.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

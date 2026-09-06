@@ -996,11 +996,33 @@ def _handle_preset(
     if chosen in {"think", "builder", "research", "ops"}:
         allowed, reason, spend_now = gate_paid_job(chosen, project_id, tools)
         if not allowed:
+            # Get detailed cap-exceeded message with CEO name and reset time
+            from .spend import check_cap_alerts
+            
             engine = "board"
-            blocker = reason
+            blocker = reason or "spend cap"
             text = reason or "spend cap"
-            patch_index_line("Blocker", blocker or "spend cap")
+            
+            # Try to get more detailed cap message
             cfg = load_config()
+            settings = load_settings()
+            try:
+                alerts = check_cap_alerts(
+                    float(cfg.get("spend_cap_usd", 5.0)),
+                    cfg.get("spend_cap_period", "week"),
+                    policy=settings.get("spend_policy")
+                )
+                # Find alert for this CEO
+                if project_id:
+                    for alert in alerts.get("alerts", []):
+                        if alert.get("ceo_id") == project_id and alert.get("level") == "cap_exceeded":
+                            blocker = alert["message"]
+                            text = alert["message"]
+                            break
+            except Exception:
+                pass
+            
+            patch_index_line("Blocker", blocker)
             receipt = _receipt_base(job_id, chosen, engine, message, work)
             receipt.update(
                 {

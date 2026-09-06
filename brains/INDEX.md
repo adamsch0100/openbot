@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: WC-2 Coding Worker Hardening shipped: retry on transient failures (3×exponential backoff), Accept→Revert rollback, optional branch/PR, test-after-accept, comprehensive tests.
-Last: WC-1 True Parallel Multi-Agent (autonomous task queue, auto-handoff, concurrent execution). World-class v2 ship order locked (ROADMAP). Routines (PR #15). Builder validation gate (PR #14). Handoff bus (PR #13).
-Next: WC-3 Spend dashboard (per-CEO cost breakdown with trend charts).
+Now: WC-3 Spend Dashboard shipped: per-CEO breakdown, week-over-week trends, 50% cap alerts, cap-exceeded notices, comprehensive tests.
+Last: WC-2 Coding Worker Hardening (PR #18): retry on transient failures (3×exponential backoff), Accept→Revert rollback, optional branch/PR, test-after-accept. WC-1 True Parallel Multi-Agent.
+Next: WC-4 Onboarding — operator directs next.
 Blocker: —
 
 ## Vault

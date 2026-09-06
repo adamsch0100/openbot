@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from .store import in_spend_period, list_jobs, spend_bucket
+from .store import in_spend_period, list_jobs, parse_job_time, spend_bucket
 
 PAID_PRESETS = {"think", "builder", "research", "ops"}
 DEFAULT_POLICY = {
@@ -281,3 +281,226 @@ def gate_paid_job(preset: str, project_id: str | None, tools: dict | None) -> tu
     )
     decision = gate(preset, summary)
     return bool(decision["allow"]), decision.get("reason"), summary
+
+
+def per_ceo_breakdown(
+    cap_usd: float,
+    period: str,
+    now: datetime | None = None,
+    policy=None,
+    go_usage=None,
+) -> dict:
+    """
+    Aggregate spend by project_id (CEO) with weekly/daily breakdown.
+    Returns per-CEO totals, alert status, and trend data.
+    """
+    from .org import list_projects
+
+    policy = normalize_policy(policy)
+    go = _go_for_period(go_usage if go_usage is not None else (_go_snapshot() or {}), period)
+    current = now or datetime.now(timezone.utc)
+    
+    projects = list_projects()
+    ceo_data = {}
+    
+    # Initialize CEO entries
+    for proj in projects:
+        pid = proj.get("id")
+        if not pid:
+            continue
+        ceo_data[pid] = {
+            "id": pid,
+            "name": proj.get("name") or pid,
+            "total_usd": 0.0,
+            "weekly_usd": 0.0,
+            "monthly_usd": 0.0,
+            "daily_breakdown": {},  # date -> usd
+            "alert_50_percent": False,
+            "at_cap": False,
+            "cap_usd": cap_usd,
+        }
+    
+    # Aggregate jobs
+    for job in list_jobs():
+        if job.get("rejected"):
+            continue
+        pid = job.get("project_id")
+        if not pid or pid not in ceo_data:
+            continue
+        
+        try:
+            amount = float(job.get("usd_estimate") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        
+        wallet = classify_job(job, go, policy)
+        if wallet == "unknown":
+            continue
+        
+        # Apply policy binding
+        if policy["bind"] == "payg" and wallet != "payg":
+            continue
+        
+        job_time = str(job.get("at") or "")
+        job_dt = parse_job_time(job_time)
+        if not job_dt:
+            continue
+        
+        # Total
+        ceo_data[pid]["total_usd"] += amount
+        
+        # Period-specific
+        if in_spend_period(job_time, "week", current):
+            ceo_data[pid]["weekly_usd"] += amount
+        if in_spend_period(job_time, "month", current):
+            ceo_data[pid]["monthly_usd"] += amount
+        
+        # Daily breakdown for trends (last 14 days)
+        date_key = job_dt.date().isoformat()
+        ceo_data[pid]["daily_breakdown"][date_key] = (
+            ceo_data[pid]["daily_breakdown"].get(date_key, 0.0) + amount
+        )
+    
+    # Round and detect alerts
+    for pid, data in ceo_data.items():
+        data["total_usd"] = round(data["total_usd"], 6)
+        data["weekly_usd"] = round(data["weekly_usd"], 6)
+        data["monthly_usd"] = round(data["monthly_usd"], 6)
+        
+        # Alert at 50% of weekly cap
+        if period == "week" and data["weekly_usd"] >= cap_usd * 0.5:
+            data["alert_50_percent"] = True
+        
+        # Cap exceeded
+        if data["weekly_usd"] >= cap_usd:
+            data["at_cap"] = True
+    
+    return {
+        "period": period,
+        "cap_usd": float(cap_usd),
+        "ceos": list(ceo_data.values()),
+        "policy": policy,
+        "go": go,
+    }
+
+
+def weekly_trend(
+    project_id: str | None = None,
+    now: datetime | None = None,
+    policy=None,
+    go_usage=None,
+) -> dict:
+    """
+    Return daily spend breakdown for the last 14 days.
+    """
+    from datetime import timedelta
+
+    policy = normalize_policy(policy)
+    go = _go_for_period(go_usage if go_usage is not None else (_go_snapshot() or {}), "week")
+    current = now or datetime.now(timezone.utc)
+    
+    # Generate date range (last 14 days)
+    dates = []
+    for i in range(13, -1, -1):
+        date = (current - timedelta(days=i)).date()
+        dates.append(date.isoformat())
+    
+    daily_totals = {d: 0.0 for d in dates}
+    
+    # Aggregate jobs by day
+    for job in list_jobs():
+        if job.get("rejected"):
+            continue
+        if project_id and job.get("project_id") != project_id:
+            continue
+        
+        try:
+            amount = float(job.get("usd_estimate") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        
+        wallet = classify_job(job, go, policy)
+        if wallet == "unknown":
+            continue
+        
+        if policy["bind"] == "payg" and wallet != "payg":
+            continue
+        
+        job_time = str(job.get("at") or "")
+        job_dt = parse_job_time(job_time)
+        if not job_dt:
+            continue
+        
+        date_key = job_dt.date().isoformat()
+        if date_key in daily_totals:
+            daily_totals[date_key] += amount
+    
+    # Format response
+    series = [{"date": d, "usd": round(daily_totals[d], 6)} for d in dates]
+    
+    return {
+        "project_id": project_id,
+        "days": 14,
+        "series": series,
+        "policy": policy,
+    }
+
+
+def check_cap_alerts(
+    cap_usd: float,
+    period: str,
+    now: datetime | None = None,
+    policy=None,
+    go_usage=None,
+) -> dict:
+    """
+    Check for cap-related alerts: 50% threshold, cap exceeded.
+    Returns list of alerts per CEO.
+    """
+    breakdown = per_ceo_breakdown(cap_usd, period, now, policy, go_usage)
+    current = now or datetime.now(timezone.utc)
+    
+    alerts = []
+    for ceo in breakdown["ceos"]:
+        if ceo["alert_50_percent"] and not ceo["at_cap"]:
+            alerts.append({
+                "ceo_id": ceo["id"],
+                "ceo_name": ceo["name"],
+                "kind": "warning",
+                "level": "50_percent",
+                "message": f"{ceo['name']} at {round(ceo['weekly_usd'] / cap_usd * 100)}% of weekly cap (${ceo['weekly_usd']:.2f} / ${cap_usd:.2f})",
+                "weekly_usd": ceo["weekly_usd"],
+                "cap_usd": cap_usd,
+                "percent": round(ceo["weekly_usd"] / cap_usd * 100, 1),
+            })
+        
+        if ceo["at_cap"]:
+            # Calculate reset time (end of current week/month)
+            if period == "week":
+                days_until_reset = 7 - current.isocalendar()[2]  # ISO weekday (1=Mon, 7=Sun)
+                reset_msg = f"resets in {days_until_reset} day{'s' if days_until_reset != 1 else ''}"
+            elif period == "month":
+                import calendar
+                last_day = calendar.monthrange(current.year, current.month)[1]
+                days_until_reset = last_day - current.day
+                reset_msg = f"resets in {days_until_reset} day{'s' if days_until_reset != 1 else ''}"
+            else:
+                reset_msg = "resets tomorrow"
+            
+            alerts.append({
+                "ceo_id": ceo["id"],
+                "ceo_name": ceo["name"],
+                "kind": "error",
+                "level": "cap_exceeded",
+                "message": f"{ceo['name']} hit ${cap_usd:.2f} cap, {reset_msg}",
+                "weekly_usd": ceo["weekly_usd"],
+                "cap_usd": cap_usd,
+                "reset_message": reset_msg,
+            })
+    
+    return {
+        "period": period,
+        "cap_usd": cap_usd,
+        "alerts": alerts,
+        "has_alerts": len(alerts) > 0,
+    }
