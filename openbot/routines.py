@@ -76,7 +76,7 @@ def list_routines(project_id: str | None = None, include_hermes: bool = True) ->
             tools = project_tools(project_id) if project_id else {}
             hermes_home = str(tools.get("hermes_home") or "").strip() or None
             
-            cron_data = cron_list(hermes_home, timeout=8)
+            cron_data = cron_list(home=hermes_home)
             if cron_data.get("ok"):
                 # cron_list now returns "jobs" list with multi-line format
                 for cron in cron_data.get("jobs", []):

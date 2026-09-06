@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #41 CLEAN UNDRAFT (tests + code only, ready for immediate merge)
-Last: Multi-line parser + is_valid_job_id guard + gateway_status timeout wrapper; 19 tests pass; junk docs deleted
-Next: Merge → live SAA Homes verify → CEO dry_run → real migrate
+Now: PR fix-cron-list-call-gateway-status MERGE-READY (fixed TypeError in routines.py, removed duplicate gateway/status route)
+Last: Fixed cron_list call to use home= kwarg (not timeout); removed duplicate /api/hermes/gateway/status handler; added test
+Next: CEO live-verify hermes_count>0 with SAA Homes crons (form-pipeline-health, daily-ranking-strike); then merge
 Blocker: —
 
 ## Vault

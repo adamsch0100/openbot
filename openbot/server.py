@@ -890,16 +890,6 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, public_keyring())
         if path == "/api/hermes/instances":
             return self._json(200, {"instances": public_instances()})
-        if path == "/api/hermes/gateway/status":
-            qs = parse_qs(urlparse(self.path).query)
-            project_id = (qs.get("project_id") or [""])[0].strip() or None
-            home = None
-            if project_id:
-                org = ensure_org()
-                match = next((row for row in org["projects"] if row.get("id") == project_id), None)
-                if match:
-                    home = (match.get("tools") or {}).get("hermes_home")
-            return self._json(200, gateway_status(home))
         instance_sessions = INSTANCE_SESSIONS.match(path)
         if instance_sessions:
             try:
@@ -920,13 +910,12 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/hermes/gateway/status":
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
-            from .hermes import gateway_status
             from .org import project_tools
             
             tools = project_tools(project_id) if project_id else {}
             hermes_home = str(tools.get("hermes_home") or "").strip() or None
             
-            status = gateway_status(hermes_home, timeout=5)
+            status = gateway_status(hermes_home, timeout=3)
             status["project_id"] = project_id
             return self._json(200, status)
         if path == "/api/selfbuild/status":
