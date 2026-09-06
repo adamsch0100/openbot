@@ -634,93 +634,15 @@ def import_backup(zip_path: str | Path, home: str | Path) -> dict:
     }
 
 
-def cron_list(cwd: str | None = None, home: str | Path | None = None) -> dict:
-    binary = which("hermes")
-    if not binary:
-        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing", "schedules": []}
-    code, out = _run([binary, "cron", "list"], cwd, 30, home=home)
-    
-    # Parse cron list into structured schedules
-    schedules = []
-    lines = (out or "").strip().splitlines()
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("-") or "job" in line.lower() and "schedule" in line.lower():
-            continue
-        
-        # Parse cron list format (typically: job_id  name  schedule  status  last_run)
-        parts = line.split(maxsplit=4)
-        if len(parts) >= 3:
-            job_id = parts[0]
-            name = parts[1]
-            schedule = parts[2] if len(parts) > 2 else ""
-            status = parts[3] if len(parts) > 3 else "unknown"
-            last_run = parts[4] if len(parts) > 4 else ""
-            
-            schedules.append({
-                "id": job_id,
-                "name": name,
-                "schedule": schedule,
-                "enabled": "disabled" not in status.lower(),
-                "status": status,
-                "last_run": last_run,
-                "source": "hermes",
-            })
-    
-    return {
-        "ok": code == 0,
-        "code": code,
-        "text": out.strip() if out else "(no cron jobs)",
-        "schedules": schedules,
-    }
-
-
-def cron_update_delivery(job_id: str, delivery: str = "local", cwd: str | None = None, home: str | Path | None = None) -> dict:
-    """Update an existing cron's delivery method. Migrates deliver=origin to deliver=local."""
+def cron_list(cwd: str | None = None) -> dict:
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
-    
-    # hermes cron update <job_id> --deliver <method>
-    code, out = _run([binary, "cron", "update", job_id, "--deliver", delivery], cwd, 30, home=home)
-    
-    return {
-        "ok": code == 0,
-        "code": code,
-        "text": out.strip() or ("updated delivery" if code == 0 else "update failed"),
-        "job_id": job_id,
-        "delivery": delivery,
-    }
+    code, out = _run([binary, "cron", "list"], cwd, 30)
+    return {"ok": code == 0, "code": code, "text": out.strip() or "(no cron jobs)"}
 
 
-def migrate_crons_to_local(home: str | Path | None = None) -> dict:
-    """Migrate all crons in a Hermes home from deliver=origin to deliver=local."""
-    result = cron_list(home=home)
-    if not result.get("ok"):
-        return {"ok": False, "error": "could not list crons", "migrated": []}
-    
-    schedules = result.get("schedules") or []
-    migrated = []
-    failed = []
-    
-    for sched in schedules:
-        job_id = sched.get("id")
-        if not job_id:
-            continue
-        
-        # Update to deliver=local
-        update_result = cron_update_delivery(job_id, "local", home=home)
-        if update_result.get("ok"):
-            migrated.append(job_id)
-        else:
-            failed.append({"id": job_id, "error": update_result.get("text")})
-    
-    return {
-        "ok": len(failed) == 0,
-        "migrated": migrated,
-        "failed": failed,
-        "total": len(schedules),
-    }
+def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None) -> dict:
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
@@ -817,93 +739,3 @@ def mcp_catalog(cwd: str | None = None) -> dict:
         name = line.split()[0]
         items.append({"id": name, "label": line[:160]})
     return {"ok": code == 0, "text": out.strip(), "items": items[:80]}
-
-
-def gateway_status(home: str | Path | None = None) -> dict:
-    """Check if Hermes gateway is running and return cron schedule summary."""
-    binary = which("hermes")
-    if not binary:
-        return {
-            "ok": False,
-            "running": False,
-            "text": "Hermes Agent binary missing",
-            "enabled_count": 0,
-            "total_count": 0,
-            "next_fire": None,
-        }
-    
-    # Check if gateway process is running
-    code, out = _run([binary, "gateway", "status"], None, 30, home=home)
-    running = code == 0 and "running" in out.lower()
-    
-    # Get cron list to count schedules
-    cron_result = cron_list()
-    cron_text = cron_result.get("text", "")
-    
-    enabled_count = 0
-    total_count = 0
-    next_fire = None
-    
-    if cron_text and "No cron" not in cron_text:
-        for line in cron_text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("-") or "job" in line.lower() and "schedule" in line.lower():
-                continue
-            # Count lines that look like cron entries
-            parts = line.split()
-            if len(parts) >= 3:
-                total_count += 1
-                # Check if enabled (not disabled)
-                if "disabled" not in line.lower():
-                    enabled_count += 1
-    
-    return {
-        "ok": True,
-        "running": running,
-        "text": out.strip() if out else "gateway status unknown",
-        "enabled_count": enabled_count,
-        "total_count": total_count,
-        "next_fire": next_fire,
-        "home": str(home) if home else None,
-    }
-
-
-def gateway_start(home: str | Path | None = None, wait: bool = False) -> dict:
-    """Start Hermes gateway to enable cron execution."""
-    binary = which("hermes")
-    if not binary:
-        return {"ok": False, "text": "Hermes Agent binary missing"}
-    
-    # First check if already running
-    status = gateway_status(home)
-    if status.get("running"):
-        return {
-            "ok": True,
-            "text": "gateway already running",
-            "already_running": True,
-        }
-    
-    # Start gateway
-    timeout = 45 if wait else 15
-    code, out = _run([binary, "gateway", "start"], None, timeout, home=home)
-    
-    return {
-        "ok": code == 0,
-        "code": code,
-        "text": out.strip() or ("gateway started" if code == 0 else "gateway start failed"),
-    }
-
-
-def gateway_stop(home: str | Path | None = None) -> dict:
-    """Stop Hermes gateway."""
-    binary = which("hermes")
-    if not binary:
-        return {"ok": False, "text": "Hermes Agent binary missing"}
-    
-    code, out = _run([binary, "gateway", "stop"], None, 30, home=home)
-    
-    return {
-        "ok": code == 0,
-        "code": code,
-        "text": out.strip() or ("gateway stopped" if code == 0 else "gateway stop failed"),
-    }
