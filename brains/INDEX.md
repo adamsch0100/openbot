@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #43 MERGE-READY — Fix Hermes cron delivery migration CLI command (edit not update)
-Last: Discovered real migrate failure: hermes cron update → usage dump. Fixed to hermes cron edit + tests green.
-Next: CEO review + merge
+Now: PR #44 MERGE-READY — Mobile UX fix (compact composer, strip Meta pricing junk, readable chat history)
+Last: Operator Vitzer reported mobile "still terrible" with screenshot. Fixed: 9px "Talking to" label, 15px textarea (UI font not serif), stream padding max(140px,25vh), Meta Model API pricing/rate-limits stripped in cleanBotText, single-row composer controls 36-38px height. Tested 390×844, 393×851, 375×667.
+Next: Operator test on real phone, merge if delightful
 Blocker: —
 
 ## Vault
