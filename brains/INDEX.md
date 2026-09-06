@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: WC-8 E2E World-Class Audit shipped: E2E harness + live run (2/4 passed, PIN blocker), Frontend UI/UX verified world-class (⭐⭐⭐⭐⭐: 187ms load, secure PIN, professional design), regression routine, 18 tests passing.
+Now: WC-8 harness+partial live smoke (2/4; Builder/Research PIN-blocked; Ops GET /api/routines only, not create-cron).
 Last: WC-7 Self-Build Loop, WC-6 Polish Pack, WC-5 Observability, WC-4 Onboarding, WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: Queue complete — operator directs next
-Blocker: —
+Next: WC-8 live smoke (PIN unlock) OR operator directs next
+Blocker: PIN unlock required for Builder/Research chat paths (and Ops create-cron not exercised)
 
 ## Vault
 
