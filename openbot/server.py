@@ -460,15 +460,29 @@ class Handler(SimpleHTTPRequestHandler):
             if parsed.query:
                 full_path = f"{full_path}?{parsed.query}"
             
+            # Read request body for POST/PUT
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length > 0 else None
+            
             # Connect to backend
             conn = http.client.HTTPConnection(host, port, timeout=15)
-            conn.request(self.command, full_path, headers={
-                "Host": f"{host}:{port}",
-                "User-Agent": self.headers.get("User-Agent", ""),
-                "Accept": self.headers.get("Accept", "*/*"),
-            })
             
+            # Build headers (exclude hop-by-hop headers)
+            headers = {}
+            for key, value in self.headers.items():
+                lower = key.lower()
+                if lower not in ("host", "connection", "transfer-encoding", "upgrade"):
+                    headers[key] = value
+            headers["Host"] = f"{host}:{port}"
+            
+            # Make request
+            conn.request(self.command, full_path, body=body, headers=headers)
             response = conn.getresponse()
+            
+            # Check for websocket upgrade (unsupported by this simple proxy)
+            if response.status == 101 or "upgrade" in response.getheaders():
+                conn.close()
+                return self._proxy_fallback(f"http://{host}:{port}{target_path}")
             
             # Forward response
             self.send_response(response.status)
@@ -497,6 +511,78 @@ class Handler(SimpleHTTPRequestHandler):
                 self.wfile.write(msg.encode("utf-8"))
             except Exception:
                 pass
+
+    def _proxy_fallback(self, direct_url: str):
+        """Fallback UI when proxy doesn't support websockets or engine is down."""
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engine Dashboard</title>
+  <style>
+    body {{
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #100f0d;
+      color: #f3ead8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }}
+    .card {{
+      max-width: 480px;
+      padding: 24px;
+      background: #1c1a16;
+      border: 1px solid #2c2822;
+      border-radius: 12px;
+      text-align: center;
+    }}
+    h1 {{
+      margin: 0 0 16px;
+      font-size: 18px;
+      color: #c9a66b;
+    }}
+    p {{
+      margin: 0 0 20px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #8f8270;
+    }}
+    a {{
+      display: inline-block;
+      padding: 10px 20px;
+      background: #c9a66b;
+      color: #1a140c;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }}
+    a:hover {{
+      background: #d4b47a;
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Engine Dashboard</h1>
+    <p>This dashboard requires features not supported by the simple proxy. Open it directly on your machine:</p>
+    <a href="{direct_url}" target="_blank" rel="noopener">Open Dashboard</a>
+  </div>
+</body>
+</html>"""
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html.encode("utf-8"))
+        except Exception as e:
+            self.log_error(f"_proxy_fallback: {e}")
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
             return
 
@@ -831,6 +917,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        
+        # Proxy OpenCode web UI
+        if path.startswith("/opencode/"):
+            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
+        
+        # Proxy Hermes dashboard
+        if path.startswith("/hermes/"):
+            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if path == "/api/onboarding/test-job":
             if not self._unlocked():
@@ -1352,6 +1446,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_PATCH(self):
         path = urlparse(self.path).path
+        
+        # Proxy OpenCode web UI
+        if path.startswith("/opencode/"):
+            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
+        
+        # Proxy Hermes dashboard
+        if path.startswith("/hermes/"):
+            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
+        
         if not self._unlocked():
             return self._json(401, {"error": "locked"})
         length = int(self.headers.get("Content-Length", 0))
@@ -1385,6 +1488,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_PUT(self):
         path = urlparse(self.path).path
+        
+        # Proxy OpenCode web UI
+        if path.startswith("/opencode/"):
+            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
+        
+        # Proxy Hermes dashboard
+        if path.startswith("/hermes/"):
+            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
+        
         try:
             data = self._read_json()
         except json.JSONDecodeError:
@@ -1415,6 +1527,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         path = urlparse(self.path).path
+        
+        # Proxy OpenCode web UI
+        if path.startswith("/opencode/"):
+            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
+        
+        # Proxy Hermes dashboard
+        if path.startswith("/hermes/"):
+            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
+        
         match = KEY_ID.match(path)
         if match:
             try:

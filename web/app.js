@@ -202,14 +202,14 @@ function cleanBotText(text) {
   if (!text) return "";
   let cleaned = String(text);
   
-  // Strip Meta contributor tier banners (common patterns)
+  // Strip Meta contributor tier banners (exact common patterns only)
   cleaned = cleaned.replace(/^!!!?\s*CONTRIBUTOR\s+TIER\s*—\s*TRAINS?\s+ON\s+YOUR\s+DATA.*$/gim, "");
   cleaned = cleaned.replace(/^This\s+is\s+Meta'?s?\s+contributor\s+tier.*$/gim, "");
   cleaned = cleaned.replace(/^Selecting\s+it\s+permits?\s+Meta.*train.*$/gim, "");
   
-  // Strip smoke test junk / builder labels if they're the only line
+  // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
   const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-  if (lines.length === 1 && /^(SMOKE|BUILDER|OK|PASS|FAIL)(_\w+)*\s*$/i.test(lines[0])) {
+  if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
     return "";
   }
   

@@ -185,10 +185,8 @@ def _public_engine(result: dict) -> dict:
 def opencode_web_status() -> dict:
     engines = detect()
     running = _port_open("127.0.0.1", OPENCODE_WEB_PORT)
-    board_host = os.environ.get("OPENBOT_HOST", "127.0.0.1")
-    board_port = os.environ.get("OPENBOT_PORT", "8787")
-    # Use proxy URL so mobile devices can access
-    url = f"http://{board_host}:{board_port}/opencode/" if running else None
+    # Same-origin relative URL so it works from any public hostname
+    url = "/opencode/" if running else None
     return {
         "engine": "OpenCode",
         "present": engines["opencode"]["present"],
@@ -293,10 +291,8 @@ def _start_opencode_web(folder: str | None = None) -> dict:
 def hermes_dash_status() -> dict:
     engines = detect()
     running = _port_open("127.0.0.1", HERMES_DASH_PORT)
-    board_host = os.environ.get("OPENBOT_HOST", "127.0.0.1")
-    board_port = os.environ.get("OPENBOT_PORT", "8787")
-    # Use proxy URL so mobile devices can access
-    url = f"http://{board_host}:{board_port}/hermes/" if running else None
+    # Same-origin relative URL so it works from any public hostname
+    url = "/hermes/" if running else None
     return {
         "engine": "Hermes Agent",
         "present": engines["hermes"]["present"],
