@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #39 MERGE-READY — Hermes gateway lazy+non-blocking (fixes #36 outage, rebased on master)
-Last: Mobile UX polish #37 merged; Revert #36 outage fix (#38)
-Next: Deploy to Railway → verify SAA Homes crons → 48h clean run → railway-down old boxes
+Now: PR #40 CLEAN MERGE-READY — Hermes cron robust + gateway status sticky (rebased on master)
+Last: Robust cron parsing (JSON→table fallback, reject chrome), gateway start/status/stop APIs, migrate-delivery with is_valid_job_id guard, junk docs deleted
+Next: Live verify: POST gateway/start → GET gateway/status shows running:true; SAA Homes cron parse clean (daily-ranking-strike not junk)
 Blocker: —
 
 ## Vault

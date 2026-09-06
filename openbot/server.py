@@ -29,7 +29,14 @@ from .config import (
 from .cronwatch import ingest_cron_runs
 from .detect import detect
 from .gitutil import git_status
-from .hermes import mcp_catalog, skills_list
+from .hermes import (
+    gateway_start,
+    gateway_status,
+    gateway_stop,
+    mcp_catalog,
+    migrate_cron_delivery,
+    skills_list,
+)
 from .onboarding import onboarding_status, test_job_prompt
 from .hermes_import import (
     add_instance,
@@ -883,6 +890,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, public_keyring())
         if path == "/api/hermes/instances":
             return self._json(200, {"instances": public_instances()})
+        if path == "/api/hermes/gateway/status":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            home = None
+            if project_id:
+                org = ensure_org()
+                match = next((row for row in org["projects"] if row.get("id") == project_id), None)
+                if match:
+                    home = (match.get("tools") or {}).get("hermes_home")
+            return self._json(200, gateway_status(home))
         instance_sessions = INSTANCE_SESSIONS.match(path)
         if instance_sessions:
             try:
@@ -1442,6 +1459,38 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+        if path == "/api/hermes/gateway/start":
+            project_id = data.get("project_id") or None
+            wait = data.get("wait", False)
+            home = None
+            if project_id:
+                org = ensure_org()
+                match = next((row for row in org["projects"] if row.get("id") == project_id), None)
+                if match:
+                    home = (match.get("tools") or {}).get("hermes_home")
+            result = gateway_start(home, wait=bool(wait))
+            return self._json(200 if result.get("ok") else 500, result)
+        if path == "/api/hermes/gateway/stop":
+            project_id = data.get("project_id") or None
+            home = None
+            if project_id:
+                org = ensure_org()
+                match = next((row for row in org["projects"] if row.get("id") == project_id), None)
+                if match:
+                    home = (match.get("tools") or {}).get("hermes_home")
+            result = gateway_stop(home)
+            return self._json(200 if result.get("ok") else 500, result)
+        if path == "/api/hermes/crons/migrate-delivery":
+            project_id = data.get("project_id") or None
+            dry_run = data.get("dry_run", False)
+            home = None
+            if project_id:
+                org = ensure_org()
+                match = next((row for row in org["projects"] if row.get("id") == project_id), None)
+                if match:
+                    home = (match.get("tools") or {}).get("hermes_home")
+            result = migrate_cron_delivery(home, dry_run=bool(dry_run))
+            return self._json(200 if result.get("ok") else 500, result)
         if path == "/api/hermes/instances":
             try:
                 return self._json(

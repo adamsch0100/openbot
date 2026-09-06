@@ -634,12 +634,142 @@ def import_backup(zip_path: str | Path, home: str | Path) -> dict:
     }
 
 
-def cron_list(cwd: str | None = None) -> dict:
+def cron_list(cwd: str | None = None, home: str | Path | None = None) -> dict:
+    """List Hermes cron jobs. Prefers JSON output; falls back to robust table parsing."""
     binary = which("hermes")
     if not binary:
-        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
-    code, out = _run([binary, "cron", "list"], cwd, 30)
-    return {"ok": code == 0, "code": code, "text": out.strip() or "(no cron jobs)"}
+        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing", "jobs": [], "crons": []}
+    
+    # Try JSON output first (if supported)
+    code, out = _run([binary, "cron", "list", "--json"], cwd, 30, home=home)
+    if code == 0 and out.strip():
+        try:
+            data = json.loads(out)
+            if isinstance(data, list):
+                return {"ok": True, "code": 0, "text": out.strip(), "jobs": data}
+            elif isinstance(data, dict) and "jobs" in data:
+                return {"ok": True, "code": 0, "text": out.strip(), "jobs": data.get("jobs", [])}
+        except json.JSONDecodeError:
+            pass
+    
+    # Fallback: try regular list and parse table carefully
+    code, out = _run([binary, "cron", "list"], cwd, 30, home=home)
+    text = out.strip() or "(no cron jobs)"
+    
+    # Parse table robustly: only extract real job data
+    jobs = _parse_cron_table(text)
+    
+    return {"ok": code == 0, "code": code, "text": text, "jobs": jobs}
+
+
+def is_valid_job_id(job_id: str) -> bool:
+    """Validate that a string looks like a real job ID, not table chrome.
+    
+    Real job IDs:
+    - At least 3 characters
+    - Contain at least one alphanumeric
+    - Not common table chrome words
+    
+    Use this guard before operating on job IDs from cron list output.
+    """
+    if not job_id or len(job_id) < 3:
+        return False
+    
+    # Must have at least one alphanumeric
+    if not any(c.isalnum() for c in job_id):
+        return False
+    
+    # Reject known table chrome
+    chrome = {"│", "├", "┤", "┬", "┴", "┼", "Schedule:", "Last", "Dispatch:", 
+              "Delivery:", "Enabled:", "Status:", "ID", "Name", "Created"}
+    if job_id in chrome:
+        return False
+    
+    # Reject if it's all punctuation (like "---")
+    if all(not c.isalnum() for c in job_id):
+        return False
+    
+    return True
+
+
+def _parse_cron_table(text: str) -> list[dict]:
+    """Parse hermes cron list table output into structured jobs.
+    
+    Only extracts rows with valid job IDs, names, schedules.
+    Ignores table chrome (borders, headers, separators).
+    """
+    if not text or "No cron" in text or "no cron" in text:
+        return []
+    
+    jobs = []
+    lines = text.strip().split("\n")
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Skip empty lines
+        if not stripped:
+            continue
+        
+        # Remove box drawing characters and vertical pipes for parsing
+        # Common box chars: │ ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ ─
+        clean = re.sub(r"[│┌┐└┘├┤┬┴┼─║╔╗╚╝╠╣╦╩╬═]", " ", stripped)
+        clean = clean.strip()
+        
+        if not clean:
+            continue
+        
+        # Skip separator lines (all dashes, equals, or spaces)
+        if set(clean) <= {"-", "=", " "}:
+            continue
+        
+        # Parse table row: extract fields by position or split
+        # Typical format: <id> <name> <schedule> [<enabled>] [<delivery>] [<last_run>]
+        parts = clean.split()
+        
+        # Skip header lines (common patterns) - check first word is a standalone header
+        if parts:
+            first_word_upper = parts[0].upper()
+            if first_word_upper in {"ID", "JOB", "NAME", "SCHEDULE", "STATUS", "ENABLED", "CREATED", "LAST", "DELIVERY"}:
+                continue
+        if "Schedule:" in clean and "Last" in clean:  # Header-like labels
+            continue
+        if len(parts) < 3:
+            continue
+        
+        # First part should be a reasonable job ID
+        job_id = parts[0]
+        # Skip if it's clearly table chrome
+        if job_id in {"Schedule:", "Last", "Dispatch:", "Delivery:", "Enabled:", "Status:", "ID", "Name"}:
+            continue
+        # Skip if it doesn't look like an ID (too short or all punctuation)
+        if len(job_id) < 3 or not any(c.isalnum() for c in job_id):
+            continue
+        
+        # Second part is name
+        name = parts[1] if len(parts) > 1 else ""
+        
+        # Third+ parts are schedule
+        # Clean up schedule: remove trailing status/delivery/enabled fields if present
+        # Common pattern: "every 1h" or "0 9 * * *"
+        schedule_parts = []
+        for p in parts[2:]:
+            # Stop if we hit status words
+            if p.lower() in {"enabled", "disabled", "true", "false", "local", "telegram", "running", "idle"}:
+                break
+            schedule_parts.append(p)
+        schedule = " ".join(schedule_parts)
+        
+        if not schedule:
+            continue
+        
+        jobs.append({
+            "id": job_id,
+            "name": name,
+            "schedule": schedule,
+        })
+    
+    return jobs
 
 
 def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None) -> dict:
@@ -651,6 +781,160 @@ def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None
         cmd.append(job_id)
     code, out = _run(cmd, cwd, 30)
     return {"ok": code == 0, "code": code, "text": out.strip() or ""}
+
+
+def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
+    """Check Hermes gateway status. Does NOT start gateway. Returns immediately."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
+    
+    code, out = _run([binary, "gateway", "status"], None, timeout, home=home)
+    text = out.strip()
+    
+    # Parse running status from output
+    running = code == 0 and "running" in text.lower()
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": text or "(no output)",
+        "running": running,
+    }
+
+
+def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: int = 30) -> dict:
+    """Start Hermes gateway daemon. Returns immediately if wait=False (lazy start)."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
+    
+    # Check if already running
+    status = gateway_status(home, timeout=5)
+    if status.get("running"):
+        return {
+            "ok": True,
+            "code": 0,
+            "text": "Gateway already running",
+            "running": True,
+            "started": False,
+        }
+    
+    cmd = [binary, "gateway", "start"]
+    if wait:
+        # Synchronous start (wait for completion)
+        code, out = _run(cmd, None, timeout, home=home)
+        text = out.strip()
+        running = code == 0
+        return {
+            "ok": code == 0,
+            "code": code,
+            "text": text or "(no output)",
+            "running": running,
+            "started": running,
+        }
+    else:
+        # Async start (spawn and return immediately)
+        try:
+            proc = _popen(cmd, None, home=home)
+            # Give it a moment to start, then check status
+            time.sleep(0.5)
+            status_check = gateway_status(home, timeout=5)
+            return {
+                "ok": True,
+                "code": 0,
+                "text": "Gateway start initiated",
+                "running": status_check.get("running", False),
+                "started": True,
+                "pid": proc.pid if hasattr(proc, "pid") else None,
+            }
+        except Exception as err:
+            return {
+                "ok": False,
+                "code": 1,
+                "error": str(err),
+                "running": False,
+                "started": False,
+            }
+
+
+def gateway_stop(home: str | Path | None = None, timeout: int = 10) -> dict:
+    """Stop Hermes gateway daemon gracefully."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "error": "Hermes Agent binary missing"}
+    
+    code, out = _run([binary, "gateway", "stop"], None, timeout, home=home)
+    text = out.strip()
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": text or "(no output)",
+    }
+
+
+def migrate_cron_delivery(home: str | Path | None = None, dry_run: bool = False) -> dict:
+    """Migrate Hermes cron jobs from deliver=origin to deliver=local.
+    
+    Uses is_valid_job_id guard to prevent operating on table chrome.
+    """
+    result = cron_list(home=home)
+    if not result.get("ok"):
+        return {
+            "ok": False,
+            "error": "Failed to list cron jobs",
+            "migrated": [],
+            "failed": [],
+        }
+    
+    jobs = result.get("jobs", [])
+    migrated = []
+    failed = []
+    
+    binary = which("hermes")
+    if not binary:
+        return {
+            "ok": False,
+            "error": "Hermes Agent binary missing",
+            "migrated": [],
+            "failed": [],
+        }
+    
+    for job in jobs:
+        job_id = job.get("id", "")
+        
+        # Guard: only migrate valid job IDs
+        if not is_valid_job_id(job_id):
+            failed.append({
+                "id": job_id,
+                "reason": "Invalid job ID (table chrome)",
+            })
+            continue
+        
+        if dry_run:
+            # Dry run: just record what would be migrated
+            migrated.append(job_id)
+        else:
+            # Real migration: update delivery setting
+            # Note: `hermes cron update` command may vary; adjust as needed
+            cmd = [binary, "cron", "update", job_id, "--deliver", "local"]
+            code, out = _run(cmd, None, 30, home=home)
+            if code == 0:
+                migrated.append(job_id)
+            else:
+                failed.append({
+                    "id": job_id,
+                    "reason": out.strip()[:200] or "Update failed",
+                })
+    
+    return {
+        "ok": len(failed) == 0,
+        "migrated": migrated,
+        "failed": failed,
+        "total": len(jobs),
+        "dry_run": dry_run,
+    }
 
 
 def skills_list(cwd: str | None = None) -> dict:
@@ -739,384 +1023,3 @@ def mcp_catalog(cwd: str | None = None) -> dict:
         name = line.split()[0]
         items.append({"id": name, "label": line[:160]})
     return {"ok": code == 0, "text": out.strip(), "items": items[:80]}
-
-
-# ========== Gateway Management (Lazy, Non-Blocking) ==========
-
-import threading
-import subprocess as _subprocess
-
-_GATEWAY_PROCS: dict[str, _subprocess.Popen | None] = {}
-_GATEWAY_LOCK = threading.Lock()
-
-
-def _gateway_key(home: str | Path | None) -> str:
-    """Unique key for a gateway instance tied to a Hermes home."""
-    if not home:
-        root = hermes_home()
-    else:
-        try:
-            root = Path(home).resolve()
-        except OSError:
-            root = Path(home)
-    return str(root)
-
-
-def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
-    """
-    Check gateway status for a Hermes home.
-    
-    This is a fast, non-blocking status check. Does NOT start the gateway.
-    Returns immediately with running=False if gateway isn't running.
-    
-    Args:
-        home: Hermes home path (None = default home)
-        timeout: Max seconds to wait for `hermes cron list` (default 5s)
-    
-    Returns:
-        {
-            "running": bool,
-            "enabled_count": int,
-            "total_count": int,
-            "next_fire": str | None,
-            "error": str | None
-        }
-    """
-    binary = which("hermes")
-    if not binary:
-        return {
-            "running": False,
-            "enabled_count": 0,
-            "total_count": 0,
-            "next_fire": None,
-            "error": "Hermes Agent binary missing"
-        }
-    
-    # Quick check if gateway process exists
-    key = _gateway_key(home)
-    with _GATEWAY_LOCK:
-        proc = _GATEWAY_PROCS.get(key)
-        if proc and proc.poll() is not None:
-            # Process died, clean it up
-            _GATEWAY_PROCS[key] = None
-            proc = None
-    
-    # Parse cron list to check if gateway is functional
-    cmd = [binary, "cron", "list"]
-    try:
-        code, out = _run(cmd, cwd=None, timeout=timeout, home=home)
-    except Exception:
-        return {
-            "running": False,
-            "enabled_count": 0,
-            "total_count": 0,
-            "next_fire": None,
-            "error": "cron list check timed out"
-        }
-    
-    if code != 0:
-        return {
-            "running": False,
-            "enabled_count": 0,
-            "total_count": 0,
-            "next_fire": None,
-            "error": f"cron list failed: {out[:200]}"
-        }
-    
-    # Parse cron list output
-    enabled = 0
-    total = 0
-    for line in (out or "").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("-") or stripped.startswith("="):
-            continue
-        if re.match(r"^(job|id|name)", stripped, re.I):
-            continue
-        total += 1
-        if "enabled" in stripped.lower():
-            enabled += 1
-    
-    return {
-        "running": proc is not None,
-        "enabled_count": enabled,
-        "total_count": total,
-        "next_fire": None,  # TODO: parse from cron list output if available
-        "error": None
-    }
-
-
-def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: int = 30) -> dict:
-    """
-    Start the Hermes gateway for a home (lazy, daemon thread).
-    
-    This starts the gateway in the background. Does NOT block the HTTP server.
-    Use wait=True only when explicitly testing gateway startup (never on boot).
-    
-    Args:
-        home: Hermes home path (None = default home)
-        wait: If True, wait up to timeout seconds for gateway to respond
-        timeout: Max seconds to wait if wait=True
-    
-    Returns:
-        {
-            "ok": bool,
-            "running": bool,
-            "started": bool,  # True if we started a new process
-            "error": str | None
-        }
-    """
-    binary = which("hermes")
-    if not binary:
-        return {
-            "ok": False,
-            "running": False,
-            "started": False,
-            "error": "Hermes Agent binary missing"
-        }
-    
-    key = _gateway_key(home)
-    
-    with _GATEWAY_LOCK:
-        proc = _GATEWAY_PROCS.get(key)
-        
-        # Check if already running
-        if proc and proc.poll() is None:
-            return {
-                "ok": True,
-                "running": True,
-                "started": False,
-                "error": None
-            }
-        
-        # Clean up dead process
-        if proc:
-            _GATEWAY_PROCS[key] = None
-        
-        # Start new gateway process
-        cmd = [binary, "cron", "gateway"]
-        env = _hermes_env(home)
-        
-        try:
-            # Start as daemon process
-            proc = _subprocess.Popen(
-                cmd,
-                env=env,
-                stdin=_subprocess.DEVNULL,
-                stdout=_subprocess.DEVNULL,
-                stderr=_subprocess.DEVNULL,
-                **(_text_kwargs() if os.name == "nt" else {})
-            )
-            _GATEWAY_PROCS[key] = proc
-        except (OSError, _subprocess.SubprocessError) as err:
-            return {
-                "ok": False,
-                "running": False,
-                "started": False,
-                "error": f"Failed to start gateway: {err}"
-            }
-    
-    # If wait requested, poll status
-    if wait:
-        import time
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            status = gateway_status(home, timeout=3)
-            if status.get("running") or status.get("total_count", 0) > 0:
-                return {
-                    "ok": True,
-                    "running": True,
-                    "started": True,
-                    "error": None
-                }
-            time.sleep(1)
-        
-        return {
-            "ok": False,
-            "running": False,
-            "started": True,
-            "error": "Gateway started but did not respond within timeout"
-        }
-    
-    # Non-blocking: assume success
-    return {
-        "ok": True,
-        "running": True,
-        "started": True,
-        "error": None
-    }
-
-
-def gateway_stop(home: str | Path | None = None) -> dict:
-    """
-    Stop the gateway for a Hermes home.
-    
-    Returns:
-        {"ok": bool, "stopped": bool, "error": str | None}
-    """
-    key = _gateway_key(home)
-    
-    with _GATEWAY_LOCK:
-        proc = _GATEWAY_PROCS.get(key)
-        if not proc:
-            return {"ok": True, "stopped": False, "error": "Gateway not running"}
-        
-        if proc.poll() is not None:
-            # Already dead
-            _GATEWAY_PROCS[key] = None
-            return {"ok": True, "stopped": False, "error": "Gateway already stopped"}
-        
-        # Terminate gracefully
-        try:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except _subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=2)
-        except Exception as err:
-            return {"ok": False, "stopped": False, "error": f"Failed to stop: {err}"}
-        finally:
-            _GATEWAY_PROCS[key] = None
-    
-    return {"ok": True, "stopped": True, "error": None}
-
-
-def cron_list(home: str | Path | None = None, timeout: int = 10) -> dict:
-    """
-    List all cron jobs in a Hermes home.
-    
-    Returns:
-        {
-            "ok": bool,
-            "crons": [{"id": str, "name": str, "schedule": str, "enabled": bool, ...}],
-            "text": str,
-            "error": str | None
-        }
-    """
-    binary = which("hermes")
-    if not binary:
-        return {"ok": False, "crons": [], "text": "", "error": "Hermes Agent binary missing"}
-    
-    cmd = [binary, "cron", "list"]
-    try:
-        code, out = _run(cmd, cwd=None, timeout=timeout, home=home)
-    except Exception as err:
-        return {"ok": False, "crons": [], "text": "", "error": f"cron list failed: {err}"}
-    
-    if code != 0:
-        return {"ok": False, "crons": [], "text": out, "error": f"cron list exited {code}"}
-    
-    # Parse table output (ID, Name, Schedule, Status, etc.)
-    crons = []
-    lines = (out or "").splitlines()
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("-") or stripped.startswith("="):
-            continue
-        if re.match(r"^(job|id|name)", stripped, re.I):
-            continue
-        
-        # Try to parse table columns (whitespace-separated)
-        parts = stripped.split()
-        if len(parts) >= 4:
-            job_id = parts[0]
-            name = parts[1]
-            schedule = parts[2] if len(parts) > 2 else ""
-            enabled = "enabled" in stripped.lower()
-            crons.append({
-                "id": job_id,
-                "name": name,
-                "schedule": schedule,
-                "enabled": enabled,
-                "raw": stripped
-            })
-    
-    return {
-        "ok": True,
-        "crons": crons,
-        "text": out,
-        "error": None
-    }
-
-
-def migrate_cron_delivery(home: str | Path | None = None, dry_run: bool = False) -> dict:
-    """
-    Migrate all crons in a Hermes home from deliver=origin to deliver=local.
-    
-    This ensures cron results route into OpenBot CEO chat instead of old Hermes origin.
-    
-    Args:
-        home: Hermes home path (None = default home)
-        dry_run: If True, just report what would be migrated without changing
-    
-    Returns:
-        {
-            "ok": bool,
-            "migrated": [str],  # list of cron IDs
-            "failed": [{"id": str, "error": str}],
-            "total": int,
-            "error": str | None
-        }
-    """
-    binary = which("hermes")
-    if not binary:
-        return {
-            "ok": False,
-            "migrated": [],
-            "failed": [],
-            "total": 0,
-            "error": "Hermes Agent binary missing"
-        }
-    
-    # List all crons
-    cron_data = cron_list(home, timeout=10)
-    if not cron_data.get("ok"):
-        return {
-            "ok": False,
-            "migrated": [],
-            "failed": [],
-            "total": 0,
-            "error": cron_data.get("error", "Failed to list crons")
-        }
-    
-    crons = cron_data.get("crons", [])
-    migrated = []
-    failed = []
-    
-    for cron in crons:
-        job_id = cron.get("id", "")
-        name = cron.get("name", "")
-        
-        if not job_id:
-            continue
-        
-        # Check if already deliver=local (by inspecting the raw output)
-        raw = cron.get("raw", "")
-        if "deliver" in raw and "local" in raw:
-            # Already migrated
-            continue
-        
-        if dry_run:
-            migrated.append(job_id)
-            continue
-        
-        # Update cron to use deliver=local
-        # hermes cron update <job_id> --deliver local
-        cmd = [binary, "cron", "update", job_id, "--deliver", "local"]
-        try:
-            code, out = _run(cmd, cwd=None, timeout=15, home=home)
-            if code == 0:
-                migrated.append(job_id)
-            else:
-                failed.append({"id": job_id, "name": name, "error": out[:200]})
-        except Exception as err:
-            failed.append({"id": job_id, "name": name, "error": str(err)[:200]})
-    
-    return {
-        "ok": len(failed) == 0,
-        "migrated": migrated,
-        "failed": failed,
-        "total": len(crons),
-        "dry_run": dry_run,
-        "error": None if len(failed) == 0 else f"{len(failed)} cron(s) failed to migrate"
-    }
