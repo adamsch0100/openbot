@@ -893,7 +893,7 @@ body {
 
 .connector-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 2fr) auto auto auto auto;
   gap: 0.5rem;
   align-items: center;
   padding: 0.5rem 0.75rem;
@@ -910,8 +910,36 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
+.connector-row-popular {
+  background: rgba(201, 166, 107, 0.06);
+  border-color: rgba(201, 166, 107, 0.2);
+}
+
 .connector-name {
   font-weight: 500;
+}
+
+.connector-name-desc {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.popular-skills-section {
+  margin: 1rem 0 0.5rem 0;
+}
+
+.popular-skills-section h4 {
+  margin: 0 0 0.25rem 0;
+}
+
+.popular-skills-divider {
+  margin: 1.5rem 0 0.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.popular-skills-divider h4 {
+  margin: 0 0 0.5rem 0;
 }
 
 .connector-cell {

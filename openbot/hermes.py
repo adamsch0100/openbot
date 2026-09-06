@@ -655,16 +655,76 @@ def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None
 
 
 def skills_list(cwd: str | None = None) -> dict:
+    """List Hermes skills with descriptions and popular recommendations."""
     binary = which("hermes")
     if not binary:
-        return {"ok": False, "text": "Hermes Agent binary missing", "skills": []}
+        return {
+            "ok": False,
+            "text": "Hermes Agent binary missing",
+            "skills": [],
+            "popular": []
+        }
     code, out = _run([binary, "skills", "list"], cwd, 30)
+    
+    # Parse skill names from `hermes skills list` output
     names = []
     for line in (out or "").splitlines():
         token = line.strip().split()[0] if line.strip() else ""
         if token and not token.startswith("-") and token.lower() not in {"name", "skill", "skills"}:
             names.append(token[:80])
-    return {"ok": code == 0, "text": out.strip(), "skills": names[:80]}
+    
+    # Skill descriptions (fallback when Hermes doesn't provide metadata)
+    skill_descriptions = {
+        "github": "Query GitHub repos, issues, and PRs",
+        "github-pr-workflow": "Create and manage GitHub pull requests",
+        "web-search": "Search the web for current information",
+        "terminal": "Execute shell commands in the workspace",
+        "file-operations": "Read, write, and search files",
+        "browser": "Navigate and extract content from websites",
+        "python-execution": "Run Python code and scripts",
+        "code-analysis": "Analyze code structure and dependencies",
+        "documentation": "Generate and update documentation",
+        "testing": "Run and analyze test suites",
+        "database": "Query and manage databases",
+        "api-client": "Make HTTP requests to APIs",
+        "image-processing": "Analyze and transform images",
+        "data-analysis": "Process and visualize data",
+        "scheduling": "Set up cron jobs and timers",
+        "notification": "Send alerts and notifications",
+        "memory": "Store and retrieve persistent data",
+        "research": "Deep research and summarization",
+        "planning": "Break down tasks and create plans",
+        "review": "Code review and quality checks",
+    }
+    
+    # Build skills list with descriptions
+    skills_with_desc = []
+    for name in names[:80]:
+        desc = skill_descriptions.get(name, "Hermes Agent skill")
+        skills_with_desc.append({
+            "name": name,
+            "description": desc
+        })
+    
+    # Popular skills recommended for Think/Research/Ops
+    popular = [
+        "web-search",
+        "browser",
+        "github",
+        "terminal",
+        "file-operations",
+        "research",
+        "planning",
+    ]
+    # Filter to only skills that are actually installed
+    popular_installed = [s for s in popular if s in names]
+    
+    return {
+        "ok": code == 0,
+        "text": out.strip(),
+        "skills": skills_with_desc,
+        "popular": popular_installed
+    }
 
 
 def mcp_catalog(cwd: str | None = None) -> dict:

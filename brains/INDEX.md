@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: WC-5 Observability shipped: Hermes tool-call progress in live stream, replay verbose modal with full Hermes/OpenCode session logs, job receipts link to raw logs via View raw log button.
-Last: WC-4 Onboarding (auth checks for Hermes/OpenCode before first work, test job flow), WC-3 Spend Dashboard (per-CEO breakdown, trends, 50% cap alerts), WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: WC-6 Polish pack — operator directs next.
+Now: WC-6 Polish Pack shipped: skills catalog with descriptions + popular skills, routine templates (Morning standup, Weekly review), Memory search → stream jump verified.
+Last: WC-5 Observability (Hermes tool-call progress, replay verbose modal, job receipts link raw logs), WC-4 Onboarding (auth checks, test job), WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
+Next: WC-7 Self-build loop — operator directs next.
 Blocker: —
 
 ## Vault

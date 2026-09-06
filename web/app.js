@@ -2490,6 +2490,9 @@ function isTalk(job) {
 
 function renderTalk(job) {
   const el = bubble("bot", job.text || "");
+  if (job.id) {
+    el.setAttribute("data-job-id", job.id);
+  }
   stampLane(el, job);
   appendWorkDetails(el, job);
   // Add report card for talk jobs too
@@ -3744,7 +3747,7 @@ $("saveModels").addEventListener("click", async () => {
   if (res.ok) applyConfig(data);
 });
 
-let connectorsCatalog = { skills: [], mcp: [] };
+let connectorsCatalog = { skills: [], mcp: [], popularSkills: [] };
 
 async function loadConnectorsCatalog() {
   try {
@@ -3752,7 +3755,8 @@ async function loadConnectorsCatalog() {
     const data = await res.json();
     connectorsCatalog = {
       skills: data.skills || [],
-      mcp: data.mcp || []
+      mcp: data.mcp || [],
+      popularSkills: data.popular_skills || []
     };
     paintConnectorsPanel();
   } catch (err) {
@@ -3772,24 +3776,80 @@ function paintConnectorsPanel() {
   if (connectorsCatalog.skills.length === 0) {
     skillMatrix.innerHTML = `<p class="muted">No Hermes skills found. Run <code>hermes skills list</code> to see available skills.</p>`;
   } else {
-    let skillHtml = `<div class="connector-row connector-row-header">
+    let skillHtml = "";
+    
+    // Popular Skills section
+    if (connectorsCatalog.popularSkills && connectorsCatalog.popularSkills.length > 0) {
+      skillHtml += `<div class="popular-skills-section">
+        <h4 class="drawer-sub">Popular Skills</h4>
+        <p class="muted">Recommended for Think, Research, and Ops agents</p>
+      </div>`;
+      
+      skillHtml += `<div class="connector-row connector-row-header">
+        <div class="connector-name">Skill</div>
+        <div class="connector-name-desc">Description</div>
+        <div class="connector-cell">Think</div>
+        <div class="connector-cell">Research</div>
+        <div class="connector-cell">Ops</div>
+        <div class="connector-cell">Chat</div>
+      </div>`;
+      
+      connectorsCatalog.skills.forEach((skillObj) => {
+        const skillName = typeof skillObj === 'string' ? skillObj : skillObj.name;
+        const skillDesc = typeof skillObj === 'object' ? skillObj.description : '';
+        if (!connectorsCatalog.popularSkills.includes(skillName)) return;
+        
+        const skillConfig = globalConnectors.skills[skillName] || {};
+        skillHtml += `<div class="connector-row connector-row-popular">
+          <div class="connector-name">${escapeHtml(skillName)}</div>
+          <div class="connector-name-desc">${escapeHtml(skillDesc)}</div>`;
+        
+        seats.forEach((seat) => {
+          const checked = skillConfig[seat] === true ? " checked" : "";
+          skillHtml += `<div class="connector-cell">
+            <label>
+              <input type="checkbox" data-skill="${escapeHtml(skillName)}" data-seat="${seat}"${checked} />
+            </label>
+          </div>`;
+        });
+        
+        skillHtml += `<div class="connector-cell connector-cell-disabled">
+          <label title="Chat never has tools">
+            <input type="checkbox" disabled />
+          </label>
+        </div>`;
+        skillHtml += `</div>`;
+      });
+      
+      skillHtml += `<div class="popular-skills-divider">
+        <h4 class="drawer-sub">All Skills</h4>
+      </div>`;
+    }
+    
+    // All skills section with header
+    skillHtml += `<div class="connector-row connector-row-header">
       <div class="connector-name">Skill</div>
+      <div class="connector-name-desc">Description</div>
       <div class="connector-cell">Think</div>
       <div class="connector-cell">Research</div>
       <div class="connector-cell">Ops</div>
       <div class="connector-cell">Chat</div>
     </div>`;
     
-    connectorsCatalog.skills.forEach((skill) => {
-      const skillConfig = globalConnectors.skills[skill] || {};
+    connectorsCatalog.skills.forEach((skillObj) => {
+      const skillName = typeof skillObj === 'string' ? skillObj : skillObj.name;
+      const skillDesc = typeof skillObj === 'object' ? skillObj.description : '';
+      const skillConfig = globalConnectors.skills[skillName] || {};
+      
       skillHtml += `<div class="connector-row">
-        <div class="connector-name">${escapeHtml(skill)}</div>`;
+        <div class="connector-name">${escapeHtml(skillName)}</div>
+        <div class="connector-name-desc">${escapeHtml(skillDesc)}</div>`;
       
       seats.forEach((seat) => {
         const checked = skillConfig[seat] === true ? " checked" : "";
         skillHtml += `<div class="connector-cell">
           <label>
-            <input type="checkbox" data-skill="${escapeHtml(skill)}" data-seat="${seat}"${checked} />
+            <input type="checkbox" data-skill="${escapeHtml(skillName)}" data-seat="${seat}"${checked} />
           </label>
         </div>`;
       });
@@ -5015,6 +5075,57 @@ if ($("saveMemory")) {
   
   // Routines management
   let routineSteps = [];
+  let routineTemplates = [];
+  
+  async function loadRoutineTemplates() {
+    try {
+      const res = await fetch("/api/routines/templates");
+      if (!res.ok) throw new Error("load templates failed");
+      const data = await res.json();
+      routineTemplates = data.templates || [];
+      renderTemplateDropdown();
+    } catch (err) {
+      console.error("load routine templates failed:", err);
+    }
+  }
+  
+  function renderTemplateDropdown() {
+    const select = $("routineTemplate");
+    if (!select) return;
+    
+    let html = '<option value="">Start from scratch...</option>';
+    routineTemplates.forEach((template) => {
+      html += `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`;
+    });
+    select.innerHTML = html;
+  }
+  
+  $("routineTemplate").addEventListener("change", () => {
+    const templateId = $("routineTemplate").value;
+    const descEl = $("routineTemplateDesc");
+    
+    if (!templateId) {
+      if (descEl) descEl.textContent = "";
+      return;
+    }
+    
+    const template = routineTemplates.find((t) => t.id === templateId);
+    if (!template) return;
+    
+    // Show template description
+    if (descEl) {
+      descEl.textContent = template.description || "";
+    }
+    
+    // Load template into form
+    $("routineName").value = template.name;
+    $("routineSchedule").value = template.schedule;
+    routineSteps = template.steps.map((step) => ({
+      seat: step.seat,
+      instruction: step.instruction
+    }));
+    renderRoutineSteps();
+  });
   
   async function loadRoutines() {
     try {
@@ -5213,6 +5324,7 @@ if ($("saveMemory")) {
   });
   
   renderRoutineSteps();
+  loadRoutineTemplates();
   loadRoutines();
 }
 
