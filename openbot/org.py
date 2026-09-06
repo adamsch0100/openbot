@@ -633,7 +633,7 @@ def bootstrap_ceo_runtime(project_id: str, title: str | None = None, folder: str
     _copy_if_missing(machine / "auth.json", home / "auth.json")
     _seed_work_readme(work, (title or pid).strip() or pid)
     git_ok = _init_git(work)
-    patch_project_tools(pid, {"hermes_home": str(home.resolve())})
+    patch_project_tools(pid, {"hermes_home": str(home.resolve())}, create_if_missing=True)
     stamp_ceo_wiring(pid)
     return {
         "project_id": pid,
@@ -721,7 +721,7 @@ def node_label(project_id: str | None = None, worker_id: str | None = None) -> s
     return project_id
 
 
-def patch_project_tools(project_id: str, patch: dict) -> dict:
+def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = False) -> dict:
     data = _load_saved()
     pid = _slug(project_id)
     found = False
@@ -774,7 +774,28 @@ def patch_project_tools(project_id: str, patch: dict) -> dict:
             row["fallback"] = [str(item).strip() for item in raw if str(item).strip()]
         break
     if not found:
-        raise ValueError("project not found")
+        if create_if_missing:
+            cfg = load_config()
+            work_dir = str(cfg.get("work_dir") or ROOT)
+            new_project = {
+                "id": pid,
+                "name": pid,
+                "role": "ceo",
+                "folder": work_dir,
+                "primary": len(data.get("projects") or []) == 0,
+                "workers": [],
+            }
+            for key in ("hermes_home", "hermes_instance_id", "hermes_session_id", "account_id", "site_url"):
+                if key in patch:
+                    value = str(patch.get(key) or "").strip()
+                    if value:
+                        new_project[key] = value
+            if "projects" not in data:
+                data["projects"] = []
+            data["projects"].append(new_project)
+            _ensure_project_index(pid, pid, work_dir)
+        else:
+            raise ValueError("project not found")
     _save(data)
     return public_org(data)
 
