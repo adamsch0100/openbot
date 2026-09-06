@@ -207,6 +207,19 @@ function cleanBotText(text) {
   cleaned = cleaned.replace(/^This\s+is\s+Meta'?s?\s+contributor\s+tier.*$/gim, "");
   cleaned = cleaned.replace(/^Selecting\s+it\s+permits?\s+Meta.*train.*$/gim, "");
   
+  // Strip Meta Model API pricing/rate-limit boilerplate
+  // Pattern: "Meta Model API is free... pricing and rate limits... https://dev.meta.ai/docs/pricing-rate-limits/"
+  cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free.*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gis, "");
+  
+  // Strip "See current pricing and rate limits for the Meta Model API here: https://..."
+  cleaned = cleaned.replace(/See\s+current\s+pricing\s+and\s+rate\s+limits\s+for\s+the\s+Meta\s+Model\s+API.*?https?:\/\/[^\s]+/gi, "");
+  
+  // Strip standalone Meta pricing URLs
+  cleaned = cleaned.replace(/https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
+  
+  // Strip any long paragraph about Meta's acceptable use policy or training data
+  cleaned = cleaned.replace(/It\s+lowers\s+the\s+barrier\s+to\s+entry.*?acceptable\./gis, "");
+  
   // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
   const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
