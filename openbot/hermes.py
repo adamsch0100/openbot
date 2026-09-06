@@ -415,23 +415,26 @@ def chat(
     with tempfile.TemporaryDirectory(prefix="openbot-hermes-") as tmp:
         root = Path(tmp)
         usage_path = root / "usage.json"
+        query = root / "query.txt"
+        query.write_text(prompt, encoding="utf-8")
         if talk:
-            # -z: single prompt in, final reply text out (no banners / tool previews).
+            # Talk mode: clean one-shot query for board Chat (no banners/tool previews).
+            # Use hermes chat -q with --quiet for programmatic output.
             cmd = [
                 binary,
-                "-z",
-                prompt,
+                "chat",
+                "--query-file",
+                str(query),
+                "--quiet",
                 "--yolo",
-                "--safe-mode",
                 "--ignore-rules",
-                "--reasoning",
-                "none",
+                "--source",
+                "openbot",
                 "--usage-file",
                 str(usage_path),
             ]
         else:
-            query = root / "query.txt"
-            query.write_text(prompt, encoding="utf-8")
+            # Job mode: full multi-turn session with toolsets and skills.
             cmd = [
                 binary,
                 "chat",
