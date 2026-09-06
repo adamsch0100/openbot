@@ -1659,229 +1659,367 @@ footer {
   white-space: nowrap;
 }
 footer a { color: var(--bronze); }
-/* Mobile-first layout: phone ≤480px, usable ≤860px */
+/* WORLD-CLASS MOBILE UX: Modern chat-first design for ≤860px */
 @media (max-width: 860px) {
   body { overflow: auto; }
+  
+  /* ========== HEADER: Ultra-compact, minimal chrome ========== */
   .bar { 
     grid-template-columns: auto minmax(0, 1fr) auto;
-    padding: 6px 10px;
-    gap: 10px;
+    padding: 8px 12px;
+    gap: 12px;
+    background: rgba(16, 15, 13, 0.98);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(201, 166, 107, 0.1);
   }
   
-  /* Compact header: hide "LOCAL ORG." sub, keep gem + OPENBOT */
+  /* Hide "LOCAL ORG." sub, keep gem + OPENBOT */
   .sub { display: none; }
-  .word { font-size: 11px; letter-spacing: 0.18em; }
-  .mark-gem { width: 26px; height: 26px; }
+  .word { font-size: 11px; letter-spacing: 0.2em; font-weight: 600; }
+  .mark-gem { width: 28px; height: 28px; }
   
-  /* MOBILE COMPOSER FIX: Compact "Talking to" label */
-  .composer-who {
-    font-size: 9px;
-    letter-spacing: 0.06em;
-    padding: 0 4px;
-    margin: 0;
-    opacity: 0.7;
-  }
-  
-  /* Stage tabs horizontal scroll */
+  /* Stage tabs: pill-style with better visual hierarchy */
   .stages { 
     grid-column: 2; 
     justify-self: center;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.15);
+    border-radius: 20px;
+    padding: 4px;
   }
   .stage-btn { 
-    font-size: 11px;
-    padding: 5px 11px;
+    font-size: 12px;
+    padding: 6px 14px;
     white-space: nowrap;
+    border-radius: 16px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+  .stage-btn.on {
+    background: var(--bronze);
+    color: #1a140c;
+    box-shadow: 0 2px 8px rgba(201, 166, 107, 0.3);
   }
   
-  /* Hamburger menu button for org rail */
+  /* Hamburger menu: modern icon button */
   .mobile-org-toggle {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 40px;
     height: 40px;
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.15);
+    border-radius: 12px;
     cursor: pointer;
-    color: var(--ink);
+    color: var(--bronze);
     font-size: 18px;
     padding: 0;
     flex-shrink: 0;
+    transition: all 0.2s ease;
   }
-  .mobile-org-toggle:hover { border-color: var(--bronze); color: var(--bronze); }
+  .mobile-org-toggle:hover { 
+    background: rgba(201, 166, 107, 0.1);
+    border-color: var(--bronze);
+  }
   
-  /* Chat stage: full-width chat, rail as overlay */
+  /* Spend meter: minimal, single-line */
+  .meter { 
+    padding: 8px 12px;
+    font-size: 11px;
+    max-width: 120px;
+    gap: 0;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.15);
+    border-radius: 12px;
+  }
+  .meter-line { display: none; }
+  .meter-total { font-size: 12px; font-weight: 600; }
+  .engine-hint { display: none; }
+  
+  /* ========== CHAT LAYOUT: Full-width, chat-first ========== */
   #stage-chat.on { 
     grid-template-columns: minmax(0, 1fr);
     position: relative;
   }
   
-  /* Rail becomes overlay drawer */
+  /* Rail: slide-in drawer with modern styling */
   .rail {
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
-    width: min(280px, 80vw);
+    width: min(300px, 85vw);
     z-index: 30;
     transform: translateX(-100%);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4);
+    background: var(--bg-rail);
+    border-right: 1px solid rgba(201, 166, 107, 0.1);
   }
   .rail.open { transform: translateX(0); }
   
-  /* Rail scrim */
   .rail-scrim {
     display: none;
     position: fixed;
     inset: 0;
     background: rgba(10, 9, 8, 0.7);
+    backdrop-filter: blur(4px);
     z-index: 29;
   }
   .rail-scrim.open { display: block; }
   
-  /* Chat column full width */
+  /* Chat column: full-width, optimized spacing */
   .chat-col { width: 100%; }
   .chat-shell { 
     width: 100%;
-    padding: 0 10px 10px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
   
-  /* Tighter chat head */
+  /* Chat head: minimal, breadcrumb-style */
   .chat-head {
-    padding: 10px 4px 6px;
-    gap: 2px;
+    padding: 12px 16px 8px;
+    gap: 4px;
+    background: rgba(16, 15, 13, 0.95);
+    border-bottom: 1px solid rgba(201, 166, 107, 0.08);
   }
   .chat-where { 
-    font-size: 11px; 
-    letter-spacing: 0.12em; 
+    font-size: 13px; 
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: var(--bronze);
   }
   .chat-folder { 
-    font-size: 10px;
-    line-height: 1.3;
-  }
-  
-  /* Tighter stream spacing with composer clearance */
-  .stream {
-    padding: 12px 4px 14px;
-    gap: 10px;
-    /* Add bottom padding to ensure chat doesn't get clipped by floating composer */
-    padding-bottom: max(140px, 25vh);
-  }
-  
-  /* Compact bubbles */
-  .bubble { gap: 4px; }
-  .bubble.user {
-    padding: 10px 13px;
-    max-width: 90%;
-  }
-  .bubble.bot {
-    padding: 10px 13px;
-  }
-  .bubble-text {
-    font-size: 14px;
-    line-height: 1.48;
-  }
-  .card {
-    padding: 10px 12px;
-  }
-  .card .meta { font-size: 10px; margin-bottom: 6px; }
-  
-  /* Compact index */
-  .index {
-    padding: 8px 0 10px;
-  }
-  .index summary {
     font-size: 11px;
-    padding: 1px 0 3px;
-  }
-  .index pre {
-    font-size: 11px;
-    max-height: 140px;
-    margin: 8px 0 6px;
+    line-height: 1.4;
+    opacity: 0.7;
   }
   
-  /* Lanes: horizontal scroll with better tap targets */
+  /* Lanes: horizontal scroll pills */
   .lanes { 
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 3px;
-    margin-top: 6px;
+    padding: 4px;
+    margin-top: 8px;
     max-width: 100%;
+    background: rgba(28, 26, 22, 0.4);
+    border: 1px solid rgba(201, 166, 107, 0.1);
+    border-radius: 16px;
   }
   .lane { 
-    padding: 6px 10px;
-    font-size: 10px;
-    min-height: 34px;
+    padding: 6px 12px;
+    font-size: 11px;
+    min-height: 32px;
     display: flex;
     align-items: center;
     white-space: nowrap;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+  .lane.on {
+    background: var(--bronze-soft);
+    color: var(--bronze);
   }
   
-  /* Route buttons: better tap targets */
-  .route { 
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  /* Index brief: collapsible, minimal */
+  .index {
+    padding: 8px 16px 10px;
+    background: rgba(16, 15, 13, 0.6);
+    border-bottom: 1px solid rgba(201, 166, 107, 0.08);
   }
-  .route-btn { 
-    padding: 8px 14px;
-    font-size: 12px;
+  .index summary {
+    font-size: 11px;
+    padding: 2px 0 4px;
+    color: var(--bronze);
+    font-weight: 500;
+  }
+  .index pre {
+    font-size: 11px;
+    max-height: 120px;
+    margin: 8px 0 6px;
+    line-height: 1.5;
+  }
+  
+  /* ========== STREAM: Chat-first, maximum content area ========== */
+  .stream {
+    flex: 1;
+    padding: 16px 16px 20px;
+    gap: 12px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Extra bottom padding for floating composer */
+    padding-bottom: max(160px, 30vh);
+  }
+  
+  /* Bubbles: modern, readable, spacious */
+  .bubble { 
+    gap: 6px;
+    animation: bubble-in 0.3s ease;
+  }
+  @keyframes bubble-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .bubble.user {
+    padding: 12px 16px;
+    max-width: 85%;
+    margin-left: auto;
+    background: var(--bronze-soft);
+    border: 1px solid rgba(201, 166, 107, 0.2);
+    border-radius: 18px 18px 4px 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  
+  .bubble.bot {
+    padding: 12px 16px;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.1);
+    border-radius: 18px 18px 18px 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  .bubble-text {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  
+  /* Job cards: compact, readable */
+  .card {
+    padding: 12px 14px;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  .card .meta { 
+    font-size: 10px; 
+    margin-bottom: 8px;
+    color: var(--bronze);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .card pre {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  
+  /* ========== COMPOSER: Floating, compact, modern ========== */
+  .composer {
+    position: sticky;
+    bottom: 0;
+    margin: 0;
+    padding: 12px 16px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: rgba(16, 15, 13, 0.98);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(201, 166, 107, 0.1);
+    border-radius: 0;
+    gap: 8px;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Hide "Talking to" label on mobile (redundant with chat head) */
+  .composer-who {
+    display: none;
+  }
+  
+  .composer textarea {
+    font-size: 16px; /* Prevent iOS Safari auto-zoom */
     min-height: 44px;
+    max-height: 120px;
+    padding: 10px 0;
+    font-family: var(--ui);
+    line-height: 1.4;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+  }
+  
+  .composer-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  
+  /* Attach button: icon-only, modern */
+  .attach-btn {
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    font-size: 20px;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.15);
+    border-radius: 12px;
     display: flex;
     align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+  .attach-btn:hover {
+    background: rgba(201, 166, 107, 0.1);
+    border-color: var(--bronze);
   }
   
-  /* Composer: ensure above safe area, compact layout */
-  .composer {
-    padding: 6px 8px;
-    margin-bottom: env(safe-area-inset-bottom, 8px);
-    gap: 4px;
-  }
-  .composer textarea {
-    font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
-    min-height: 42px;
-    max-height: 120px;
-    padding: 6px 0;
-    font-family: var(--ui); /* Use UI font, not serif display font */
-  }
-  .composer-input-row {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    gap: 6px;
-    align-items: center;
-  }
+  /* Route select: compact dropdown */
   .route-select {
-    font-size: 11px;
-    padding: 8px 22px 8px 8px;
-    min-width: 70px;
-    background-position: right 6px center;
-    height: 38px;
+    font-size: 12px;
+    padding: 8px 24px 8px 12px;
+    min-width: 80px;
+    height: 40px;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.15);
+    border-radius: 12px;
+    background-position: right 8px center;
+    font-weight: 500;
+    color: var(--bronze);
   }
+  
+  /* Send button: prominent, modern */
   .composer .send {
-    height: 38px;
-    min-width: 68px;
-    padding: 6px 12px;
-    font-size: 13px;
+    height: 40px;
+    min-width: 72px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--bronze);
+    color: #1a140c;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(201, 166, 107, 0.3);
+    transition: all 0.2s ease;
   }
-  .attach-btn {
-    padding: 8px 10px;
-    font-size: 16px;
-    height: 38px;
-    min-width: 38px;
+  .composer .send:hover {
+    box-shadow: 0 4px 12px rgba(201, 166, 107, 0.4);
+    transform: translateY(-1px);
+  }
+  .composer .send:active {
+    transform: translateY(0);
   }
   
-  /* Compact footer: collapse engines info */
-  footer { 
-    white-space: normal;
-    font-size: 10px;
-    padding: 6px 12px;
-    line-height: 1.4;
+  /* Composer hints/chips: compact */
+  .reply-chip, .composer-hint {
+    font-size: 11px;
+    padding: 6px 10px;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.1);
+    border-radius: 10px;
   }
   
-  /* Settings drawer full-width */
-  .drawer { grid-template-columns: minmax(0, 1fr); }
+  /* ========== SETTINGS DRAWER: Full-screen modal ========== */
+  .drawer { 
+    grid-template-columns: minmax(0, 1fr);
+  }
   .drawer-grid { 
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1890,195 +2028,147 @@ footer a { color: var(--bronze); }
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     border-right: none;
-    border-bottom: 1px solid var(--line);
-    padding: 8px;
-    gap: 4px;
+    border-bottom: 1px solid rgba(201, 166, 107, 0.1);
+    padding: 12px 16px;
+    gap: 6px;
+    background: rgba(16, 15, 13, 0.95);
   }
   .drawer-tab {
     white-space: nowrap;
-    min-height: 44px;
+    min-height: 40px;
     font-size: 12px;
-    padding: 10px 14px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .drawer-tab.on {
+    background: var(--bronze-soft);
+    color: var(--bronze);
   }
   .drawer-body {
-    padding: 16px 16px 24px;
+    padding: 20px 16px 32px;
   }
   
-  /* Form fields stack */
-  .field-row, .model-grid { grid-template-columns: minmax(0, 1fr); }
-  .kv div { grid-template-columns: minmax(0, 1fr); }
+  /* ========== FORMS: Touch-friendly, readable ========== */
+  .field-row, .model-grid { 
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .kv div { 
+    grid-template-columns: minmax(0, 1fr);
+  }
   
-  /* Better input tap targets */
   input, textarea, select {
     font-size: 16px; /* Prevent iOS zoom */
-    padding: 10px 12px;
-    min-height: 44px;
+    padding: 12px 14px;
+    min-height: 48px;
+    border-radius: 12px;
+    background: rgba(28, 26, 22, 0.6);
+    border: 1px solid rgba(201, 166, 107, 0.15);
   }
   
-  /* Better button tap targets */
   .ghost-btn, .send {
-    min-height: 44px;
-    padding: 10px 16px;
-    font-size: 14px;
+    min-height: 48px;
+    padding: 12px 20px;
+    font-size: 15px;
+    border-radius: 12px;
+    font-weight: 600;
   }
   
-  /* User bubbles full width on small screens */
-  .bubble.user { max-width: 100%; }
-  
-  /* Meter compact: stack or single line */
-  .bar-right { 
-    grid-column: 3;
-    justify-self: end;
-  }
-  .meter { 
-    padding: 6px 10px;
-    font-size: 10px;
-    max-width: 110px;
-    gap: 4px;
-  }
-  .meter-line { 
-    display: none; /* Hide breakdown on mobile, just show total */
-  }
-  .meter-total { font-size: 11px; }
-  .engine-hint { display: none; } /* Hide on mobile */
-  
-  /* Wizard/first-run panels: phone-friendly */
+  /* ========== OVERLAYS: Modern, centered ========== */
   .overlay {
-    padding: 16px;
+    padding: 20px;
     align-items: flex-start;
-    padding-top: max(16px, env(safe-area-inset-top, 16px));
+    padding-top: max(20px, env(safe-area-inset-top, 20px));
   }
   .panel {
-    padding: 20px 16px;
+    padding: 24px 20px;
     width: 100%;
     max-width: 100%;
-    gap: 14px;
+    gap: 16px;
+    border-radius: 20px;
+    background: rgba(28, 26, 22, 0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(201, 166, 107, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   }
-  .panel h2 { font-size: 20px; }
-  .panel .mark {
-    text-align: center;
+  .panel h2 { 
+    font-size: 22px;
+    font-weight: 600;
   }
   .mark-lockup {
-    width: 180px;
+    width: 160px;
     height: auto;
   }
   
-  /* Unlock gate: phone-friendly */
   #unlockGate .panel {
-    padding: 24px 20px;
+    padding: 28px 24px;
   }
   #unlockPin {
-    font-size: 20px; /* Bigger PIN input on phone */
+    font-size: 24px;
     text-align: center;
-    letter-spacing: 0.3em;
-    padding: 14px;
+    letter-spacing: 0.4em;
+    padding: 16px;
+    font-weight: 600;
   }
   
-  /* Wizard inputs */
-  .wizard-step input,
-  .wizard-step select {
-    font-size: 16px;
-    padding: 12px;
+  /* ========== UTILITY: Footer, misc ========== */
+  footer { 
+    white-space: normal;
+    font-size: 10px;
+    padding: 8px 16px;
+    line-height: 1.5;
+    text-align: center;
+    opacity: 0.6;
   }
   
-  /* Auth status cards */
-  .auth-status-card {
-    padding: 14px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  .auth-status-icon {
-    font-size: 32px;
-    align-self: center;
+  /* Empty state CTA */
+  .mobile-cta {
+    display: block;
+    margin-top: 20px;
+    padding: 14px 20px;
+    background: var(--bronze);
+    color: #1a140c;
+    border: none;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(201, 166, 107, 0.3);
   }
   
-  /* Usage panel: spend breaks readable */
+  /* Usage/spend UI */
   .spend-break {
-    padding: 12px;
-    font-size: 12px;
-    gap: 8px;
-  }
-  .spend-break div {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  
-  /* Job log */
-  .job-log {
+    padding: 14px;
+    font-size: 13px;
     gap: 10px;
+    border-radius: 12px;
   }
   .job-row {
-    padding: 12px;
-    gap: 6px;
-    font-size: 12px;
+    padding: 14px;
+    gap: 8px;
+    font-size: 13px;
+    border-radius: 12px;
   }
   
-  /* Spend table */
-  .spend-table {
-    font-size: 12px;
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .spend-table th,
-  .spend-table td {
-    padding: 6px;
-    white-space: nowrap;
-  }
-  
-  /* Provider cards */
-  .provider {
-    padding: 12px;
-    gap: 10px;
-  }
-  .provider-top {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  /* Seat cards */
-  .seat-card {
-    padding: 12px;
-    gap: 10px;
-  }
-  .seat-card header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-  
-  /* Memory cards */
-  .memory-cards {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  
-  /* Actions wrap on phone */
+  /* Actions stack on mobile */
   .actions {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 12px;
   }
   .actions button {
     width: 100%;
   }
-  
-  /* Empty state: show "Pick a CEO" CTA on mobile */
-  .mobile-cta {
-    display: block;
-  }
 }
 
-/* Phone-specific: ≤480px */
+/* Phone-specific refinements: ≤480px */
 @media (max-width: 480px) {
+  /* Header: even more compact */
   .bar { 
     padding: 6px 10px; 
     gap: 8px;
   }
   .mark-gem { width: 24px; height: 24px; }
-  .word { font-size: 10px; letter-spacing: 0.16em; }
+  .word { font-size: 10px; letter-spacing: 0.18em; }
   
   .mobile-org-toggle {
     width: 36px;
@@ -2087,200 +2177,209 @@ footer a { color: var(--bronze); }
   }
   
   .stages { 
-    font-size: 10px;
-    padding: 2px;
+    padding: 3px;
   }
   .stage-btn { 
-    font-size: 10px;
-    padding: 4px 9px;
-    min-height: 32px;
-  }
-  
-  .rail { width: min(260px, 85vw); }
-  
-  .chat-shell { padding: 0 10px 10px; }
-  .chat-head { padding: 10px 4px 6px; gap: 1px; }
-  .chat-where { font-size: 11px; letter-spacing: 0.12em; }
-  .chat-folder { font-size: 10px; }
-  
-  /* Tighter lane pills */
-  .lane, .route-btn { 
-    padding: 6px 10px;
     font-size: 11px;
-    min-height: 36px;
-  }
-  
-  /* Even more compact composer on phones */
-  .composer { 
-    padding: 5px 8px;
-    gap: 3px;
-  }
-  .composer-who {
-    font-size: 8px;
-    letter-spacing: 0.04em;
-    padding: 0 2px;
-  }
-  .composer textarea {
-    min-height: 40px;
-    max-height: 100px;
-    font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
-  }
-  .composer-input-row {
-    gap: 5px;
-  }
-  .route-select {
-    font-size: 10px;
-    padding: 7px 20px 7px 7px;
-    min-width: 65px;
-    height: 36px;
-  }
-  .composer .send {
-    height: 36px;
-    min-width: 60px;
     padding: 5px 10px;
+    min-height: 30px;
+  }
+  
+  .rail { width: min(280px, 88vw); }
+  
+  /* Chat: tighter spacing */
+  .chat-head { 
+    padding: 10px 14px 6px;
+  }
+  .chat-where { 
     font-size: 12px;
+    letter-spacing: 0.12em;
   }
-  .attach-btn {
-    padding: 7px 9px;
-    font-size: 15px;
-    height: 36px;
-    min-width: 36px;
+  .chat-folder { 
+    font-size: 10px;
   }
   
-  /* Ensure stream has enough bottom padding */
+  .lanes {
+    padding: 3px;
+  }
+  .lane { 
+    padding: 5px 10px;
+    font-size: 10px;
+    min-height: 30px;
+  }
+  
+  .index {
+    padding: 6px 14px 8px;
+  }
+  .index summary {
+    font-size: 10px;
+  }
+  .index pre {
+    font-size: 10px;
+    max-height: 100px;
+  }
+  
+  /* Stream: tighter padding */
   .stream {
-    padding-bottom: max(120px, 22vh);
+    padding: 12px 14px 16px;
+    gap: 10px;
+    padding-bottom: max(140px, 28vh);
   }
   
-  /* Tap target: minimum 44px for primary controls */
-  button.send { min-height: 44px; padding: 10px 14px; }
-  .attach-btn { min-height: 44px; min-width: 44px; padding: 0; }
-  
-  /* Wizard on phone */
-  .overlay {
-    padding: 12px;
-  }
-  .panel {
-    padding: 18px 14px;
-    gap: 12px;
-  }
-  .panel h2 { font-size: 18px; }
-  .mark-lockup {
-    width: 160px;
-  }
-  
-  /* Unlock */
-  #unlockGate .panel {
-    padding: 20px 16px;
-  }
-  #unlockPin {
-    font-size: 22px;
-    padding: 16px;
-    letter-spacing: 0.4em;
-  }
-  
-  /* Meter even more compact */
-  .meter {
-    padding: 5px 8px;
-    font-size: 9px;
-    max-width: 90px;
-  }
-  .meter-total { font-size: 10px; }
-  
-  /* Drawer on phone */
-  .drawer-nav {
-    padding: 6px;
-    gap: 3px;
-  }
-  .drawer-tab {
-    font-size: 11px;
-    padding: 8px 12px;
-    min-height: 40px;
-  }
-  .drawer-body {
-    padding: 14px 12px 20px;
-  }
-  .drawer-top {
-    padding: 14px 16px;
-  }
-  .drawer-top h2 { font-size: 20px; }
-  
-  /* Form elements */
-  input, textarea, select {
-    font-size: 16px;
-    padding: 10px;
-  }
-  
-  /* Buttons */
-  .ghost-btn, .send {
-    min-height: 44px;
+  /* Bubbles: slightly tighter */
+  .bubble.user, .bubble.bot {
     padding: 10px 14px;
-    font-size: 13px;
-  }
-  
-  /* Spend UI */
-  .spend-break {
-    padding: 10px;
-    font-size: 11px;
-  }
-  .job-row {
-    padding: 10px;
-    font-size: 11px;
-  }
-  
-  /* Providers */
-  .provider {
-    padding: 10px;
-  }
-  
-  /* Seat cards */
-  .seat-card {
-    padding: 10px;
-  }
-  
-  /* Actions */
-  .actions {
-    gap: 8px;
-  }
-  
-  /* Footer */
-  footer { font-size: 9px; padding: 5px 10px; }
-  
-  /* Bubbles */
-  .bubble {
-    font-size: 14px;
   }
   .bubble-text {
     font-size: 14px;
     line-height: 1.5;
   }
+  
   .card {
     padding: 10px 12px;
   }
-  
-  /* Index brief */
-  .index {
-    padding: 8px 0 10px;
+  .card pre {
+    font-size: 12px;
   }
-  .index pre {
+  
+  /* Composer: tighter but still touch-friendly */
+  .composer { 
+    padding: 10px 14px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    gap: 6px;
+  }
+  .composer textarea {
+    min-height: 42px;
+    max-height: 100px;
+    font-size: 16px; /* Prevent iOS Safari auto-zoom */
+  }
+  .composer-input-row {
+    gap: 6px;
+  }
+  .attach-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    font-size: 18px;
+  }
+  .route-select {
     font-size: 11px;
-    max-height: 140px;
+    padding: 7px 22px 7px 10px;
+    min-width: 75px;
+    height: 38px;
+  }
+  .composer .send {
+    height: 38px;
+    min-width: 68px;
+    padding: 0 14px;
+    font-size: 13px;
   }
   
-  /* Empty state on phone */
+  /* Overlays: tighter */
+  .overlay {
+    padding: 16px;
+  }
+  .panel {
+    padding: 20px 16px;
+    gap: 14px;
+  }
+  .panel h2 { 
+    font-size: 20px;
+  }
+  .mark-lockup {
+    width: 140px;
+  }
+  
+  #unlockGate .panel {
+    padding: 24px 20px;
+  }
+  #unlockPin {
+    font-size: 22px;
+    padding: 14px;
+    letter-spacing: 0.35em;
+  }
+  
+  /* Meter: minimal */
+  .meter {
+    padding: 6px 10px;
+    font-size: 10px;
+    max-width: 100px;
+  }
+  .meter-total { 
+    font-size: 11px;
+  }
+  
+  /* Drawer: tighter */
+  .drawer-nav {
+    padding: 10px 14px;
+    gap: 4px;
+  }
+  .drawer-tab {
+    font-size: 11px;
+    padding: 7px 12px;
+    min-height: 38px;
+  }
+  .drawer-body {
+    padding: 16px 14px 24px;
+  }
+  .drawer-top {
+    padding: 14px 16px;
+  }
+  .drawer-top h2 { 
+    font-size: 20px;
+  }
+  
+  /* Forms: maintain touch targets */
+  input, textarea, select {
+    font-size: 16px;
+    padding: 11px 12px;
+    min-height: 46px;
+  }
+  
+  .ghost-btn, .send {
+    min-height: 46px;
+    padding: 11px 18px;
+    font-size: 14px;
+  }
+  
+  /* Usage UI */
+  .spend-break {
+    padding: 12px;
+    font-size: 12px;
+  }
+  .job-row {
+    padding: 12px;
+    font-size: 12px;
+  }
+  
+  .provider, .seat-card {
+    padding: 12px;
+  }
+  
+  .actions {
+    gap: 10px;
+  }
+  
+  footer { 
+    font-size: 9px;
+    padding: 6px 12px;
+  }
+  
+  /* Empty state */
   .empty-stream {
-    padding: 20px 8px 30px;
+    padding: 24px 14px 32px;
   }
   .empty-stream h1 {
-    font-size: 20px;
+    font-size: 22px;
     line-height: 1.3;
   }
   .empty-stream p {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
   }
   .mobile-cta {
-    display: block;
+    padding: 12px 18px;
+    font-size: 14px;
   }
 }
 
