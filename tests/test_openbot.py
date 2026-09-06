@@ -1593,7 +1593,7 @@ class HermesGlueTests(unittest.TestCase):
         self.assertIn("--toolsets", source)
         self.assertNotIn('--toolsets", "none"', source)
         self.assertNotIn("--ignore-user-config", source)
-        self.assertNotIn("--create-if-missing", source)
+        self.assertIn("--create-if-missing", source)
 
     def test_job_mode_no_usage_file_talk_mode_keeps_it(self):
         """Job mode (hermes chat) does NOT pass --usage-file; talk mode (hermes -z) does."""

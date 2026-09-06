@@ -452,7 +452,7 @@ def chat(
             if resume:
                 cmd.extend(["--resume", resume])
             elif session:
-                cmd.extend(["--continue", session])
+                cmd.extend(["--continue", session, "--create-if-missing"])
         if provider and model_id:
             cmd.extend(["--provider", provider, "-m", model_id])
         elif model_id:
