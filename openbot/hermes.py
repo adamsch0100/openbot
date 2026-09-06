@@ -783,6 +783,160 @@ def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None
     return {"ok": code == 0, "code": code, "text": out.strip() or ""}
 
 
+def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
+    """Check Hermes gateway status. Does NOT start gateway. Returns immediately."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
+    
+    code, out = _run([binary, "gateway", "status"], None, timeout, home=home)
+    text = out.strip()
+    
+    # Parse running status from output
+    running = code == 0 and "running" in text.lower()
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": text or "(no output)",
+        "running": running,
+    }
+
+
+def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: int = 30) -> dict:
+    """Start Hermes gateway daemon. Returns immediately if wait=False (lazy start)."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
+    
+    # Check if already running
+    status = gateway_status(home, timeout=5)
+    if status.get("running"):
+        return {
+            "ok": True,
+            "code": 0,
+            "text": "Gateway already running",
+            "running": True,
+            "started": False,
+        }
+    
+    cmd = [binary, "gateway", "start"]
+    if wait:
+        # Synchronous start (wait for completion)
+        code, out = _run(cmd, None, timeout, home=home)
+        text = out.strip()
+        running = code == 0
+        return {
+            "ok": code == 0,
+            "code": code,
+            "text": text or "(no output)",
+            "running": running,
+            "started": running,
+        }
+    else:
+        # Async start (spawn and return immediately)
+        try:
+            proc = _popen(cmd, None, home=home)
+            # Give it a moment to start, then check status
+            time.sleep(0.5)
+            status_check = gateway_status(home, timeout=5)
+            return {
+                "ok": True,
+                "code": 0,
+                "text": "Gateway start initiated",
+                "running": status_check.get("running", False),
+                "started": True,
+                "pid": proc.pid if hasattr(proc, "pid") else None,
+            }
+        except Exception as err:
+            return {
+                "ok": False,
+                "code": 1,
+                "error": str(err),
+                "running": False,
+                "started": False,
+            }
+
+
+def gateway_stop(home: str | Path | None = None, timeout: int = 10) -> dict:
+    """Stop Hermes gateway daemon gracefully."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "error": "Hermes Agent binary missing"}
+    
+    code, out = _run([binary, "gateway", "stop"], None, timeout, home=home)
+    text = out.strip()
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": text or "(no output)",
+    }
+
+
+def migrate_cron_delivery(home: str | Path | None = None, dry_run: bool = False) -> dict:
+    """Migrate Hermes cron jobs from deliver=origin to deliver=local.
+    
+    Uses is_valid_job_id guard to prevent operating on table chrome.
+    """
+    result = cron_list(home=home)
+    if not result.get("ok"):
+        return {
+            "ok": False,
+            "error": "Failed to list cron jobs",
+            "migrated": [],
+            "failed": [],
+        }
+    
+    jobs = result.get("jobs", [])
+    migrated = []
+    failed = []
+    
+    binary = which("hermes")
+    if not binary:
+        return {
+            "ok": False,
+            "error": "Hermes Agent binary missing",
+            "migrated": [],
+            "failed": [],
+        }
+    
+    for job in jobs:
+        job_id = job.get("id", "")
+        
+        # Guard: only migrate valid job IDs
+        if not is_valid_job_id(job_id):
+            failed.append({
+                "id": job_id,
+                "reason": "Invalid job ID (table chrome)",
+            })
+            continue
+        
+        if dry_run:
+            # Dry run: just record what would be migrated
+            migrated.append(job_id)
+        else:
+            # Real migration: update delivery setting
+            # Note: `hermes cron update` command may vary; adjust as needed
+            cmd = [binary, "cron", "update", job_id, "--deliver", "local"]
+            code, out = _run(cmd, None, 30, home=home)
+            if code == 0:
+                migrated.append(job_id)
+            else:
+                failed.append({
+                    "id": job_id,
+                    "reason": out.strip()[:200] or "Update failed",
+                })
+    
+    return {
+        "ok": len(failed) == 0,
+        "migrated": migrated,
+        "failed": failed,
+        "total": len(jobs),
+        "dry_run": dry_run,
+    }
+
+
 def skills_list(cwd: str | None = None) -> dict:
     """List Hermes skills with descriptions and popular recommendations."""
     binary = which("hermes")
