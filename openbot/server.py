@@ -76,7 +76,7 @@ from .org import (
     write_worker_brain,
 )
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
-from .router import decide_diff, handle, pending_approvals, public_job
+from .router import decide_diff, revert_accept, handle, pending_approvals, public_job
 from .queueworker import active_workers, auto_create_handoffs
 from .store import (
     ROOT,
@@ -92,6 +92,7 @@ from .threadstore import append_turn, read_thread, thread_key
 
 WEB = ROOT / "web"
 JOB_ACTION = re.compile(r"^/api/jobs/([a-f0-9]{6,32})/(accept|reject)$")
+JOB_REVERT = re.compile(r"^/api/jobs/([a-f0-9]{6,32})/revert$")
 RUN_STOP = re.compile(r"^/api/runs/([a-zA-Z0-9-]{6,40})/stop$")
 BRAIN_PATH = re.compile(r"^/api/brains/(cos|builder|research|ops|think)$")
 KEY_ID = re.compile(r"^/api/keys/([a-zA-Z0-9_-]{4,32})$")
@@ -1142,9 +1143,22 @@ class Handler(SimpleHTTPRequestHandler):
         if match:
             job_id, action = match.group(1), match.group(2)
             force = bool(data.get("force")) if isinstance(data, dict) else False
-            result = decide_diff(job_id, accept=(action == "accept"), force=force)
+            push_branch = bool(data.get("push_branch")) if isinstance(data, dict) else False
+            branch_name = str(data.get("branch_name") or "") if isinstance(data, dict) else None
+            run_tests = bool(data.get("run_tests")) if isinstance(data, dict) else False
+            result = decide_diff(job_id, accept=(action == "accept"), force=force, push_branch=push_branch, branch_name=branch_name, run_tests=run_tests)
             code = 200 if result.get("ok") else 400
             # decide_diff already returns the correct INDEX (project or staff)
+            if "index" not in result:
+                result["index"] = read_index()
+            result["spend"] = _public_config()["spend"]
+            return self._json(code, result)
+        
+        match = JOB_REVERT.match(path)
+        if match:
+            job_id = match.group(1)
+            result = revert_accept(job_id)
+            code = 200 if result.get("ok") else 400
             if "index" not in result:
                 result["index"] = read_index()
             result["spend"] = _public_config()["spend"]

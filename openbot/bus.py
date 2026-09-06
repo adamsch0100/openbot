@@ -578,19 +578,19 @@ def handoff_summary(project_id: str | None) -> str:
     return "\n".join(parts)
 
 
-def log_approval(job: dict, accepted: bool, force: bool = False) -> None:
+def log_approval(job: dict, accepted: bool, force: bool = False, action: str = "decide") -> None:
     log_entry = {
         "at": now_iso(),
         "id": job.get("id"),
         "bot": job.get("worker_id") or job.get("project_id") or "staff",
         "engine": job.get("engine"),
         "preset": job.get("preset"),
-        "trigger": "diff-card",
-        "status": "accepted" if accepted else "rejected",
+        "trigger": "diff-card" if action == "decide" else "revert-card",
+        "status": "accepted" if accepted else ("rejected" if action == "decide" else "reverted"),
         "gate": "approval",
         "files": job.get("handoff_path") or "diff",
         "external": "none",
-        "approval": "received" if accepted else "denied",
+        "approval": "received" if accepted else ("denied" if action == "decide" else "reverted"),
     }
     if force:
         log_entry["force_accepted"] = True

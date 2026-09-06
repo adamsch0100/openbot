@@ -2734,6 +2734,17 @@ function renderJob(job) {
     diffActions.appendChild(accept);
     diffActions.appendChild(reject);
     diffBlock.appendChild(diffActions);
+  } else if (job.accepted && !job.reverted && !job.rejected) {
+    // Show Revert button for accepted diffs (not yet reverted)
+    const revertActions = document.createElement("div");
+    revertActions.className = "diff-actions";
+    const revert = document.createElement("button");
+    revert.type = "button";
+    revert.className = "ghost-btn revert-btn";
+    revert.textContent = "Revert Accept";
+    revert.addEventListener("click", () => revertDiff(job.id, revertActions));
+    revertActions.appendChild(revert);
+    diffBlock.appendChild(revertActions);
   }
   el.appendChild(diffBlock);
 }
@@ -2940,6 +2951,41 @@ async function decide(jobId, action, actionsEl, force = false) {
     
     card("bot brief", briefLines.join("\n"), "Brief updated");
   }
+}
+
+async function revertDiff(jobId, actionsEl) {
+  actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+  const res = await fetch(`/api/jobs/${jobId}/revert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  const data = await res.json();
+  
+  if (data.index) renderIndex(data.index);
+  if (data.spend) renderSpend(data.spend);
+  
+  const statusText = data.ok
+    ? "diff reverted · restored git snapshot"
+    : (data.error || "revert failed");
+  card("bot", statusText, `job ${jobId}`);
+  
+  // Show inline Brief update after Revert
+  if (data.ok && data.index) {
+    const now = indexField(data.index, "Now");
+    const last = indexField(data.index, "Last");
+    const next = indexField(data.index, "Next");
+    const blocker = indexField(data.index, "Blocker");
+    
+    let briefLines = [`Now: ${now}`];
+    if (last !== "—") briefLines.push(`Last: ${last}`);
+    if (next !== "—") briefLines.push(`Next: ${next}`);
+    if (blocker !== "—") briefLines.push(`Blocker: ${blocker}`);
+    
+    card("bot brief", briefLines.join("\n"), "Brief updated");
+  }
+  
+  await refreshActivity();
+  paintLanes();
 }
 
 async function loadJobs() {

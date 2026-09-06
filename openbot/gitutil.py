@@ -131,3 +131,62 @@ def restore_snapshot(folder: str, before: dict) -> tuple[bool, str]:
         if code != 0:
             return False, out[-2000:] or "git apply of prior dirty tree failed"
     return True, "restored"
+
+
+def create_branch(folder: str, branch_name: str) -> tuple[bool, str]:
+    """Create and checkout a new branch."""
+    if not is_repo(folder):
+        return False, "not a git repo"
+    code, out = _run(folder, ["checkout", "-b", branch_name])
+    if code != 0:
+        return False, out[-2000:] or "git checkout -b failed"
+    return True, f"created branch {branch_name}"
+
+
+def commit_changes(folder: str, message: str) -> tuple[bool, str]:
+    """Stage and commit all changes."""
+    if not is_repo(folder):
+        return False, "not a git repo"
+    code, out = _run(folder, ["add", "-A"])
+    if code != 0:
+        return False, out[-2000:] or "git add failed"
+    code, out = _run(folder, ["commit", "-m", message])
+    if code != 0:
+        # Check if nothing to commit
+        if "nothing to commit" in out.lower() or "nothing added to commit" in out.lower():
+            return False, "no changes to commit"
+        return False, out[-2000:] or "git commit failed"
+    return True, "committed"
+
+
+def push_branch(folder: str, branch_name: str, remote: str = "origin") -> tuple[bool, str]:
+    """Push branch to remote."""
+    if not is_repo(folder):
+        return False, "not a git repo"
+    code, out = _run(folder, ["push", "-u", remote, branch_name])
+    if code != 0:
+        return False, out[-2000:] or "git push failed"
+    return True, f"pushed {branch_name} to {remote}"
+
+
+def get_remote_url(folder: str, remote: str = "origin") -> str:
+    """Get remote URL."""
+    if not is_repo(folder):
+        return ""
+    code, out = _run(folder, ["remote", "get-url", remote])
+    if code != 0:
+        return ""
+    url = (out or "").strip().splitlines()[0] if out else ""
+    if url.lower().startswith("error:") or "no such remote" in url.lower():
+        return ""
+    return url
+
+
+def get_current_branch(folder: str) -> str:
+    """Get current branch name."""
+    if not is_repo(folder):
+        return ""
+    code, out = _run(folder, ["branch", "--show-current"])
+    if code != 0:
+        return ""
+    return (out or "").strip()
