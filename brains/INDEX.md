@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #41 MERGE-READY — Hermes multi-line cron parser (CoS lock met, undrafted)
-Last: Parser handles EXACT real format (form-pipeline-health + daily-ranking-strike); is_valid_job_id rejects Next/Execution/Skills/Name:; gateway_status never 502; 19 tests pass; all CoS criteria verified
-Next: Merge → live SAA Homes proof → CEO dry_run migrate → real migrate after re-verify
+Now: PR #41 CLEAN UNDRAFT (tests + code only, ready for immediate merge)
+Last: Multi-line parser + is_valid_job_id guard + gateway_status timeout wrapper; 19 tests pass; junk docs deleted
+Next: Merge → live SAA Homes verify → CEO dry_run → real migrate
 Blocker: —
 
 ## Vault
