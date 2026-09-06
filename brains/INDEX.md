@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Hermes job argv drop --usage-file (not valid on hermes chat, only on hermes -z)
-Last: PR #29 merged (restored -z for talk), PR #28 merged (talk to chat --query-file), PR #27 deployed
-Next: Live Think re-smoke after merge
-Blocker: live Think re-smoke not done yet
+Now: Mobile layout PR pending push + smoke test
+Last: Phone-first layout implemented (rail → drawer, chat full-width, compact header, tap targets ≥44px)
+Next: Push branch, open PR, verify at 390×844 or live Railway instance
+Blocker: none
 
 ## Vault
 
