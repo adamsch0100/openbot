@@ -1801,6 +1801,11 @@ footer a { color: var(--bronze); }
   flex-shrink: 0;
 }
 
+.auth-status-content {
+  flex: 1;
+  min-width: 0;
+}
+
 .auth-status-label {
   font-size: 0.95rem;
   font-weight: 500;
@@ -1810,6 +1815,7 @@ footer a { color: var(--bronze); }
 
 .auth-status-card .muted {
   margin-top: 8px;
+  margin-bottom: 12px;
   font-size: 0.85rem;
 }
 
@@ -1819,4 +1825,8 @@ footer a { color: var(--bronze); }
   border-radius: 4px;
   font-family: ui-monospace, monospace;
   font-size: 0.85em;
+}
+
+.auth-status-card .ghost-btn {
+  margin-top: 8px;
 }

@@ -762,35 +762,34 @@ class Handler(SimpleHTTPRequestHandler):
                 project_id = data.get("project_id") or None
                 worker_id = data.get("worker_id") or "builder"
                 
+                from .config import load_config
+                from .org import work_target
+                
                 prompt = test_job_prompt()
+                cfg = load_config()
+                folder = work_target(project_id, cfg["work_dir"] if cfg["work_dir_ok"] else None)
                 
-                job_id = str(uuid.uuid4())[:8]
-                thread_id = thread_key(project_id, worker_id)
+                job = handle(
+                    message=prompt,
+                    folder=folder,
+                    preset="builder",
+                    project_id=project_id,
+                    worker_id=worker_id,
+                    quote="",
+                    attachments=None,
+                )
                 
-                def run_test():
-                    try:
-                        handle(
-                            message=prompt,
-                            job_id=job_id,
-                            project_id=project_id,
-                            worker_id=worker_id,
-                            preset="builder",
-                            extra="",
-                            quote="",
-                            attachments=None,
-                            hermes_home=None,
-                        )
-                    except Exception as e:
-                        print(f"[onboarding] test job failed: {e}")
-                
-                threading.Thread(target=run_test, daemon=True).start()
+                _record_job(job, prompt, project_id, worker_id, quote="", attachments=None)
+                job["activity"] = _activity()
                 
                 return self._json(200, {
                     "ok": True,
-                    "job_id": job_id,
-                    "message": "Test job started"
+                    "job": job,
+                    "message": "Test job complete"
                 })
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 return self._json(500, {"error": str(e)})
         
         ctype = self.headers.get("Content-Type", "")

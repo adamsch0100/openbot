@@ -3859,26 +3859,36 @@ async function checkEngineAuth() {
     if (data.hermes && data.hermes.authenticated) {
       hermesCard.innerHTML = `
         <div class="auth-status-icon">✅</div>
-        <div class="auth-status-label">Hermes Agent: Authenticated</div>
+        <div class="auth-status-content">
+          <div class="auth-status-label">Hermes Agent: Authenticated</div>
+        </div>
       `;
     } else {
       hermesCard.innerHTML = `
         <div class="auth-status-icon">❌</div>
-        <div class="auth-status-label">Hermes Agent: Not Authenticated</div>
-        <p class="muted">Run <code>hermes portal</code> in your terminal to authenticate with Nous Portal, or connect your API key in the Hermes tab.</p>
+        <div class="auth-status-content">
+          <div class="auth-status-label">Hermes Agent: Not Authenticated</div>
+          <p class="muted">Run <code>hermes portal</code> in your terminal to authenticate with Nous Portal.</p>
+          <button type="button" class="ghost-btn" onclick="window.open('https://portal.nousresearch.com', '_blank')">Authenticate Now</button>
+        </div>
       `;
     }
     
     if (data.opencode && data.opencode.authenticated) {
       opencodeCard.innerHTML = `
         <div class="auth-status-icon">✅</div>
-        <div class="auth-status-label">OpenCode: Authenticated</div>
+        <div class="auth-status-content">
+          <div class="auth-status-label">OpenCode: Authenticated</div>
+        </div>
       `;
     } else {
       opencodeCard.innerHTML = `
         <div class="auth-status-icon">❌</div>
-        <div class="auth-status-label">OpenCode: Not Authenticated</div>
-        <p class="muted">Run <code>opencode auth login</code> in your terminal to authenticate with OpenCode.</p>
+        <div class="auth-status-content">
+          <div class="auth-status-label">OpenCode: Not Authenticated</div>
+          <p class="muted">Run <code>opencode auth login</code> in your terminal to authenticate with OpenCode.</p>
+          <button type="button" class="ghost-btn" onclick="alert('Please open your terminal and run: opencode auth login')">Authenticate Now</button>
+        </div>
       `;
     }
     
