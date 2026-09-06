@@ -18,10 +18,12 @@ OPENCODE_WEB_PORT = 4096
 HERMES_DASH_PORT = 9119
 _opencode_proc: subprocess.Popen | None = None
 _hermes_dash_proc: subprocess.Popen | None = None
+_hermes_gateway_procs: dict[str, subprocess.Popen] = {}
 _opencode_cwd: str | None = None
 _hermes_dash_home: str | None = None
 _oc_lock = threading.Lock()
 _hermes_lock = threading.Lock()
+_gateway_lock = threading.Lock()
 _warmed = False
 _warm_lock = threading.Lock()
 
@@ -168,6 +170,9 @@ def _kill_port(port: int) -> None:
 def _cleanup() -> None:
     _kill(_opencode_proc)
     _kill(_hermes_dash_proc)
+    # Also stop gateway processes
+    for proc in _hermes_gateway_procs.values():
+        _kill(proc)
 
 
 atexit.register(_cleanup)
@@ -487,5 +492,47 @@ def warm_engines_background() -> None:
             },
             flush=True,
         )
+        # Also start gateways for all CEOs with Hermes homes
+        try:
+            ensure_gateways()
+        except Exception as err:
+            print(f"[openbot] gateway warm failed: {err}", flush=True)
     except Exception as err:
         print(f"[openbot] engine warm failed: {err}", flush=True)
+
+
+def ensure_gateway(home: str | Path | None = None) -> dict:
+    """Ensure Hermes gateway is running for a given home."""
+    from .hermes import gateway_status, gateway_start
+    
+    status = gateway_status(home)
+    if status.get("running"):
+        return {"ok": True, "already_running": True}
+    
+    # Start gateway in background
+    result = gateway_start(home, wait=False)
+    return result
+
+
+def ensure_gateways() -> None:
+    """Start gateway for each CEO that has a Hermes home."""
+    from .org import ensure_org, project_tools
+    
+    org = ensure_org()
+    for project in org.get("projects") or []:
+        pid = project.get("id")
+        if not pid:
+            continue
+        tools = project_tools(pid)
+        hermes_home = tools.get("hermes_home")
+        if not hermes_home:
+            continue
+        
+        try:
+            result = ensure_gateway(hermes_home)
+            if result.get("ok") or result.get("already_running"):
+                print(f"[openbot] gateway for {pid}: ok", flush=True)
+            else:
+                print(f"[openbot] gateway for {pid} failed: {result.get('text')}", flush=True)
+        except Exception as err:
+            print(f"[openbot] gateway for {pid} error: {err}", flush=True)

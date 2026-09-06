@@ -739,3 +739,93 @@ def mcp_catalog(cwd: str | None = None) -> dict:
         name = line.split()[0]
         items.append({"id": name, "label": line[:160]})
     return {"ok": code == 0, "text": out.strip(), "items": items[:80]}
+
+
+def gateway_status(home: str | Path | None = None) -> dict:
+    """Check if Hermes gateway is running and return cron schedule summary."""
+    binary = which("hermes")
+    if not binary:
+        return {
+            "ok": False,
+            "running": False,
+            "text": "Hermes Agent binary missing",
+            "enabled_count": 0,
+            "total_count": 0,
+            "next_fire": None,
+        }
+    
+    # Check if gateway process is running
+    code, out = _run([binary, "gateway", "status"], None, 30, home=home)
+    running = code == 0 and "running" in out.lower()
+    
+    # Get cron list to count schedules
+    cron_result = cron_list()
+    cron_text = cron_result.get("text", "")
+    
+    enabled_count = 0
+    total_count = 0
+    next_fire = None
+    
+    if cron_text and "No cron" not in cron_text:
+        for line in cron_text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("-") or "job" in line.lower() and "schedule" in line.lower():
+                continue
+            # Count lines that look like cron entries
+            parts = line.split()
+            if len(parts) >= 3:
+                total_count += 1
+                # Check if enabled (not disabled)
+                if "disabled" not in line.lower():
+                    enabled_count += 1
+    
+    return {
+        "ok": True,
+        "running": running,
+        "text": out.strip() if out else "gateway status unknown",
+        "enabled_count": enabled_count,
+        "total_count": total_count,
+        "next_fire": next_fire,
+        "home": str(home) if home else None,
+    }
+
+
+def gateway_start(home: str | Path | None = None, wait: bool = False) -> dict:
+    """Start Hermes gateway to enable cron execution."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "text": "Hermes Agent binary missing"}
+    
+    # First check if already running
+    status = gateway_status(home)
+    if status.get("running"):
+        return {
+            "ok": True,
+            "text": "gateway already running",
+            "already_running": True,
+        }
+    
+    # Start gateway
+    timeout = 45 if wait else 15
+    code, out = _run([binary, "gateway", "start"], None, timeout, home=home)
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": out.strip() or ("gateway started" if code == 0 else "gateway start failed"),
+    }
+
+
+def gateway_stop(home: str | Path | None = None) -> dict:
+    """Stop Hermes gateway."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "text": "Hermes Agent binary missing"}
+    
+    code, out = _run([binary, "gateway", "stop"], None, 30, home=home)
+    
+    return {
+        "ok": code == 0,
+        "code": code,
+        "text": out.strip() or ("gateway stopped" if code == 0 else "gateway stop failed"),
+    }

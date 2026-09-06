@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: world-class v2 signed by CoS (2026-09-06)
-Last: Chat smoke PASS (#33 Think/Research/Builder) + mobile phone proof PASS (#34 v=57 @390×844 hamburger/overlay/scrim)
-Next: operator directs / optional polish (Meta contributor banner strip; Builder Hermes/muse label oddity)
+Now: Hermes cron/gateway integration MERGE-READY — visibility, supervision, delivery routing for SAA Homes
+Last: Added gateway status API, auto-start on boot, cron-to-thread routing, docs/tests
+Next: Verify SAA Homes crons fire + appear in CEO chat after deploy, then railway-down old boxes when 48h clean
 Blocker: —
 
 ## Vault

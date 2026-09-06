@@ -29,7 +29,7 @@ from .config import (
 from .cronwatch import ingest_cron_runs
 from .detect import detect
 from .gitutil import git_status
-from .hermes import mcp_catalog, skills_list
+from .hermes import mcp_catalog, skills_list, gateway_status, gateway_start, gateway_stop
 from .onboarding import onboarding_status, test_job_prompt
 from .hermes_import import (
     add_instance,
@@ -737,6 +737,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, public_keyring())
         if path == "/api/hermes/instances":
             return self._json(200, {"instances": public_instances()})
+        if path == "/api/hermes/gateway/status":
+            qs = parse_qs(urlparse(self.path).query)
+            project_id = (qs.get("project_id") or [""])[0].strip() or None
+            hermes_home = None
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+            return self._json(200, gateway_status(hermes_home))
         instance_sessions = INSTANCE_SESSIONS.match(path)
         if instance_sessions:
             try:
@@ -1022,6 +1030,22 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/engines/hermes/open":
             result = open_hermes()
+            return self._json(200 if result.get("ok") else 400, result)
+        if path == "/api/hermes/gateway/start":
+            project_id = str(data.get("project_id") or "").strip() or None
+            hermes_home = None
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+            result = gateway_start(hermes_home, wait=bool(data.get("wait")))
+            return self._json(200 if result.get("ok") else 400, result)
+        if path == "/api/hermes/gateway/stop":
+            project_id = str(data.get("project_id") or "").strip() or None
+            hermes_home = None
+            if project_id:
+                tools = project_tools(project_id)
+                hermes_home = tools.get("hermes_home")
+            result = gateway_stop(hermes_home)
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/org/projects":
             try:
