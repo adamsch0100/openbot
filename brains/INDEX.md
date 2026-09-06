@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #44 MERGE-READY — Mobile UX fix (compact composer, strip Meta pricing junk, readable chat history)
-Last: CEO review blocker resolved. iOS Safari auto-zooms when textarea font-size < 16px. Changed mobile/phone textarea back to 16px (kept compact heights, UI font, padding). All other fixes intact: 9px "Talking to" label, stream padding max(140px,25vh), Meta pricing stripped, 36-38px controls. v=60.
-Next: Merge when CEO approves
+Now: PR #45 MERGE-READY — Fix Meta junk in brief panel (wire cleanBotText into all display paths)
+Last: Phone smoke FAIL on #44. Meta contributor/pricing/training text still appeared in CoS brief panel (not just chat bubbles). Root cause: renderBotMeta()/renderIndex()/emptyStreamHtml() bypassed sanitization. Fixed: wired cleanBotText into all 3 paths, added 3 new regexes matching screenshot text ("permits Meta to use your prompts", "Do NOT use it for confidential", "For the same model with no training"). v=61. Keep 16px textarea from #44.
+Next: Operator phone retest, merge when clean
 Blocker: —
 
 ## Vault
