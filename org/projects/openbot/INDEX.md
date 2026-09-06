@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: WC-3 Spend Dashboard shipped: per-CEO cost breakdown, 14-day trend chart, 50% weekly cap yellow alerts, cap-exceeded notices, sidebar badges, comprehensive tests (7 tests passing).
-Last: WC-2 Coding Worker Hardening (PR #18): retry on transient failures (3×exponential backoff), Accept→Revert rollback, optional branch/PR, test-after-accept. WC-1 True Parallel Multi-Agent.
-Next: WC-4 Onboarding — run test job, auth checks (Hermes/OpenCode), first-run flow extension.
+Now: WC-4 Onboarding shipped: auth checks for Hermes/OpenCode before first work, test job flow, authentication cards with instructions.
+Last: WC-3 Spend Dashboard (PR #19: per-CEO cost breakdown, 14-day trend chart, 50% weekly cap yellow alerts, cap-exceeded notices), WC-2 Coding Worker Hardening (PR #18: retry on transient failures, Accept→Revert rollback, branch/PR, test-after-accept), WC-1 True Parallel Multi-Agent.
+Next: WC-5 Observability — operator directs next.
 Blocker: —
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
@@ -40,7 +40,7 @@ OSS first: users and courtesy with upstream; they help make it amazing; you are 
 
 Paid access first: cash and a smaller inbox. Fallback: wrapper-tax reputation, almost nobody pays to rent two free CLIs, courtesy to OpenCode/Hermes gets colder, you lose the people who would have made it good.
 
-Monthly is allowed only as supporter or later hosted. Not as “pay to use the wrapper.”
+Monthly is allowed only as supporter or later hosted. Not as "pay to use the wrapper."
 
 ## Phases (do in order)
 

@@ -29,6 +29,7 @@ from .cronwatch import ingest_cron_runs
 from .detect import detect
 from .gitutil import git_status
 from .hermes import mcp_catalog, skills_list
+from .onboarding import onboarding_status, test_job_prompt
 from .hermes_import import (
     add_instance,
     delete_instance,
@@ -583,6 +584,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {"jobs": [public_job(job) for job in jobs[:30]]})
         if path == "/api/activity":
             return self._json(200, _activity(ingest_cron=True))
+        if path == "/api/onboarding/status":
+            if not self._unlocked():
+                return self._json(200, _locked_payload())
+            status = onboarding_status()
+            return self._json(200, status)
         if path == "/api/thread":
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
@@ -747,6 +753,46 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        
+        if path == "/api/onboarding/test-job":
+            if not self._unlocked():
+                return self._json(403, {"error": "unlock required"})
+            try:
+                data = self._read_json()
+                project_id = data.get("project_id") or None
+                worker_id = data.get("worker_id") or "builder"
+                
+                prompt = test_job_prompt()
+                
+                job_id = str(uuid.uuid4())[:8]
+                thread_id = thread_key(project_id, worker_id)
+                
+                def run_test():
+                    try:
+                        handle(
+                            message=prompt,
+                            job_id=job_id,
+                            project_id=project_id,
+                            worker_id=worker_id,
+                            preset="builder",
+                            extra="",
+                            quote="",
+                            attachments=None,
+                            hermes_home=None,
+                        )
+                    except Exception as e:
+                        print(f"[onboarding] test job failed: {e}")
+                
+                threading.Thread(target=run_test, daemon=True).start()
+                
+                return self._json(200, {
+                    "ok": True,
+                    "job_id": job_id,
+                    "message": "Test job started"
+                })
+            except Exception as e:
+                return self._json(500, {"error": str(e)})
+        
         ctype = self.headers.get("Content-Type", "")
         is_multipart = ctype.startswith("multipart/form-data")
         

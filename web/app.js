@@ -3421,7 +3421,9 @@ function setWizardStep(name) {
   const labels = {
     engines: "Engines",
     folder: "Folder",
-    key: "Key"
+    key: "Key",
+    auth: "Authentication",
+    test: "Test"
   };
   document.querySelectorAll(".wizard-step").forEach((el) => {
     el.classList.toggle("hidden", el.dataset.step !== name);
@@ -3838,12 +3840,95 @@ $("saveWizardKey").addEventListener("click", async () => {
   fillKeys(data);
   cfg.has_key = true;
   lockComposer(true);
-  $("firstRun").classList.add("hidden");
-  fetch("/api/index").then((r) => r.json()).then(applyConfig);
+  setWizardStep("auth");
+  checkEngineAuth();
 });
 $("skipWizardKey").addEventListener("click", () => {
+  setWizardStep("auth");
+  checkEngineAuth();
+});
+
+async function checkEngineAuth() {
+  try {
+    const res = await fetch("/api/onboarding/status");
+    const data = await res.json();
+    
+    const hermesCard = $("hermesAuthStatus");
+    const opencodeCard = $("opencodeAuthStatus");
+    
+    if (data.hermes && data.hermes.authenticated) {
+      hermesCard.innerHTML = `
+        <div class="auth-status-icon">✅</div>
+        <div class="auth-status-label">Hermes Agent: Authenticated</div>
+      `;
+    } else {
+      hermesCard.innerHTML = `
+        <div class="auth-status-icon">❌</div>
+        <div class="auth-status-label">Hermes Agent: Not Authenticated</div>
+        <p class="muted">Run <code>hermes portal</code> in your terminal to authenticate with Nous Portal, or connect your API key in the Hermes tab.</p>
+      `;
+    }
+    
+    if (data.opencode && data.opencode.authenticated) {
+      opencodeCard.innerHTML = `
+        <div class="auth-status-icon">✅</div>
+        <div class="auth-status-label">OpenCode: Authenticated</div>
+      `;
+    } else {
+      opencodeCard.innerHTML = `
+        <div class="auth-status-icon">❌</div>
+        <div class="auth-status-label">OpenCode: Not Authenticated</div>
+        <p class="muted">Run <code>opencode auth login</code> in your terminal to authenticate with OpenCode.</p>
+      `;
+    }
+    
+    if (data.ready) {
+      $("wizardAuthNext").classList.remove("hidden");
+    } else {
+      $("wizardAuthNext").classList.add("hidden");
+    }
+  } catch (err) {
+    console.error("[onboarding] auth check failed:", err);
+  }
+}
+
+$("wizardAuthNext").addEventListener("click", () => {
+  setWizardStep("test");
+});
+
+$("wizardAuthSkip").addEventListener("click", () => {
+  setWizardStep("test");
+});
+
+$("runTestJob").addEventListener("click", async () => {
+  $("testJobStatus").textContent = "Starting test job...";
+  try {
+    const res = await fetch("/api/onboarding/test-job", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: projectId,
+        worker_id: "builder"
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      $("testJobStatus").textContent = "Test job running! Check the activity feed for results.";
+      setTimeout(() => {
+        $("firstRun").classList.add("hidden");
+        init();
+      }, 2000);
+    } else {
+      $("testJobStatus").textContent = data.error || "Test job failed";
+    }
+  } catch (err) {
+    $("testJobStatus").textContent = "Network error: " + err.message;
+  }
+});
+
+$("skipTestJob").addEventListener("click", () => {
   $("firstRun").classList.add("hidden");
-  lockComposer(false);
+  init();
 });
 $("saveKey").addEventListener("click", async () => {
   const res = await fetch("/api/keys", {
