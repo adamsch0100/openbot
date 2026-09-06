@@ -198,6 +198,27 @@ function escapeHtml(s) {
   }[c]));
 }
 
+function cleanBotText(text) {
+  if (!text) return "";
+  let cleaned = String(text);
+  
+  // Strip Meta contributor tier banners (exact common patterns only)
+  cleaned = cleaned.replace(/^!!!?\s*CONTRIBUTOR\s+TIER\s*—\s*TRAINS?\s+ON\s+YOUR\s+DATA.*$/gim, "");
+  cleaned = cleaned.replace(/^This\s+is\s+Meta'?s?\s+contributor\s+tier.*$/gim, "");
+  cleaned = cleaned.replace(/^Selecting\s+it\s+permits?\s+Meta.*train.*$/gim, "");
+  
+  // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
+  const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
+    return "";
+  }
+  
+  // Collapse multiple blank lines
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  return cleaned.trim();
+}
+
 async function showReplayModal(jobId) {
   try {
     const res = await fetch(`/api/jobs/${jobId}/log`);
@@ -672,11 +693,11 @@ function paintLanes() {
       ? "Show every turn in this chat"
       : (fresh ? `New ${jobLabel(lane)} — click to show only those` : `Show only ${jobLabel(lane)} jobs in this chat`);
   });
-  document.querySelectorAll(".route-btn").forEach((btn) => {
-    const route = btn.dataset.preset;
-    btn.classList.toggle("on", route === preset);
-    btn.classList.toggle("working", Boolean(liveRunId) && route === liveLane && route !== "cos");
-  });
+  const routeSelect = $("routeSelect");
+  if (routeSelect) {
+    routeSelect.value = preset || "cos";
+    routeSelect.classList.toggle("working", Boolean(liveRunId) && preset !== "cos" && preset === liveLane);
+  }
   applyLaneFilter();
 }
 
@@ -2349,7 +2370,8 @@ function bubble(kind, body) {
   el.className = `bubble ${kind}`;
   const text = document.createElement("div");
   text.className = "bubble-text";
-  text.textContent = body || "";
+  const cleaned = kind === "bot" ? cleanBotText(body) : (body || "");
+  text.textContent = cleaned;
   el.appendChild(text);
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
@@ -2429,7 +2451,7 @@ function settleLive(live, job) {
     const think = live.querySelector(".thinking");
     if (think) think.remove();
     const text = live.querySelector(".bubble-text");
-    if (text) text.textContent = job.text || "";
+    if (text) text.textContent = cleanBotText(job.text || "");
     stampLane(live, job, true);
     appendWorkDetails(live, job);
     // Add report card to settled live bubble
@@ -3579,9 +3601,9 @@ async function pollActivity() {
 document.querySelectorAll(".stage-btn").forEach((btn) => {
   btn.addEventListener("click", () => setStage(btn.dataset.stage));
 });
-document.querySelectorAll(".route-btn").forEach((btn) => {
-  btn.addEventListener("click", () => setRoute(btn.dataset.preset));
-});
+if ($("routeSelect")) {
+  $("routeSelect").addEventListener("change", (e) => setRoute(e.target.value));
+}
 document.querySelectorAll(".lane").forEach((btn) => {
   btn.addEventListener("click", () => focusLane(btn.dataset.lane));
 });
@@ -4810,7 +4832,7 @@ async function sendMessage(message, opts) {
             const el = activeBubble();
             const textEl = el && el.querySelector(".bubble-text");
             const thinkEl = el && el.querySelector(".thinking");
-            if (textEl) textEl.textContent = liveText;
+            if (textEl) textEl.textContent = cleanBotText(liveText);
             if (thinkEl) thinkEl.classList.add("hidden");
             stream.scrollTop = stream.scrollHeight;
           }

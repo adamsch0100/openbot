@@ -185,11 +185,13 @@ def _public_engine(result: dict) -> dict:
 def opencode_web_status() -> dict:
     engines = detect()
     running = _port_open("127.0.0.1", OPENCODE_WEB_PORT)
+    # Same-origin relative URL so it works from any public hostname
+    url = "/opencode/" if running else None
     return {
         "engine": "OpenCode",
         "present": engines["opencode"]["present"],
         "running": running,
-        "url": f"http://127.0.0.1:{OPENCODE_WEB_PORT}" if running else None,
+        "url": url,
         "install": engines["opencode"]["install"],
         "embed": "iframe_or_tab",
         "folder": _opencode_cwd or _work_dir(),
@@ -282,7 +284,6 @@ def _start_opencode_web(folder: str | None = None) -> dict:
         }
     status = opencode_web_status()
     status["ok"] = True
-    status["url"] = f"http://127.0.0.1:{OPENCODE_WEB_PORT}"
     status["pid"] = _opencode_proc.pid
     return status
 
@@ -290,11 +291,13 @@ def _start_opencode_web(folder: str | None = None) -> dict:
 def hermes_dash_status() -> dict:
     engines = detect()
     running = _port_open("127.0.0.1", HERMES_DASH_PORT)
+    # Same-origin relative URL so it works from any public hostname
+    url = "/hermes/" if running else None
     return {
         "engine": "Hermes Agent",
         "present": engines["hermes"]["present"],
         "running": running,
-        "url": f"http://127.0.0.1:{HERMES_DASH_PORT}" if running else None,
+        "url": url,
         "home": _hermes_dash_home or str(hermes_home()),
         "install": engines["hermes"]["install"],
         "install_cmd": engines["hermes"].get("install_cmd"),
@@ -432,7 +435,6 @@ def _start_hermes_dashboard(home: str | None = None) -> dict:
         }
     status = hermes_dash_status()
     status["ok"] = True
-    status["url"] = f"http://127.0.0.1:{HERMES_DASH_PORT}"
     status["pid"] = _hermes_dash_proc.pid
     try:
         from .channel import home_summary, telegram_session_id

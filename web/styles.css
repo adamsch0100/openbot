@@ -747,7 +747,7 @@ body {
   background: var(--panel);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "who" "reply" "queue" "attachments" "route" "input" "hint";
+  grid-template-areas: "who" "autocomplete" "reply" "queue" "attachments" "input" "hint";
   gap: 8px;
   border-radius: 16px;
   flex-shrink: 0;
@@ -755,8 +755,8 @@ body {
   width: 100%;
 }
 .composer:focus-within { border-color: var(--bronze); }
-.composer .route { grid-area: route; }
 .composer .composer-who { grid-area: who; }
+.composer .seat-autocomplete { grid-area: autocomplete; }
 .composer .reply-chip { grid-area: reply; }
 .composer #queueChip { grid-area: queue; }
 .composer .attachments-preview { grid-area: attachments; }
@@ -793,10 +793,48 @@ body {
 .composer-hint.hidden { display: none; }
 .composer-input-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: end;
   min-width: 0;
+}
+.route-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg);
+  color: var(--bronze);
+  border: 1px solid var(--line);
+  padding: 10px 28px 10px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="%23c9a66b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  min-width: 90px;
+}
+.route-select:hover {
+  border-color: var(--bronze);
+}
+.route-select:focus {
+  outline: none;
+  border-color: var(--bronze);
+  box-shadow: 0 0 0 1px var(--bronze);
+}
+.route-select.working {
+  border-color: var(--bronze);
+  box-shadow: 0 0 0 1px var(--bronze);
+  animation: select-pulse 1.5s ease-in-out infinite;
+}
+@keyframes select-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.75;
+  }
 }
 .attach-btn {
   appearance: none;
@@ -1626,14 +1664,14 @@ footer a { color: var(--bronze); }
   body { overflow: auto; }
   .bar { 
     grid-template-columns: auto minmax(0, 1fr) auto;
-    padding: 8px 12px;
-    gap: 12px;
+    padding: 6px 10px;
+    gap: 10px;
   }
   
   /* Compact header: hide "LOCAL ORG." sub, keep gem + OPENBOT */
   .sub { display: none; }
   .word { font-size: 11px; letter-spacing: 0.18em; }
-  .mark-gem { width: 28px; height: 28px; }
+  .mark-gem { width: 26px; height: 26px; }
   
   /* Stage tabs horizontal scroll */
   .stages { 
@@ -1700,19 +1738,66 @@ footer a { color: var(--bronze); }
   .chat-col { width: 100%; }
   .chat-shell { 
     width: 100%;
-    padding: 0 12px 12px;
+    padding: 0 10px 10px;
+  }
+  
+  /* Tighter chat head */
+  .chat-head {
+    padding: 10px 4px 6px;
+    gap: 1px;
+  }
+  .chat-where { font-size: 12px; letter-spacing: 0.14em; }
+  .chat-folder { font-size: 10px; }
+  
+  /* Tighter stream spacing */
+  .stream {
+    padding: 12px 4px 14px;
+    gap: 10px;
+  }
+  
+  /* Compact bubbles */
+  .bubble { gap: 4px; }
+  .bubble.user {
+    padding: 10px 13px;
+    max-width: 90%;
+  }
+  .bubble.bot {
+    padding: 10px 13px;
+  }
+  .bubble-text {
+    font-size: 14px;
+    line-height: 1.48;
+  }
+  .card {
+    padding: 10px 12px;
+  }
+  .card .meta { font-size: 10px; margin-bottom: 6px; }
+  
+  /* Compact index */
+  .index {
+    padding: 8px 0 10px;
+  }
+  .index summary {
+    font-size: 11px;
+    padding: 1px 0 3px;
+  }
+  .index pre {
+    font-size: 11px;
+    max-height: 140px;
+    margin: 8px 0 6px;
   }
   
   /* Lanes: horizontal scroll with better tap targets */
   .lanes { 
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 4px;
+    padding: 3px;
+    margin-top: 8px;
   }
   .lane { 
-    padding: 8px 14px;
-    font-size: 13px;
-    min-height: 44px;
+    padding: 6px 11px;
+    font-size: 11px;
+    min-height: 36px;
     display: flex;
     align-items: center;
   }
@@ -1732,12 +1817,22 @@ footer a { color: var(--bronze); }
   
   /* Composer: ensure above safe area */
   .composer {
-    padding: 10px 12px;
+    padding: 8px 10px;
     margin-bottom: env(safe-area-inset-bottom, 8px);
   }
   .composer textarea {
     font-size: 16px; /* Prevent iOS zoom */
     min-height: 48px;
+  }
+  .composer-input-row {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 8px;
+  }
+  .route-select {
+    font-size: 11px;
+    padding: 10px 24px 10px 10px;
+    min-width: 80px;
+    background-position: right 6px center;
   }
   
   /* Compact footer: collapse engines info */
