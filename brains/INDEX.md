@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #49 MERGE-READY — Fix renderReportCard bypass (wire cleanBotText into report card render path)
-Last: Phone smoke FAIL on #47. Research card still shows Meta junk in report RESULT box. Root cause: renderReportCard(job) dumps raw job.text into .report-result without cleanBotText. Fixed: line 2704 const text = cleanBotText(String(job.text || '')).trim(), also clean INDEX delta fields (index_now/last/next/blocker). All 6 render paths now covered. v=64. Also PR #48 open: world-class mobile UX redesign.
-Next: Phone re-smoke on Research/Ops/Think jobs
+Now: CEO collaborator share is live (invite link, scoped session, owner keeps vault)
+Last: PR #49 MERGE-READY — Fix renderReportCard bypass (wire cleanBotText into report card render path)
+Next: Phone re-smoke on Research/Ops/Think jobs; invite a helper from This CEO → Share
 Blocker: —
 
 ## Vault

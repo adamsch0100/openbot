@@ -15,6 +15,7 @@ web/node_modules/
 .opencode/cache/
 *.session
 openbot.local.json
+shares.local.json
 secrets.local.json
 .openbot-logins.json
 org/profile.json

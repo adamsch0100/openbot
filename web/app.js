@@ -39,6 +39,49 @@ let lastOcFolder = "";
 let lastHermesHome = "";
 let pendingAttachments = [];
 
+function isCollaborator() {
+  return cfg.actor === "collaborator";
+}
+
+function sharePerm(name) {
+  if (!isCollaborator()) return true;
+  const perms = (cfg.share && cfg.share.member && cfg.share.member.permissions) || {};
+  return Boolean(perms[name]);
+}
+
+const SHARE_PERM_LABELS = [
+  ["chat_read", "View chat"],
+  ["chat_write", "Send chat"],
+  ["jobs_view", "View jobs"],
+  ["jobs_run", "Trigger jobs"],
+  ["index_edit", "Edit INDEX / inbox"],
+  ["approve_needs_you", "Approve needs-you cards"],
+  ["engines_view", "View OpenCode / Hermes"],
+  ["workers_manage", "Manage workers"],
+  ["wiring_edit", "Change CEO wiring"]
+];
+
+function sharePermChecks(perms) {
+  const row = perms || {};
+  return SHARE_PERM_LABELS.map(([key, label]) => (
+    `<label><input type="checkbox" data-share-perm="${key}"${row[key] ? " checked" : ""} /> ${label}</label>`
+  )).join("");
+}
+
+function readSharePerms(root) {
+  const out = {};
+  (root || document).querySelectorAll("[data-share-perm]").forEach((el) => {
+    out[el.dataset.sharePerm] = el.checked;
+  });
+  return out;
+}
+
+function actorLabel(actor) {
+  if (!actor || typeof actor !== "object") return "";
+  if (actor.kind === "collaborator") return actor.label || "Collaborator";
+  return actor.label || "Owner";
+}
+
 function aimKey(pid, wid) {
   return `${pid == null ? projectId : pid}::${wid == null ? workerId : wid}`;
 }
@@ -1547,6 +1590,12 @@ function fillCeoPanel() {
   `;
   
   if (hint) hint.textContent = `${project.name} — Keys, spend, seats, connectors, and Hermes home`;
+  if (isCollaborator()) {
+    if (hint) hint.textContent = `${project.name} — shared with you`;
+    body.innerHTML = "";
+    fillCollaboratorShareCard(project);
+    return;
+  }
   body.innerHTML = `
     ${toolsStrip}
     <div class="usage-card">
@@ -1618,6 +1667,194 @@ function fillCeoPanel() {
   // Set up event listeners
   const save = $("saveCeoTools");
   if (save) save.addEventListener("click", () => saveCeoTools(project.id));
+  fillOwnerSharePanel(project);
+}
+
+function fillCollaboratorShareCard(project) {
+  const body = $("ceoPanelBody");
+  if (!body) return;
+  const share = cfg.share || {};
+  const member = share.member || {};
+  const card = document.createElement("div");
+  card.className = "usage-card";
+  card.innerHTML = `
+    <h4>This share</h4>
+    <p class="lede">Shared with you by ${escapeHtml(share.owner_name || "the owner")}. You help manage ${escapeHtml((project && project.name) || "this CEO")}.</p>
+    <div class="field">
+      <label for="collabName">Display name</label>
+      <input id="collabName" type="text" value="${escapeHtml(member.display_name || "")}" />
+    </div>
+    <div class="field">
+      <label for="collabSecret">New unlock secret</label>
+      <input id="collabSecret" type="password" autocomplete="new-password" placeholder="leave blank to keep" />
+    </div>
+    <div class="actions">
+      <button type="button" class="send" id="saveCollabYou">Save</button>
+      <button type="button" class="ghost-btn" id="leaveShareBtn">Leave share</button>
+      <p class="muted" id="collabYouStatus"></p>
+    </div>
+  `;
+  body.appendChild(card);
+  const save = $("saveCollabYou");
+  if (save) save.addEventListener("click", saveCollaboratorYou);
+  const leave = $("leaveShareBtn");
+  if (leave) leave.addEventListener("click", leaveShare);
+}
+
+async function saveCollaboratorYou() {
+  const body = {
+    display_name: ($("collabName") && $("collabName").value.trim()) || ""
+  };
+  const secret = ($("collabSecret") && $("collabSecret").value) || "";
+  if (secret) body.secret = secret;
+  const res = await fetch("/api/share/me", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if ($("collabYouStatus")) $("collabYouStatus").textContent = res.ok ? "saved" : (data.error || "save failed");
+}
+
+async function leaveShare() {
+  const res = await fetch("/api/share/me", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ leave: true })
+  });
+  if (res.ok) {
+    localStorage.removeItem("openbot_share_member");
+    location.href = location.pathname;
+  }
+}
+
+async function fillOwnerSharePanel(project) {
+  const body = $("ceoPanelBody");
+  if (!body || !project) return;
+  const wrap = document.createElement("div");
+  wrap.id = "ceoSharePanel";
+  wrap.innerHTML = `<h3 class="drawer-sub">Share this CEO</h3><p class="muted">Invite a helper. You still pay. They do not see keys.</p><p class="muted" id="sharePanelStatus">Loading…</p>`;
+  body.appendChild(wrap);
+  let data = {};
+  try {
+    const res = await fetch(`/api/share?project_id=${encodeURIComponent(project.id)}`);
+    data = await res.json();
+  } catch (_err) {
+    if ($("sharePanelStatus")) $("sharePanelStatus").textContent = "Could not load shares.";
+    return;
+  }
+  const members = data.members || [];
+  const invites = data.invites || [];
+  const memberHtml = members.map((row) => `
+    <div class="share-member" data-member="${escapeHtml(row.id)}">
+      <b>${escapeHtml(row.display_name || "Collaborator")}</b>
+      <span class="muted">${escapeHtml(row.status || "active")} · last ${escapeHtml(row.last_active_at || "—")}</span>
+      <div class="share-perm">${sharePermChecks(row.permissions)}</div>
+      <div class="field">
+        <label>Daily spend ceiling USD</label>
+        <input data-share-ceiling type="number" min="0" step="0.5" value="${row.spend_ceiling_usd_day == null ? "" : escapeHtml(String(row.spend_ceiling_usd_day))}" placeholder="CEO cap" />
+      </div>
+      <label><input data-share-chat-only type="checkbox"${row.seats_mode === "chat_only" ? " checked" : ""} /> Chat-only seats</label>
+      <div class="actions">
+        <button type="button" class="send" data-save-member="${escapeHtml(row.id)}">Save</button>
+        <button type="button" class="ghost-btn" data-pause-member="${escapeHtml(row.id)}">${row.status === "paused" ? "Resume" : "Pause"}</button>
+        <button type="button" class="ghost-btn" data-remove-member="${escapeHtml(row.id)}">Remove</button>
+      </div>
+    </div>
+  `).join("") || `<p class="muted">No collaborators yet.</p>`;
+  const inviteHtml = invites.map((row) => `
+    <p class="muted">Invite ${escapeHtml(row.id)} · ${escapeHtml(row.status)} · uses ${escapeHtml(String(row.uses || 0))}/${escapeHtml(String(row.max_uses || 1))}
+      <button type="button" class="ghost-btn" data-revoke-invite="${escapeHtml(row.id)}">Revoke</button>
+    </p>
+  `).join("");
+  wrap.innerHTML = `
+    <h3 class="drawer-sub">Share this CEO</h3>
+    <p class="lede">Invite a helper to this CEO’s chat and jobs. You keep keys, PIN, and billing.</p>
+    <div class="share-perm">${sharePermChecks({
+      chat_read: true, chat_write: true, jobs_view: true, jobs_run: true, index_edit: true,
+      approve_needs_you: false, engines_view: true, workers_manage: false, wiring_edit: false
+    })}</div>
+    <div class="field">
+      <label for="shareInviteDays">Invite expiry (days)</label>
+      <input id="shareInviteDays" type="number" min="1" max="90" value="7" />
+    </div>
+    <div class="actions">
+      <button type="button" class="send" id="createShareInvite">Create invite link</button>
+      <p class="muted" id="sharePanelStatus"></p>
+    </div>
+    <input id="shareInviteUrl" type="text" readonly class="hidden" />
+    ${inviteHtml}
+    <h3 class="drawer-sub">Members</h3>
+    ${memberHtml}
+  `;
+  const create = $("createShareInvite");
+  if (create) {
+    create.addEventListener("click", async () => {
+      const res = await fetch("/api/share/invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: project.id,
+          permissions: readSharePerms(wrap),
+          expires_days: Number(($("shareInviteDays") && $("shareInviteDays").value) || 7),
+          origin: location.origin
+        })
+      });
+      const out = await res.json();
+      if (!res.ok) {
+        if ($("sharePanelStatus")) $("sharePanelStatus").textContent = out.error || "invite failed";
+        return;
+      }
+      const box = $("shareInviteUrl");
+      if (box) {
+        box.classList.remove("hidden");
+        box.value = out.url || "";
+        box.select();
+      }
+      if ($("sharePanelStatus")) $("sharePanelStatus").textContent = "Invite link ready. Copy it.";
+    });
+  }
+  wrap.querySelectorAll("[data-save-member]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest(".share-member");
+      const ceiling = card && card.querySelector("[data-share-ceiling]");
+      const chatOnly = card && card.querySelector("[data-share-chat-only]");
+      const res = await fetch(`/api/share/members/${btn.dataset.saveMember}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          permissions: readSharePerms(card),
+          spend_ceiling_usd_day: ceiling && ceiling.value === "" ? null : Number(ceiling && ceiling.value),
+          seats_mode: chatOnly && chatOnly.checked ? "chat_only" : "inherit"
+        })
+      });
+      const out = await res.json();
+      if ($("sharePanelStatus")) $("sharePanelStatus").textContent = res.ok ? "member saved" : (out.error || "save failed");
+    });
+  });
+  wrap.querySelectorAll("[data-pause-member]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const paused = btn.textContent === "Pause";
+      await fetch(`/api/share/members/${btn.dataset.pauseMember}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pause: paused })
+      });
+      fillCeoPanel();
+    });
+  });
+  wrap.querySelectorAll("[data-remove-member]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await fetch(`/api/share/members/${btn.dataset.removeMember}`, { method: "DELETE" });
+      fillCeoPanel();
+    });
+  });
+  wrap.querySelectorAll("[data-revoke-invite]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await fetch(`/api/share/invites/${btn.dataset.revokeInvite}`, { method: "DELETE" });
+      fillCeoPanel();
+    });
+  });
 }
 
 function paintCeoConnectorsMatrix(connectors) {
@@ -1913,17 +2150,17 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
   }
   
   tree.innerHTML = `
-    <button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
+    ${isCollaborator() ? `<p class="share-banner">Shared with you by ${escapeHtml((cfg.share && cfg.share.owner_name) || "the owner")} · you are a collaborator</p>` : `<button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
       <span class="org-avatar" aria-hidden="true">${escapeHtml(cosInitials)}</span>
       <span class="org-btn-text">
         <b>Chief of Staff${staffStatusChip}</b>
         <span class="org-now">runs the CEOs</span>
       </span>
-    </button>
+    </button>`}
     ${inboxHtml()}
     ${capNoticesHtml()}
     ${projectBits}
-    <button type="button" class="org-add" id="addCeoBtn">Add CEO</button>
+    ${isCollaborator() ? "" : `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>`}
   `;
   tree.querySelectorAll(".org-btn").forEach((btn) => {
     btn.addEventListener("click", () => setOrgNode(btn.dataset.project || "", btn.dataset.worker || ""));
@@ -2041,8 +2278,13 @@ function renderSchedules(project) {
 }
 
 function fillProfile(data) {
-  const name = (data.operator_name || "").trim() || "You";
+  const name = (data.operator_name || "").trim() || (isCollaborator() ? "Collaborator" : "You");
   if ($("profileName")) $("profileName").textContent = name;
+  if ($("profileRole")) {
+    $("profileRole").textContent = isCollaborator()
+      ? `Collaborator · ${(data.share && data.share.owner_name) || "Owner"}`
+      : "Settings";
+  }
   if ($("operatorName") && document.activeElement !== $("operatorName")) {
     $("operatorName").value = data.operator_name || "";
   }
@@ -2237,6 +2479,19 @@ function applyConfig(data) {
     /* keys/seats are optional; org already painted */
   }
   renderBotMeta();
+  applyCollaboratorChrome();
+}
+
+function applyCollaboratorChrome() {
+  const hide = new Set(["folder", "keys", "import", "channels", "git", "models", "connectors", "routines", "advanced"]);
+  document.querySelectorAll(".drawer-tab").forEach((btn) => {
+    btn.classList.toggle("hidden", isCollaborator() && hide.has(btn.dataset.panel));
+  });
+  document.querySelectorAll(".stage-btn").forEach((btn) => {
+    if (btn.dataset.stage === "opencode" || btn.dataset.stage === "hermes") {
+      btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
+    }
+  });
 }
 
 function syncHermesHint() {
@@ -2313,10 +2568,19 @@ function setSettings(open, panel) {
 }
 
 function setSettingsPanel(name) {
+  const hide = new Set(["folder", "keys", "import", "channels", "git", "models", "connectors", "routines", "advanced"]);
+  if (isCollaborator() && hide.has(name)) name = "you";
   const title = PANEL_TITLES[name] || "Settings";
   $("settingsTitle").textContent = title;
   document.querySelectorAll(".drawer-tab").forEach((btn) => {
     btn.classList.toggle("on", btn.dataset.panel === name);
+    const panel = btn.dataset.panel;
+    btn.classList.toggle("hidden", isCollaborator() && hide.has(panel));
+  });
+  document.querySelectorAll(".stage-btn").forEach((btn) => {
+    if (btn.dataset.stage === "opencode" || btn.dataset.stage === "hermes") {
+      btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
+    }
   });
   document.querySelectorAll(".drawer-panel").forEach((el) => {
     el.classList.toggle("on", el.id === `panel-${name}`);
@@ -2388,9 +2652,16 @@ function card(kind, body, meta) {
   return el;
 }
 
-function bubble(kind, body) {
+function bubble(kind, body, actor) {
   const el = document.createElement("article");
   el.className = `bubble ${kind}`;
+  const label = actorLabel(actor);
+  if (kind === "user" && label) {
+    const tag = document.createElement("span");
+    tag.className = "actor-tag";
+    tag.textContent = label;
+    el.appendChild(tag);
+  }
   const text = document.createElement("div");
   text.className = "bubble-text";
   const cleaned = kind === "bot" ? cleanBotText(body) : (body || "");
@@ -3029,7 +3300,7 @@ function renderTurns(turns, extras) {
   rows.forEach((turn, index) => {
     if (turn.role === "user") {
       lastBot = "";
-      const el = bubble("user", turn.text || "");
+      const el = bubble("user", turn.text || "", turn.actor);
       if (turn.quote) attachQuotePreview(el, turn.quote);
       if (turn.attachments) renderAttachments(el, turn.attachments);
       const next = rows[index + 1];
@@ -3543,6 +3814,88 @@ async function waitForUnlock() {
   });
 }
 
+async function waitForShareInvite(token) {
+  const gate = $("shareGate");
+  if (!gate) return null;
+  let preview = {};
+  try {
+    preview = await (await fetch(`/api/share/invite/${encodeURIComponent(token)}`)).json();
+  } catch (_err) {
+    preview = {};
+  }
+  if ($("shareTitle")) $("shareTitle").textContent = "Join this CEO";
+  if ($("shareCopy")) {
+    $("shareCopy").textContent = preview.project_name
+      ? `${preview.operator_name || "Owner"} invited you to ${preview.project_name}. You help manage it; they still pay.`
+      : "Someone invited you to help manage a CEO. You will not see keys or billing.";
+  }
+  if ($("shareSecretConfirmWrap")) $("shareSecretConfirmWrap").classList.remove("hidden");
+  if ($("shareJoinBtn")) $("shareJoinBtn").textContent = "Join";
+  gate.classList.remove("hidden");
+  if ($("shareName")) $("shareName").focus();
+  return new Promise((resolve) => {
+    const submit = async () => {
+      const name = ($("shareName") && $("shareName").value.trim()) || "";
+      const secret = ($("shareSecret") && $("shareSecret").value) || "";
+      const confirm = ($("shareSecretConfirm") && $("shareSecretConfirm").value) || "";
+      if (secret.length < 4) {
+        if ($("shareError")) $("shareError").textContent = "Secret must be at least 4 characters.";
+        return;
+      }
+      if (confirm !== secret) {
+        if ($("shareError")) $("shareError").textContent = "Secret and confirm do not match.";
+        return;
+      }
+      const res = await fetch("/api/share/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, display_name: name, secret })
+      });
+      const data = await res.json();
+      if (res.ok && !data.needs_unlock) {
+        if (data.member && data.member.id) localStorage.setItem("openbot_share_member", data.member.id);
+        gate.classList.add("hidden");
+        history.replaceState(null, "", location.pathname);
+        resolve(data);
+        return;
+      }
+      if ($("shareError")) $("shareError").textContent = data.error || "invite failed";
+    };
+    if ($("shareJoinBtn")) $("shareJoinBtn").addEventListener("click", submit);
+  });
+}
+
+async function waitForShareUnlock(memberId) {
+  const gate = $("shareGate");
+  if (!gate) return null;
+  if ($("shareTitle")) $("shareTitle").textContent = "Unlock share";
+  if ($("shareCopy")) $("shareCopy").textContent = "Enter the unlock secret for this shared CEO.";
+  if ($("shareSecretConfirmWrap")) $("shareSecretConfirmWrap").classList.add("hidden");
+  if ($("shareJoinBtn")) $("shareJoinBtn").textContent = "Open";
+  const nameField = $("shareName");
+  if (nameField && nameField.closest(".field")) nameField.closest(".field").classList.add("hidden");
+  gate.classList.remove("hidden");
+  if ($("shareSecret")) $("shareSecret").focus();
+  return new Promise((resolve) => {
+    const submit = async () => {
+      const secret = ($("shareSecret") && $("shareSecret").value) || "";
+      const res = await fetch("/api/share/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, secret })
+      });
+      const data = await res.json();
+      if (res.ok && !data.needs_unlock) {
+        gate.classList.add("hidden");
+        resolve(data);
+        return;
+      }
+      if ($("shareError")) $("shareError").textContent = data.error || "wrong secret";
+    };
+    if ($("shareJoinBtn")) $("shareJoinBtn").addEventListener("click", submit);
+  });
+}
+
 async function loadOrgTree() {
   try {
     const res = await fetch("/api/org");
@@ -3555,6 +3908,47 @@ async function loadOrgTree() {
 }
 
 async function boot() {
+  const invite = new URLSearchParams(location.search).get("invite");
+  if (invite) {
+    const joined = await waitForShareInvite(invite);
+    if (joined) {
+      applyConfig(joined);
+      showWizard({ first_run_done: true });
+      const projects = (joined.org && joined.org.projects) || [];
+      if (projects[0]) await setOrgNode(projects[0].id, "");
+      await loadThread();
+      pollActivity();
+      sizeComposer();
+      return;
+    }
+  }
+  const memberId = localStorage.getItem("openbot_share_member");
+  if (memberId) {
+    let data = await (await fetch("/api/index")).json();
+    if (data.actor === "collaborator") {
+      applyConfig(data);
+      showWizard({ first_run_done: true });
+      const projects = (data.org && data.org.projects) || [];
+      if (projects[0]) await setOrgNode(projects[0].id, "");
+      await loadThread();
+      pollActivity();
+      sizeComposer();
+      return;
+    }
+    if (data.needs_unlock) {
+      const unlocked = await waitForShareUnlock(memberId);
+      if (unlocked) {
+        applyConfig(unlocked);
+        showWizard({ first_run_done: true });
+        const projects = (unlocked.org && unlocked.org.projects) || [];
+        if (projects[0]) await setOrgNode(projects[0].id, "");
+        await loadThread();
+        pollActivity();
+        sizeComposer();
+        return;
+      }
+    }
+  }
   await loadOrgTree();
   let data = await (await fetch("/api/index")).json();
   if (data.needs_unlock) data = await waitForUnlock();

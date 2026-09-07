@@ -1306,6 +1306,8 @@ input, textarea, select {
   display: grid; place-items: center; z-index: 20; padding: 24px;
 }
 .overlay.hidden, .drawer.hidden, .menu.hidden, .workspace:not(.on), .usage-card.hidden { display: none; }
+.drawer-tab.hidden { display: none; }
+.stage-btn.hidden { display: none; }
 .panel {
   padding: 24px; display: grid; gap: 12px; width: min(520px, 100%);
   background: var(--panel); border: 1px solid var(--line);
@@ -1314,6 +1316,12 @@ input, textarea, select {
   min-width: 0;
 }
 .panel h2 { margin: 0; font-weight: 500; font-family: var(--display); }
+.share-banner { margin: 0 0 8px; color: var(--mint); }
+.share-perm { display: grid; gap: 8px; margin: 12px 0; }
+.share-perm label { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.share-member { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
+.share-member b { font-weight: 600; }
+.bubble .actor-tag { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 .settings-wrap { position: relative; }
 .menu {
   position: absolute; right: 0; top: calc(100% + 8px);

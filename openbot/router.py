@@ -622,10 +622,10 @@ def run_opencode(
         return 124, "opencode run timed out", ""
 
 
-def _receipt_base(job_id: str, preset: str, engine: str, message: str, folder: str | None) -> dict:
+def _receipt_base(job_id: str, preset: str, engine: str, message: str, folder: str | None, actor: dict | None = None) -> dict:
     cfg = load_config()
     spend = spend_summary(cfg["spend_cap_usd"], cfg["spend_cap_period"])
-    return {
+    receipt = {
         "id": job_id,
         "at": now_iso(),
         "preset": preset,
@@ -648,6 +648,9 @@ def _receipt_base(job_id: str, preset: str, engine: str, message: str, folder: s
         "git_snapshot": None,
         "brain_excerpt": read_brain(preset if preset != "ask" else "cos")[:400],
     }
+    if actor:
+        receipt["actor"] = actor
+    return receipt
 
 
 def last_results(limit: int = 3, project_id: str | None = None) -> str:
@@ -891,6 +894,7 @@ def handle(
     chain_context: dict | None = None,
     attachments: list | None = None,
     force_go_wallet: bool = False,
+    actor: dict | None = None,
 ) -> dict:
     node = "staff"
     if worker_id:
@@ -979,6 +983,7 @@ def handle(
                 on_progress,
                 attachments if index == 0 else None,
                 force_go_wallet,
+                actor,
             )
         )
         carry = jobs[-1].get("text") or ""
@@ -1040,6 +1045,7 @@ def _handle_preset(
     on_progress=None,
     attachments: list | None = None,
     force_go_wallet: bool = False,
+    actor: dict | None = None,
 ) -> dict:
     def patch_index_line(label: str, value: str) -> None:
         patch_scope(project_id, worker_id, label, value)
@@ -1103,7 +1109,7 @@ def _handle_preset(
                 pass
             
             patch_index_line("Blocker", blocker)
-            receipt = _receipt_base(job_id, chosen, engine, message, work)
+            receipt = _receipt_base(job_id, chosen, engine, message, work, actor=actor)
             receipt.update(
                 {
                     "blocker": blocker,
@@ -1854,7 +1860,7 @@ def _handle_preset(
     )
     cap_remaining = round(max(0.0, spend["cap_remaining"] - (usd_estimate if wallet == "payg" else 0.0)), 6)
 
-    receipt = _receipt_base(job_id, chosen, engine, message, work)
+    receipt = _receipt_base(job_id, chosen, engine, message, work, actor=actor)
     index_now = read_project_index(project_id) if project_id else read_index()
     next_line = index_field(index_now, "Next")
     now_line = index_field(index_now, "Now")

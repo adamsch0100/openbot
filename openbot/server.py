@@ -87,6 +87,30 @@ from .org import (
 from .engine_proxy import inject_opencode_tree
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
 from .router import decide_diff, revert_accept, handle, pending_approvals, public_job
+from .share import (
+    actor_stamp,
+    allows_project,
+    check_job_run,
+    create_invite,
+    filter_jobs,
+    filter_org,
+    get_member,
+    member_can,
+    member_from_session,
+    member_project_id,
+    owner_only_path,
+    patch_member,
+    pause_member,
+    peek_invite,
+    project_share,
+    public_member,
+    redeem_invite,
+    remove_member,
+    revoke_invite,
+    set_member_secret,
+    touch_member,
+    unlock_member,
+)
 from .queueworker import active_workers, auto_create_handoffs
 from .store import (
     CODE_ROOT,
@@ -95,6 +119,7 @@ from .store import (
     list_jobs,
     read_brain,
     read_index,
+    read_job,
     spend_summary,
     write_brain,
     write_index,
@@ -122,6 +147,9 @@ INSTANCE_SESSIONS = re.compile(r"^/api/hermes/instances/([a-zA-Z0-9_-]{4,32})/se
 INSTANCE_SESSION = re.compile(
     r"^/api/hermes/instances/([a-zA-Z0-9_-]{4,32})/sessions/([A-Za-z0-9._:-]{2,120})$"
 )
+SHARE_INVITE_TOKEN = re.compile(r"^/api/share/invite/([A-Za-z0-9_-]{8,80})$")
+SHARE_INVITE_ID = re.compile(r"^/api/share/invites/([a-f0-9]{6,32})$")
+SHARE_MEMBER_ID = re.compile(r"^/api/share/members/([a-f0-9]{6,32})$")
 PRESET_ENGINE = {
     "cos": "board",
     "think": "Hermes Agent",
@@ -244,9 +272,11 @@ def _chat_context(data: dict, files: list | None = None) -> tuple:
     return message, folder, requested, pid, worker_id, attachments
 
 
-def _record_job(job: dict, message: str, project_id: str | None, worker_id: str | None, quote: str = "", attachments: list | None = None) -> None:
+def _record_job(job: dict, message: str, project_id: str | None, worker_id: str | None, quote: str = "", attachments: list | None = None, actor: dict | None = None) -> None:
     key = thread_key(project_id, worker_id)
     turn = {"role": "user", "text": redact_chat_login(message)}
+    if actor:
+        turn["actor"] = actor
     cleaned = redact_chat_login(str(quote or "").strip())
     cleaned = " ".join(cleaned.split())[:400]
     if cleaned:
@@ -323,7 +353,7 @@ def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -
     }
 
 
-def _activity(*, ingest_cron: bool = False) -> dict:
+def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> dict:
     from .spend import check_cap_alerts
     
     keyring = public_keyring()
@@ -359,7 +389,14 @@ def _activity(*, ingest_cron: bool = False) -> dict:
         cap_notices = spend_alerts.get("alerts") or []
     except Exception:
         cap_notices = []
-    
+    if project_id:
+        jobs = filter_jobs(jobs, project_id)
+        needs = [row for row in needs if str(row.get("project_id") or "") == str(project_id)]
+        cron_jobs = [row for row in cron_jobs if str(row.get("project_id") or "") == str(project_id)]
+        cap_notices = [
+            row for row in cap_notices if str(row.get("ceo_id") or row.get("project_id") or "") == str(project_id)
+        ]
+
     return {
         "now": (now_match.group(1).strip() if now_match else ""),
         "jobs": [public_job(job) for job in jobs[:30]],
@@ -411,7 +448,53 @@ def _public_config() -> dict:
         "has_license": operator["has_license"],
         "needs_unlock": False,
         "hermes_instances": public_instances(),
+        "actor": "owner",
+        "share": None,
     }
+
+
+def _member_config(member: dict) -> dict:
+    payload = _public_config()
+    pid = member_project_id(member)
+    operator = public_operator()
+    activity = _activity(project_id=pid)
+    if not member_can(member, "jobs_view"):
+        activity["jobs"] = []
+        activity["cron_jobs"] = []
+    if not member_can(member, "approve_needs_you"):
+        activity["needs_you"] = []
+    cfg = load_config()
+    cap = cfg["spend_cap_usd"]
+    project_cap = project_tools(pid).get("spend_cap_usd") if pid else None
+    if project_cap is not None:
+        cap = project_cap
+    org = filter_org(payload.get("org") or {}, pid)
+    payload.update(
+        {
+            "actor": "collaborator",
+            "share": {
+                "member": public_member(member),
+                "owner_name": operator.get("operator_name") or "Owner",
+                "keys_connected": bool(payload.get("has_key")),
+            },
+            "org": org,
+            "index": org.get("index") or "",
+            "activity": activity,
+            "keyring": {"accounts": [], "logins": [], "blocked": []},
+            "hermes_instances": [],
+            "brains": {},
+            "has_license": False,
+            "has_pin": False,
+            "operator_name": public_member(member).get("display_name") or "Collaborator",
+            "work_dir": "",
+            "spend": spend_summary(float(cap), cfg["spend_cap_period"], project_id=pid),
+            "setup_needed": False,
+        }
+    )
+    if not member_can(member, "engines_view"):
+        payload["opencode_web"] = {"ok": False, "running": False}
+        payload["hermes_dash"] = {"ok": False, "running": False}
+    return payload
 
 
 def _locked_payload() -> dict:
@@ -436,12 +519,102 @@ class Handler(SimpleHTTPRequestHandler):
         print(f"[openbot] {self.address_string()} {fmt % args}")
 
     def _unlocked(self) -> bool:
+        return self._owner_unlocked() or bool(self._member())
+
+    def _bearer_token(self) -> str:
+        auth = (self.headers.get("Authorization") or "").strip()
+        if auth.lower().startswith("bearer "):
+            parts = auth.split(None, 1)
+            if len(parts) == 2:
+                return parts[1].strip()
+        return ""
+
+    def _owner_token(self) -> str:
+        return self._bearer_token() or _cookie_value(self.headers.get("Cookie"), "openbot_unlock")
+
+    def _share_token(self) -> str:
+        return self._bearer_token() or _cookie_value(self.headers.get("Cookie"), "openbot_share")
+
+    def _member(self) -> dict | None:
+        return member_from_session(self._share_token())
+
+    def _owner_unlocked(self) -> bool:
         settings = load_settings()
-        if not settings.get("pin_hash"):
+        if settings.get("pin_hash"):
+            token = self._owner_token()
+            with _UNLOCK_LOCK:
+                return bool(token) and token in _UNLOCK_TOKENS
+        return self._member() is None
+
+    def _actor_row(self) -> dict | None:
+        if self._owner_unlocked():
+            return None
+        return self._member()
+
+    def _config_payload(self) -> dict:
+        if self._owner_unlocked():
+            return _public_config()
+        member = self._member()
+        if member:
+            touch_member(str(member.get("id") or ""))
+            return _member_config(member)
+        return _locked_payload()
+
+    def _lock_api(self, path: str, method: str) -> bool:
+        if path.startswith("/opencode/") or path.startswith("/hermes/"):
+            if self._member() and not member_can(self._member(), "engines_view"):
+                return True
+            return not self._unlocked()
+        if not path.startswith("/api/"):
+            return False
+        if method == "GET" and path == "/api/health":
+            return False
+        if method == "GET" and SHARE_INVITE_TOKEN.match(path):
+            return False
+        if method == "POST" and path in {"/api/unlock", "/api/share/redeem", "/api/share/unlock"}:
+            return False
+        return not self._unlocked()
+
+    def _forbid(self, error: str, code: int = 403):
+        return self._json(code, {"error": error, "ok": False})
+
+    def _require_owner(self) -> bool:
+        if self._owner_unlocked():
+            return False
+        self._forbid("owner only")
+        return True
+
+    def _require_perm(self, permission: str, project_id: str | None = None) -> bool:
+        if self._owner_unlocked():
+            return False
+        row = self._member()
+        if row is None:
+            self._json(403, _locked_payload())
             return True
-        token = _cookie_value(self.headers.get("Cookie"), "openbot_unlock")
-        with _UNLOCK_LOCK:
-            return bool(token) and token in _UNLOCK_TOKENS
+        if project_id is not None and not allows_project(row, project_id):
+            self._forbid("not on this CEO")
+            return True
+        if permission and not member_can(row, permission):
+            self._forbid("not allowed on this share")
+            return True
+        return False
+
+    def _share_cookie(self, token: str) -> str:
+        return f"openbot_share={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000"
+
+    def _clear_share_cookie(self) -> str:
+        return "openbot_share=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"
+
+    def _chat_guard(self, pid: str | None, requested: str | None):
+        member = self._actor_row()
+        if member:
+            if str(member.get("seats_mode") or "") == "chat_only":
+                requested = None
+            err = check_job_run(member, pid, requested)
+            if err:
+                self._forbid(err)
+                return None, None
+        return requested, actor_stamp(member)
 
     def _json(self, code: int, payload: dict, set_cookie: str | None = None):
         raw = json.dumps(payload).encode("utf-8")
@@ -711,22 +884,42 @@ class Handler(SimpleHTTPRequestHandler):
         
         if path == "/api/health":
             return self._json(200, {"ok": True, "credit": CREDIT, "engines": detect()})
-        if path == "/api/index":
+        invite_peek = SHARE_INVITE_TOKEN.match(path)
+        if invite_peek:
+            try:
+                return self._json(200, peek_invite(invite_peek.group(1)))
+            except ValueError as err:
+                return self._json(404, {"error": str(err), "ok": False})
+        if path in {"/api/index", "/api/config"}:
             if not self._unlocked():
                 return self._json(200, _locked_payload())
-            payload = {"index": read_index(), "engines": detect(), "credit": CREDIT}
-            payload.update(_public_config())
-            return self._json(200, payload)
+            return self._json(200, self._config_payload())
+        if self._lock_api(path, "GET"):
+            return self._json(403, _locked_payload())
+        if path == "/api/share":
+            if self._require_owner():
+                return None
+            qs = parse_qs(urlparse(self.path).query)
+            pid = (qs.get("project_id") or [""])[0].strip()
+            if not pid:
+                return self._json(400, {"error": "CEO required"})
+            return self._json(200, project_share(pid))
+        if path == "/api/share/me":
+            member = self._member()
+            if member is None:
+                return self._forbid("not a collaborator")
+            return self._json(200, {"member": public_member(member), "ok": True})
         if path == "/api/engines":
             return self._json(200, detect())
-        if path == "/api/config":
-            if not self._unlocked():
-                return self._json(200, _locked_payload())
-            return self._json(200, _public_config())
         if path == "/api/spend":
             cfg = load_config()
             qs = parse_qs(urlparse(self.path).query)
             pid = (qs.get("project_id") or [""])[0].strip() or None
+            member = self._actor_row()
+            if member:
+                pid = member_project_id(member)
+            if member and pid and not allows_project(member, pid):
+                return self._forbid("not on this CEO")
             cap = cfg["spend_cap_usd"]
             if pid:
                 project_cap = project_tools(pid).get("spend_cap_usd")
@@ -737,24 +930,49 @@ class Handler(SimpleHTTPRequestHandler):
                 spend_summary(float(cap), cfg["spend_cap_period"], project_id=pid),
             )
         if path == "/api/brains":
+            if self._require_owner():
+                return None
             return self._json(200, {"brains": list_brains()})
         brain = BRAIN_PATH.match(path)
         if brain:
+            if self._require_owner():
+                return None
             name = brain.group(1)
             return self._json(200, {"name": name, "text": read_brain(name), "engine": PRESET_ENGINE[name]})
         if path == "/api/jobs":
             jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
+            member = self._actor_row()
+            if member:
+                jobs = filter_jobs(jobs, member_project_id(member))
+                if not member_can(member, "jobs_view"):
+                    jobs = []
             return self._json(200, {"jobs": [public_job(job) for job in jobs[:30]]})
         if path == "/api/activity":
-            return self._json(200, _activity(ingest_cron=True))
+            member = self._actor_row()
+            pid = member_project_id(member) if member else None
+            activity = _activity(ingest_cron=True, project_id=pid)
+            if member and not member_can(member, "jobs_view"):
+                activity["jobs"] = []
+                activity["cron_jobs"] = []
+            if member and not member_can(member, "approve_needs_you"):
+                activity["needs_you"] = []
+            return self._json(200, activity)
         if path.startswith("/api/jobs/") and path.endswith("/log"):
+            if self._require_perm("jobs_view"):
+                return None
             job_id = path.split("/")[3]
+            job_row = read_job(job_id) or {}
+            member = self._actor_row()
+            if member and not allows_project(member, str(job_row.get("project_id") or "")):
+                return self._forbid("not on this CEO")
             from .store import read_session_log
             log = read_session_log(job_id)
             if log is None:
                 return self._json(404, {"error": "Log not found"})
             return self._json(200, {"job_id": job_id, "log": log})
         if path == "/api/onboarding/status":
+            if self._require_owner():
+                return None
             if not self._unlocked():
                 return self._json(200, _locked_payload())
             status = onboarding_status()
@@ -763,13 +981,24 @@ class Handler(SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             worker_id = (qs.get("worker_id") or [""])[0].strip() or None
+            member = self._actor_row()
+            if member and not project_id:
+                project_id = member_project_id(member)
+            if self._require_perm("chat_read", project_id):
+                return None
             key = thread_key(project_id, worker_id)
             return self._json(200, {"preset": key, "turns": read_thread(key)})
         if path == "/api/skills":
+            if self._require_perm("engines_view"):
+                return None
             return self._json(200, skills_list())
         if path == "/api/mcp/catalog":
+            if self._require_perm("engines_view"):
+                return None
             return self._json(200, mcp_catalog())
         if path == "/api/connectors/catalog":
+            if self._require_owner():
+                return None
             skills = skills_list()
             mcp = mcp_catalog()
             return self._json(200, {
@@ -780,17 +1009,31 @@ class Handler(SimpleHTTPRequestHandler):
                 "mcp_ok": mcp.get("ok", False)
             })
         if path == "/api/engines/opencode/web":
+            if self._require_perm("engines_view"):
+                return None
             return self._json(200, opencode_web_status())
         if path == "/api/engines/hermes/dashboard":
+            if self._require_perm("engines_view"):
+                return None
             return self._json(200, hermes_dash_status())
         if path == "/api/providers":
+            if self._require_owner():
+                return None
             return self._json(200, provider_status())
         if path == "/api/catalog":
+            if self._require_owner():
+                return None
             ensure_chat_model()
             return self._json(200, public_catalog())
         if path == "/api/org":
-            return self._json(200, ensure_org())
+            org = ensure_org()
+            member = self._actor_row()
+            if member:
+                org = filter_org(org, member_project_id(member))
+            return self._json(200, org)
         if path == "/api/spend/dashboard":
+            if self._require_owner():
+                return None
             from .spend import check_cap_alerts, per_ceo_breakdown, weekly_trend
             
             cfg = load_config()
@@ -818,10 +1061,20 @@ class Handler(SimpleHTTPRequestHandler):
             qs = parse_qs(urlparse(self.path).query)
             query = (qs.get("q") or [""])[0].strip()
             project_id = (qs.get("project_id") or [""])[0].strip() or None
+            member = self._actor_row()
+            if member:
+                project_id = member_project_id(member)
+            if self._require_perm("chat_read", project_id):
+                return None
             return self._json(200, _search_memory(query, project_id))
         if path == "/api/memory/fields":
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
+            member = self._actor_row()
+            if member:
+                project_id = member_project_id(member)
+            if self._require_perm("chat_read", project_id):
+                return None
             if project_id:
                 from .org import read_project_index
                 index_text = read_project_index(project_id)
@@ -832,25 +1085,30 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/queue/status":
             from .bus import load_open_handoffs
             org_data = ensure_org()
+            member = self._actor_row()
+            allowed = member_project_id(member) if member else None
             
             # Build queue status per CEO
             queue_status = []
             
             # Staff queue
-            staff_handoffs = load_open_handoffs(None, limit=100)
-            staff_open = [h for h in staff_handoffs if h["status"] == "open"]
-            if staff_open:
-                queue_status.append({
-                    "project_id": None,
-                    "name": "Chief of Staff",
-                    "queued_count": len(staff_open),
-                    "handoffs": staff_open[:5],
-                })
+            if allowed is None:
+                staff_handoffs = load_open_handoffs(None, limit=100)
+                staff_open = [h for h in staff_handoffs if h["status"] == "open"]
+                if staff_open:
+                    queue_status.append({
+                        "project_id": None,
+                        "name": "Chief of Staff",
+                        "queued_count": len(staff_open),
+                        "handoffs": staff_open[:5],
+                    })
             
             # Per-CEO queues
             for project in org_data.get("projects") or []:
                 pid = project.get("id")
                 if not pid:
+                    continue
+                if allowed is not None and pid != allowed:
                     continue
                 handoffs = load_open_handoffs(pid, limit=100)
                 open_handoffs = [h for h in handoffs if h["status"] == "open"]
@@ -873,6 +1131,8 @@ class Handler(SimpleHTTPRequestHandler):
         
         channel = PROJECT_CHANNEL.match(path)
         if channel:
+            if self._require_owner():
+                return None
             pid = channel.group(1)
             org = ensure_org()
             row = next((item for item in org.get("projects") or [] if item.get("id") == pid), None)
@@ -884,6 +1144,8 @@ class Handler(SimpleHTTPRequestHandler):
                 public_channel(tools.get("hermes_home"), tools.get("hermes_session_id")),
             )
         if path == "/api/git":
+            if self._require_owner():
+                return None
             qs = parse_qs(urlparse(self.path).query)
             folder = (qs.get("folder") or [""])[0].strip()
             pid = (qs.get("project_id") or [""])[0].strip()
@@ -895,11 +1157,17 @@ class Handler(SimpleHTTPRequestHandler):
                 folder = str(ensure_org().get("folder") or load_config().get("work_dir") or "")
             return self._json(200, git_status(folder))
         if path == "/api/keys":
+            if self._require_owner():
+                return None
             return self._json(200, public_keyring())
         if path == "/api/hermes/instances":
+            if self._require_owner():
+                return None
             return self._json(200, {"instances": public_instances()})
         instance_sessions = INSTANCE_SESSIONS.match(path)
         if instance_sessions:
+            if self._require_owner():
+                return None
             try:
                 return self._json(200, {"sessions": list_sessions(instance_sessions.group(1))})
             except ValueError as err:
@@ -907,17 +1175,23 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/api/attachments/"):
             return self._serve_attachment(path)
         if path == "/api/routines":
+            if self._require_owner():
+                return None
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             from .routines import list_routines
             result = list_routines(project_id, include_hermes=True)
             return self._json(200, result)
         if path == "/api/routines/templates":
+            if self._require_owner():
+                return None
             from .routine_templates import get_routine_templates
             return self._json(200, {"templates": get_routine_templates()})
         if path == "/api/hermes/gateway/status":
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
+            if self._require_perm("engines_view", project_id):
+                return None
             from .org import project_tools
             
             tools = project_tools(project_id) if project_id else {}
@@ -927,12 +1201,16 @@ class Handler(SimpleHTTPRequestHandler):
             status["project_id"] = project_id
             return self._json(200, status)
         if path == "/api/selfbuild/status":
+            if self._require_owner():
+                return None
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             from .selfbuild import self_build_status
             return self._json(200, self_build_status(project_id))
         routine = ROUTINE_ID.match(path)
         if routine:
+            if self._require_owner():
+                return None
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             from .routines import read_routine
@@ -954,6 +1232,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if path == "/api/onboarding/test-job":
+            if self._require_owner():
+                return None
             if not self._unlocked():
                 return self._json(403, {"error": "unlock required"})
             try:
@@ -1017,11 +1297,98 @@ class Handler(SimpleHTTPRequestHandler):
         except (json.JSONDecodeError, ValueError):
             return self._json(400, {"error": "invalid request"})
 
+        if path == "/api/share/redeem":
+            try:
+                joined = redeem_invite(
+                    str(data.get("token") or ""),
+                    str(data.get("display_name") or ""),
+                    str(data.get("secret") or ""),
+                )
+            except ValueError as err:
+                return self._json(400, {"error": str(err), "ok": False})
+            member = member_from_session(joined["token"])
+            payload = _member_config(member) if member else {}
+            payload.update(joined)
+            payload["ok"] = True
+            return self._json(200, payload, set_cookie=self._share_cookie(joined["token"]))
+        if path == "/api/share/unlock":
+            try:
+                joined = unlock_member(str(data.get("member_id") or ""), str(data.get("secret") or ""))
+            except ValueError as err:
+                return self._json(403, {"error": str(err), "needs_unlock": True})
+            member = member_from_session(joined["token"])
+            payload = _member_config(member) if member else {}
+            payload.update(joined)
+            payload["ok"] = True
+            return self._json(200, payload, set_cookie=self._share_cookie(joined["token"]))
+
+        if self._lock_api(path, "POST"):
+            return self._json(403, _locked_payload())
+
+        if path == "/api/share/invites":
+            if self._require_owner():
+                return None
+            try:
+                invite = create_invite(
+                    str(data.get("project_id") or ""),
+                    permissions=data.get("permissions"),
+                    expires_days=data.get("expires_days"),
+                    max_uses=int(data.get("max_uses") or 1),
+                    spend_ceiling_usd_day=data.get("spend_ceiling_usd_day"),
+                    require_approval_over_usd=data.get("require_approval_over_usd"),
+                    seats_mode=str(data.get("seats_mode") or "inherit"),
+                )
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+            origin = str(data.get("origin") or "").strip().rstrip("/")
+            token = invite.get("token") or ""
+            invite["url"] = f"{origin}/?invite={token}" if origin else f"/?invite={token}"
+            return self._json(200, invite)
+        if path == "/api/share/me":
+            member = self._member()
+            if member is None:
+                return self._forbid("not a collaborator")
+            mid = str(member.get("id") or "")
+            if data.get("leave"):
+                try:
+                    remove_member(mid)
+                except ValueError as err:
+                    return self._json(400, {"error": str(err)})
+                return self._json(200, {"ok": True, "left": True}, set_cookie=self._clear_share_cookie())
+            try:
+                patch = {}
+                if "display_name" in data:
+                    patch["display_name"] = data.get("display_name")
+                if patch:
+                    patch_member(mid, patch)
+                secret = str(data.get("secret") or "")
+                if secret:
+                    set_member_secret(mid, secret)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+            row = get_member(mid) or member
+            return self._json(200, {"ok": True, "member": public_member(row)})
+        member_post = SHARE_MEMBER_ID.match(path)
+        if member_post:
+            if self._require_owner():
+                return None
+            try:
+                if "pause" in data:
+                    row = pause_member(member_post.group(1), bool(data.get("pause")))
+                else:
+                    row = patch_member(member_post.group(1), data)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+            return self._json(200, {"ok": True, "member": row})
+
         if path == "/api/chat":
             try:
                 message, folder, requested, pid, worker_id, attachments = _chat_context(data, files)
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+            requested, actor = self._chat_guard(pid, requested)
+            if actor is None and self._actor_row() is not None:
+                return None
             chain_ctx = data.get("chain_context") if isinstance(data.get("chain_context"), dict) else None
             
             # Check for multi-spawn
@@ -1035,18 +1402,23 @@ class Handler(SimpleHTTPRequestHandler):
             if multi_result:
                 # Multi-spawn executed
                 job = multi_result
+                if actor:
+                    job["actor"] = actor
             else:
                 # Normal single-seat routing
-                job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx, attachments=attachments)
+                job = handle(message, folder, requested, pid, worker_id, quote=str(data.get("quote") or ""), chain_context=chain_ctx, attachments=attachments, actor=actor)
             
-            _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
-            job["activity"] = _activity()
+            _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments, actor=actor)
+            job["activity"] = _activity(project_id=pid if self._actor_row() else None)
             return self._json(200, job)
         if path == "/api/chat/stream":
             try:
                 message, folder, requested, pid, worker_id, attachments = _chat_context(data, files)
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+            requested, actor = self._chat_guard(pid, requested)
+            if actor is None and self._actor_row() is not None:
+                return None
             run_id = uuid.uuid4().hex[:12]
             live_start(run_id)
             self.send_response(200)
@@ -1097,6 +1469,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if multi_result:
                     # Multi-spawn executed
                     job = multi_result
+                    if actor:
+                        job["actor"] = actor
                 else:
                     # Normal single-seat routing
                     job = handle(
@@ -1111,10 +1485,11 @@ class Handler(SimpleHTTPRequestHandler):
                         quote=str(data.get("quote") or ""),
                         chain_context=chain_ctx,
                         attachments=attachments,
+                        actor=actor,
                     )
                 
-                _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments)
-                job["activity"] = _activity()
+                _record_job(job, message, pid, worker_id, quote=str(data.get("quote") or ""), attachments=attachments, actor=actor)
+                job["activity"] = _activity(project_id=pid if self._actor_row() else None)
                 emit("done", job)
             except Exception as err:
                 try:
@@ -1143,13 +1518,17 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/unlock":
             pin = str(data.get("pin") or "")
             if not load_settings().get("pin_hash"):
-                return self._json(200, _public_config())
+                return self._json(200, self._config_payload())
             if not verify_pin(pin):
                 return self._json(403, {"error": "wrong PIN", "needs_unlock": True})
             token = _mint_unlock()
-            return self._json(200, _public_config(), set_cookie=self._unlock_cookie(token))
+            payload = _public_config()
+            payload["token"] = token
+            return self._json(200, payload, set_cookie=self._unlock_cookie(token))
 
         if path == "/api/config":
+            if self._require_owner():
+                return None
             try:
                 if "work_dir" in data and data["work_dir"] is not None:
                     save_work_dir(str(data["work_dir"]).strip())
@@ -1195,16 +1574,24 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, _public_config(), set_cookie=cookie)
 
         if path == "/api/engines/opencode/web":
+            if self._require_perm("engines_view"):
+                return None
             folder = str(data.get("folder") or "").strip() or None
             return self._json(200, start_opencode_web(folder))
         if path == "/api/engines/hermes/dashboard":
+            if self._require_perm("engines_view"):
+                return None
             home = str(data.get("hermes_home") or "").strip() or None
             result = start_hermes_dashboard(home)
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/engines/hermes/open":
+            if self._require_owner():
+                return None
             result = open_hermes()
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/org/projects":
+            if self._require_owner():
+                return None
             try:
                 folder = str(data.get("folder") or "").strip() or None
                 name = str(data.get("name") or "").strip() or None
@@ -1213,12 +1600,16 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(400, {"error": str(err)})
         worker_add = WORKER_ADD.match(path)
         if worker_add:
+            if self._require_perm("workers_manage", worker_add.group(1)):
+                return None
             try:
                 return self._json(200, add_worker(worker_add.group(1), str(data.get("name") or "")))
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
         worker_patch = WORKER_DEL.match(path)
         if worker_patch:
+            if self._require_perm("workers_manage", worker_patch.group(1)):
+                return None
             try:
                 return self._json(
                     200,
@@ -1229,6 +1620,11 @@ class Handler(SimpleHTTPRequestHandler):
         
         if path == "/api/memory/fields":
             project_id = str(data.get("project_id") or "").strip() or None
+            if project_id:
+                if self._require_perm("index_edit", project_id):
+                    return None
+            elif self._require_owner():
+                return None
             label = str(data.get("label") or "").strip()
             value = str(data.get("value") or "").strip()
             if label not in ("Now", "Last", "Next", "Blocker"):
@@ -1246,6 +1642,11 @@ class Handler(SimpleHTTPRequestHandler):
         
         if path == "/api/handoffs":
             project_id = str(data.get("project_id") or "").strip() or None
+            member = self._actor_row()
+            if member:
+                project_id = member_project_id(member)
+            if self._require_perm("jobs_view", project_id):
+                return None
             from .bus import load_open_handoffs
             handoffs = load_open_handoffs(project_id, limit=50)
             return self._json(200, {"handoffs": handoffs})
@@ -1253,6 +1654,8 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/handoff/create":
             task = str(data.get("task") or "").strip()
             project_id = str(data.get("project_id") or "").strip() or None
+            if self._require_perm("jobs_run", project_id):
+                return None
             from_seat = str(data.get("from_seat") or "").strip() or "cos"
             to_seat = str(data.get("to_seat") or "").strip()
             next_owner = str(data.get("next_owner") or "").strip()
@@ -1266,6 +1669,8 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/handoff/claim":
             handoff_id = str(data.get("handoff_id") or "").strip()
             project_id = str(data.get("project_id") or "").strip() or None
+            if self._require_perm("jobs_run", project_id):
+                return None
             claimant = str(data.get("claimant") or "").strip()
             if not handoff_id or not claimant:
                 return self._json(400, {"error": "handoff_id and claimant required"})
@@ -1275,6 +1680,8 @@ class Handler(SimpleHTTPRequestHandler):
         
         if path == "/api/hermes/gateway/start":
             project_id = str(data.get("project_id") or "").strip() or None
+            if self._require_owner():
+                return None
             wait = bool(data.get("wait", False))
             timeout = int(data.get("timeout", 30))
             
@@ -1290,6 +1697,8 @@ class Handler(SimpleHTTPRequestHandler):
         
         if path == "/api/hermes/gateway/stop":
             project_id = str(data.get("project_id") or "").strip() or None
+            if self._require_owner():
+                return None
             
             from .hermes import gateway_stop
             from .org import project_tools
@@ -1303,6 +1712,8 @@ class Handler(SimpleHTTPRequestHandler):
         
         if path == "/api/hermes/crons/migrate-delivery":
             project_id = str(data.get("project_id") or "").strip() or None
+            if self._require_owner():
+                return None
             dry_run = bool(data.get("dry_run", False))
             
             from .hermes import migrate_cron_delivery
@@ -1316,6 +1727,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200 if result.get("ok") else 400, result)
         
         if path == "/api/routines":
+            if self._require_owner():
+                return None
             name = str(data.get("name") or "").strip()
             schedule = str(data.get("schedule") or "").strip()
             steps = data.get("steps") or []
@@ -1332,6 +1745,8 @@ class Handler(SimpleHTTPRequestHandler):
         
         routine_execute = ROUTINE_EXECUTE.match(path)
         if routine_execute:
+            if self._require_owner():
+                return None
             routine_id = routine_execute.group(1)
             project_id = str(data.get("project_id") or "").strip() or None
             from .routines import execute_routine
@@ -1340,6 +1755,8 @@ class Handler(SimpleHTTPRequestHandler):
         
         routine_resume = ROUTINE_RESUME.match(path)
         if routine_resume:
+            if self._require_owner():
+                return None
             routine_id = routine_resume.group(1)
             project_id = str(data.get("project_id") or "").strip() or None
             resume_step = int(data.get("resume_step", 0))
@@ -1351,6 +1768,8 @@ class Handler(SimpleHTTPRequestHandler):
         project_patch = PROJECT_ID.match(path)
         if project_patch:
             pid = project_patch.group(1)
+            if self._require_perm("wiring_edit", pid):
+                return None
             folder = str(data.get("folder") or "").strip()
             name = str(data.get("name") or "").strip()
             try:
@@ -1380,6 +1799,8 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
         if path == "/api/keys":
+            if self._require_owner():
+                return None
             try:
                 return self._json(
                     200,
@@ -1392,6 +1813,8 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
         if path == "/api/logins":
+            if self._require_owner():
+                return None
             try:
                 return self._json(
                     200,
@@ -1407,6 +1830,8 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
         if path == "/api/logins/use":
+            if self._require_owner():
+                return None
             try:
                 return self._json(
                     200,
@@ -1423,6 +1848,9 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+        if owner_only_path(path):
+            if self._require_owner():
+                return None
         key_row = KEY_ID.match(path)
         if key_row:
             try:
@@ -1520,6 +1948,12 @@ class Handler(SimpleHTTPRequestHandler):
         match = JOB_ACTION.match(path)
         if match:
             job_id, action = match.group(1), match.group(2)
+            job_row = read_job(job_id) or {}
+            job_pid = str(job_row.get("project_id") or "").strip() or None
+            if self._actor_row() and not job_pid:
+                return self._forbid("not on this CEO")
+            if self._require_perm("approve_needs_you", job_pid):
+                return None
             force = bool(data.get("force")) if isinstance(data, dict) else False
             push_branch = bool(data.get("push_branch")) if isinstance(data, dict) else False
             branch_name = str(data.get("branch_name") or "") if isinstance(data, dict) else None
@@ -1535,6 +1969,9 @@ class Handler(SimpleHTTPRequestHandler):
         match = JOB_REVERT.match(path)
         if match:
             job_id = match.group(1)
+            job_row = read_job(job_id) or {}
+            if self._require_perm("approve_needs_you", str(job_row.get("project_id") or "") or None):
+                return None
             result = revert_accept(job_id)
             code = 200 if result.get("ok") else 400
             if "index" not in result:
@@ -1558,6 +1995,8 @@ class Handler(SimpleHTTPRequestHandler):
         
         if not self._unlocked():
             return self._json(401, {"error": "locked"})
+        if self._require_owner():
+            return None
         length = int(self.headers.get("Content-Length", 0))
         if length <= 0 or length > 64 * 1024:
             return self._json(400, {"error": "body too large or empty"})
@@ -1598,6 +2037,8 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/hermes/"):
             return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
+        if self._lock_api(path, "PUT"):
+            return self._json(403, _locked_payload())
         try:
             data = self._read_json()
         except json.JSONDecodeError:
@@ -1605,12 +2046,18 @@ class Handler(SimpleHTTPRequestHandler):
         text = str(data.get("text") or "")
         try:
             if path == "/api/index":
+                if self._require_owner():
+                    return None
                 return self._json(200, {"index": write_index(text), "brains": list_brains()})
             org_index = PROJECT_INDEX.match(path)
             if org_index:
+                if self._require_perm("index_edit", org_index.group(1)):
+                    return None
                 return self._json(200, {"index": write_project_index(org_index.group(1), text)})
             worker_brain = WORKER_BRAIN.match(path)
             if worker_brain:
+                if self._require_perm("workers_manage", worker_brain.group(1)):
+                    return None
                 return self._json(
                     200,
                     {
@@ -1619,6 +2066,8 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             brain = BRAIN_PATH.match(path)
             if brain:
+                if self._require_owner():
+                    return None
                 name = brain.group(1)
                 return self._json(200, {"name": name, "text": write_brain(name, text)})
         except ValueError as err:
@@ -1637,26 +2086,55 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/hermes/"):
             return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
+        if self._lock_api(path, "DELETE"):
+            return self._json(403, _locked_payload())
+        invite_del = SHARE_INVITE_ID.match(path)
+        if invite_del:
+            if self._require_owner():
+                return None
+            try:
+                return self._json(200, revoke_invite(invite_del.group(1)))
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+        member_del = SHARE_MEMBER_ID.match(path)
+        if member_del:
+            if self._require_owner():
+                return None
+            try:
+                return self._json(200, remove_member(member_del.group(1)))
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+        
         match = KEY_ID.match(path)
         if match:
+            if self._require_owner():
+                return None
             try:
                 return self._json(200, delete_account(match.group(1)))
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
         login = LOGIN_ID.match(path)
         if login:
+            if self._require_owner():
+                return None
             try:
                 return self._json(200, delete_login(login.group(1)))
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
         instance = INSTANCE_ID.match(path)
         if instance:
+            if self._require_owner():
+                return None
             return self._json(200, {"instances": delete_instance(instance.group(1))})
         worker = WORKER_DEL.match(path)
         if worker:
+            if self._require_perm("workers_manage", worker.group(1)):
+                return None
             return self._json(200, remove_worker(worker.group(1), worker.group(2)))
         project = PROJECT_ID.match(path)
         if project:
+            if self._require_owner():
+                return None
             qs = parse_qs(urlparse(self.path).query)
             confirm = (qs.get("confirm") or [""])[0]
             try:
@@ -1665,6 +2143,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(400, {"error": str(err)})
         routine = ROUTINE_ID.match(path)
         if routine:
+            if self._require_owner():
+                return None
             qs = parse_qs(urlparse(self.path).query)
             project_id = (qs.get("project_id") or [""])[0].strip() or None
             from .routines import delete_routine
