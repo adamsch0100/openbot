@@ -3545,6 +3545,8 @@ function isNoiseText(text) {
   if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
   if (/You are the SAA Homes CEO/i.test(raw)) return true;
   if (/You report to Chief of Staff, who runs the org/i.test(raw)) return true;
+  if (/You are the (think|ops|research|code) engine on this CEO/i.test(raw)) return true;
+  if (/The operator is in OpenBot Chat/i.test(raw)) return true;
   const cleaned = cleanBotText(raw);
   if (!cleaned && /CONTRIBUTOR|contributor tier/i.test(raw)) return true;
   return false;
