@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Support is a CEO again — request / what’s-wrong form stays in Help, not the rail
-Last: Put tickets under You → Help; forms were wrongly sitting in the bot list
-Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=74 after deploy, then open SAA Homes
+Now: Live org is Cos, OpenBot, SAA Homes, Support — drop app / Nadia Marketing / INDEX
+Last: Railway /app was being treated as a CEO; openbot was misnamed INDEX
+Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=74 then confirm four names only
 Blocker: —
 
 ## Vault

@@ -20,8 +20,18 @@ SITE_BY_ID = {
     "saa-homes": "https://saahomes.com",
 }
 
-RETIRED_CEO_IDS = frozenset({"nadia", "listlogic"})
+RETIRED_CEO_IDS = frozenset({
+    "nadia",
+    "listlogic",
+    "nadia-marketing",
+    "app",
+    "index",
+})
+HOSTED_FOLDER_SLUGS = frozenset({"app", "data", "workspace"})
 SUPPORT_CEO_ID = "support"
+SUPPORT_WORKER_ID = SUPPORT_CEO_ID
+HOST_CEO_ID = "openbot"
+HOST_CEO_NAME = "OpenBot"
 
 ORG = ROOT / "org"
 PROFILE_PATH = ORG / "profile.json"
@@ -174,8 +184,7 @@ def _archive_retired_index(project_id: str, title: str) -> None:
         "Last: Removed from routing.\n"
         "Next: Re-add as a CEO only if the operator brings this product back.\n"
         "Blocker: —\n\n"
-        "This CEO is not in the live org. Nadia ISA is a separate SaaS product. "
-        "ListLogic may return later.\n\n"
+        "This CEO is not in the live org. Keep Cos, OpenBot, SAA Homes, and Support.\n\n"
     )
     if path.is_file():
         body = path.read_text(encoding="utf-8")
@@ -201,6 +210,7 @@ def reattach_imported_ceos(saved: dict) -> dict:
             not home.is_dir()
             or pid in have
             or pid in RETIRED_CEO_IDS
+            or pid == SUPPORT_CEO_ID
             or pid in {"opencode-test", "staff"}
             or pid.startswith("test")
         ):
@@ -260,89 +270,108 @@ def retire_archived_ceos(saved: dict) -> dict:
 def support_charter(folder: str) -> str:
     return (
         "# Support\n\n"
-        "CEO for help tickets, suggestions, and the status story. Chat is not memory.\n\n"
+        "Helper on openbot. Owns help tickets and suggestions. Reports to the openbot CEO, Cos, and the operator.\n\n"
         "Now: Ready for suggestions and help tickets.\n"
         "Last: —\n"
         "Next: Triage inbox tickets. Escalate bugs/features to Chief of Staff → openbot Builder.\n"
         "Blocker: —\n"
-        "Goals: Transparent Working-on board. Owner only at Accept / send / announce gates.\n\n"
+        "Goals: File every request. Auto-handoff code work. Owner only at Accept / send / announce.\n\n"
         f"Folder: {folder}\n"
-        "Git: openbot Builder owns code diffs. Support does not Accept its own work.\n"
-        "Hermes: this CEO's home for Think / Research / Ops.\n\n"
+        "Git: openbot Builder owns code diffs. Support does not Accept its own work.\n\n"
         "## Owns\n\n"
-        "- Ingest suggestions (in-app Suggest, later X mentions).\n"
+        "- Ingest suggestions (Help form, chat to this helper, later X mentions).\n"
         "- Triage: FAQ / bug / feature / spam / needs-owner.\n"
-        "- Status narrative: received → triage → building → in review → shipped / won't fix.\n"
+        "- Status: received → triage → building → in review → shipped / won't fix.\n"
         "- Draft replies and changelog / X announces into bus/drafts.\n"
         "- Open handoffs to Cos so openbot Builder can code the fix.\n\n"
         "## Stopline\n\n"
         "- Never Accept/Reject a diff. Never git push or merge to main.\n"
         "- Never post to X, send email, or publish without a Needs-you card.\n"
         "- Never touch Follow Up Boss, Flask ISA, Nadia SaaS, or CRM keys.\n"
-        "- Never claim to be the Nadia product. Nadia is a separate SaaS.\n"
         "- Never silently fix production. Code waits on the operator gate.\n\n"
         "## Contract\n\n"
         "JOB: Own tickets and suggestions. Triage, schedule, tell the status story, draft replies.\n"
-        "SOURCES: This INDEX, org/projects/support/tickets, OpenBot docs, bus/handoffs.\n"
+        "SOURCES: This BRAIN, org/projects/support/tickets, openbot INDEX, bus/handoffs.\n"
         "JUDGMENT: FAQ drafts stay in bus/drafts. Bugs/features become a handoff to Cos → openbot Builder.\n"
         "OUTPUT: Ticket phase updates, HANDOFF files, draft replies. Diffs wait for Accept/Reject.\n"
         "FORBIDDEN: No Accept, no push, no live X post, no CRM/FUB, no unsupervised send.\n"
     )
 
 
+def _write_support_brain(project_id: str, project_name: str) -> None:
+    worker = {"id": SUPPORT_WORKER_ID, "name": "Support"}
+    path = _ensure_worker_brain(project_id, worker, project_name)
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if "Stopline" not in text or "CEO for help tickets" in text:
+        path.write_text(support_charter(str(_project_dir(project_id) / "work")), encoding="utf-8")
+
+
+def attach_support_worker(row: dict) -> dict:
+    """Keep ticket files. Support itself is a CEO, not a helper chip."""
+    tickets = ORG / "projects" / SUPPORT_CEO_ID / "tickets"
+    tickets.mkdir(parents=True, exist_ok=True)
+    return row
+
+
+def ensure_support_worker(saved: dict) -> dict:
+    """Back-compat alias — Support stays a CEO."""
+    return ensure_support_project(saved, str(ROOT))
+
+
 def ensure_support_project(saved: dict, work: str) -> dict:
+    """Keep Support as its own CEO. Tickets stay under org/projects/support."""
     rows = [row for row in (saved.get("projects") or []) if isinstance(row, dict)]
-    existing = {str(row.get("id") or "") for row in rows}
-    if SUPPORT_CEO_ID in existing:
-        folder = next(
-            (str(row.get("folder") or "") for row in rows if str(row.get("id") or "") == SUPPORT_CEO_ID),
-            "",
-        )
-        dest = _project_dir(SUPPORT_CEO_ID)
-        dest.mkdir(parents=True, exist_ok=True)
-        index = dest / "INDEX.md"
-        if not index.is_file() or "Stopline" not in index.read_text(encoding="utf-8"):
-            index.write_text(support_charter(folder or str(dest / "work")), encoding="utf-8")
-        return saved
-    dest = ORG / "projects" / SUPPORT_CEO_ID / "work"
+    dest = _project_dir(SUPPORT_CEO_ID) / "work"
     dest.mkdir(parents=True, exist_ok=True)
-    resolved = str(dest.resolve())
-    _project_dir(SUPPORT_CEO_ID).mkdir(parents=True, exist_ok=True)
+    if not any(str(row.get("id") or "") == SUPPORT_CEO_ID for row in rows):
+        rows.append(
+            {
+                "id": SUPPORT_CEO_ID,
+                "name": "Support",
+                "role": "ceo",
+                "folder": str(dest),
+                "primary": False,
+                "workers": [],
+            }
+        )
+        saved["projects"] = rows
     index = _project_dir(SUPPORT_CEO_ID) / "INDEX.md"
-    index.write_text(support_charter(resolved), encoding="utf-8")
-    rows.append(
-        {
-            "id": SUPPORT_CEO_ID,
-            "name": "Support",
-            "role": "ceo",
-            "folder": resolved,
-            "primary": False,
-            "workers": [],
-            "connectors": {
-                "skills": {},
-                "mcp": {
-                    "fub": {"code": False, "think": False, "research": False, "ops": False, "mode": "deny"},
-                    "followupboss": {"code": False, "think": False, "research": False, "ops": False, "mode": "deny"},
-                },
-            },
-        }
-    )
-    saved["projects"] = rows
+    text = index.read_text(encoding="utf-8") if index.is_file() else ""
+    if "Stopline" not in text:
+        index.parent.mkdir(parents=True, exist_ok=True)
+        index.write_text(support_charter(str(dest)), encoding="utf-8")
+    tickets = _project_dir(SUPPORT_CEO_ID) / "tickets"
+    tickets.mkdir(parents=True, exist_ok=True)
     return saved
+
+
+def _host_identity(work: str, saved: dict) -> tuple[str, str]:
+    """Railway work_dir is /app. That folder is not a CEO."""
+    folder_slug = _slug(Path(work).name or HOST_CEO_ID)
+    if folder_slug in HOSTED_FOLDER_SLUGS or folder_slug in RETIRED_CEO_IDS:
+        return HOST_CEO_ID, HOST_CEO_NAME
+    for row in saved.get("projects") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("id") or "") == HOST_CEO_ID:
+            raw = str(row.get("name") or HOST_CEO_NAME).strip()
+            if raw.upper() in {"INDEX", "APP", "OPENBOT", HOST_CEO_ID.upper()}:
+                return HOST_CEO_ID, HOST_CEO_NAME
+            return HOST_CEO_ID, raw
+    if folder_slug == HOST_CEO_ID:
+        return HOST_CEO_ID, HOST_CEO_NAME
+    return HOST_CEO_ID, HOST_CEO_NAME
 
 
 def ensure_org() -> dict:
     cfg = load_config()
     work = cfg.get("work_dir") or str(ROOT)
-    name = Path(work).name or "OPENBOT"
-    slug = _slug(name)
     saved = retire_archived_ceos(_load_saved())
     saved = reattach_imported_ceos(saved)
     saved = ensure_support_project(saved, work)
     extras = []
     primary_workers: list[dict] = []
-    primary_id = slug
-    primary_name = name
+    primary_id, primary_name = _host_identity(work, saved)
     primary_tools: dict = {}
     for row in saved.get("projects") or []:
         if not isinstance(row, dict):
@@ -352,18 +381,21 @@ def ensure_org() -> dict:
         if not pid or pid in RETIRED_CEO_IDS:
             continue
         cleaned = _clean_workers(row.get("workers"))
-        if row.get("primary") or pid == slug:
-            primary_workers = cleaned
-            primary_tools = _carry_tools(row)
-            if row.get("name"):
-                primary_name = str(row.get("name"))
-            if row.get("primary") and pid:
-                primary_id = pid
+        if pid == HOST_CEO_ID or (row.get("primary") and pid not in {SUPPORT_CEO_ID, "saa-homes"}):
+            if pid == HOST_CEO_ID:
+                primary_id = HOST_CEO_ID
+                raw = str(row.get("name") or primary_name).strip()
+                if raw.upper() not in {"INDEX", "APP", "OPENBOT"}:
+                    primary_name = raw
+                else:
+                    primary_name = HOST_CEO_NAME
+            primary_workers = cleaned or primary_workers
+            primary_tools = {**primary_tools, **_carry_tools(row)}
             continue
         extras.append(
             {
                 "id": pid,
-                "name": row.get("name") or pid,
+                "name": "Support" if pid == SUPPORT_CEO_ID else (row.get("name") or pid),
                 "role": "ceo",
                 "folder": folder,
                 "primary": False,
@@ -382,7 +414,7 @@ def ensure_org() -> dict:
         **primary_tools,
     }
     data = {
-        "name": name,
+        "name": primary_name,
         "title": "Chief of Staff",
         "role": "cos",
         "folder": work,
@@ -390,11 +422,6 @@ def ensure_org() -> dict:
     }
     _save(data)
     seed_org_contracts([primary_id, *[row["id"] for row in extras]])
-    if SUPPORT_CEO_ID in {primary_id, *[row["id"] for row in extras]}:
-        try:
-            bootstrap_ceo_runtime(SUPPORT_CEO_ID, "Support", str(_project_dir(SUPPORT_CEO_ID) / "work"))
-        except Exception:
-            pass
     return public_org(data)
 
 
@@ -458,8 +485,12 @@ def public_org(data: dict | None = None) -> dict:
         name = str(row.get("name") or pid)
         if not pid or pid in RETIRED_CEO_IDS:
             continue
+        if pid == HOST_CEO_ID and name.strip().upper() in {"INDEX", "APP", "OPENBOT"}:
+            name = HOST_CEO_NAME
+        if pid == SUPPORT_CEO_ID:
+            name = "Support"
         _ensure_project_index(pid, name, folder)
-        seed_file_contract(_project_dir(pid) / "INDEX.md", "support" if pid == SUPPORT_CEO_ID else "ceo")
+        seed_file_contract(_project_dir(pid) / "INDEX.md", "ceo")
         ensure_bus(pid)
         index_text = read_project_index(pid)
         git = git_status(folder) if folder else {}
@@ -1296,6 +1327,8 @@ def add_project(folder: str | None = None, name: str | None = None) -> dict:
     if not resolved:
         raise ValueError("set a default folder first, or pass a project folder")
     slug = _slug(title)
+    if slug == SUPPORT_WORKER_ID:
+        raise ValueError("Support is a helper on openbot, not a CEO")
     if slug in RETIRED_CEO_IDS:
         raise ValueError(f"{slug} is retired from this board")
     existing = {str(row.get("id")) for row in (data.get("projects") or []) if isinstance(row, dict)}

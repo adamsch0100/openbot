@@ -127,9 +127,35 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertEqual(ids, {"openbot", "saa-homes"})
         self.assertIn("nadia", RETIRED_CEO_IDS)
         self.assertIn("listlogic", RETIRED_CEO_IDS)
+        self.assertIn("nadia-marketing", RETIRED_CEO_IDS)
+        self.assertIn("app", RETIRED_CEO_IDS)
         nadia_index = org_mod.ORG / "projects" / "nadia" / "INDEX.md"
         self.assertTrue(nadia_index.is_file())
         self.assertIn("Retired from this OpenBot board", nadia_index.read_text(encoding="utf-8"))
+
+    def test_hosted_app_folder_is_not_a_ceo(self):
+        from openbot.org import _host_identity, ensure_org
+
+        saved = {
+            "projects": [
+                {"id": "app", "name": "app", "primary": True, "folder": "/app"},
+                {"id": "openbot", "name": "INDEX", "primary": False},
+                {"id": "nadia-marketing", "name": "Nadia Marketing"},
+                {"id": "saa-homes", "name": "SAA Homes"},
+                {"id": "support", "name": "Support"},
+            ]
+        }
+        pid, name = _host_identity("/app", saved)
+        self.assertEqual(pid, "openbot")
+        self.assertEqual(name, "OpenBot")
+        org_mod.PROFILE_PATH.write_text(json.dumps({"projects": saved["projects"], "folder": "/app"}), encoding="utf-8")
+        with patch("openbot.org.load_config", return_value={"work_dir": "/app"}):
+            listed = {str(row.get("id")): str(row.get("name")) for row in ensure_org()["projects"]}
+        self.assertEqual(listed.get("openbot"), "OpenBot")
+        self.assertIn("saa-homes", listed)
+        self.assertIn("support", listed)
+        self.assertNotIn("app", listed)
+        self.assertNotIn("nadia-marketing", listed)
 
     def test_ensure_support_added(self):
         saved = {"projects": [{"id": "openbot", "name": "openbot", "primary": True}]}
