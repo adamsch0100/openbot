@@ -748,7 +748,7 @@ body {
 }
 .reply-chip {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   padding: 8px 10px;
@@ -785,6 +785,11 @@ body {
   padding: 0 4px;
 }
 .reply-chip-clear:hover { color: var(--bronze); }
+#queueChip .ghost-btn {
+  height: auto;
+  padding: 4px 8px;
+  font-size: 12px;
+}
 .bubble-quote {
   margin: 0 0 6px;
   padding: 0 0 0 10px;

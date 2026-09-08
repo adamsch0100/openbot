@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Chat keeps the user’s line, Auto no longer files inbox/ops.md for “run the crons”
-Last: Live SAA chat routed “run all cron jobs” to Ops, hid the typed line, and queued Continue
-Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=80 — type a SAA line and a cron-ish ask
+Now: Chat unlocks after a reply — Send now delivers a waiting line instead of sticking in Queue
+Last: Cos reply painted, then a leftover watchdog crash left Auto working so the follow-up queued
+Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=81 — tap Send now on any stuck line
 Blocker: —
 
 ## Vault

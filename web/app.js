@@ -802,6 +802,11 @@ function lockComposer(hasKey) {
       send.type = "submit";
       send.classList.remove("stop");
       send.setAttribute("aria-label", "Queue message");
+    } else if (live && queued) {
+      send.textContent = "Send now";
+      send.type = "button";
+      send.classList.remove("stop");
+      send.setAttribute("aria-label", "Send waiting message now");
     } else if (live) {
       send.textContent = "Stop";
       send.type = "button";
@@ -820,7 +825,7 @@ function lockComposer(hasKey) {
       const bits = [
         `${talkName()}${lane ? ` · ${lane}` : ""} is working…`,
         "Your line stays in the thread",
-        "Enter adds another",
+        queued ? "Send now delivers the waiting line" : "Enter adds another",
         "Stop cancels"
       ];
       if (queued) bits.splice(1, 0, `${queued} queued`);
@@ -898,13 +903,7 @@ async function stopLive(key) {
   }
   const id = live.runId && live.runId !== "pending" ? live.runId : "";
   setLive("", { key: idKey, projectId: live.projectId, workerId: live.workerId });
-  // Clear chain context and message queue (real cancel semantics)
   chainContexts.delete(idKey);
-  const queue = messageQueues.get(idKey);
-  if (queue && queue.length > 0) {
-    messageQueues.set(idKey, []);
-    paintQueueChip();
-  }
   if (!id) return;
   await fetch(`/api/runs/${id}/stop`, {
     method: "POST",
@@ -938,31 +937,45 @@ function enqueueMessage(message, opts) {
   lockComposer(Boolean(cfg.has_key));
 }
 
+let drainingQueue = false;
+
 async function drainQueue() {
-  if (liveRunId) return;
-  const key = aimKey();
-  const rows = queueFor(key);
-  if (!rows.length) {
-    paintQueueChip();
-    return;
-  }
-  const next = rows.shift();
-  paintQueueChip();
-  if (next.quote) {
-    replyQuote = next.quote;
-    const chip = $("replyChip");
-    const text = $("replyChipText");
-    if (chip && text) {
-      text.textContent = next.quote;
-      chip.classList.remove("hidden");
+  if (liveRunId || drainingQueue) return;
+  drainingQueue = true;
+  try {
+    while (!liveRunId) {
+      const key = aimKey();
+      const rows = queueFor(key);
+      if (!rows.length) {
+        paintQueueChip();
+        break;
+      }
+      const next = rows.shift();
+      paintQueueChip();
+      if (next.quote) {
+        replyQuote = next.quote;
+        const chip = $("replyChip");
+        const text = $("replyChipText");
+        if (chip && text) {
+          text.textContent = next.quote;
+          chip.classList.remove("hidden");
+        }
+      }
+      await sendMessage(next.message, {
+        preset: next.preset,
+        allowSecret: false,
+        quote: next.quote || "",
+        userEl: next.userEl
+      });
     }
+  } finally {
+    drainingQueue = false;
   }
-  await sendMessage(next.message, {
-    preset: next.preset,
-    allowSecret: false,
-    quote: next.quote || "",
-    userEl: next.userEl
-  });
+}
+
+async function sendQueuedNow() {
+  if (liveFor(aimKey())) await stopLive();
+  await drainQueue();
 }
 
 async function loadSpend() {
@@ -5439,12 +5452,26 @@ if ($("sendBtn")) {
     const message = $("msg") ? $("msg").value.trim() : "";
     if (message) return; // submit handler queues
     event.preventDefault();
+    if (queueFor().length) {
+      await sendQueuedNow();
+      return;
+    }
     await stopLive();
+  });
+}
+if ($("queueChipSend")) {
+  $("queueChipSend").addEventListener("click", async (event) => {
+    event.preventDefault();
+    await sendQueuedNow();
   });
 }
 if ($("queueChipClear")) {
   $("queueChipClear").addEventListener("click", (event) => {
     event.preventDefault();
+    const rows = queueFor();
+    rows.forEach((row) => {
+      if (row.userEl && row.userEl.isConnected) row.userEl.remove();
+    });
     messageQueues.set(aimKey(), []);
     paintQueueChip();
     lockComposer(Boolean(cfg.has_key));
@@ -5781,8 +5808,16 @@ async function sendMessage(message, opts) {
       }
     }
   } finally {
-    clearTimeout(watchdog);
-    setLive("", { key: aim, projectId: sendProjectId, workerId: sendWorkerId });
+    try {
+      if (progressWatchdog) clearTimeout(progressWatchdog);
+      clearTimeout(maxWatchdog);
+    } catch (_err) {
+      /* timers already cleared */
+    }
+    const cur = liveFor(aim);
+    if (!cur || cur.abort === ac) {
+      setLive("", { key: aim, projectId: sendProjectId, workerId: sendWorkerId });
+    }
     if (stillHere()) {
       if (!job) {
         try { await refreshThreadTail(); } catch (_load) { /* already painted */ }
