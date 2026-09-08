@@ -914,12 +914,15 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "") -> dic
         names = [row["title"] for row in (healthy + recent)[:3]]
         bits.append("Recently: " + ", ".join(names) + ".")
     else:
-        bits.append("Nothing from the last two days is on this machine yet. Telegram may still have the live Railway report.")
+        bits.append(
+            "This board’s schedule copy is older than two days. "
+            "The live Hermes box still runs the jobs — Telegram gets today’s work."
+        )
     if failed:
-        bits.append("Still failed: " + ", ".join(row["title"] for row in failed[:3]) + ".")
-    if ask:
+        bits.append("Last copy still failed: " + ", ".join(row["title"] for row in failed[:3]) + ".")
+    if ask and not re.search(r"open hermes to confirm", ask, re.I):
         bits.append("What moves this forward: " + ask)
-    elif not failed:
+    elif healthy or recent:
         bits.append("No operator step from the schedule.")
     return {
         "story": " ".join(bits),

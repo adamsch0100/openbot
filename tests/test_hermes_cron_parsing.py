@@ -196,6 +196,31 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertIn("GBP", pack["story"])
         self.assertEqual(cron_title("form-pipeline-health"), "Site and form check")
 
+    def test_cron_digest_stale_copy_points_at_live_hermes(self):
+        rows = [
+            {
+                "id": "a",
+                "name": "form-pipeline-health",
+                "enabled": True,
+                "last_run_at": "2026-08-01T14:00:00+00:00",
+                "last_status": "ok",
+                "outcome": "Healthy. Nothing new to report.",
+            },
+            {
+                "id": "b",
+                "name": "indexation-patrol",
+                "enabled": True,
+                "last_run_at": "2026-08-02T13:30:00+00:00",
+                "last_status": "error",
+                "outcome": "Failed. The last run did not finish.",
+            },
+        ]
+        pack = cron_digest(rows, hours=48, next_ask="Open Hermes to confirm the schedule")
+        self.assertIn("older than two days", pack["story"])
+        self.assertIn("Telegram", pack["story"])
+        self.assertNotIn("Open Hermes to confirm", pack["story"])
+        self.assertIn("Indexation patrol", pack["story"])
+
     def test_read_home_crons_from_jobs_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

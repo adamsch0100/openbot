@@ -2417,7 +2417,7 @@ function paintScheduleButton() {
   const count = ((project && project.crons) || []).length;
   btn.hidden = !project;
   if (!project) return;
-  btn.textContent = scheduleOpen ? "Hide schedule" : "What's running";
+  btn.textContent = scheduleOpen ? "Hide schedule" : "What's happening";
 }
 
 function cronCardHtml(row, open) {
@@ -2496,7 +2496,7 @@ function renderChatSchedule(rows, digest, focusId) {
   el.hidden = false;
   const list = rows || [];
   if (rows && !list.length) {
-    el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live Railway report.</p>`;
+    el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live report.</p>`;
     return;
   }
   const pack = digest || digestCache.get(projectId) || {};
@@ -3529,6 +3529,33 @@ function renderJob(job) {
   el.appendChild(diffBlock);
 }
 
+function isNoiseText(text) {
+  const raw = String(text || "");
+  if (!raw.trim()) return true;
+  if (/Saved inbox\/ops\.md/i.test(raw)) return true;
+  if (/e2e_wc8_|e2e_test_routine|WC8-/i.test(raw)) return true;
+  if (/hermes cron list/i.test(raw)) return true;
+  if (/List every cron\/schedule\/routine/i.test(raw)) return true;
+  if (/pipeline-health/.test(raw) && /indexation-patrol/.test(raw)) return true;
+  if (/Scheduled Jobs/.test(raw) && /[┌│]/.test(raw)) return true;
+  if (/Gateway reports not running/i.test(raw)) return true;
+  if (/You are the ops engine on this CEO/i.test(raw)) return true;
+  if (/raw\.githubusercontent\.com\/adamsch0100\/openbot/i.test(raw)) return true;
+  if (/Create file e2e_/i.test(raw)) return true;
+  if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
+  const cleaned = cleanBotText(raw);
+  if (!cleaned && /CONTRIBUTOR|contributor tier/i.test(raw)) return true;
+  return false;
+}
+
+function isNoiseTurn(turn) {
+  if (!turn) return true;
+  const job = turn.job || {};
+  const text = job.text || turn.text || "";
+  const message = job.message || "";
+  return isNoiseText(text) || isNoiseText(message);
+}
+
 function emptyStreamHtml() {
   const project = currentProject();
   const worker = currentWorker();
@@ -3538,13 +3565,15 @@ function emptyStreamHtml() {
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
-  let lead = "You are talking to Chief of Staff — the bot under you. CEOs report here. Click a CEO for their own chat.";
+  let lead = "Pick a CEO on the left. Talk here like a normal chat — Cos routes the work.";
   let showCTA = !project; // Show "Pick a CEO" on CoS empty state
   if (worker && project) {
-    lead = `You are talking to ${worker.name} on ${project.name}. Work still reports in this chat.`;
+    lead = `Talking to ${worker.name} on ${project.name}.`;
     showCTA = false;
   } else if (project) {
-    lead = `You are talking to ${project.name}. Pin Code, Think, Research, or Ops below when you want that engine next. A CEO can propose a helper here if one is actually needed.`;
+    lead = project.id === "saa-homes"
+      ? "SAA Homes watches saahomes.com. Talk here. The live schedule still runs on Telegram."
+      : `Talking to ${project.name}. Type a message — pin Code, Think, Research, or Ops only when you want that engine.`;
     showCTA = false;
   }
   return `
@@ -3586,18 +3615,25 @@ function renderTurns(turns, extras) {
     return;
   }
   stream.innerHTML = "";
-  if (telegram.length) {
+  const telegramKeep = (telegram || []).filter((turn) => !isNoiseText(turn.text || "")).slice(-4);
+  if (telegramKeep.length) {
     const banner = document.createElement("p");
     banner.className = "channel-banner";
-    banner.textContent = note || "Hermes Telegram history. This instance owns the live bots.";
+    banner.textContent = note || "A short slice from Telegram. Replies here stay on this board.";
     stream.appendChild(banner);
-    telegram.forEach((turn) => {
+    telegramKeep.forEach((turn) => {
       const el = bubble(turn.role === "user" ? "user" : "bot", turn.text || "");
       if (turn.role !== "user") el.classList.add("from-telegram");
     });
+  } else if (projectId === "saa-homes") {
+    const banner = document.createElement("p");
+    banner.className = "channel-banner";
+    banner.textContent = "SAA’s live Hermes box is on Railway. Telegram gets today’s work. This chat is the operator surface.";
+    stream.appendChild(banner);
   }
   let lastBot = "";
   rows.forEach((turn, index) => {
+    if (isNoiseTurn(turn)) return;
     if (turn.role === "user") {
       lastBot = "";
       const el = bubble("user", turn.text || "", turn.actor);
