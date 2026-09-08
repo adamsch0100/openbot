@@ -19,7 +19,7 @@ from .detect import which
 from .hermes import import_backup as hermes_import_zip
 from .keyring import SECRETS_PATH
 from . import org as org_mod
-from .org import add_project, patch_project_tools, project_ids, public_org, write_project_index
+from .org import RETIRED_CEO_IDS, _slug, add_project, patch_project_tools, project_ids, public_org, write_project_index
 from .store import ROOT
 
 HOMES = ROOT / "hermes-homes"
@@ -138,9 +138,16 @@ def _import_folder(folder: str | None) -> str:
     return str(dest)
 
 
+def _refuse_retired(title: str) -> None:
+    slug = _slug(title)
+    if slug in RETIRED_CEO_IDS:
+        raise ValueError(f"{slug} is retired from this board")
+
+
 def import_from_backup(path: str, name: str | None = None, folder: str | None = None) -> dict:
     peek = peek_backup(path)
     title = (name or "").strip() or peek["title"]
+    _refuse_retired(title)
     work = _import_folder(folder)
     before = set(project_ids())
     org = add_project(work, title)
@@ -354,6 +361,7 @@ def import_session(instance_id: str, session_id: str, name: str | None = None, f
     if not sid:
         raise ValueError("session id required")
     title = (name or "").strip() or sid[:40]
+    _refuse_retired(title)
     work = _import_folder(folder)
     before = set(project_ids())
     org = add_project(work, title)

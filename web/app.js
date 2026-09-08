@@ -38,6 +38,8 @@ let replyQuote = "";
 let lastOcFolder = "";
 let lastHermesHome = "";
 let pendingAttachments = [];
+const threadCache = new Map();
+const digestCache = new Map();
 
 function isCollaborator() {
   return cfg.actor === "collaborator";
@@ -187,7 +189,8 @@ const PANEL_TITLES = {
   import: "Import",
   channels: "Channels",
   jobs: "Usage",
-  about: "About"
+  about: "About",
+  help: "Help"
 };
 const PROVIDER_STAGE = { nous: "hermes" };
 
@@ -1988,20 +1991,74 @@ function ceoInitials(name) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
+function inboxActionLabel(kind) {
+  if (kind === "diff") return "Open chat";
+  if (kind === "login") return "Open CEO";
+  if (kind === "gate") return "Approve";
+  if (kind === "expired") return "Dismiss";
+  return "Open";
+}
+
+function visibleNeedsYou() {
+  return (((cfg.activity || {}).needs_you) || []).filter((row) => {
+    if (row.kind === "brief") return !inboxSeen.has(row.id);
+    return true;
+  });
+}
+
 function inboxHtml() {
-  const rows = ((cfg.activity || {}).needs_you) || [];
-  const unread = rows.filter((row) => !inboxSeen.has(row.id)).length;
-  const items = rows.length ? rows.map((row) => {
-    const ping = inboxSeen.has(row.id) ? "" : " ping";
-    return `<button type="button" class="org-inbox-item${ping}" data-inbox="${escapeHtml(row.id)}" data-project="${escapeHtml(row.project_id || "")}" data-preset="${escapeHtml(row.preset || "")}">
+  const rows = visibleNeedsYou();
+  if (!rows.length) return "";
+  const items = rows.map((row) => {
+    const ping = row.kind === "brief" ? "" : " ping";
+    const done = row.kind === "brief"
+      ? `<button type="button" class="ghost-btn" data-inbox-done="${escapeHtml(row.id)}">Done</button>`
+      : "";
+    const deny = row.kind === "gate"
+      ? `<button type="button" class="ghost-btn" data-inbox-deny="${escapeHtml(row.approval_id || row.id || "")}">Dismiss</button>`
+      : "";
+    return `<div class="org-inbox-item${ping}" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}" data-preset="${escapeHtml(row.preset || "")}" data-approval="${escapeHtml(row.approval_id || row.id || "")}">
       <b>${escapeHtml(row.name || "CEO")}</b>
-      <span>${escapeHtml(row.label || "needs you")}</span>
-    </button>`;
-  }).join("") : `<p class="org-inbox-empty">Empty. Login walls and Code Accept/Reject land here.</p>`;
+      <span>${escapeHtml(row.label || "Needs you")}</span>
+      <div class="org-inbox-actions">
+        <button type="button" class="ghost-btn" data-inbox-open="${escapeHtml(row.id)}">${escapeHtml(inboxActionLabel(row.kind))}</button>
+        ${deny}
+        ${done}
+      </div>
+    </div>`;
+  }).join("");
   return `<div class="org-inbox">
-    <div class="org-inbox-head">Inbox${unread ? ` · ${unread}` : ""}</div>
+    <div class="org-inbox-head">Needs you</div>
+    <p class="org-inbox-empty">One thing at a time. Open the CEO, do the step, then come back.</p>
     ${items}
   </div>`;
+}
+
+function paintHelpPanel() {
+  const host = $("helpWorkingOn");
+  if (!host) return;
+  const work = (cfg.activity || {}).working_on || {};
+  const open = work.open || [];
+  const chip = (cfg.activity || {}).eval || {};
+  const expired = Number(chip.expired_approvals || 0);
+  const items = open.map((row) => {
+    const phase = escapeHtml(row.phase || "received");
+    return `<div class="org-inbox-item">
+      <b>${escapeHtml(row.title || row.id || "ticket")}</b>
+      <span class="phase-chip">${phase}${row.engine ? " · " + escapeHtml(row.engine) : ""}</span>
+      <span>${escapeHtml(row.now || row.next || "")}</span>
+    </div>`;
+  }).join("");
+  const empty = items ? items : `<p class="org-inbox-empty">No open tickets.</p>`;
+  const warn = expired ? `<p class="org-inbox-empty">Expired approvals: ${expired} (did not auto-approve)</p>` : "";
+  host.innerHTML = `
+    <div class="org-inbox working-on">
+      <div class="org-inbox-head">Working on · ${open.length}</div>
+      ${empty}
+      ${warn}
+    </div>`;
+  const helpChip = $("helpChip");
+  if (helpChip) helpChip.textContent = open.length ? `· ${open.length}` : "";
 }
 
 function capNoticesHtml() {
@@ -2024,9 +2081,18 @@ function capNoticesHtml() {
 }
 
 function projectNeedsYou(pid) {
-  return (((cfg.activity || {}).needs_you) || []).some(
-    (row) => String(row.project_id || "") === String(pid || "") && !inboxSeen.has(row.id)
-  );
+  return (((cfg.activity || {}).needs_you) || []).some((row) => {
+    if (String(row.project_id || "") !== String(pid || "")) return false;
+    if (row.kind === "brief") return !inboxSeen.has(row.id);
+    return true;
+  });
+}
+
+function paintOrgSelection() {
+  document.querySelectorAll(".org-btn").forEach((btn) => {
+    const on = (btn.dataset.project || "") === projectId && (btn.dataset.worker || "") === workerId;
+    btn.classList.toggle("on", on);
+  });
 }
 
 function renderOrg(data) {
@@ -2038,14 +2104,13 @@ function renderOrg(data) {
     const primary = projects.find((row) => row.primary) || projects[0];
     if (primary) expanded.add(primary.id);
   }
-  
-  // Fetch queue status and spend alerts asynchronously
+
   let queueData = { queue_status: [], active_workers: [], total_queued: 0 };
   let spendAlerts = { alerts: [] };
-  
+
   Promise.all([
-    fetch("/api/queue/status").then(r => r.json()).catch(() => queueData),
-    fetch("/api/spend/dashboard").then(r => r.json()).catch(() => ({ alerts: { alerts: [] } }))
+    fetch("/api/queue/status").then((r) => r.json()).catch(() => queueData),
+    fetch("/api/spend/dashboard").then((r) => r.json()).catch(() => ({ alerts: { alerts: [] } }))
   ]).then(([qData, sData]) => {
     queueData = qData;
     spendAlerts = sData.alerts || { alerts: [] };
@@ -2166,14 +2231,51 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     btn.addEventListener("click", () => setOrgNode(btn.dataset.project || "", btn.dataset.worker || ""));
     bindNodeMenu(btn, btn.dataset.kind, btn.dataset.project || "", btn.dataset.worker || "");
   });
-  tree.querySelectorAll("[data-inbox]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      inboxSeen.add(btn.dataset.inbox);
-      const pid = btn.dataset.project || "";
-      const lane = btn.dataset.preset || "";
+  tree.querySelectorAll("[data-inbox-open]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      const card = btn.closest("[data-inbox]");
+      if (!card) return;
+      const pid = card.dataset.project || "";
+      const kind = card.dataset.kind || "";
+      if (kind === "gate") {
+        const approvalId = card.dataset.approval || card.dataset.inbox;
+        if (approvalId) {
+          fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accept: true })
+          }).then((r) => r.json()).then(() => fetch("/api/config").then((c) => c.json()).then(applyConfig));
+        }
+        return;
+      }
+      if (kind === "expired") {
+        inboxSeen.add(card.dataset.inbox);
+        renderOrg(org);
+        return;
+      }
+      const lane = kind === "diff" ? "builder" : (card.dataset.preset || "");
       setOrgNode(pid, "");
       if (lane && lane !== "cos") focusLane(lane);
+    });
+  });
+  tree.querySelectorAll("[data-inbox-done]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      inboxSeen.add(btn.dataset.inboxDone);
       renderOrg(org);
+    });
+  });
+  tree.querySelectorAll("[data-inbox-deny]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      const approvalId = btn.dataset.inboxDeny;
+      if (!approvalId) return;
+      fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accept: false })
+      }).then((r) => r.json()).then(() => fetch("/api/config").then((c) => c.json()).then(applyConfig));
     });
   });
   const addCeo = $("addCeoBtn");
@@ -2229,7 +2331,7 @@ function selectedIndexText() {
   return org.staff || org.index || "";
 }
 
-function renderBotMeta() {
+function renderBotMeta(opts) {
   const text = selectedIndexText();
   const cleaned = cleanBotText(text);
   if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty)";
@@ -2242,14 +2344,12 @@ function renderBotMeta() {
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
     if (!project) {
-      $("chatFolder").textContent = "You → Chief of Staff → CEOs";
+      $("chatFolder").textContent = "Pick a CEO on the left. Cos routes the work.";
     } else {
-      const tools = project.tools || {};
-      const bits = [];
-      const n = Number(tools.session_count || 0);
-      if (n) bits.push(`${n.toLocaleString()} chats`);
-      if (tools.session_title) bits.push(tools.session_title);
-      $("chatFolder").textContent = bits.join(" · ") || "CEO";
+      const nxt = String(project.index_next || "").trim();
+      const now = String(project.index_now || "").trim();
+      const ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
+      $("chatFolder").textContent = ask || "This CEO is idle.";
     }
   }
   const folder = currentAim().folder || "";
@@ -2257,24 +2357,187 @@ function renderBotMeta() {
   syncComposerWho();
   paintLanes();
   renderSchedules(project);
-  loadSpend();
+  paintScheduleButton();
+  paintCeoBrief(digestCache.get(projectId));
+  if (!project) {
+    scheduleOpen = false;
+    const panel = $("chatSchedule");
+    if (panel) {
+      panel.hidden = true;
+      panel.innerHTML = "";
+    }
+  }
+  if (!opts || !opts.skipSpend) loadSpend();
 }
 
 function renderSchedules(project) {
   const el = $("scheduleList");
   if (!el) return;
-  const rows = (project && project.schedules) || [];
-  if (!project || !rows.length) {
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
+let scheduleOpen = false;
+let scheduleFocusId = "";
+
+function cronTitle(name) {
+  const map = {
+    "form-pipeline-health": "Site and form check",
+    "conversion-surge": "Conversion fixes",
+    "monthly-market-blog": "Monthly market blog",
+    "geo-citation-audit": "Citation audit",
+    "indexation-patrol": "Indexation patrol",
+    "daily-ranking-strike": "Daily rankings",
+    "competitor-content-watch": "Competitor watch",
+    "daily-done-digest": "Daily wrap-up",
+    "seo-execute-queue": "SEO fix queue",
+    "gbp-local-pack-audit": "Google Business Profile"
+  };
+  const raw = String(name || "").trim();
+  if (map[raw]) return map[raw];
+  return raw.replace(/[-_]+/g, " ").replace(/^\w/, (ch) => ch.toUpperCase()) || "Scheduled check";
+}
+
+function cronWhen(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "not yet";
+  const stamp = new Date(raw);
+  if (Number.isNaN(stamp.getTime())) return raw.slice(0, 16);
+  const ms = Date.now() - stamp.getTime();
+  if (ms < 36e5) return "in the last hour";
+  if (ms < 864e5) return "today";
+  if (ms < 1728e5) return "yesterday";
+  return stamp.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function paintScheduleButton() {
+  const btn = $("openSchedule");
+  if (!btn) return;
+  const project = currentProject();
+  const count = ((project && project.crons) || []).length;
+  btn.hidden = !project;
+  if (!project) return;
+  btn.textContent = scheduleOpen ? "Hide schedule" : "What's running";
+}
+
+function cronCardHtml(row, open) {
+  const title = row.title || cronTitle(row.name || row.id);
+  const when = cronWhen(row.last_run_at);
+  const outcome = row.outcome || "No result on this machine yet.";
+  const next = row.next_action || "";
+  const showNext = next && !/no action/i.test(next) && !/ask Think to retry/i.test(next);
+  const report = open ? (row.last_result || "") : "";
+  return `<article class="cron-card${open ? " open" : ""}" id="cron-${escapeHtml(row.id || "")}">
+    <div class="cron-head">
+      <b>${escapeHtml(title)}</b>
+      <span>${escapeHtml(when)}</span>
+    </div>
+    <p class="cron-outcome">${escapeHtml(outcome)}</p>
+    ${showNext ? `<p class="cron-next">${escapeHtml(next)}</p>` : ""}
+    ${report ? `<details open><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
+  </article>`;
+}
+
+function paintCeoBrief(digest) {
+  const el = $("ceoBrief");
+  if (!el) return;
+  if (!projectId) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const project = currentProject();
+  const nxt = String((project && project.index_next) || "").trim();
+  const now = String((project && project.index_now) || "").trim();
+  const blocker = String((project && project.index_blocker) || "").trim();
+  const bits = [];
+  if (digest && digest.story) bits.push(digest.story);
+  else if (blocker && blocker !== "—") bits.push(`Blocked: ${blocker}`);
+  else if (nxt && nxt !== "—") bits.push(nxt);
+  else if (now && now !== "—") bits.push(now);
+  if (!bits.length) {
     el.hidden = true;
     el.innerHTML = "";
     return;
   }
   el.hidden = false;
-  el.innerHTML = rows.map((row) => `
-    <div class="schedule-row">
-      <b>${escapeHtml(row.schedule || "")}</b>
-      <span>${escapeHtml(row.text || "")}</span>
-    </div>`).join("");
+  el.innerHTML = bits.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
+}
+
+async function loadCeoDigest() {
+  if (!projectId) {
+    paintCeoBrief(null);
+    return null;
+  }
+  const cached = digestCache.get(projectId);
+  if (cached) paintCeoBrief(cached);
+  try {
+    const pid = projectId;
+    const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`);
+    const data = await res.json();
+    digestCache.set(pid, data.digest || {});
+    if (projectId === pid) {
+      paintCeoBrief(data.digest);
+      if (scheduleOpen) renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
+    }
+    return data;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function renderChatSchedule(rows, digest, focusId) {
+  const el = $("chatSchedule");
+  if (!el) return;
+  if (!projectId || !scheduleOpen) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  const list = rows || [];
+  if (rows && !list.length) {
+    el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live Railway report.</p>`;
+    return;
+  }
+  const pack = digest || digestCache.get(projectId) || {};
+  const want = String(focusId || scheduleFocusId || "");
+  const failed = pack.failed || list.filter((row) => /error|fail/i.test(row.last_status || ""));
+  const recent = pack.recent || [];
+  const seen = new Set([...failed, ...recent].map((row) => row.id));
+  const rest = list.filter((row) => row.enabled !== false && !seen.has(row.id));
+  const sections = [];
+  if (pack.story) sections.push(`<p class="cron-story">${escapeHtml(pack.story)}</p>`);
+  if (failed.length) {
+    sections.push(`<h3 class="cron-section">Needs a look</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+  }
+  if (recent.length) {
+    sections.push(`<h3 class="cron-section">Last two days</h3>${recent.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+  }
+  if (rest.length) {
+    sections.push(`<details class="cron-more"><summary>Everything else · ${rest.length}</summary>${rest.map((row) => cronCardHtml(row, row.id === want)).join("")}</details>`);
+  }
+  el.innerHTML = sections.join("");
+  if (want && window.CSS && CSS.escape) {
+    const target = el.querySelector(`#cron-${CSS.escape(want)}`);
+    if (target) target.scrollIntoView({ block: "nearest" });
+  }
+}
+
+async function openSchedule(focusId) {
+  if (!projectId) return;
+  scheduleOpen = true;
+  scheduleFocusId = focusId || "";
+  paintScheduleButton();
+  const el = $("chatSchedule");
+  const cached = digestCache.get(projectId);
+  if (el) {
+    el.hidden = false;
+    if (cached) renderChatSchedule(null, cached, focusId);
+    else el.innerHTML = `<p class="muted">Loading the last two days…</p>`;
+  }
+  const data = await loadCeoDigest();
+  if (data) renderChatSchedule(data.crons || [], data.digest || {}, focusId);
+  else if (el && !cached) el.innerHTML = `<p class="muted">Could not load the schedule.</p>`;
 }
 
 function fillProfile(data) {
@@ -2314,8 +2577,11 @@ function fillSettings(data) {
     $("hermesSkills").value = data.hermes_skills || "";
   }
   if ($("enableSelfBuild")) $("enableSelfBuild").checked = Boolean(data.enable_self_build);
+  if ($("xIntakeEnabled")) $("xIntakeEnabled").checked = Boolean(data.x_intake_enabled);
+  if ($("xUsername") && document.activeElement !== $("xUsername")) $("xUsername").value = data.x_username || "";
   loadSelfBuildStatus();
   if (data.org) renderOrg(data.org);
+  paintHelpPanel();
   fillKeys(data.keyring || {});
   fillImport(data.hermes_instances || []);
   fillCeoPanel();
@@ -2595,6 +2861,7 @@ function setSettingsPanel(name) {
   if (name === "channels") fillChannels();
   if (name === "memory") loadMemory();
   if (name === "usage") loadJobs();
+  if (name === "help") paintHelpPanel();
   if ($("settings") && !$("settings").classList.contains("hidden")) syncHash();
 }
 
@@ -2622,14 +2889,26 @@ async function setOrgNode(project, worker) {
   unreadLanes = new Set();
   if (projectId) expanded.add(projectId);
   syncLiveFromAim();
+  paintOrgSelection();
   renderOrg(org);
-  renderBotMeta();
+  renderBotMeta({ skipSpend: true });
+  const cached = threadCache.get(aimKey());
+  if (cached) renderTurns(cached.turns, { telegram: cached.telegram || [], note: cached.note || "" });
+  loadCeoDigest();
   await loadThread();
   syncComposerWho();
   scrollChatBottom();
-  if (projectId) {
-    startOpenCode();
-    startHermes();
+  if (stage === "opencode") startOpenCode();
+  if (stage === "hermes") startHermes();
+  if (scheduleOpen && projectId) openSchedule("");
+  else {
+    scheduleOpen = false;
+    const panel = $("chatSchedule");
+    if (panel) {
+      panel.hidden = true;
+      panel.innerHTML = "";
+    }
+    paintScheduleButton();
   }
   if (!liveRunId) await drainQueue();
 }
@@ -2646,7 +2925,8 @@ function card(kind, body, meta) {
   el.className = `card ${kind}`;
   // Clean bot responses (ops/think/research jobs) before display
   const cleaned = kind.includes("bot") ? cleanBotText(body) : body;
-  el.innerHTML = `<div class="meta">${escapeHtml(meta || kind)}</div><pre>${escapeHtml(cleaned)}</pre>`;
+  const head = meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "";
+  el.innerHTML = `${head}<pre>${escapeHtml(cleaned)}</pre>`;
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
   return el;
@@ -2783,19 +3063,12 @@ function liveBubbleFor(key) {
 }
 
 function jobMeta(job) {
-  return [
-    job.cron ? "cron" : "",
-    `job ${job.id}`,
-    `preset ${job.preset}`,
-    `engine ${job.engine}`,
-    job.handoff && job.handoff.length > 1 ? `handoff ${job.handoff.join(" → ")}` : "",
-    job.gate && job.gate.label ? job.gate.label : "",
-    job.handoff_path ? job.handoff_path : "",
-    `model ${job.model || "none"}`,
-    `$${Number(job.usd_estimate || 0).toFixed(4)}`,
-    job.stopped ? "stopped" : "",
-    job.blocker ? `blocker: ${job.blocker}` : "ok"
-  ].filter(Boolean).join(" · ");
+  if (!job) return "";
+  if (job.login_wall) return "This site asked for a login.";
+  const hasDiff = Boolean((job.diff && String(job.diff).trim()) || (job.untracked && job.untracked.length) || job.diff_pending);
+  if (hasDiff) return "A code change is ready. Accept to keep it or Reject to undo.";
+  if (job.blocker && String(job.blocker) !== "ok") return String(job.blocker);
+  return "";
 }
 
 function isTalk(job) {
@@ -2825,6 +3098,7 @@ function continueAfterLogin(job) {
     "Continue. An approved site login is in .openbot-logins.json in this Hermes home. Fill the page from that file. Never print the file or any password. If TOTP or CAPTCHA appears, stop with LOGIN_WALL.",
     { preset: lane, allowSecret: true }
   );
+  pollActivity();
 }
 
 function parseComposerLogin(text) {
@@ -2954,6 +3228,7 @@ function fillLoginOffer(parsed) {
 }
 
 function renderReportCard(job) {
+  return null;
   if (!job) return null;
   const card = document.createElement("div");
   card.className = "report-card";
@@ -3062,10 +3337,32 @@ function renderJob(job) {
     renderTalk(job);
     return;
   }
+  if (job.cron) {
+    const title = cronTitle(job.cron_name || "Scheduled check");
+    const outcome = job.cron_outcome || "";
+    const nxt = job.cron_next || "";
+    const lines = [`${title} finished.`];
+    if (outcome) lines.push(outcome);
+    if (nxt) lines.push(`What to do: ${nxt}`);
+    const el = bubble("bot", lines.join("\n"));
+    el.classList.add("cron");
+    if (job.id) el.setAttribute("data-job-id", job.id);
+    stampLane(el, job);
+    const actions = document.createElement("div");
+    actions.className = "job-actions";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "send";
+    open.textContent = "Open report";
+    open.addEventListener("click", () => openSchedule(job.cron_id || ""));
+    actions.appendChild(open);
+    el.appendChild(actions);
+    return;
+  }
   const kind = job.login_wall ? "bot wall" : "bot";
   const body = job.login_wall && !job.text
     ? "This page needs a login. Approve a vault login, type it on this card, or sign in on your screen."
-    : (job.text || JSON.stringify(job, null, 2));
+    : (job.text || "Work finished. The next step is in the brief above.");
   const el = card(kind, body, jobMeta(job));
   if (job.id) {
     el.setAttribute("data-job-id", job.id);
@@ -3148,10 +3445,13 @@ function renderJob(job) {
   const handoffCard = renderHandoffCard(job);
   if (handoffCard) el.appendChild(handoffCard);
   const gate = job.gate || {};
-  if (gate.label || job.handoff_path) {
+  if (gate.label) {
     const line = document.createElement("p");
     line.className = `gate-line ${gate.action || ""}`;
-    line.textContent = [gate.label, job.handoff_path ? `file ${job.handoff_path}` : ""].filter(Boolean).join(" · ");
+    const parked = /irreversible|park/i.test(String(gate.label || ""));
+    line.textContent = parked
+      ? "This is parked until you say yes — send, publish, pay, or delete."
+      : "A draft is ready in files. Nothing public yet.";
     el.appendChild(line);
   }
   // Add report card for non-talk jobs
@@ -3335,22 +3635,28 @@ async function loadThread() {
   const res = await fetch(`/api/thread?${params.toString()}`);
   const data = await res.json();
   const turns = data.turns || [];
-  let telegram = [];
-  let note = "";
-  if (projectId && !workerId) {
-    try {
-      const channelRes = await fetch(`/api/org/projects/${encodeURIComponent(projectId)}/channel`);
-      const channel = await channelRes.json();
-      telegram = channel.turns || [];
-      note = channel.note || "";
-    } catch (_err) {
-      telegram = [];
-    }
-  }
-  renderTurns(turns, { telegram, note });
+  const prev = threadCache.get(key) || {};
+  threadCache.set(key, { turns, telegram: prev.telegram || [], note: prev.note || "" });
+  renderTurns(turns, { telegram: prev.telegram || [], note: prev.note || "" });
   if (liveFor(key)) {
     const el = thinkingBubble();
     el.dataset.liveKey = key;
+  }
+  if (!projectId || workerId) return;
+  try {
+    const channelRes = await fetch(`/api/org/projects/${encodeURIComponent(projectId)}/channel`);
+    const channel = await channelRes.json();
+    if (aimKey() !== key) return;
+    const telegram = channel.turns || [];
+    const note = channel.note || "";
+    threadCache.set(key, { turns, telegram, note });
+    renderTurns(turns, { telegram, note });
+    if (liveFor(key)) {
+      const el = thinkingBubble();
+      el.dataset.liveKey = key;
+    }
+  } catch (_err) {
+    /* keep local thread */
   }
 }
 
@@ -3455,6 +3761,7 @@ async function decide(jobId, action, actionsEl, force = false, pushBranch = fals
         testFailCard.remove();
       });
     }
+    pollActivity();
     return;
   }
   
@@ -3477,6 +3784,7 @@ async function decide(jobId, action, actionsEl, force = false, pushBranch = fals
     
     card("bot brief", briefLines.join("\n"), "Brief updated");
   }
+  pollActivity();
 }
 
 async function revertDiff(jobId, actionsEl) {
@@ -3510,8 +3818,7 @@ async function revertDiff(jobId, actionsEl) {
     card("bot brief", briefLines.join("\n"), "Brief updated");
   }
   
-  await refreshActivity();
-  paintLanes();
+  pollActivity();
 }
 
 async function loadJobs() {
@@ -4037,10 +4344,53 @@ if ($("modelSearch")) {
 if ($("openSpend")) {
   $("openSpend").addEventListener("click", () => setSettings(true, "usage"));
 }
+if ($("openSchedule")) {
+  $("openSchedule").addEventListener("click", () => {
+    if (scheduleOpen) {
+      scheduleOpen = false;
+      const panel = $("chatSchedule");
+      if (panel) panel.hidden = true;
+      paintScheduleButton();
+      return;
+    }
+    openSchedule("");
+  });
+}
 $("openSettings").addEventListener("click", (event) => {
   event.stopPropagation();
   setSettings(true, "you");
 });
+if ($("openHelp")) {
+  $("openHelp").addEventListener("click", (event) => {
+    event.stopPropagation();
+    setSettings(true, "help");
+  });
+}
+if ($("suggestForm")) {
+  $("suggestForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const title = ($("suggestTitle") && $("suggestTitle").value) || "";
+    const body = ($("suggestBody") && $("suggestBody").value) || "";
+    const status = $("suggestStatus");
+    try {
+      const res = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body, source: "suggest" })
+      });
+      const data = await res.json();
+      if (status) status.textContent = res.ok ? `ticket ${data.id} · ${data.phase}` : (data.error || "failed");
+      if (res.ok) {
+        if ($("suggestTitle")) $("suggestTitle").value = "";
+        if ($("suggestBody")) $("suggestBody").value = "";
+        const cfgRes = await fetch("/api/config");
+        if (cfgRes.ok) applyConfig(await cfgRes.json());
+      }
+    } catch (err) {
+      if (status) status.textContent = "failed";
+    }
+  });
+}
 $("closeSettings").addEventListener("click", () => setSettings(false));
 $("settingsScrim").addEventListener("click", () => setSettings(false));
 $("gotoOpenCode").addEventListener("click", () => openWorkspace("opencode"));
@@ -4182,7 +4532,9 @@ if ($("saveAdvanced")) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        enable_self_build: $("enableSelfBuild").checked
+        enable_self_build: $("enableSelfBuild").checked,
+        x_intake_enabled: $("xIntakeEnabled") ? $("xIntakeEnabled").checked : false,
+        x_username: $("xUsername") ? $("xUsername").value : ""
       })
     });
     const data = await res.json();
@@ -4190,6 +4542,23 @@ if ($("saveAdvanced")) {
     if (res.ok) {
       applyConfig(data);
       loadSelfBuildStatus();
+    }
+  });
+}
+
+if ($("ingestX")) {
+  $("ingestX").addEventListener("click", async () => {
+    const statusEl = $("xIntakeStatus");
+    const res = await fetch("/api/x/ingest", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const data = await res.json();
+    if (statusEl) {
+      statusEl.textContent = data.ok
+        ? `created ${(data.created || []).length}`
+        : (data.reason || data.error || "failed");
+    }
+    if (data.ok) {
+      const cfgRes = await fetch("/api/config");
+      if (cfgRes.ok) applyConfig(await cfgRes.json());
     }
   });
 }
@@ -4396,6 +4765,23 @@ function paintConnectorsPanel() {
       mcpHtml += `</div>`;
     });
     mcpMatrix.innerHTML = mcpHtml;
+  }
+  const boardList = $("boardSkillsList");
+  if (boardList) {
+    fetch("/api/skills/board").then((r) => r.json()).then((data) => {
+      const skills = data.skills || [];
+      if (!skills.length) {
+        boardList.innerHTML = `<p class="muted">No board Skills yet. Dogfood Skills seed on first org load.</p>`;
+        return;
+      }
+      boardList.innerHTML = skills.map((skill) => `
+        <div class="connector-row">
+          <div class="connector-name">${escapeHtml(skill.name || "")}</div>
+          <div class="connector-name-desc">${escapeHtml(skill.description || "")} · ${escapeHtml(skill.whenToUse || "")}</div>
+        </div>`).join("");
+    }).catch(() => {
+      boardList.innerHTML = `<p class="muted">Board Skills unavailable.</p>`;
+    });
   }
 }
 

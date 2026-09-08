@@ -1,7 +1,11 @@
 """Test Hermes cron list parsing (multi-line block format)."""
 
+import json
+import tempfile
 import unittest
-from openbot.hermes import _parse_cron_table, is_valid_job_id
+from pathlib import Path
+
+from openbot.hermes import _parse_cron_table, cron_digest, cron_outcome, cron_title, is_valid_job_id, read_home_crons
 
 
 class TestHermesCronParsing(unittest.TestCase):
@@ -158,6 +162,68 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertFalse(is_valid_job_id(""))
         self.assertFalse(is_valid_job_id("abc"))  # Too short
         self.assertFalse(is_valid_job_id("form-pipeline-health"))  # Name, not ID
+
+    def test_cron_outcome_silent_and_fail(self):
+        healthy, nxt = cron_outcome("ok", "## Response\n[SILENT] nothing new")
+        self.assertIn("Healthy", healthy)
+        self.assertIn("No action", nxt)
+        failed, fix = cron_outcome("error", "## Response\nGateway shutdown")
+        self.assertTrue(failed.startswith("Failed"))
+        self.assertIn("Think", fix)
+
+    def test_cron_digest_plain_story(self):
+        rows = [
+            {
+                "id": "a",
+                "name": "form-pipeline-health",
+                "enabled": True,
+                "last_run_at": "2026-09-07T23:00:00+00:00",
+                "last_status": "ok",
+                "outcome": "Healthy. Nothing new to report.",
+            },
+            {
+                "id": "b",
+                "name": "monthly-market-blog",
+                "enabled": True,
+                "last_run_at": "2026-09-03T12:00:00+00:00",
+                "last_status": "error",
+                "outcome": "Failed. The Hermes gateway stopped mid-run.",
+            },
+        ]
+        pack = cron_digest(rows, hours=48, next_ask="Pin Think and send GBP listing corrections.")
+        self.assertIn("Site and form check", pack["story"])
+        self.assertIn("Monthly market blog", pack["story"])
+        self.assertIn("GBP", pack["story"])
+        self.assertEqual(cron_title("form-pipeline-health"), "Site and form check")
+
+    def test_read_home_crons_from_jobs_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            out = home / "cron" / "output" / "7cb2a72c1cc8"
+            out.mkdir(parents=True)
+            (home / "cron" / "jobs.json").write_text(
+                json.dumps({
+                    "jobs": [{
+                        "id": "7cb2a72c1cc8",
+                        "name": "form-pipeline-health",
+                        "schedule_display": "0 14 * * *",
+                        "enabled": True,
+                        "last_run_at": "2026-09-06T23:29:53",
+                        "last_status": "ok",
+                    }]
+                }),
+                encoding="utf-8",
+            )
+            (out / "2026-09-06_23-29-53.md").write_text(
+                "## Response\n[SILENT] healthy\n",
+                encoding="utf-8",
+            )
+            listed = read_home_crons(home, results=False)
+            self.assertEqual(listed[0]["name"], "form-pipeline-health")
+            self.assertEqual(listed[0]["last_result"], "")
+            detailed = read_home_crons(home, results=True)
+            self.assertIn("[SILENT]", detailed[0]["last_result"])
+            self.assertIn("Healthy", detailed[0]["outcome"])
 
 
 if __name__ == "__main__":

@@ -1,3 +1,12 @@
+# nadia (archived)
+
+Now: Retired from this OpenBot board. Folder kept on disk.
+Last: Removed from routing.
+Next: Re-add as a CEO only if the operator brings this product back.
+Blocker: —
+
+This CEO is not in the live org. Nadia ISA is a separate SaaS product. ListLogic may return later.
+
 # Nadia
 
 CEO imported from Hermes Agent. Chat is not memory.

@@ -176,6 +176,14 @@ def claim_and_execute(
                     updated.append(line)
             handoff_path.write_text("\n".join(updated), encoding="utf-8")
         
+        try:
+            from .tickets import find_ticket_for_handoff, on_job_linked
+
+            ticket = find_ticket_for_handoff(handoff_id)
+            if ticket and result:
+                on_job_linked(str(ticket.get("id") or ""), result)
+        except Exception:
+            pass
         return result
     except Exception as err:
         # Update handoff to blocked

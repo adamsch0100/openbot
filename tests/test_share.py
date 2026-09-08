@@ -57,8 +57,10 @@ class ShareStoreTests(unittest.TestCase):
         org_mod.HERMES_HOMES = self.home / "hermes-homes"
         save_settings({"operator_name": "Ada"})
         ensure_org()
-        self.project = add_project(str(self.home), "ListLogic")
-        self.pid = self.project["projects"][0]["id"] if "projects" in self.project else None
+        self.project = add_project(str(self.home), "AcmeCo")
+        self.pid = self.project.get("project_id")
+        if not self.pid:
+            self.pid = (self.project.get("projects") or [{}])[-1].get("id")
         if not self.pid:
             self.pid = ensure_org()["projects"][0]["id"]
 

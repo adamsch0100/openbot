@@ -1,0 +1,294 @@
+"""Labor loop: Support tickets, hard gate, drafts, retired CEOs."""
+
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest.mock import patch
+
+import openbot.bus as bus_mod
+import openbot.config as config_mod
+import openbot.org as org_mod
+import openbot.playskills as skills_mod
+import openbot.store as store_mod
+import openbot.tickets as tickets_mod
+from openbot.bus import (
+    connector_mode,
+    create_gate_approval,
+    decide_approval,
+    evidence_has_source,
+    expire_approvals,
+    list_approvals,
+    list_drafts,
+    move_draft,
+    should_park_irreversible,
+    write_draft,
+    write_evidence_record,
+)
+from openbot.hermes_import import _refuse_retired
+from openbot.org import RETIRED_CEO_IDS, SUPPORT_CEO_ID, ensure_support_project, retire_archived_ceos
+from openbot.router import _effective_skills
+from openbot.tickets import (
+    classify_kind,
+    create_ticket,
+    draft_announce,
+    ingest_x_mentions,
+    on_diff_decided,
+    public_ticket,
+    route_to_builder,
+    working_on,
+)
+
+
+class LaborLoopIsolation(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self.tmp.name)
+        self._store = {
+            "root": store_mod.ROOT,
+            "brains": store_mod.BRAINS,
+            "jobs": store_mod.JOBS,
+            "index": store_mod.INDEX,
+        }
+        self._org = {
+            "root": org_mod.ROOT,
+            "org": org_mod.ORG,
+            "profile": org_mod.PROFILE_PATH,
+            "homes": org_mod.HERMES_HOMES,
+        }
+        self._bus_org = bus_mod.ORG
+        self._bus_root = bus_mod.ROOT
+        self._bus_log = bus_mod.ACTION_LOG
+        self._tickets_org = tickets_mod.ORG
+        self._skills_org = skills_mod.ORG
+        self._skills_root = skills_mod.SKILLS_ROOT
+        self._settings = config_mod.SETTINGS_PATH
+
+        store_mod.ROOT = self.home
+        store_mod.BRAINS = self.home / "brains"
+        store_mod.JOBS = self.home / "jobs"
+        store_mod.INDEX = self.home / "brains" / "INDEX.md"
+        store_mod.BRAINS.mkdir(parents=True, exist_ok=True)
+        store_mod.JOBS.mkdir(parents=True, exist_ok=True)
+        store_mod.INDEX.write_text("Now: test\nLast: —\nNext: —\nBlocker: —\n", encoding="utf-8")
+        config_mod.SETTINGS_PATH = self.home / "openbot.local.json"
+        org_mod.ROOT = self.home
+        org_mod.ORG = self.home / "org"
+        org_mod.PROFILE_PATH = self.home / "org" / "profile.json"
+        org_mod.HERMES_HOMES = self.home / "hermes-homes"
+        org_mod.ORG.mkdir(parents=True, exist_ok=True)
+        bus_mod.ROOT = self.home
+        bus_mod.ORG = org_mod.ORG
+        bus_mod.ACTION_LOG = org_mod.ORG / "ACTION_LOG.md"
+        tickets_mod.ORG = org_mod.ORG
+        skills_mod.ORG = org_mod.ORG
+        skills_mod.SKILLS_ROOT = org_mod.ORG / "skills"
+        (org_mod.ORG / "projects" / "support").mkdir(parents=True, exist_ok=True)
+        (org_mod.ORG / "projects" / "support" / "INDEX.md").write_text(
+            "# Support\n\nNow: Ready.\nLast: —\nNext: —\nBlocker: —\n",
+            encoding="utf-8",
+        )
+        (org_mod.ORG / "projects" / "openbot").mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        store_mod.ROOT = self._store["root"]
+        store_mod.BRAINS = self._store["brains"]
+        store_mod.JOBS = self._store["jobs"]
+        store_mod.INDEX = self._store["index"]
+        org_mod.ROOT = self._org["root"]
+        org_mod.ORG = self._org["org"]
+        org_mod.PROFILE_PATH = self._org["profile"]
+        org_mod.HERMES_HOMES = self._org["homes"]
+        bus_mod.ROOT = self._bus_root
+        bus_mod.ORG = self._bus_org
+        bus_mod.ACTION_LOG = self._bus_log
+        tickets_mod.ORG = self._tickets_org
+        skills_mod.ORG = self._skills_org
+        skills_mod.SKILLS_ROOT = self._skills_root
+        config_mod.SETTINGS_PATH = self._settings
+        self.tmp.cleanup()
+
+
+class RetiredOrgTests(LaborLoopIsolation):
+    def test_retire_drops_nadia_and_listlogic(self):
+        saved = {
+            "projects": [
+                {"id": "openbot", "name": "openbot", "primary": True},
+                {"id": "nadia", "name": "Nadia"},
+                {"id": "listlogic", "name": "ListLogic"},
+                {"id": "saa-homes", "name": "SAA Homes"},
+            ]
+        }
+        out = retire_archived_ceos(saved)
+        ids = {str(row.get("id")) for row in out.get("projects") or []}
+        self.assertEqual(ids, {"openbot", "saa-homes"})
+        self.assertIn("nadia", RETIRED_CEO_IDS)
+        self.assertIn("listlogic", RETIRED_CEO_IDS)
+        nadia_index = org_mod.ORG / "projects" / "nadia" / "INDEX.md"
+        self.assertTrue(nadia_index.is_file())
+        self.assertIn("Retired from this OpenBot board", nadia_index.read_text(encoding="utf-8"))
+
+    def test_ensure_support_added(self):
+        saved = {"projects": [{"id": "openbot", "name": "openbot", "primary": True}]}
+        out = ensure_support_project(saved, str(self.home))
+        ids = {str(row.get("id")) for row in out.get("projects") or []}
+        self.assertIn(SUPPORT_CEO_ID, ids)
+        index = org_mod.ORG / "projects" / "support" / "INDEX.md"
+        text = index.read_text(encoding="utf-8")
+        self.assertIn("Stopline", text)
+        self.assertIn("Never Accept", text)
+
+    def test_public_org_lists_support_ceo(self):
+        profile = {
+            "name": "OPENBOT",
+            "role": "cos",
+            "folder": str(self.home),
+            "projects": [
+                {"id": "openbot", "name": "openbot", "role": "ceo", "folder": str(self.home), "primary": True, "workers": []},
+                {"id": "support", "name": "Support", "role": "ceo", "folder": str(self.home), "primary": False, "workers": []},
+            ],
+        }
+        org_mod.PROFILE_PATH.write_text(json.dumps(profile), encoding="utf-8")
+        listed = {str(row.get("id")) for row in org_mod.public_org()["projects"]}
+        self.assertIn("openbot", listed)
+        self.assertIn(SUPPORT_CEO_ID, listed)
+        self.assertIn(SUPPORT_CEO_ID, {row["id"] for row in org_mod.list_projects()})
+
+    def test_add_project_refuses_retired(self):
+        with self.assertRaises(ValueError):
+            org_mod.add_project(str(self.home), "Nadia")
+        with self.assertRaises(ValueError):
+            _refuse_retired("ListLogic")
+
+
+class TicketLoopTests(LaborLoopIsolation):
+    def test_classify_and_suggest_faq_drafts(self):
+        self.assertEqual(classify_kind("how do I pin a model"), "faq")
+        self.assertEqual(classify_kind("the builder crash is a bug"), "bug")
+        ticket = create_ticket("How do I start", "how do I open the board", source="suggest", auto_route=True)
+        self.assertEqual(ticket["kind"], "faq")
+        self.assertEqual(ticket["phase"], "triage")
+        self.assertTrue(ticket.get("draft_id"))
+        drafts = list_drafts("support", "drafts")
+        self.assertTrue(any(row.get("id") == ticket["draft_id"] for row in drafts))
+        pub = public_ticket(ticket)
+        self.assertEqual(pub["id"], ticket["id"])
+        work = working_on()
+        self.assertTrue(any(row["id"] == ticket["id"] for row in work["open"]))
+
+    def test_bug_routes_to_builder_handoff(self):
+        ticket = create_ticket("Login crash", "bug: builder crash on submit", source="suggest", auto_route=True)
+        self.assertEqual(ticket["kind"], "bug")
+        self.assertEqual(ticket["phase"], "building")
+        self.assertTrue(ticket.get("handoff_id"))
+        handoff = org_mod.ORG / "projects" / "openbot" / "bus" / "handoffs"
+        files = list(handoff.glob("*.md")) if handoff.is_dir() else []
+        self.assertTrue(files)
+
+    def test_accept_ships_and_drafts_announce(self):
+        ticket = create_ticket("Add a button", "please add a feature for dark mode", source="suggest", auto_route=False)
+        ticket = route_to_builder(ticket["id"])
+        job = {"id": "abc123", "diff_pending": True, "engine": "OpenCode"}
+        from openbot.tickets import on_job_linked
+
+        linked = on_job_linked(ticket["id"], job)
+        self.assertEqual(linked["phase"], "in_review")
+        shipped = on_diff_decided({"id": "abc123"}, True)
+        self.assertEqual(shipped["phase"], "shipped")
+        self.assertTrue(shipped.get("draft_id"))
+        announce = draft_announce(ticket["id"])
+        self.assertTrue(announce.get("draft_id"))
+
+    def test_x_ingest_fail_closed(self):
+        config_mod.SETTINGS_PATH.write_text(json.dumps({"x_intake_enabled": False}), encoding="utf-8")
+        out = ingest_x_mentions()
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["reason"], "x intake off")
+        config_mod.SETTINGS_PATH.write_text(json.dumps({"x_intake_enabled": True}), encoding="utf-8")
+        out = ingest_x_mentions()
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["reason"], "x credentials missing")
+
+
+class GateDraftEvidenceTests(LaborLoopIsolation):
+    def test_park_irreversible(self):
+        self.assertTrue(should_park_irreversible("ops", "send this email now"))
+        self.assertTrue(should_park_irreversible("builder", "push to origin main"))
+        self.assertFalse(should_park_irreversible("ops", "draft a reply, do not send"))
+        self.assertFalse(should_park_irreversible("cos", "send this"))
+        self.assertFalse(should_park_irreversible("builder", "fix the crash locally"))
+
+    def test_approval_expires_without_auto_approve(self):
+        row = create_gate_approval(job_id="job1", project_id="support", kind="irreversible", message="post to x")
+        self.assertEqual(row["status"], "pending")
+        path = bus_mod.approvals_dir() / f"{row['id']}.json"
+        past = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["expires_at"] = past
+        path.write_text(json.dumps(data), encoding="utf-8")
+        expired = expire_approvals()
+        self.assertTrue(any(item["id"] == row["id"] for item in expired))
+        listed = list_approvals("expired")
+        self.assertEqual(listed[0]["status"], "expired")
+        with self.assertRaises(ValueError):
+            decide_approval(row["id"], True)
+
+    def test_decide_approval_and_draft_lanes(self):
+        approval = create_gate_approval(job_id="job2", project_id="support", kind="irreversible", message="send")
+        decided = decide_approval(approval["id"], True)
+        self.assertEqual(decided["status"], "approved")
+        draft = write_draft(kind="announce", body="Shipped a fix.", project_id="support", title="Announce")
+        moved = move_draft(draft["id"], "support", "reviews")
+        self.assertEqual(moved["status"], "reviews")
+        moved = move_draft(draft["id"], "support", "approved")
+        self.assertEqual(moved["status"], "approved")
+        self.assertTrue(list_drafts("support", "approved"))
+
+    def test_evidence_bounce_unsourced(self):
+        rel = write_evidence_record("job3", project_id="support", produced_by="research", source="", result="prices went up")
+        path = self.home / rel
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("SOURCE: MISSING", text)
+        self.assertFalse(evidence_has_source(text))
+        ok = write_evidence_record(
+            "job4",
+            project_id="support",
+            produced_by="research",
+            source="https://example.com",
+            result="listed",
+        )
+        ok_text = (self.home / ok).read_text(encoding="utf-8")
+        self.assertTrue(evidence_has_source(ok_text))
+
+    def test_support_fub_denied(self):
+        tools = {
+            "connectors": {
+                "mcp": {"fub": {"mode": "deny", "ops": True}},
+                "skills": {"fub": {"ops": True}, "web-search": {"ops": True}},
+            }
+        }
+        self.assertEqual(connector_mode("fub", tools, "support"), "deny")
+        self.assertEqual(connector_mode("followupboss", {}, "support"), "deny")
+        skills = _effective_skills("ops", tools, "support")
+        self.assertNotIn("fub", (skills or "").split(","))
+        self.assertIn("web-search", (skills or "").split(","))
+
+
+class RoutineSkillSmoke(unittest.TestCase):
+    def test_support_triage_template_has_id(self):
+        from openbot.routine_templates import get_routine_templates
+
+        rows = get_routine_templates()
+        ids = [row["id"] for row in rows]
+        self.assertIn("support-triage", ids)
+        self.assertIn("pre-deploy-check", ids)
+        for row in rows:
+            self.assertTrue(row.get("id"))
+            self.assertTrue(row.get("steps"))
+
+
+if __name__ == "__main__":
+    unittest.main()

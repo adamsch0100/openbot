@@ -78,6 +78,22 @@ def get_routine_templates() -> list[dict]:
             ]
         },
         {
+            "id": "support-triage",
+            "name": "Support ticket sweep",
+            "description": "Load the support-triage Skill. Do not use a naked cron prompt.",
+            "schedule": "every 4 hours",
+            "steps": [
+                {
+                    "seat": "think",
+                    "instruction": "SKILL support-triage: read org/projects/support/tickets. Classify open tickets. FAQ → draft reply in bus/drafts. Bug/feature → handoff to Cos → openbot Builder. Never Accept, push, or post."
+                },
+                {
+                    "seat": "ops",
+                    "instruction": "SKILL support-status-update: patch Support INDEX Now/Last/Next from ticket phases. Do not send or publish."
+                }
+            ]
+        },
+        {
             "id": "pre-deploy-check",
             "name": "Pre-Deploy Checklist",
             "description": "Validation before deployment",

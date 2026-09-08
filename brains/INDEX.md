@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: CEO collaborator share is live (invite link, scoped session, owner keeps vault)
-Last: PR #49 MERGE-READY — Fix renderReportCard bypass (wire cleanBotText into report card render path)
-Next: Phone re-smoke on Research/Ops/Think jobs; invite a helper from This CEO → Share
+Now: Support is a CEO again — request / what’s-wrong form stays in Help, not the rail
+Last: Put tickets under You → Help; forms were wrongly sitting in the bot list
+Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=74 after deploy, then open SAA Homes
 Blocker: —
 
 ## Vault
@@ -12,9 +12,9 @@ Blocker: —
 - Keys live in `secrets.local.json` on this machine (gitignored). Same idea as `.env`. Not markdown. Not chat.
 - Site logins live in that same vault. You → Keys → Site logins, or approve them on a login card when a job hits a wall.
 - Unlock PIN in You → Settings gates the board. Do not paste keys or passwords into chat.
-- OpenCode (three Go wallets, same catalog): shared pool first, then SAA Homes / Conversion, then ListLogic. OpenRouter PAYG last.
+- OpenCode (three Go wallets, same catalog): shared pool first, then SAA Homes / Conversion, then ListLogic wallet if still in the keyring. OpenRouter PAYG last.
 - Seats are Auto unless you pin: Auto uses Muse Spark Contributor Free while OpenCode lists it, then Chat flash / Think-Code Arena / Ops cheap Go. Empty Chat can still be Board (INDEX) for free status.
-- CEO pins: openbot + Nadia → shared pool. SAA Homes → SAA Go. ListLogic → ListLogic Go. If that wallet is empty the instance chain is next.
+- CEO pins: openbot + Support → shared pool. SAA Homes → SAA Go. Nadia and ListLogic CEOs are retired from routing (folders stay on disk).
 - Hermes native: Nous Portal subscription. Subscribe at portal.nousresearch.com/r/adam-schwartz. Connect with `hermes portal` or paste `NOUS_API_KEY`. Not in this vault yet, so Auto is Go then OpenRouter.
 - PAYG: OpenRouter after the three Go wallets are empty, plus OpenCode Zen after Go quota
 - Not imported: Telegram, SMTP, GitHub, Meta — those stay on Railway. TOTP and CAPTCHA still stop on this screen.
@@ -33,7 +33,8 @@ Blocker: —
 - Work dir: C:\Users\adamm\Projects\openbot
 - Default: Auto on OpenCode Go, then the other Go wallets, OpenRouter last.
 - Plan: org/projects/openbot/INDEX.md
-- Tickets: org/projects/openbot/inbox.md
+- Tickets: org/projects/support/tickets (file via You → Help; Support is a CEO)
+- Support files: org/projects/support/INDEX.md
 
 ## Engines
 

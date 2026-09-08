@@ -9,6 +9,7 @@ import select
 import subprocess
 import tempfile
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .detect import hermes_home, which
@@ -783,15 +784,220 @@ def _parse_cron_table(text: str) -> list[dict]:
     return jobs
 
 
-def cron_runs(job_id: str | None = None, limit: int = 20, cwd: str | None = None) -> dict:
+def cron_runs(
+    job_id: str | None = None,
+    limit: int = 20,
+    cwd: str | None = None,
+    home: str | Path | None = None,
+) -> dict:
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
     cmd = [binary, "cron", "runs", "--limit", str(max(1, min(int(limit), 500)))]
     if job_id:
         cmd.append(job_id)
-    code, out = _run(cmd, cwd, 30)
+    code, out = _run(cmd, cwd, 30, home=home)
     return {"ok": code == 0, "code": code, "text": out.strip() or ""}
+
+
+def _cron_report_body(text: str) -> str:
+    raw = str(text or "")
+    match = re.search(r"^## Response\s*$", raw, re.M)
+    body = raw[match.end() :].strip() if match else raw.strip()
+    return body
+
+
+CRON_TITLES = {
+    "form-pipeline-health": "Site and form check",
+    "conversion-surge": "Conversion fixes",
+    "monthly-market-blog": "Monthly market blog",
+    "geo-citation-audit": "Citation audit",
+    "indexation-patrol": "Indexation patrol",
+    "daily-ranking-strike": "Daily rankings",
+    "competitor-content-watch": "Competitor watch",
+    "daily-done-digest": "Daily wrap-up",
+    "seo-execute-queue": "SEO fix queue",
+    "weekly-war-room": "Weekly war room",
+    "city-deep-dive-rotation": "City deep dive",
+    "content-gap-offense": "Content gaps",
+    "backlink-outreach-research": "Backlink research",
+    "schema-technical-audit": "Schema audit",
+    "internal-link-architecture": "Internal links",
+    "gbp-local-pack-audit": "Google Business Profile",
+    "blog-content-calendar": "Blog calendar",
+    "market-dominance-review": "Market review",
+    "social-weekly-content": "Weekly social pack",
+    "weekly-operator-schedule": "Weekly operator plan",
+    "lead-attribution-brief": "Lead attribution",
+    "idx-listings-hourly-sync": "Hourly listing sync",
+    "idx-listings-daily-full-sync": "Daily listing sync",
+}
+
+
+def cron_title(name: str) -> str:
+    raw = str(name or "").strip()
+    if raw in CRON_TITLES:
+        return CRON_TITLES[raw]
+    return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
+
+
+def cron_outcome(status: str, result: str) -> tuple[str, str]:
+    """Plain outcome + next action from a cron status and report body."""
+    body = _cron_report_body(result)
+    st = str(status or "").strip().lower()
+    if re.search(r"\[silent\]", body, re.I):
+        return "Healthy. Nothing new to report.", "No action. It will run again on schedule."
+    if re.search(r"error|fail", st):
+        if re.search(r"gateway shutdown", f"{body} {status}", re.I):
+            return "Failed. The Hermes gateway stopped mid-run.", "Open this CEO and ask Think to retry or fix it."
+        return "Failed. The last run did not finish.", "Open this CEO and ask Think to retry or fix it."
+    if not body:
+        return "Ran, but this board does not have the full report yet.", "Wait for the next copy, or check Telegram."
+    first = re.sub(r"\s+", " ", body.splitlines()[0])[:140]
+    return first, "Read the note below, then do the next step it names."
+
+
+def _parse_cron_when(value: str) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        stamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp.astimezone(timezone.utc)
+
+
+def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "") -> dict:
+    """Last two days in plain language. No click-through required."""
+    now = datetime.now(timezone.utc)
+    window = timedelta(hours=max(6, int(hours)))
+    failed: list[dict] = []
+    recent: list[dict] = []
+    healthy: list[dict] = []
+    stale: list[dict] = []
+    enabled = 0
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        on = row.get("enabled") is not False
+        if on:
+            enabled += 1
+        status = str(row.get("last_status") or "").lower()
+        when = _parse_cron_when(str(row.get("last_run_at") or ""))
+        fresh = bool(when and now - when <= window)
+        item = {
+            "id": str(row.get("id") or ""),
+            "name": str(row.get("name") or row.get("id") or "cron"),
+            "title": cron_title(str(row.get("name") or "")),
+            "last_run_at": str(row.get("last_run_at") or ""),
+            "last_status": str(row.get("last_status") or ""),
+            "outcome": str(row.get("outcome") or ""),
+            "next_action": str(row.get("next_action") or ""),
+            "enabled": on,
+        }
+        if on and re.search(r"error|fail", status):
+            failed.append(item)
+        elif fresh and re.search(r"healthy|\[silent\]", f"{row.get('outcome') or ''} {row.get('last_result') or ''}", re.I):
+            healthy.append(item)
+        elif fresh:
+            recent.append(item)
+        elif on:
+            stale.append(item)
+    ask = re.sub(r"\s+", " ", str(next_ask or "")).strip()
+    if ask in {"", "—"}:
+        ask = ""
+    bits = []
+    if healthy or recent:
+        names = [row["title"] for row in (healthy + recent)[:3]]
+        bits.append("Recently: " + ", ".join(names) + ".")
+    else:
+        bits.append("Nothing from the last two days is on this machine yet. Telegram may still have the live Railway report.")
+    if failed:
+        bits.append("Still failed: " + ", ".join(row["title"] for row in failed[:3]) + ".")
+    if ask:
+        bits.append("What moves this forward: " + ask)
+    elif not failed:
+        bits.append("No operator step from the schedule.")
+    return {
+        "story": " ".join(bits),
+        "failed": failed[:8],
+        "recent": (healthy + recent)[:12],
+        "stale": stale[:6],
+        "enabled": enabled,
+        "failed_count": len(failed),
+        "recent_count": len(healthy) + len(recent),
+    }
+
+
+def _latest_cron_markdown(home: Path, job_id: str, limit: int = 4000) -> str:
+    folder = home / "cron" / "output" / str(job_id)
+    if not folder.is_dir():
+        return ""
+    files = sorted(folder.glob("*.md"), key=lambda path: path.name, reverse=True)
+    if not files:
+        return ""
+    try:
+        text = files[0].read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    return text[:limit]
+
+
+def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[dict]:
+    """Read Hermes jobs.json. results=True attaches last markdown. Never opens sqlite."""
+    if not home:
+        return []
+    root = Path(home)
+    path = root / "cron" / "jobs.json"
+    if not path.is_file():
+        return []
+    try:
+        blob = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    rows = blob.get("jobs") if isinstance(blob, dict) else blob
+    out: list[dict] = []
+    for row in rows or []:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        jid = str(row.get("id"))
+        status = str(row.get("last_status") or "").strip()
+        when = _parse_cron_when(str(row.get("last_run_at") or ""))
+        fresh = bool(when and datetime.now(timezone.utc) - when <= timedelta(hours=48))
+        need_md = bool(results and (fresh or re.search(r"error|fail", status, re.I)))
+        result = _latest_cron_markdown(root, jid) if need_md else ""
+        if status or result:
+            if need_md or re.search(r"error|fail", status, re.I):
+                outcome, nxt = cron_outcome(status, result)
+            else:
+                outcome, nxt = (
+                    "Last check is older than two days.",
+                    "No action unless something failed.",
+                )
+        else:
+            outcome, nxt = "", ""
+        sched = row.get("schedule") if isinstance(row.get("schedule"), dict) else {}
+        name = str(row.get("name") or jid)
+        out.append(
+            {
+                "id": jid,
+                "name": name,
+                "title": cron_title(name),
+                "schedule": str(row.get("schedule_display") or sched.get("expr") or ""),
+                "enabled": row.get("enabled") is not False,
+                "last_run_at": str(row.get("last_run_at") or ""),
+                "next_run_at": str(row.get("next_run_at") or ""),
+                "last_status": status,
+                "last_error": str(row.get("last_error") or ""),
+                "last_result": result,
+                "outcome": outcome,
+                "next_action": nxt,
+            }
+        )
+    return out
 
 
 def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:

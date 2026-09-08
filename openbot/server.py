@@ -150,6 +150,11 @@ INSTANCE_SESSION = re.compile(
 SHARE_INVITE_TOKEN = re.compile(r"^/api/share/invite/([A-Za-z0-9_-]{8,80})$")
 SHARE_INVITE_ID = re.compile(r"^/api/share/invites/([a-f0-9]{6,32})$")
 SHARE_MEMBER_ID = re.compile(r"^/api/share/members/([a-f0-9]{6,32})$")
+TICKET_ID = re.compile(r"^/api/tickets/([a-z0-9-]{6,40})$")
+TICKET_ACTION = re.compile(r"^/api/tickets/([a-z0-9-]{6,40})/(route|announce)$")
+APPROVAL_ID = re.compile(r"^/api/approvals/([a-z0-9-]{6,40})$")
+DRAFT_ACTION = re.compile(r"^/api/drafts/([a-z0-9-]{6,40})/(approve|reject)$")
+BOARD_SKILL = re.compile(r"^/api/skills/board/([a-z0-9-]{2,80})$")
 PRESET_ENGINE = {
     "cos": "board",
     "think": "Hermes Agent",
@@ -374,7 +379,10 @@ def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> di
     needs = []
     for item in pending_approvals():
         row = dict(item)
-        row["name"] = names.get(row.get("project_id") or "") or "Chief of Staff"
+        row["name"] = (
+            names.get(row.get("project_id") or "")
+            or ("Help" if str(row.get("project_id") or "") == "support" else "Chief of Staff")
+        )
         needs.append(row)
     
     # Check for spend cap alerts
@@ -389,6 +397,24 @@ def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> di
         cap_notices = spend_alerts.get("alerts") or []
     except Exception:
         cap_notices = []
+    try:
+        from .tickets import working_on
+        from .bus import eval_chip, list_drafts
+        from .playskills import list_board_skills, seed_dogfood_skills
+
+        seed_dogfood_skills()
+        work = working_on()
+        chip = eval_chip()
+    except Exception:
+        work = {"open": [], "recent": [], "expired_approvals": [], "counts": {}}
+        chip = {"pending_approvals": 0, "expired_approvals": 0, "expired": [], "pending": []}
+    drafts = []
+    try:
+        from .bus import list_drafts
+
+        drafts = list_drafts("support", "drafts") + list_drafts("support", "reviews")
+    except Exception:
+        drafts = []
     if project_id:
         jobs = filter_jobs(jobs, project_id)
         needs = [row for row in needs if str(row.get("project_id") or "") == str(project_id)]
@@ -403,6 +429,9 @@ def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> di
         "needs_you": needs,
         "cron_jobs": cron_jobs,
         "cap_notices": cap_notices,
+        "working_on": work,
+        "eval": chip,
+        "drafts": drafts[:12],
         "has_key": _has_key(keyring),
         "opencode_running": bool(opencode_web_status().get("running")),
         "hermes_running": bool(hermes_dash_status().get("running")),
@@ -450,6 +479,8 @@ def _public_config() -> dict:
         "hermes_instances": public_instances(),
         "actor": "owner",
         "share": None,
+        "x_intake_enabled": bool(load_settings().get("x_intake_enabled")),
+        "x_username": str(load_settings().get("x_username") or ""),
     }
 
 
@@ -1031,6 +1062,17 @@ class Handler(SimpleHTTPRequestHandler):
             if member:
                 org = filter_org(org, member_project_id(member))
             return self._json(200, org)
+        if path == "/api/crons":
+            from .org import project_cron_bundle
+
+            qs = parse_qs(urlparse(self.path).query)
+            pid = (qs.get("project_id") or [""])[0].strip()
+            if not pid:
+                return self._json(400, {"error": "project_id required"})
+            member = self._actor_row()
+            if member and not allows_project(member, pid):
+                return self._forbid("not on this CEO")
+            return self._json(200, project_cron_bundle(pid))
         if path == "/api/spend/dashboard":
             if self._require_owner():
                 return None
@@ -1218,6 +1260,68 @@ class Handler(SimpleHTTPRequestHandler):
             if not data:
                 return self._json(404, {"error": "routine not found"})
             return self._json(200, data)
+        if path == "/api/tickets":
+            if self._require_perm("jobs_view"):
+                return None
+            from .tickets import list_tickets, public_ticket
+
+            qs = parse_qs(urlparse(self.path).query)
+            phase = (qs.get("phase") or [""])[0].strip()
+            phases = (phase,) if phase else None
+            rows = [public_ticket(row) for row in list_tickets(phases=phases)]
+            return self._json(200, {"tickets": rows})
+        if path == "/api/working-on":
+            if self._require_perm("jobs_view"):
+                return None
+            from .tickets import working_on, public_ticket
+
+            data = working_on()
+            data["open"] = [public_ticket(row) for row in data.get("open") or []]
+            data["recent"] = [public_ticket(row) for row in data.get("recent") or []]
+            return self._json(200, data)
+        if path == "/api/skills/board":
+            if self._require_perm("engines_view"):
+                return None
+            from .playskills import list_board_skills
+
+            return self._json(200, {"skills": list_board_skills()})
+        if path == "/api/drafts":
+            if self._require_perm("jobs_view"):
+                return None
+            from .bus import list_drafts
+
+            qs = parse_qs(urlparse(self.path).query)
+            pid = (qs.get("project_id") or ["support"])[0].strip() or "support"
+            lane = (qs.get("lane") or ["drafts"])[0].strip() or "drafts"
+            return self._json(200, {"drafts": list_drafts(pid, lane)})
+        if path == "/api/approvals":
+            if self._require_perm("jobs_view"):
+                return None
+            from .bus import list_approvals
+
+            qs = parse_qs(urlparse(self.path).query)
+            status = (qs.get("status") or ["pending"])[0].strip() or "pending"
+            return self._json(200, {"approvals": list_approvals(status)})
+        skill = BOARD_SKILL.match(path)
+        if skill:
+            if self._require_perm("engines_view"):
+                return None
+            from .playskills import read_skill
+
+            data = read_skill(skill.group(1))
+            if not data:
+                return self._json(404, {"error": "skill not found"})
+            return self._json(200, data)
+        ticket = TICKET_ID.match(path)
+        if ticket:
+            if self._require_perm("jobs_view"):
+                return None
+            from .tickets import public_ticket, read_ticket
+
+            row = read_ticket(ticket.group(1))
+            if not row:
+                return self._json(404, {"error": "ticket not found"})
+            return self._json(200, public_ticket(row))
         return super().do_GET()
 
     def do_POST(self):
@@ -1549,6 +1653,8 @@ class Handler(SimpleHTTPRequestHandler):
                     "license_key",
                     "spend_policy",
                     "enable_self_build",
+                    "x_intake_enabled",
+                    "x_username",
                 )
                 if any(key in data for key in settings_keys):
                     if isinstance(data.get("seats"), dict):
@@ -1945,6 +2051,82 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
 
+        if path == "/api/tickets":
+            if self._require_perm("chat_write"):
+                return None
+            try:
+                from .tickets import create_ticket, public_ticket
+
+                title = str(data.get("title") or "").strip()
+                body = str(data.get("body") or "").strip()
+                source = str(data.get("source") or "suggest").strip() or "suggest"
+                author = str(data.get("author") or "").strip()
+                ticket = create_ticket(title, body, source=source, author=author)
+                return self._json(200, public_ticket(ticket))
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+        ticket_action = TICKET_ACTION.match(path)
+        if ticket_action:
+            if self._require_perm("chat_write"):
+                return None
+            from .tickets import draft_announce, public_ticket, route_to_builder
+
+            tid = ticket_action.group(1)
+            action = ticket_action.group(2)
+            try:
+                if action == "route":
+                    row = route_to_builder(tid)
+                else:
+                    row = draft_announce(tid)
+                return self._json(200, public_ticket(row))
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+        if path == "/api/x/ingest":
+            if self._require_owner():
+                return None
+            from .tickets import ingest_x_mentions
+
+            return self._json(200, ingest_x_mentions())
+        if path == "/api/skills/board":
+            if self._require_owner():
+                return None
+            try:
+                from .playskills import write_skill
+
+                skill = write_skill(
+                    str(data.get("name") or ""),
+                    str(data.get("description") or ""),
+                    str(data.get("whenToUse") or data.get("when_to_use") or ""),
+                    str(data.get("body") or ""),
+                )
+                return self._json(200, skill)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+        approval = APPROVAL_ID.match(path)
+        if approval:
+            if self._require_perm("approve_needs_you"):
+                return None
+            try:
+                from .bus import decide_approval
+
+                accept = bool(data.get("accept", True))
+                row = decide_approval(approval.group(1), accept)
+                return self._json(200, row)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
+        draft_action = DRAFT_ACTION.match(path)
+        if draft_action:
+            if self._require_perm("approve_needs_you"):
+                return None
+            try:
+                from .bus import move_draft
+
+                dest = "approved" if draft_action.group(2) == "approve" else "archive"
+                pid = str(data.get("project_id") or "support").strip() or "support"
+                row = move_draft(draft_action.group(1), pid, dest)
+                return self._json(200, row)
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
         match = JOB_ACTION.match(path)
         if match:
             job_id, action = match.group(1), match.group(2)

@@ -24,6 +24,8 @@ DEFAULT_SETTINGS = {
     "profile_account_id": "",
     "hermes_skills": "",
     "enable_self_build": False,
+    "x_intake_enabled": False,
+    "x_username": "",
     "connectors": {
         "skills": {},
         "mcp": {}
@@ -222,6 +224,10 @@ def load_settings() -> dict:
                 data["hermes_skills"] = raw["hermes_skills"].strip()
             if "enable_self_build" in raw:
                 data["enable_self_build"] = bool(raw["enable_self_build"])
+            if "x_intake_enabled" in raw:
+                data["x_intake_enabled"] = bool(raw["x_intake_enabled"])
+            if isinstance(raw.get("x_username"), str):
+                data["x_username"] = raw["x_username"].strip().lstrip("@")[:40]
             connectors = raw.get("connectors")
             if isinstance(connectors, dict):
                 if isinstance(connectors.get("skills"), dict):
@@ -274,6 +280,10 @@ def save_settings(patch: dict) -> dict:
         current["hermes_skills"] = str(patch.get("hermes_skills") or "").strip()
     if "enable_self_build" in patch:
         current["enable_self_build"] = bool(patch.get("enable_self_build"))
+    if "x_intake_enabled" in patch:
+        current["x_intake_enabled"] = bool(patch.get("x_intake_enabled"))
+    if "x_username" in patch:
+        current["x_username"] = str(patch.get("x_username") or "").strip().lstrip("@")[:40]
     if "connectors" in patch and isinstance(patch.get("connectors"), dict):
         connectors = patch["connectors"]
         if isinstance(connectors.get("skills"), dict):

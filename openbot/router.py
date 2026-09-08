@@ -36,15 +36,19 @@ from .bus import (
     classify_gate,
     close_work_job,
     cos_file_reply,
+    create_gate_approval,
     handoff_summary,
     law_extra,
     log_approval,
+    should_park_irreversible,
+    write_draft,
 )
 from .org import (
     add_schedule,
     ensure_ceo_engines,
     inbox_tail,
     index_field,
+    list_projects,
     node_label,
     patch_project_tools,
     patch_scope,
@@ -112,6 +116,10 @@ WALLET_EMPTY = re.compile(
     r"insufficient balance|opencode\.ai/.*/billing",
     re.I,
 )
+NEED_OPERATOR = re.compile(
+    r"\b(login|pay|send|publish|approve|approval|password|gbp)\b",
+    re.I,
+)
 PRESETS = {"cos", "builder", "research", "ops", "think"}
 LANE_LABEL = {
     "cos": "Chat",
@@ -172,7 +180,21 @@ def resolve_preset(message: str, requested: str | None) -> str:
     return classify(message)
 
 
-def _effective_skills(preset: str, tools: dict | None) -> str | None:
+def _strip_denied_skills(names: list[str], tools: dict | None, project_id: str | None) -> list[str]:
+    from .bus import connector_mode
+
+    kept = []
+    for name in names:
+        skill = (name or "").strip()
+        if not skill:
+            continue
+        if connector_mode(skill, tools, project_id) == "deny":
+            continue
+        kept.append(skill)
+    return kept
+
+
+def _effective_skills(preset: str, tools: dict | None, project_id: str | None = None) -> str | None:
     """Compute effective skills for a preset based on connector configuration.
     
     Returns:
@@ -192,20 +214,29 @@ def _effective_skills(preset: str, tools: dict | None) -> str | None:
     # Map preset to seat name used in connectors
     seat_map = {"think": "think", "research": "research", "ops": "ops"}
     seat = seat_map.get(preset)
+    support = str(project_id or "") == "support"
+
+    def legacy() -> str | None:
+        raw = str(settings.get("hermes_skills") or "").strip()
+        if support:
+            names = _strip_denied_skills([x.strip() for x in raw.split(",") if x.strip()], tools, project_id)
+            return ",".join(names)
+        return raw or None
     
     if not seat or not skills_config:
         # No connector config, fall back to legacy hermesSkills
-        return str(settings.get("hermes_skills") or "").strip() or None
+        return legacy()
     
     # Collect skills enabled for this seat
     allowed = []
     for skill_name, seat_toggles in skills_config.items():
         if isinstance(seat_toggles, dict) and seat_toggles.get(seat) is True:
             allowed.append(skill_name)
+    allowed = _strip_denied_skills(allowed, tools, project_id)
     
     # If no skills are explicitly enabled, use legacy hermesSkills as fallback
     if not allowed:
-        return str(settings.get("hermes_skills") or "").strip() or None
+        return legacy()
     
     return ",".join(allowed)
 
@@ -408,7 +439,7 @@ def cos_browser_login_reply() -> str:
     return (
         "Cos has no browser. Site logins stay in the board vault — never paste cookies or passwords into chat.\n"
         "1. You → Keys → Site logins — add facebook.com (or the site) with user/pass there.\n"
-        "2. Open the CEO that owns the work (Nadia), pin Research or Think.\n"
+        "2. Open the CEO that owns the work, pin Research or Think.\n"
         "3. Ask that CEO to open the group; if a login wall hits, Approve the vault login on the card.\n"
         "I cannot see whether a browser login already worked from this Staff chat — check the CEO thread "
         "or the last Research/Think card for a login wall vs success."
@@ -708,6 +739,14 @@ def _packet_extra(
         bits.append(f"TICKET:\n{ticket}")
     if extra:
         bits.append(extra.strip())
+    try:
+        from .playskills import skill_packet
+
+        play = skill_packet(project_id, preset)
+        if play:
+            bits.append(play)
+    except Exception:
+        pass
     if preset in {"think", "research", "ops"} and hermes_home:
         staged = stage_job_logins(project_id, hermes_home, only_auto=True)
         if staged:
@@ -811,22 +850,27 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         if key in latest:
             continue
         latest[key] = job
+    projects = list_projects()
+    names = {str(row.get("id") or ""): str(row.get("name") or row.get("id") or "this CEO") for row in projects}
     out: list[dict] = []
     for job in latest.values():
+        pid = str(job.get("project_id") or "")
+        who = names.get(pid) or "this CEO"
         if job.get("login_wall"):
             kind = "login"
-            label = "needs a login"
+            label = f"{who}: a site asked for a login. Open this CEO, approve the saved login, then continue."
         elif job.get("diff_pending"):
             kind = "diff"
-            label = "Accept or reject the diff"
+            label = f"{who}: a code change is waiting. Open chat and Accept to keep it or Reject to undo."
         else:
             continue
         out.append(
             {
                 "id": str(job.get("id") or ""),
                 "kind": kind,
+                "name": who,
                 "label": label,
-                "project_id": str(job.get("project_id") or ""),
+                "project_id": pid,
                 "engine": str(job.get("engine") or "board"),
                 "preset": str(job.get("preset") or ""),
                 "url": str(job.get("url") or ""),
@@ -835,6 +879,79 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         )
         if len(out) >= limit:
             break
+    have = {str(row.get("project_id") or "") for row in out}
+    for project in projects:
+        if len(out) >= limit:
+            break
+        pid = str(project.get("id") or "")
+        if not pid or pid in have:
+            continue
+        who = str(project.get("name") or pid)
+        text = read_project_index(pid)
+        now = index_field(text, "Now")
+        nxt = index_field(text, "Next")
+        blocker = index_field(text, "Blocker")
+        stuck = blocker and blocker != "—"
+        if not stuck and not NEED_OPERATOR.search(f"{now}\n{nxt}"):
+            continue
+        ask = nxt if nxt and nxt != "—" else (now if now and now != "—" else "needs a decision")
+        label = (
+            f"{who} is blocked: {blocker[:120]}. Open this CEO and clear it."
+            if stuck
+            else f"{who} needs you: {ask[:140]}"
+        )
+        out.append(
+            {
+                "id": f"brief-{pid}",
+                "kind": "brief",
+                "name": who,
+                "label": label,
+                "project_id": pid,
+                "engine": "board",
+                "preset": "cos",
+                "url": "",
+                "at": "",
+            }
+        )
+        have.add(pid)
+    try:
+        from .bus import list_approvals
+
+        for row in list_approvals("pending"):
+            if len(out) >= limit:
+                break
+            out.append(
+                {
+                    "id": str(row.get("id") or ""),
+                    "kind": "gate",
+                    "label": "Something is waiting for your yes before it can continue.",
+                    "project_id": str(row.get("project_id") or ""),
+                    "engine": "board",
+                    "preset": "ops",
+                    "url": "",
+                    "at": str(row.get("created_at") or ""),
+                    "approval_id": str(row.get("id") or ""),
+                    "job_id": str(row.get("job_id") or ""),
+                }
+            )
+        for row in list_approvals("expired")[:4]:
+            if len(out) >= limit:
+                break
+            out.append(
+                {
+                    "id": str(row.get("id") or ""),
+                    "kind": "expired",
+                    "label": "A yes/no window expired. It did not auto-approve. Dismiss it.",
+                    "project_id": str(row.get("project_id") or ""),
+                    "engine": "board",
+                    "preset": "ops",
+                    "url": "",
+                    "at": str(row.get("expires_at") or ""),
+                    "approval_id": str(row.get("id") or ""),
+                }
+            )
+    except Exception:
+        pass
     return out
 
 
@@ -1071,7 +1188,7 @@ def _handle_preset(
     brain_text = read_worker_brain(project_id, worker_id) or (index_text if project_id else read_brain("cos"))
     tools = tools or project_tools(project_id)
     seats = tools.get("seats") if isinstance(tools.get("seats"), dict) else {}
-    skills = _effective_skills(chosen, tools)
+    skills = _effective_skills(chosen, tools, project_id)
     hermes_home_dir = str(tools.get("hermes_home") or "").strip() or None
     login_wall = False
     page_url = None
@@ -1110,25 +1227,50 @@ def _handle_preset(
             
             patch_index_line("Blocker", blocker)
             receipt = _receipt_base(job_id, chosen, engine, message, work, actor=actor)
-            receipt.update(
-                {
-                    "blocker": blocker,
-                    "text": text,
-                    "usd_estimate": 0.0,
-                    "wallet": "included",
-                    "cost_known": True,
-                    "spend": spend_now,
-                    "cap_remaining": spend_now.get("cap_remaining"),
-                    "project_id": project_id,
-                    "worker_id": worker_id,
-                    "keep_going": False,
-                }
-            )
+            receipt.update({"text": text, "blocker": blocker, "engine": engine})
             write_job(receipt)
-            receipt["index"] = read_project_index(project_id) if project_id else read_index()
-            receipt["engines"] = engines
-            receipt["config"] = {"work_dir": cfg["work_dir"], "first_run_done": cfg["first_run_done"]}
             return public_job(receipt)
+
+    if should_park_irreversible(chosen, message):
+        engine = "board"
+        approval = create_gate_approval(
+            job_id=job_id,
+            project_id=project_id,
+            kind="irreversible",
+            message=message,
+        )
+        draft = write_draft(
+            kind="outbound",
+            body=message,
+            project_id=project_id or "support",
+            title="Parked irreversible action",
+        )
+        blocker = "irreversible — parked for Needs-you"
+        text = (
+            "Parked. This looks like send/publish/pay/delete/push.\n"
+            f"Approval {approval['id']} expires {approval['expires_at']}. "
+            "It will not auto-approve.\n"
+            f"Draft: {draft.get('path')}"
+        )
+        patch_index_line("Blocker", blocker)
+        patch_index_line("Next", f"Approve {approval['id']} or let it expire")
+        receipt = _receipt_base(job_id, chosen, engine, message, work, actor=actor)
+        receipt.update(
+            {
+                "text": text,
+                "blocker": blocker,
+                "engine": engine,
+                "approval_id": approval["id"],
+                "approval_pending": True,
+                "draft_id": draft.get("id"),
+                "gate": classify_gate(chosen, message, ok=False, talk=False),
+            }
+        )
+        receipt["gate"]["action"] = "approval"
+        receipt["gate"]["label"] = "irreversible — Needs-you before send"
+        close_work_job(receipt, text)
+        write_job(receipt)
+        return public_job(receipt)
 
     if chosen == "ask":
         text = (
@@ -1919,6 +2061,14 @@ def _handle_preset(
     receipt["text"] = text
     close_work_job(receipt, text)
     write_job(receipt)
+    try:
+        from .tickets import on_job_linked
+
+        ticket_match = re.search(r"\bsug-[a-f0-9]{8,12}\b", message or "")
+        if ticket_match:
+            on_job_linked(ticket_match.group(0), receipt)
+    except Exception:
+        pass
     spend_after = spend_summary(float(cap), cfg["spend_cap_period"], project_id=project_id)
     receipt["cap_remaining"] = spend_after["cap_remaining"]
     receipt["text"] = text
@@ -2075,7 +2225,15 @@ def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: boo
         patch_lines("Next", "Ask for the next change")
         patch_lines("Blocker", "—")
         rollup_staff(pid, wid, f"accepted diff {job_id}")
-        log_approval(updated or job, True, force=validation_bypassed)
+        accepted_job = dict(updated or job)
+        accepted_job["approval_id"] = str(accepted_job.get("id") or job_id)
+        log_approval(accepted_job, True, force=validation_bypassed)
+        try:
+            from .tickets import on_diff_decided
+
+            on_diff_decided(accepted_job, True)
+        except Exception:
+            pass
         
         # Optional test-after-accept
         if run_tests and folder:
@@ -2132,6 +2290,12 @@ def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: boo
     patch_lines("Blocker", "—")
     rollup_staff(pid, wid, f"rejected diff {job_id}")
     log_approval(updated or job, False, force=False)
+    try:
+        from .tickets import on_diff_decided
+
+        on_diff_decided(updated or job, False)
+    except Exception:
+        pass
     return {
         "ok": True,
         "accepted": False,

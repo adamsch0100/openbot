@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpenBot · Local Org.</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
-  <link rel="stylesheet" href="/styles.css?v=64" />
+  <link rel="stylesheet" href="/styles.css?v=72" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -152,14 +152,22 @@
             <small id="profileRole">Settings</small>
           </span>
         </button>
+        <button type="button" class="help-link" id="openHelp">Help &amp; suggestions <span id="helpChip"></span></button>
       </div>
     </aside>
     <div class="chat-col">
       <div class="chat-shell">
       <div class="chat-head">
-        <div class="chat-where" id="chatWhere">Chief of Staff</div>
-        <div class="chat-folder" id="chatFolder">You → Chief of Staff → CEOs</div>
-        <nav class="lanes" id="laneStatus" aria-label="Work in this chat">
+        <div class="chat-head-row">
+          <div>
+            <div class="chat-where" id="chatWhere">Chief of Staff</div>
+            <div class="chat-folder" id="chatFolder">You → Chief of Staff → CEOs</div>
+          </div>
+          <button type="button" class="ghost-btn" id="openSchedule" hidden>Schedule</button>
+        </div>
+        <aside id="ceoBrief" class="ceo-brief" hidden></aside>
+        <aside id="chatSchedule" class="chat-schedule" hidden></aside>
+        <nav class="lanes" id="laneStatus" hidden aria-label="Work in this chat">
           <button type="button" class="lane on" data-lane="all" title="Show every turn in this chat">All</button>
           <button type="button" class="lane" data-lane="builder" title="Show only Code jobs in this chat">Code</button>
           <button type="button" class="lane" data-lane="think" title="Show only Think jobs in this chat">Think</button>
@@ -248,6 +256,7 @@
           <button type="button" class="drawer-tab" data-panel="memory">Memory</button>
           <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
           <button type="button" class="drawer-tab" data-panel="advanced">Advanced</button>
+          <button type="button" class="drawer-tab" data-panel="help">Help</button>
           <button type="button" class="drawer-tab" data-panel="about">About</button>
         </nav>
         <div class="drawer-body">
@@ -446,7 +455,10 @@
             <h3 class="drawer-sub">MCP Servers</h3>
             <p class="muted">MCP catalog from <code>hermes mcp catalog</code>. Select which seats can use each server. GitHub MCP defaults to Code only.</p>
             <div id="mcpMatrix" class="connector-matrix"></div>
-            <p class="muted" id="connectorNote">Per-CEO overrides: select a CEO in the sidebar, then use This CEO panel.</p>
+            <p class="muted" id="connectorNote">Per-CEO overrides: select a CEO in the sidebar, then use This CEO panel. Support never gets FUB/CRM keys.</p>
+            <h3 class="drawer-sub">Board Skills (HOW)</h3>
+            <p class="muted">Playbooks the board owns. A routine is only WHEN it runs — it should load a Skill, not a naked cron prompt.</p>
+            <div id="boardSkillsList" class="connector-matrix"></div>
             <div class="actions">
               <button type="button" class="send" id="saveConnectors">Save</button>
               <button type="button" class="ghost-btn" id="refreshConnectors">Refresh catalog</button>
@@ -582,10 +594,34 @@
               Enable self-build loop
             </label>
             <div id="selfBuildStatus" class="muted"></div>
+            <h4>X intake</h4>
+            <p class="muted">Mentions become Support tickets. Off by default. Needs <code>X_BEARER_TOKEN</code> in the environment. Fail closed if missing. Posts still wait for Needs-you.</p>
+            <label class="check">
+              <input id="xIntakeEnabled" type="checkbox" />
+              Enable X mention intake
+            </label>
+            <div class="field">
+              <label for="xUsername">X username</label>
+              <input id="xUsername" type="text" placeholder="openbot" autocomplete="off" />
+            </div>
+            <div class="actions">
+              <button type="button" class="ghost-btn" id="ingestX">Pull mentions now</button>
+              <p class="muted" id="xIntakeStatus"></p>
+            </div>
             <div class="actions">
               <button type="button" class="send" id="saveAdvanced">Save</button>
               <p class="muted" id="advancedStatus"></p>
             </div>
+          </section>
+          <section class="drawer-panel" id="panel-help">
+            <p class="lede">File a request or report what’s wrong here. Support is a CEO you can talk to — this form is not in the bot list. Cos routes bugs and features to openbot Builder. You Accept diffs and any public post.</p>
+            <div id="helpWorkingOn"></div>
+            <form class="suggest-form" id="suggestForm">
+              <input id="suggestTitle" type="text" placeholder="Support request" autocomplete="off" />
+              <textarea id="suggestBody" rows="3" placeholder="What’s wrong, or what should OpenBot do?"></textarea>
+              <button type="submit" class="ghost-btn">Suggest</button>
+              <p class="muted" id="suggestStatus"></p>
+            </form>
           </section>
           <section class="drawer-panel" id="panel-about">
             <p class="credit">
@@ -613,6 +649,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=65"></script>
+  <script src="/app.js?v=74"></script>
 </body>
 </html>

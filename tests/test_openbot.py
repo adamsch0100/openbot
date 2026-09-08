@@ -1155,11 +1155,32 @@ class KeyringTests(unittest.TestCase):
                 "preset": "builder",
             },
         ]
-        with patch("openbot.router.list_jobs", return_value=jobs):
+        with patch("openbot.router.list_jobs", return_value=jobs), patch(
+            "openbot.router.list_projects", return_value=[]
+        ):
             rows = pending_approvals()
         kinds = {row["project_id"]: row["kind"] for row in rows}
         self.assertEqual(kinds["saa-homes"], "login")
         self.assertEqual(kinds["openbot"], "diff")
+        self.assertIn("login", next(row["label"] for row in rows if row["kind"] == "login").lower())
+        self.assertIn("accept", next(row["label"] for row in rows if row["kind"] == "diff").lower())
+
+    def test_pending_approvals_brief_from_index(self):
+        from unittest.mock import patch
+
+        from openbot.router import pending_approvals
+
+        with patch("openbot.router.list_jobs", return_value=[]), patch(
+            "openbot.router.list_projects",
+            return_value=[{"id": "saa-homes", "name": "SAA Homes"}],
+        ), patch(
+            "openbot.router.read_project_index",
+            return_value="Now: waiting\nLast: ok\nNext: Pin Think and send GBP listing corrections.\nBlocker: —\n",
+        ):
+            rows = pending_approvals()
+        self.assertEqual(rows[0]["kind"], "brief")
+        self.assertEqual(rows[0]["id"], "brief-saa-homes")
+        self.assertIn("GBP", rows[0]["label"])
 
     def test_hermes_portal_auth_counts_as_nous(self):
         from unittest.mock import patch
@@ -1240,6 +1261,20 @@ class StreamAndErrorTests(unittest.TestCase):
         )
         self.assertEqual(error_message_from_raw(raw), "No endpoints found that support tool use.")
         self.assertNotIn("set-cookie", sanitize_job_text(raw + " set-cookie=secret").lower())
+
+
+class ReattachCeoTests(unittest.TestCase):
+    def test_reattach_imported_ceos_skips_retired_and_tests(self):
+        from openbot.org import reattach_imported_ceos
+
+        saved = {"projects": [{"id": "openbot", "name": "openbot", "primary": True}]}
+        out = reattach_imported_ceos(saved)
+        ids = {str(row.get("id")) for row in out.get("projects") or []}
+        self.assertIn("openbot", ids)
+        self.assertIn("saa-homes", ids)
+        self.assertNotIn("nadia", ids)
+        self.assertNotIn("listlogic", ids)
+        self.assertNotIn("opencode-test", ids)
 
 
 class OrgTests(unittest.TestCase):

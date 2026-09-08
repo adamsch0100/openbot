@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .store import ROOT, list_jobs, now_iso
@@ -14,6 +17,12 @@ SECRET = re.compile(
     r"(password|passwd|totp|secret|api[_-]?key|bearer|authorization:\s*\S+)",
     re.I,
 )
+DRAFT_OK = re.compile(
+    r"\b(draft|queue|prepare|suggest|do not send|don't send|park)\b",
+    re.I,
+)
+APPROVAL_TTL_MIN = 60
+DENIED_MCP = frozenset({"fub", "followupboss", "flask-isa", "flask_isa", "stripe"})
 IRREVERSIBLE = re.compile(
     r"\b(send|publish|post|tweet|email|purchase|pay|spend|transfer|delete|"
     r"sign\b|accept terms|push(?:ed|ing)?(?:\s+to)?\s+(?:origin|remote|prod)|"
@@ -78,9 +87,16 @@ CONTRACTS = {
     "ops": {
         "job": "Schedule work in Hermes cron. Tickets live in inbox/ops.md.",
         "sources": "The operator request, INDEX, existing crons.",
-        "judgment": "A routine is good when it is silent on success and idempotent on retry.",
+        "judgment": "A routine is good when it is silent on success and idempotent on retry. Routines load a Skill (HOW); cron is only WHEN.",
         "output": "A cron job id and schedule. Notify only on exception or approval.",
         "forbidden": "No browser, no send/publish/pay/delete/sign. Never bypass source or evidence gates.",
+    },
+    "support": {
+        "job": "Own tickets and suggestions. Triage, schedule, tell the status story, draft replies.",
+        "sources": "Support INDEX, ticket files, OpenBot docs, bus/handoffs.",
+        "judgment": "FAQ drafts stay in bus/drafts. Bugs/features hand off to Cos → openbot Builder.",
+        "output": "Ticket phase updates, HANDOFF files, draft replies. Diffs wait for Accept/Reject.",
+        "forbidden": "No Accept, no push, no live X post, no CRM/FUB, no unsupervised send.",
     },
     "ceo": {
         "job": "Own this project's outcome. Route Code to OpenCode; Think/Research/Ops to Hermes.",
@@ -189,6 +205,8 @@ def handoff_instruction() -> str:
 
 def law_extra(preset: str, project_id: str | None = None, worker_id: str | None = None) -> str:
     kind = "worker" if worker_id else (preset if preset in CONTRACTS else "ceo")
+    if str(project_id or "") == "support" and not worker_id:
+        kind = "support"
     parts = [
         "CONTRACT:\n" + contract_lines(kind),
         gates_block(preset),
@@ -378,18 +396,25 @@ def close_work_job(receipt: dict, result: str) -> dict:
         created = auto_create_handoffs(receipt, result, project_id)
         if created:
             receipt["auto_handoffs"] = created
-    
+
     if preset == "research" and (sources or result):
-        ev = ensure_bus(project_id) / "evidence" / f"{job_id}.md"
-        ev.write_text(
-            f"# Evidence {job_id}\n\n"
-            f"SOURCE: {redact(sources) or '—'}\n"
-            f"AT: {now_iso()}\n\n"
-            f"{redact(result)}\n",
-            encoding="utf-8",
+        ev_rel = write_evidence_record(
+            job_id,
+            project_id=project_id,
+            produced_by=str(receipt.get("engine") or "research"),
+            source=sources,
+            result=result,
         )
+        receipt["evidence_path"] = ev_rel
+        ev_file = ROOT / ev_rel
+        blob = ev_file.read_text(encoding="utf-8") if ev_file.is_file() else result
+        if not evidence_has_source(blob):
+            receipt["blocker"] = receipt.get("blocker") or "unsourced evidence — bounce"
+            status = "blocked" 
     gate = receipt.get("gate") if isinstance(receipt.get("gate"), dict) else {}
     files = rel
+    if preset == "research" and receipt.get("evidence_path"):
+        files = f"{rel}; {receipt.get('evidence_path')}"
     if receipt.get("diff_pending"):
         files = f"{rel}; local diff pending"
     append_action_log(
@@ -404,7 +429,8 @@ def close_work_job(receipt: dict, result: str) -> dict:
             "gate": gate.get("action") or "allow",
             "files": files,
             "external": "attempted" if gate.get("irreversible") else "none",
-            "approval": "needed" if gate.get("action") == "approval" else "n/a",
+        "approval": receipt.get("approval_id")
+        or ("needed" if gate.get("action") == "approval" else "n/a"),
         }
     )
     receipt["handoff_path"] = rel
@@ -590,7 +616,7 @@ def log_approval(job: dict, accepted: bool, force: bool = False, action: str = "
         "gate": "approval",
         "files": job.get("handoff_path") or "diff",
         "external": "none",
-        "approval": "received" if accepted else ("denied" if action == "decide" else "reverted"),
+        "approval": str(job.get("approval_id") or "received" if accepted else "denied"),
     }
     if force:
         log_entry["force_accepted"] = True
@@ -700,10 +726,310 @@ def seed_org_contracts(project_ids: list[str] | None = None) -> None:
             continue
         if wanted and folder.name not in wanted:
             continue
-        seed_file_contract(folder / "INDEX.md", "ceo")
+        seed_file_contract(folder / "INDEX.md", "support" if folder.name == "support" else "ceo")
         ensure_bus(folder.name)
         workers = folder / "workers"
         if not workers.is_dir():
             continue
         for worker in workers.iterdir():
             seed_file_contract(worker / "BRAIN.md", "worker")
+
+
+def should_park_irreversible(preset: str, message: str) -> bool:
+    """True when the job must stop for a Needs-you card before external IO."""
+    if preset in {"cos", "ask", "think", "research"}:
+        return False
+    text = message or ""
+    if DRAFT_OK.search(text):
+        return False
+    if preset == "builder":
+        return bool(
+            re.search(
+                r"\b(push(?:ed|ing)?(?:\s+to)?\s+(?:origin|remote|prod)|publish|deploy|production)\b",
+                text,
+                re.I,
+            )
+        )
+    return bool(IRREVERSIBLE.search(text))
+
+
+def approvals_dir() -> Path:
+    path = ORG / "approvals"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def drafts_dir(project_id: str | None, lane: str = "drafts") -> Path:
+    root = ensure_bus(project_id)
+    path = root / lane
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def write_draft(
+    *,
+    kind: str,
+    body: str,
+    project_id: str | None,
+    ticket_id: str = "",
+    title: str = "",
+) -> dict:
+    draft_id = f"draft-{uuid.uuid4().hex[:8]}"
+    path = drafts_dir(project_id, "drafts") / f"{draft_id}.md"
+    payload = (
+        f"# {title or kind}\n\n"
+        f"ID: {draft_id}\n"
+        f"KIND: {kind}\n"
+        f"STATUS: draft\n"
+        f"TICKET: {ticket_id or '—'}\n"
+        f"AT: {now_iso()}\n\n"
+        f"{redact(body)}\n"
+    )
+    path.write_text(payload, encoding="utf-8")
+    return {
+        "id": draft_id,
+        "kind": kind,
+        "status": "draft",
+        "ticket_id": ticket_id,
+        "project_id": project_id,
+        "path": str(path.relative_to(ROOT)).replace("\\", "/"),
+        "title": title or kind,
+        "body": body,
+    }
+
+
+def _parse_draft(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    fields = {"id": path.stem, "path": str(path.relative_to(ROOT)).replace("\\", "/"), "body": text}
+    for line in text.splitlines()[:12]:
+        if line.startswith("ID:"):
+            fields["id"] = line[3:].strip()
+        elif line.startswith("KIND:"):
+            fields["kind"] = line[5:].strip()
+        elif line.startswith("STATUS:"):
+            fields["status"] = line[7:].strip()
+        elif line.startswith("TICKET:"):
+            fields["ticket_id"] = line[7:].strip()
+        elif line.startswith("# "):
+            fields["title"] = line[2:].strip()
+    return fields
+
+
+def list_drafts(project_id: str | None, lane: str = "drafts", limit: int = 20) -> list[dict]:
+    folder = drafts_dir(project_id, lane)
+    rows = []
+    for path in sorted(folder.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+        try:
+            rows.append(_parse_draft(path))
+        except (OSError, UnicodeDecodeError):
+            continue
+    return rows
+
+
+def move_draft(draft_id: str, project_id: str | None, dest_lane: str) -> dict:
+    if dest_lane not in {"drafts", "reviews", "approved", "archive"}:
+        raise ValueError("invalid lane")
+    found = None
+    for lane in ("drafts", "reviews", "approved", "archive"):
+        path = drafts_dir(project_id, lane) / f"{draft_id}.md"
+        if path.is_file():
+            found = path
+            break
+    if found is None:
+        raise ValueError("draft not found")
+    dest = drafts_dir(project_id, dest_lane) / found.name
+    text = found.read_text(encoding="utf-8")
+    text = re.sub(r"^STATUS:.*$", f"STATUS: {dest_lane}", text, count=1, flags=re.M)
+    dest.write_text(text, encoding="utf-8")
+    if dest.resolve() != found.resolve():
+        found.unlink()
+    return _parse_draft(dest)
+
+
+def write_evidence_record(
+    job_id: str,
+    *,
+    project_id: str | None,
+    produced_by: str,
+    claims: list[dict] | None = None,
+    source: str = "",
+    result: str = "",
+) -> str:
+    root = ensure_bus(project_id)
+    path = root / "evidence" / f"{job_id}.md"
+    rows = claims or []
+    if not rows and (source or result):
+        rows = [
+            {
+                "claim": redact(result)[:400] or "research result",
+                "source": source or "—",
+                "read_at": now_iso(),
+                "produced_by": produced_by,
+            }
+        ]
+    lines = [f"# Evidence {job_id}", "", f"PRODUCED_BY: {produced_by}", f"AT: {now_iso()}", ""]
+    missing = False
+    for row in rows:
+        src = str(row.get("source") or "").strip()
+        read_at = str(row.get("read_at") or now_iso())
+        claim = str(row.get("claim") or "").strip()
+        if not src or src in {"—", "-", "MISSING"}:
+            missing = True
+            src = ""
+        lines.append(f"CLAIM: {redact(claim)}")
+        lines.append(f"SOURCE: {redact(src) or 'MISSING'}")
+        lines.append(f"READ_AT: {read_at}")
+        lines.append("")
+    if missing:
+        lines.append("STATUS: bounce — unsourced claim")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    try:
+        return str(path.relative_to(ROOT)).replace("\\", "/")
+    except ValueError:
+        return str(path)
+
+
+def evidence_has_source(text: str) -> bool:
+    blob = text or ""
+    if "SOURCE: MISSING" in blob or re.search(r"^SOURCE:\s+[—\-]?$", blob, re.M):
+        return False
+    return bool(re.search(r"^SOURCE:\s+\S+", blob, re.M))
+
+
+def _iso_to_dt(raw: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def create_gate_approval(
+    *,
+    job_id: str,
+    project_id: str | None,
+    kind: str,
+    message: str,
+    ttl_min: int = APPROVAL_TTL_MIN,
+) -> dict:
+    approval_id = f"apr-{uuid.uuid4().hex[:10]}"
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=max(5, int(ttl_min)))
+    row = {
+        "id": approval_id,
+        "kind": kind,
+        "status": "pending",
+        "job_id": job_id,
+        "project_id": project_id or "",
+        "message": redact(message)[:800],
+        "created_at": now.isoformat(),
+        "expires_at": expires.isoformat(),
+        "decided_at": "",
+        "actor": "",
+    }
+    path = approvals_dir() / f"{approval_id}.json"
+    path.write_text(json.dumps(row, indent=2), encoding="utf-8")
+    return row
+
+
+def expire_approvals() -> list[dict]:
+    expired = []
+    now = datetime.now(timezone.utc)
+    for path in approvals_dir().glob("apr-*.json"):
+        try:
+            row = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(row.get("status") or "") != "pending":
+            continue
+        exp = _iso_to_dt(str(row.get("expires_at") or ""))
+        if exp and exp < now:
+            row["status"] = "expired"
+            path.write_text(json.dumps(row, indent=2), encoding="utf-8")
+            append_action_log(
+                {
+                    "id": row.get("job_id") or row.get("id"),
+                    "bot": row.get("project_id") or "staff",
+                    "engine": "board",
+                    "preset": "ops",
+                    "trigger": "approval-expiry",
+                    "status": "expired",
+                    "gate": "approval",
+                    "approval": row.get("id"),
+                    "external": "none",
+                }
+            )
+            expired.append(row)
+    return expired
+
+
+def list_approvals(status: str | None = "pending") -> list[dict]:
+    expire_approvals()
+    rows = []
+    for path in approvals_dir().glob("apr-*.json"):
+        try:
+            row = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if status and str(row.get("status") or "") != status:
+            continue
+        rows.append(row)
+    rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+    return rows
+
+
+def decide_approval(approval_id: str, accept: bool, actor: str = "owner") -> dict:
+    path = approvals_dir() / f"{approval_id}.json"
+    if not path.is_file():
+        raise ValueError("approval not found")
+    row = json.loads(path.read_text(encoding="utf-8"))
+    if str(row.get("status") or "") == "expired":
+        raise ValueError("approval expired")
+    if str(row.get("status") or "") != "pending":
+        raise ValueError("approval not pending")
+    row["status"] = "approved" if accept else "denied"
+    row["decided_at"] = now_iso()
+    row["actor"] = actor
+    path.write_text(json.dumps(row, indent=2), encoding="utf-8")
+    append_action_log(
+        {
+            "id": row.get("job_id") or approval_id,
+            "bot": row.get("project_id") or "staff",
+            "engine": "board",
+            "preset": "ops",
+            "trigger": "needs-you",
+            "status": row["status"],
+            "gate": "approval",
+            "approval": approval_id,
+            "external": "none",
+        }
+    )
+    return row
+
+
+def connector_mode(name: str, tools: dict | None, project_id: str | None = None) -> str:
+    """allow | ask | deny. Support never gets FUB/CRM keys."""
+    key = re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+    if str(project_id or "") == "support" and any(bad.replace("-", "") in key or bad in (name or "").lower() for bad in DENIED_MCP):
+        return "deny"
+    if any(bad.replace("-", "") == key or bad == (name or "").lower() for bad in DENIED_MCP):
+        if str(project_id or "") == "support":
+            return "deny"
+    blob = tools or {}
+    connectors = blob.get("connectors") if isinstance(blob.get("connectors"), dict) else {}
+    mcp = connectors.get("mcp") if isinstance(connectors.get("mcp"), dict) else {}
+    row = mcp.get(name) or mcp.get(key) or {}
+    if isinstance(row, dict) and row.get("mode") in {"allow", "ask", "deny"}:
+        return str(row.get("mode"))
+    return "ask" if IRREVERSIBLE.search(name or "") else "allow"
+
+
+def eval_chip() -> dict:
+    expire_approvals()
+    pending = list_approvals("pending")
+    expired = list_approvals("expired")
+    return {
+        "pending_approvals": len(pending),
+        "expired_approvals": len(expired[:12]),
+        "expired": expired[:8],
+        "pending": pending[:8],
+    }
