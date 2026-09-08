@@ -3,9 +3,11 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from openbot.hermes import _parse_cron_table, cron_digest, cron_outcome, cron_title, is_valid_job_id, read_home_crons
+from openbot.live import finish, snapshot, start
 
 
 class TestHermesCronParsing(unittest.TestCase):
@@ -249,6 +251,55 @@ class TestJobIdValidation(unittest.TestCase):
             detailed = read_home_crons(home, results=True)
             self.assertIn("[SILENT]", detailed[0]["last_result"])
             self.assertIn("Healthy", detailed[0]["outcome"])
+
+    def test_cron_digest_now_running_and_due(self):
+        now = datetime.now(timezone.utc)
+        rows = [
+            {
+                "id": "run1",
+                "name": "daily-ranking-strike",
+                "enabled": True,
+                "state": "running",
+                "last_status": "running",
+                "last_run_at": now.isoformat(),
+                "next_run_at": (now + timedelta(hours=24)).isoformat(),
+            },
+            {
+                "id": "due1",
+                "name": "form-pipeline-health",
+                "enabled": True,
+                "state": "scheduled",
+                "last_status": "ok",
+                "last_run_at": (now - timedelta(hours=20)).isoformat(),
+                "next_run_at": (now + timedelta(minutes=8)).isoformat(),
+                "outcome": "Healthy. Nothing new to report.",
+            },
+            {
+                "id": "done1",
+                "name": "indexation-patrol",
+                "enabled": True,
+                "state": "scheduled",
+                "last_status": "ok",
+                "last_run_at": (now - timedelta(minutes=4)).isoformat(),
+                "next_run_at": (now + timedelta(hours=6)).isoformat(),
+                "outcome": "Healthy. Nothing new to report.",
+            },
+        ]
+        pack = cron_digest(rows, live_runs=[{"project_id": "saa-homes", "preset": "think"}])
+        self.assertEqual(pack["running"][0]["name"], "daily-ranking-strike")
+        self.assertEqual(pack["due"][0]["name"], "form-pipeline-health")
+        self.assertEqual(pack["just_finished"][0]["name"], "indexation-patrol")
+        self.assertIn("Now running", pack["live_story"])
+        self.assertIn("This chat is answering now", pack["live_story"])
+
+    def test_live_snapshot_names_the_chat(self):
+        start("live-test-1", {"project_id": "saa-homes", "preset": "think", "title": "check rankings"})
+        try:
+            rows = snapshot()
+            self.assertTrue(any(row["id"] == "live-test-1" and row["project_id"] == "saa-homes" for row in rows))
+        finally:
+            finish("live-test-1")
+        self.assertFalse(any(row["id"] == "live-test-1" for row in snapshot()))
 
 
 if __name__ == "__main__":

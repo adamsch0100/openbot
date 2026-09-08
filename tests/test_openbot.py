@@ -134,6 +134,7 @@ class UsageTests(unittest.TestCase):
 class RouterClassifyTests(unittest.TestCase):
     def test_status_and_code(self):
         self.assertEqual(classify("What is going on and what is blocked?"), "cos")
+        self.assertEqual(classify("what is actually running right now"), "cos")
         self.assertEqual(classify("Change the code: add a footer"), "builder")
         self.assertEqual(classify("Look at this site https://example.com"), "research")
         self.assertEqual(classify("Every morning ping the board"), "ops")
@@ -540,6 +541,7 @@ class BrandMarkTests(unittest.TestCase):
         self.assertIn("live_stop", server)
         self.assertIn("patch_project_tools", server)
         self.assertIn("/api/unlock", server)
+        self.assertIn("/api/companion", server)
         self.assertIn("operator_name", server)
         self.assertIn("/api/hermes/import/backup", server)
 

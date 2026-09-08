@@ -449,11 +449,18 @@ def project_crons(project_id: str, *, results: bool = True) -> list[dict]:
 def project_cron_bundle(project_id: str) -> dict:
     """Schedule rows plus a last-two-days story in plain language."""
     from .hermes import cron_digest
+    from .live import snapshot
 
     pid = str(project_id or "").strip()
     rows = project_crons(pid, results=True)
     nxt = index_field(read_project_index(pid), "Next") if pid else ""
-    return {"project_id": pid, "crons": rows, "digest": cron_digest(rows, next_ask=nxt)}
+    live_runs = [row for row in snapshot() if str(row.get("project_id") or "") == pid]
+    return {
+        "project_id": pid,
+        "crons": rows,
+        "live_runs": live_runs,
+        "digest": cron_digest(rows, next_ask=nxt, live_runs=live_runs),
+    }
 
 
 def list_projects() -> list[dict]:

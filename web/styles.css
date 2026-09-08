@@ -609,6 +609,60 @@ body {
   justify-content: space-between;
   gap: 10px;
 }
+.ceo-live {
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #141210;
+}
+.ceo-live[hidden] { display: none; }
+.ceo-live-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.ceo-live-head b {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bronze);
+}
+.ceo-live.on .ceo-live-head b { color: #d8b36a; }
+.ceo-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.ceo-live.on .ceo-live-dot {
+  background: #c9a227;
+  box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.18);
+  animation: ceo-live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ceo-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.ceo-live p {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.ceo-live p:last-child { margin-bottom: 0; color: var(--muted); }
+.ceo-live-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0 0 4px;
+}
+.ceo-live-item span { color: var(--muted); }
 .ceo-brief {
   margin: 10px 0 4px;
   padding: 10px 12px;
@@ -654,6 +708,7 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
+.cron-card.live .cron-head b { color: #d8b36a; }
 .cron-card {
   display: grid;
   gap: 4px;

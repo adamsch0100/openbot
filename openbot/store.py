@@ -21,6 +21,7 @@ JOBS = ROOT / "jobs"
 INDEX = BRAINS / "INDEX.md"
 JOB_ID_RE = re.compile(r"^[a-f0-9]{6,32}$")
 BRAIN_NAMES = {"cos", "builder", "research", "ops", "think"}
+INDEX_LABELS = ("Now", "Last", "Next", "Blocker")
 MAX_FILE_CHARS = 100_000
 CONTRIBUTOR_BANNER = re.compile(
     r"!!!?\s*CONTRIBUTOR\s+TIER[\s\S]*?(?=\n(?:Now|Last|Next|Blocker):|\n\n|$)",
@@ -54,6 +55,17 @@ def clean_memory_text(text: str) -> str:
 
 def read_index() -> str:
     return INDEX.read_text(encoding="utf-8") if INDEX.exists() else ""
+
+
+def index_four_lines(text: str | None = None) -> dict[str, str]:
+    """Staff INDEX four-liners. Companion and status read this, not the vault."""
+    blob = text if text is not None else read_index()
+    out = {label: "" for label in INDEX_LABELS}
+    for label in INDEX_LABELS:
+        match = re.search(rf"^{re.escape(label)}:\s*(.*)$", blob or "", re.M)
+        if match:
+            out[label] = match.group(1).strip()
+    return out
 
 
 def read_brain(name: str) -> str:

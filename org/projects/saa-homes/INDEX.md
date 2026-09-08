@@ -2,9 +2,9 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Live SAA Hermes on Railway still runs the schedule. This board is the operator chat.
+Now: Now running at the top of this chat. Live Railway Hermes still owns the schedule; this copy reports what it can see.
 Last: form-pipeline-health ran on the imported copy
-Next: Open What’s happening. Pin Think and name one failed job. Do not fire every cron from chat.
+Next: Watch Now running. When a job finishes, it lands here and in What’s happening. Pin Think for one failed job. Do not fire every cron.
 Blocker: —
 Goals: —
 

@@ -106,6 +106,7 @@ function syncLiveFromAim() {
   lockComposer(Boolean(cfg.has_key));
   paintLanes();
   paintQueueChip();
+  paintCeoLive(digestCache.get(projectId));
 }
 
 function formatFileSize(bytes) {
@@ -892,6 +893,7 @@ function setLive(runId, meta) {
     paintLanes();
     renderOrg(org);
   }
+  paintCeoLive(digestCache.get(projectId));
 }
 
 async function stopLive(key) {
@@ -2387,7 +2389,9 @@ function renderBotMeta(opts) {
   paintLanes();
   renderSchedules(project);
   paintScheduleButton();
-  paintCeoBrief(digestCache.get(projectId));
+  const cachedPack = digestCache.get(projectId) || {};
+  paintCeoBrief(cachedPack.digest || cachedPack);
+  paintCeoLive(cachedPack);
   if (!project) {
     scheduleOpen = false;
     const panel = $("chatSchedule");
@@ -2439,6 +2443,19 @@ function cronWhen(value) {
   return stamp.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function cronWhenNext(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const stamp = new Date(raw);
+  if (Number.isNaN(stamp.getTime())) return "";
+  const ms = stamp.getTime() - Date.now();
+  if (ms >= -20 * 60 * 1000 && ms <= 30 * 60 * 1000) return "due now";
+  if (ms < 0 && ms > -36e5) return "a bit late";
+  if (ms < 0) return "";
+  if (ms < 36e5) return `in ${Math.max(1, Math.round(ms / 60000))} min`;
+  return stamp.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+
 function paintScheduleButton() {
   const btn = $("openSchedule");
   if (!btn) return;
@@ -2449,20 +2466,23 @@ function paintScheduleButton() {
   btn.textContent = scheduleOpen ? "Hide schedule" : "What's happening";
 }
 
-function cronCardHtml(row, open) {
+function cronCardHtml(row, open, mark) {
   const title = row.title || cronTitle(row.name || row.id);
   const when = cronWhen(row.last_run_at);
+  const upcoming = cronWhenNext(row.next_run_at);
+  const clock = upcoming ? `${when} · next ${upcoming}` : when;
   const outcome = row.outcome || "No result on this machine yet.";
   const next = row.next_action || "";
   const showNext = next && !/no action/i.test(next) && !/ask Think to retry/i.test(next);
   const report = open ? (row.last_result || "") : "";
-  return `<article class="cron-card${open ? " open" : ""}" id="cron-${escapeHtml(row.id || "")}">
+  const live = mark === "live";
+  return `<article class="cron-card${open ? " open" : ""}${live ? " live" : ""}" id="cron-${escapeHtml(row.id || "")}">
     <div class="cron-head">
       <b>${escapeHtml(title)}</b>
-      <span>${escapeHtml(when)}</span>
+      <span>${escapeHtml(live ? "running now" : clock)}</span>
     </div>
-    <p class="cron-outcome">${escapeHtml(outcome)}</p>
-    ${showNext ? `<p class="cron-next">${escapeHtml(next)}</p>` : ""}
+    <p class="cron-outcome">${escapeHtml(live ? "This job is on the schedule right now." : outcome)}</p>
+    ${showNext && !live ? `<p class="cron-next">${escapeHtml(next)}</p>` : ""}
     ${report ? `<details open><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
   </article>`;
 }
@@ -2493,20 +2513,80 @@ function paintCeoBrief(digest) {
   el.innerHTML = bits.map((line) => `<p>${escapeHtml(line)}</p>`).join("");
 }
 
+function laneLabel(name) {
+  const raw = String(name || "").trim();
+  if (!raw || raw === "cos") return "Chat";
+  return jobLabel(raw) || raw;
+}
+
+function paintCeoLive(pack) {
+  const el = $("ceoLive");
+  if (!el) return;
+  if (!projectId) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const data = pack || digestCache.get(projectId) || {};
+  const digest = data.digest || data;
+  const chatLive = Boolean(liveRunId);
+  const boardRuns = (data.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
+  const running = digest.running || [];
+  const due = digest.due || [];
+  const finished = digest.just_finished || [];
+  const nextUp = digest.next_up || null;
+  const active = chatLive || boardRuns.length || running.length;
+  const items = [];
+  if (chatLive) {
+    items.push(`<div class="ceo-live-item"><b>${escapeHtml(talkName())} is answering this chat</b><span>${escapeHtml(laneLabel(liveLane || preset))}</span></div>`);
+  }
+  boardRuns.forEach((row) => {
+    if (chatLive && String(row.id || "") === String(liveRunId)) return;
+    items.push(`<div class="ceo-live-item"><b>${escapeHtml(laneLabel(row.preset))} is working</b><span>${escapeHtml(String(row.title || "This chat").slice(0, 48))}</span></div>`);
+  });
+  running.forEach((row) => {
+    items.push(`<div class="ceo-live-item"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>schedule · running</span></div>`);
+  });
+  if (!active && due.length) {
+    due.slice(0, 3).forEach((row) => {
+      items.push(`<div class="ceo-live-item"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>${escapeHtml(cronWhenNext(row.next_run_at) || "due now")}</span></div>`);
+    });
+  }
+  if (!active && !due.length && finished.length) {
+    finished.slice(0, 2).forEach((row) => {
+      items.push(`<div class="ceo-live-item"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>just finished</span></div>`);
+    });
+  }
+  if (!items.length && nextUp) {
+    items.push(`<div class="ceo-live-item"><b>${escapeHtml(nextUp.title || cronTitle(nextUp.name))}</b><span>${escapeHtml(cronWhenNext(nextUp.next_run_at) || "next up")}</span></div>`);
+  }
+  const note = active
+    ? "When this finishes, it lands in the chat and in What’s happening."
+    : (digest.live_story || "Nothing running on this copy. Live Hermes + Telegram still own today’s jobs.");
+  el.hidden = false;
+  el.classList.toggle("on", Boolean(active));
+  el.innerHTML = `<div class="ceo-live-head"><b>${active ? "Now running" : (due.length ? "Due now" : "Now running")}</b><i class="ceo-live-dot" aria-hidden="true"></i></div>${items.join("")}<p>${escapeHtml(note)}</p>`;
+}
+
 async function loadCeoDigest() {
   if (!projectId) {
     paintCeoBrief(null);
+    paintCeoLive(null);
     return null;
   }
   const cached = digestCache.get(projectId);
-  if (cached) paintCeoBrief(cached);
+  if (cached) {
+    paintCeoBrief(cached.digest || cached);
+    paintCeoLive(cached);
+  }
   try {
     const pid = projectId;
     const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`);
     const data = await res.json();
-    digestCache.set(pid, data.digest || {});
+    digestCache.set(pid, data);
     if (projectId === pid) {
       paintCeoBrief(data.digest);
+      paintCeoLive(data);
       if (scheduleOpen) renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
     }
     return data;
@@ -2528,14 +2608,28 @@ function renderChatSchedule(rows, digest, focusId) {
     el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live report.</p>`;
     return;
   }
-  const pack = digest || digestCache.get(projectId) || {};
+  const cached = digestCache.get(projectId) || {};
+  const pack = digest || cached.digest || cached || {};
   const want = String(focusId || scheduleFocusId || "");
+  const running = pack.running || [];
+  const due = pack.due || [];
+  const finished = pack.just_finished || [];
   const failed = pack.failed || list.filter((row) => /error|fail/i.test(row.last_status || ""));
   const recent = pack.recent || [];
-  const seen = new Set([...failed, ...recent].map((row) => row.id));
+  const seen = new Set([...running, ...due, ...finished, ...failed, ...recent].map((row) => row.id));
   const rest = list.filter((row) => row.enabled !== false && !seen.has(row.id));
   const sections = [];
+  if (pack.live_story) sections.push(`<p class="cron-story">${escapeHtml(pack.live_story)}</p>`);
   if (pack.story) sections.push(`<p class="cron-story">${escapeHtml(pack.story)}</p>`);
+  if (running.length) {
+    sections.push(`<h3 class="cron-section">Now running</h3>${running.map((row) => cronCardHtml(row, row.id === want, "live")).join("")}`);
+  }
+  if (due.length) {
+    sections.push(`<h3 class="cron-section">Due now</h3>${due.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+  }
+  if (finished.length) {
+    sections.push(`<h3 class="cron-section">Just finished</h3>${finished.map((row) => cronCardHtml(row, row.id === want, "done")).join("")}`);
+  }
   if (failed.length) {
     sections.push(`<h3 class="cron-section">Needs a look</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
   }
@@ -2561,7 +2655,7 @@ async function openSchedule(focusId) {
   const cached = digestCache.get(projectId);
   if (el) {
     el.hidden = false;
-    if (cached) renderChatSchedule(null, cached, focusId);
+    if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
     else el.innerHTML = `<p class="muted">Loading the last two days…</p>`;
   }
   const data = await loadCeoDigest();
@@ -3608,7 +3702,7 @@ function emptyStreamHtml() {
     showCTA = false;
   } else if (project) {
     lead = project.id === "saa-homes"
-      ? "SAA Homes watches saahomes.com. Talk here. The live schedule still runs on Telegram."
+      ? "SAA Homes watches saahomes.com. Now running at the top shows this chat and any job this copy can see. Finished work lands here and in What’s happening. Telegram still owns the live schedule."
       : `Talking to ${project.name}. Type a message — pin Code, Think, Research, or Ops only when you want that engine.`;
     showCTA = false;
   }
@@ -4285,7 +4379,20 @@ async function loadOrgTree() {
   }
 }
 
+let digestTimer = 0;
+
+function startDigestPoll() {
+  if (digestTimer) return;
+  digestTimer = window.setInterval(() => {
+    if (projectId) loadCeoDigest();
+  }, 15000);
+}
+
 async function boot() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+  startDigestPoll();
   const invite = new URLSearchParams(location.search).get("invite");
   if (invite) {
     const joined = await waitForShareInvite(invite);
@@ -4377,9 +4484,19 @@ async function pollActivity() {
     renderActivity(data);
     await loadSpend();
     if (projectId && !workerId) {
+      const freshCron = [];
       (data.cron_jobs || []).forEach((job) => {
-        if (job.project_id === projectId && job.id && !seenCron.has(job.id)) renderJob(job);
+        if (job.project_id === projectId && job.id && !seenCron.has(job.id)) {
+          renderJob(job);
+          freshCron.push(job);
+        }
       });
+      if (freshCron.length) loadCeoDigest();
+    }
+    if (projectId && Array.isArray(data.live_runs)) {
+      const pack = digestCache.get(projectId) || {};
+      digestCache.set(projectId, Object.assign({}, pack, { live_runs: data.live_runs }));
+      paintCeoLive(digestCache.get(projectId));
     }
     if (!liveRunId) {
       const fresh = (data.jobs || []).some((job) => {

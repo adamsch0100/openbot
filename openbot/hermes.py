@@ -871,14 +871,50 @@ def _parse_cron_when(value: str) -> datetime | None:
     return stamp.astimezone(timezone.utc)
 
 
-def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "") -> dict:
-    """Last two days in plain language. No click-through required."""
+_CRON_RUNNING = re.compile(r"running|in.?progress|started|firing|claimed", re.I)
+_CRON_PAUSED = re.compile(r"paused|disabled", re.I)
+
+
+def _cron_digest_item(row: dict, enabled: bool) -> dict:
+    return {
+        "id": str(row.get("id") or ""),
+        "name": str(row.get("name") or row.get("id") or "cron"),
+        "title": cron_title(str(row.get("name") or "")),
+        "last_run_at": str(row.get("last_run_at") or ""),
+        "next_run_at": str(row.get("next_run_at") or ""),
+        "last_status": str(row.get("last_status") or ""),
+        "state": str(row.get("state") or ""),
+        "outcome": str(row.get("outcome") or ""),
+        "next_action": str(row.get("next_action") or ""),
+        "enabled": enabled,
+    }
+
+
+def _cron_is_running(row: dict) -> bool:
+    if row.get("enabled") is False:
+        return False
+    state = str(row.get("state") or "")
+    if _CRON_PAUSED.search(state):
+        return False
+    status = str(row.get("last_status") or "")
+    if _CRON_RUNNING.search(state) or _CRON_RUNNING.search(status):
+        return True
+    return bool(row.get("claimed") or row.get("fire_claim"))
+
+
+def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_runs: list[dict] | None = None) -> dict:
+    """Last two days plus what is running / due now. No click-through required."""
     now = datetime.now(timezone.utc)
     window = timedelta(hours=max(6, int(hours)))
     failed: list[dict] = []
     recent: list[dict] = []
     healthy: list[dict] = []
     stale: list[dict] = []
+    running: list[dict] = []
+    due: list[dict] = []
+    just_finished: list[dict] = []
+    next_up: dict | None = None
+    next_up_when: datetime | None = None
     enabled = 0
     for row in rows or []:
         if not isinstance(row, dict):
@@ -887,18 +923,24 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "") -> dic
         if on:
             enabled += 1
         status = str(row.get("last_status") or "").lower()
+        state = str(row.get("state") or "")
+        paused = (not on) or bool(_CRON_PAUSED.search(state))
         when = _parse_cron_when(str(row.get("last_run_at") or ""))
+        nxt_when = _parse_cron_when(str(row.get("next_run_at") or ""))
         fresh = bool(when and now - when <= window)
-        item = {
-            "id": str(row.get("id") or ""),
-            "name": str(row.get("name") or row.get("id") or "cron"),
-            "title": cron_title(str(row.get("name") or "")),
-            "last_run_at": str(row.get("last_run_at") or ""),
-            "last_status": str(row.get("last_status") or ""),
-            "outcome": str(row.get("outcome") or ""),
-            "next_action": str(row.get("next_action") or ""),
-            "enabled": on,
-        }
+        item = _cron_digest_item(row, on)
+        live = _cron_is_running(row)
+        if live:
+            running.append(item)
+        elif when and now - when <= timedelta(minutes=15) and not _CRON_RUNNING.search(status):
+            just_finished.append(item)
+        if on and not paused and not live and nxt_when:
+            delta = nxt_when - now
+            if timedelta(minutes=-20) <= delta <= timedelta(minutes=30):
+                due.append(item)
+            if nxt_when > now and (next_up_when is None or nxt_when < next_up_when):
+                next_up_when = nxt_when
+                next_up = item
         if on and re.search(r"error|fail", status):
             failed.append(item)
         elif fresh and re.search(r"healthy|\[silent\]", f"{row.get('outcome') or ''} {row.get('last_result') or ''}", re.I):
@@ -925,11 +967,36 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "") -> dic
         bits.append("What moves this forward: " + ask)
     elif healthy or recent:
         bits.append("No operator step from the schedule.")
+    chat_live = [row for row in (live_runs or []) if isinstance(row, dict)]
+    live_bits = []
+    if running:
+        live_bits.append("Now running: " + ", ".join(row["title"] for row in running[:3]) + ".")
+    if chat_live:
+        live_bits.append("This chat is answering now.")
+    if due and not running:
+        live_bits.append("Due now: " + ", ".join(row["title"] for row in due[:3]) + ".")
+    if just_finished and not running:
+        live_bits.append("Just finished: " + ", ".join(row["title"] for row in just_finished[:3]) + ".")
+    if not live_bits:
+        if next_up:
+            live_bits.append(f"Nothing running on this copy. Next up: {next_up['title']}.")
+        else:
+            live_bits.append("Nothing running on this copy.")
+        if not (healthy or recent):
+            live_bits.append("Live Hermes + Telegram still own today’s jobs.")
+        else:
+            live_bits.append("A finished job will land in this chat and in What’s happening.")
     return {
         "story": " ".join(bits),
+        "live_story": " ".join(live_bits),
         "failed": failed[:8],
         "recent": (healthy + recent)[:12],
         "stale": stale[:6],
+        "running": running[:8],
+        "due": due[:8],
+        "just_finished": just_finished[:8],
+        "next_up": next_up,
+        "copy_stale": not (healthy or recent or running or just_finished),
         "enabled": enabled,
         "failed_count": len(failed),
         "recent_count": len(healthy) + len(recent),
@@ -992,6 +1059,8 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
                 "title": cron_title(name),
                 "schedule": str(row.get("schedule_display") or sched.get("expr") or ""),
                 "enabled": row.get("enabled") is not False,
+                "state": str(row.get("state") or ""),
+                "claimed": bool(row.get("fire_claim")),
                 "last_run_at": str(row.get("last_run_at") or ""),
                 "next_run_at": str(row.get("next_run_at") or ""),
                 "last_status": status,

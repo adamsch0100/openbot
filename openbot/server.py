@@ -53,6 +53,7 @@ from .keyring import (
     delete_account,
     delete_login,
     public_keyring,
+    public_logins,
     redact_chat_login,
     rename_account,
     set_fallback,
@@ -67,6 +68,7 @@ from .launch import (
     warm_engines_background,
 )
 from .live import finish as live_finish
+from .live import snapshot as live_snapshot
 from .live import start as live_start
 from .live import stop as live_stop
 from .models import ensure_chat_model, public_catalog, validate_seats
@@ -115,6 +117,7 @@ from .queueworker import active_workers, auto_create_handoffs
 from .store import (
     CODE_ROOT,
     ROOT,
+    index_four_lines,
     list_brains,
     list_jobs,
     read_brain,
@@ -170,6 +173,51 @@ CREDIT = (
 )
 _UNLOCK_TOKENS: set[str] = set()
 _UNLOCK_LOCK = threading.Lock()
+_CORS_HEADERS = (
+    ("Access-Control-Allow-Origin", "*"),
+    ("Access-Control-Allow-Headers", "Content-Type, Authorization"),
+    ("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"),
+)
+
+
+def companion_payload(project_id: str | None = None) -> dict:
+    """Chat / approve / progress contract for the phone shell and PWA."""
+    activity = _activity(project_id=project_id)
+    four = index_four_lines()
+    needs = []
+    for row in activity.get("needs_you") or []:
+        item = dict(row)
+        kind = str(item.get("kind") or "")
+        if kind == "login":
+            item["logins"] = public_logins(item.get("project_id") or None)
+            item["actions"] = ["login"]
+            item["text"] = item.get("label") or ""
+        elif kind == "diff":
+            item["actions"] = ["accept", "reject"]
+            item["text"] = item.get("label") or ""
+            job = read_job(str(item.get("id") or "")) or {}
+            if job.get("text"):
+                item["text"] = str(job.get("text") or "")
+        elif kind in {"gate", "expired"}:
+            item["actions"] = ["accept", "reject"] if kind == "gate" else []
+            item["text"] = item.get("label") or ""
+        else:
+            item["actions"] = []
+            item["text"] = item.get("label") or ""
+        needs.append(item)
+    return {
+        "now": activity.get("now") or four.get("Now") or "",
+        "index": four,
+        "jobs": activity.get("jobs") or [],
+        "needs_you": needs,
+        "engines": detect(),
+        "credit": CREDIT,
+        "opencode_running": bool(activity.get("opencode_running")),
+        "hermes_running": bool(activity.get("hermes_running")),
+        "preset_engines": PRESET_ENGINE,
+        "has_key": bool(activity.get("has_key")),
+        "companion": True,
+    }
 
 
 def _cookie_value(header: str | None, name: str) -> str:
@@ -435,6 +483,7 @@ def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> di
         "has_key": _has_key(keyring),
         "opencode_running": bool(opencode_web_status().get("running")),
         "hermes_running": bool(hermes_dash_status().get("running")),
+        "live_runs": live_snapshot(),
     }
 
 
@@ -655,12 +704,28 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))
             self.send_header("Cache-Control", "no-store")
+            for name, value in _CORS_HEADERS:
+                self.send_header(name, value)
             if set_cookie:
                 self.send_header("Set-Cookie", set_cookie)
             self.end_headers()
             self.wfile.write(raw)
         except Exception as e:
             self.log_error(f"_json: {e}")
+
+    def do_OPTIONS(self):
+        path = urlparse(self.path).path
+        if path.startswith("/opencode/"):
+            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
+        if path.startswith("/hermes/"):
+            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
+        self.send_response(204)
+        for name, value in _CORS_HEADERS:
+            self.send_header(name, value)
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return None
 
     def _proxy(self, host: str, port: int, target_path: str):
         """Proxy requests to localhost engines so they work from mobile."""
@@ -807,7 +872,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
     def _unlock_cookie(self, token: str) -> str:
-        return f"openbot_unlock={token}; HttpOnly; SameSite=Lax; Path=/"
+        parts = [f"openbot_unlock={token}", "HttpOnly", "SameSite=Lax", "Path=/"]
+        if (self.headers.get("X-Forwarded-Proto") or "").lower() == "https":
+            parts.append("Secure")
+        return "; ".join(parts)
 
     def _serve_attachment(self, path: str) -> None:
         from .store import ROOT
@@ -915,7 +983,17 @@ class Handler(SimpleHTTPRequestHandler):
             return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if path == "/api/health":
-            return self._json(200, {"ok": True, "credit": CREDIT, "engines": detect()})
+            host, _ = listen_addr()
+            return self._json(
+                200,
+                {
+                    "ok": True,
+                    "credit": CREDIT,
+                    "engines": detect(),
+                    "companion": True,
+                    "remote": host not in {"127.0.0.1", "::1", "localhost"},
+                },
+            )
         invite_peek = SHARE_INVITE_TOKEN.match(path)
         if invite_peek:
             try:
@@ -979,6 +1057,10 @@ class Handler(SimpleHTTPRequestHandler):
                 if not member_can(member, "jobs_view"):
                     jobs = []
             return self._json(200, {"jobs": [public_job(job) for job in jobs[:30]]})
+        if path == "/api/companion":
+            member = self._actor_row()
+            pid = member_project_id(member) if member else None
+            return self._json(200, companion_payload(pid))
         if path == "/api/activity":
             member = self._actor_row()
             pid = member_project_id(member) if member else None
@@ -1523,7 +1605,15 @@ class Handler(SimpleHTTPRequestHandler):
             if actor is None and self._actor_row() is not None:
                 return None
             run_id = uuid.uuid4().hex[:12]
-            live_start(run_id)
+            live_start(
+                run_id,
+                {
+                    "project_id": pid or "",
+                    "worker_id": worker_id or "",
+                    "preset": requested or "cos",
+                    "title": (message or "This chat")[:80],
+                },
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")

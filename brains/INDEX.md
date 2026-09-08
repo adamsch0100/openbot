@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: SAA Chat replies on the brief; live spend crash fixed; catch-up no longer waits on Hermes
-Last: Walked local SAA send → reply → incremental follow-up; both stayed on screen and unlocked Send
-Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=82
+Now: SAA Chat shows Now running at the top — this chat, due jobs, and just-finished. Done work lands in chat and What’s happening.
+Last: Schedule only had Needs a look / Last two days, so nothing looked live.
+Next: Hard-refresh the live board after this ships. Watch Now running on SAA Homes while you send a line.
 Blocker: —
 
 ## Vault

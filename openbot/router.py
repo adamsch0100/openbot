@@ -83,7 +83,12 @@ from .store import (
 from .usage import parse_opencode_events
 
 STATUS = re.compile(
-    r"\b(what('?s| is) (going on|blocked|the status|happening)|status|blocked|index|what are you doing)\b",
+    r"\b("
+    r"what('?s| is) (going on|blocked|the status|happening)|"
+    r"what('?s| is).{0,24}running|"
+    r"now running|"
+    r"status|blocked|index|what are you doing"
+    r")\b",
     re.I,
 )
 CODE = re.compile(
@@ -398,6 +403,7 @@ def _cos_chat_fallback(project_id: str | None, worker_id: str | None, message: s
             message,
             node_label(project_id, worker_id) or "Chief of Staff",
             wiring=wiring_brief(project_id),
+            live=_live_status_line(project_id),
         )
     else:
         brief = staff_status_reply()
@@ -792,7 +798,17 @@ def _packet_extra(
     return "\n\n".join(bits)
 
 
-def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "") -> str:
+def _live_status_line(project_id: str | None) -> str:
+    if not project_id:
+        return ""
+    try:
+        digest = (project_cron_bundle(project_id) or {}).get("digest") or {}
+    except (TypeError, ValueError, OSError):
+        return ""
+    return str(digest.get("live_story") or "").strip()
+
+
+def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "", live: str = "") -> str:
     name = (who or "OpenBot").strip() or "OpenBot"
     is_status = bool(STATUS.search(message or ""))
     greeting = bool(GREET.search(message or "")) and not is_status
@@ -810,6 +826,8 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
         return f"Hello — {name}. I report to Chief of Staff. How can I help?"
     if is_status:
         lines: list[str] = [now]
+        if live:
+            lines.append(live)
         if nxt and nxt != "—":
             lines.append(f"Next: {nxt}")
         if last and last != "—":
@@ -873,8 +891,9 @@ def cos_run_existing_reply(project_id: str | None = None) -> str:
     if story:
         bits.append(story)
     bits.append(
-        "Do them one at a time from What’s happening or pin Think and name one failed job. "
-        "This chat will not walk the whole set."
+        "Watch Now running at the top of this CEO. When a job finishes, it lands in this chat "
+        "and in What’s happening. Do them one at a time from there, or pin Think and name one "
+        "failed job. This chat will not walk the whole set."
     )
     return " ".join(bits)
 
@@ -1521,7 +1540,12 @@ def _handle_preset(
             paid = spend_gate("think", spend_now)
             if not paid["allow"]:
                 use_llm = False
-                text = status_reply(index_text, message, node_label(project_id, worker_id))
+                text = status_reply(
+                    index_text,
+                    message,
+                    node_label(project_id, worker_id),
+                    live=_live_status_line(project_id),
+                )
                 if paid.get("reason"):
                     text = f"{text}\n\n{paid['reason']}"
                 engine = "board"
@@ -1624,6 +1648,7 @@ def _handle_preset(
                     message,
                     node_label(project_id, worker_id) or "Chief of Staff",
                     wiring=wiring_brief(project_id),
+                    live=_live_status_line(project_id),
                 )
     elif chosen == "builder":
         if not engines["opencode"]["present"]:

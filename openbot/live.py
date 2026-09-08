@@ -9,11 +9,37 @@ _lock = threading.Lock()
 _runs: dict[str, dict] = {}
 
 
-def start(run_id: str) -> threading.Event:
+def start(run_id: str, meta: dict | None = None) -> threading.Event:
     cancel = threading.Event()
+    row = {"cancel": cancel, "proc": None}
+    if isinstance(meta, dict):
+        for key in ("project_id", "worker_id", "preset", "title"):
+            value = meta.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                row[key] = text[:80] if key == "title" else text
     with _lock:
-        _runs[run_id] = {"cancel": cancel, "proc": None}
+        _runs[run_id] = row
     return cancel
+
+
+def snapshot() -> list[dict]:
+    """In-flight board chats. Hermes remains the scheduler."""
+    with _lock:
+        out = []
+        for run_id, row in _runs.items():
+            out.append(
+                {
+                    "id": run_id,
+                    "project_id": str(row.get("project_id") or ""),
+                    "worker_id": str(row.get("worker_id") or ""),
+                    "preset": str(row.get("preset") or "cos"),
+                    "title": str(row.get("title") or "This chat"),
+                }
+            )
+        return out
 
 
 def attach(run_id: str, proc: subprocess.Popen | None) -> None:
