@@ -83,7 +83,7 @@ from .store import (
 from .usage import parse_opencode_events
 
 STATUS = re.compile(
-    r"\b(what('?s| is) (going on|blocked|the status)|status|blocked|index)\b",
+    r"\b(what('?s| is) (going on|blocked|the status|happening)|status|blocked|index|what are you doing)\b",
     re.I,
 )
 CODE = re.compile(
@@ -106,7 +106,9 @@ RUN_EXISTING = re.compile(
     r"\b("
     r"run\b.{0,48}\b(cron|schedule)s?\b|"
     r"(fire|start|kick off)\b.{0,40}\b(cron|schedule)s?\b|"
-    r"get (everything|things|it all|saa|the (site|board|jobs))\b.{0,24}\bworking\b"
+    r"get (everything|things|it all|saa|the (site|board|jobs))\b.{0,24}\bworking\b|"
+    r"(incrementally|one at a time|one-by-one|one by one)|"
+    r"catch(ed)? up|catch-up"
     r")",
     re.I,
 )
@@ -870,7 +872,10 @@ def cos_run_existing_reply(project_id: str | None = None) -> str:
         bits.append(f"This board’s copy lists {enabled} enabled jobs.")
     if story:
         bits.append(story)
-    bits.append("Open What’s happening for the last two days, or pin Think and name one failed job to retry.")
+    bits.append(
+        "Do them one at a time from What’s happening or pin Think and name one failed job. "
+        "This chat will not walk the whole set."
+    )
     return " ".join(bits)
 
 

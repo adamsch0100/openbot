@@ -16,7 +16,7 @@ from .detect import hermes_home, which
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 HERMES_TIMEOUT = 600
-TALK_TIMEOUT = 90
+TALK_TIMEOUT = 25
 TALK_RESUME_TIMEOUT = 180
 HERMES_MAX_TURNS = "16"
 USAGE_KEYS = (

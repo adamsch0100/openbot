@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Chat unlocks after a reply — Send now delivers a waiting line instead of sticking in Queue
-Last: Cos reply painted, then a leftover watchdog crash left Auto working so the follow-up queued
-Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=81 — tap Send now on any stuck line
+Now: SAA Chat replies on the brief; live spend crash fixed; catch-up no longer waits on Hermes
+Last: Walked local SAA send → reply → incremental follow-up; both stayed on screen and unlocked Send
+Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=82
 Blocker: —
 
 ## Vault

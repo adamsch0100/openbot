@@ -3436,7 +3436,7 @@ function renderJob(job) {
     open.textContent = "Open page";
     actions.appendChild(open);
   }
-  if (job.keep_going && !job.stopped) {
+  if (job.keep_going && !job.stopped && (job.login_wall || !hydratingHistory)) {
     const go = document.createElement("button");
     go.type = "button";
     go.className = "ghost-btn";
@@ -3572,6 +3572,8 @@ function isNoiseText(text) {
   if (/raw\.githubusercontent\.com\/adamsch0100\/openbot/i.test(raw)) return true;
   if (/Create file e2e_/i.test(raw)) return true;
   if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
+  if (/need your google.{0,40}password/i.test(raw)) return true;
+  if (/share your GBP login credentials/i.test(raw)) return true;
   if (/You are the SAA Homes CEO/i.test(raw)) return true;
   if (/You report to Chief of Staff, who runs the org/i.test(raw)) return true;
   if (/You are the (think|ops|research|code) engine on this CEO/i.test(raw)) return true;

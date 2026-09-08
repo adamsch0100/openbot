@@ -144,6 +144,7 @@ class RouterClassifyTests(unittest.TestCase):
         )
         self.assertEqual(classify("remind me every morning"), "ops")
         self.assertTrue(wants_run_existing("run all of the cron jobs"))
+        self.assertTrue(wants_run_existing("do them incrementally or one at a time then. they all need caught up"))
         self.assertFalse(wants_run_existing("Every morning ping the board"))
         self.assertFalse(keep_going_for("ops"))
         reply = cos_run_existing_reply(None)
