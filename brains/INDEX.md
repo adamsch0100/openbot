@@ -4,7 +4,7 @@ Source of truth for this OpenBot instance. Status questions read this file only.
 
 Now: Live SAA Hermes is shipping today — board chat hides debug and tells the truth about the stale copy
 Last: SAA Homes Hermes on Railway is up; OpenBot volume still has cron files from Sept 5
-Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=77 — SAA story + clean Cos/SAA chat
+Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=78 — SAA story + clean Cos/SAA chat
 Blocker: —
 
 ## Vault

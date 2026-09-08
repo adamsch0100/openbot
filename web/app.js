@@ -3543,6 +3543,8 @@ function isNoiseText(text) {
   if (/raw\.githubusercontent\.com\/adamsch0100\/openbot/i.test(raw)) return true;
   if (/Create file e2e_/i.test(raw)) return true;
   if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
+  if (/You are the SAA Homes CEO/i.test(raw)) return true;
+  if (/You report to Chief of Staff, who runs the org/i.test(raw)) return true;
   const cleaned = cleanBotText(raw);
   if (!cleaned && /CONTRIBUTOR|contributor tier/i.test(raw)) return true;
   return false;
@@ -3619,7 +3621,9 @@ function renderTurns(turns, extras) {
   if (telegramKeep.length) {
     const banner = document.createElement("p");
     banner.className = "channel-banner";
-    banner.textContent = note || "A short slice from Telegram. Replies here stay on this board.";
+    banner.textContent = projectId === "saa-homes"
+      ? "SAA’s live Hermes box is on Railway. Telegram gets today’s work. Replies here stay on this board."
+      : "A short slice from Telegram. Replies here stay on this board.";
     stream.appendChild(banner);
     telegramKeep.forEach((turn) => {
       const el = bubble(turn.role === "user" ? "user" : "bot", turn.text || "");
