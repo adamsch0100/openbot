@@ -14,7 +14,7 @@ from .config import load_config
 from .detect import hermes_home, which
 from .gitutil import git_status
 from .bus import ensure_bus, seed_file_contract, seed_org_contracts
-from .store import ROOT, now_iso, patch_index_line, read_index
+from .store import ROOT, clean_memory_text, now_iso, patch_index_line, read_index
 
 SITE_BY_ID = {
     "saa-homes": "https://saahomes.com",
@@ -553,12 +553,12 @@ def bind_telegram_sessions(data: dict | None = None) -> dict:
 
 def _now_line(text: str) -> str:
     match = re.search(r"^Now:\s*(.*)$", text or "", re.M)
-    return (match.group(1).strip() if match else "") or "source of truth"
+    return clean_memory_text(match.group(1).strip() if match else "") or "source of truth"
 
 
 def index_field(text: str, label: str) -> str:
     match = re.search(rf"^{re.escape(label)}:\s*(.*)$", text or "", re.M)
-    return (match.group(1).strip() if match else "") or ""
+    return clean_memory_text(match.group(1).strip() if match else "") or ""
 
 
 def _public_tools(row: dict) -> dict:
@@ -1081,7 +1081,7 @@ def read_worker_brain(project_id: str | None, worker_id: str | None) -> str:
 def patch_file_index(path: Path, label: str, value: str) -> None:
     text = path.read_text(encoding="utf-8") if path.is_file() else ""
     pattern = rf"^{re.escape(label)}:.*$"
-    repl = f"{label}: {value}"
+    repl = f"{label}: {clean_memory_text(value)}"
     if re.search(pattern, text, flags=re.M):
         text = re.sub(pattern, lambda _match: repl, text, count=1, flags=re.M)
     else:
@@ -1110,7 +1110,7 @@ def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> 
             name = str(row.get("name") or project_id)
             break
     who = worker_id or "CEO"
-    snippet = re.sub(r"\s+", " ", (result or "").strip())[:160] or "—"
+    snippet = re.sub(r"\s+", " ", clean_memory_text(result or "").strip())[:160] or "—"
     patch_index_line("Last", f"{name} · {who}: {snippet}")
     patch_index_line("Now", f"{name} just reported")
     patch_index_line("Next", f"Open {name} or keep going from Chief of Staff")
@@ -1239,7 +1239,7 @@ def write_project_index(project_id: str, text: str) -> str:
     pid = _slug(project_id)
     path = _project_dir(pid) / "INDEX.md"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    path.write_text(clean_memory_text(text), encoding="utf-8")
     return path.read_text(encoding="utf-8")
 
 

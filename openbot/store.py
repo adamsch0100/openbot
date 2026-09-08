@@ -22,6 +22,34 @@ INDEX = BRAINS / "INDEX.md"
 JOB_ID_RE = re.compile(r"^[a-f0-9]{6,32}$")
 BRAIN_NAMES = {"cos", "builder", "research", "ops", "think"}
 MAX_FILE_CHARS = 100_000
+CONTRIBUTOR_BANNER = re.compile(
+    r"!!!?\s*CONTRIBUTOR\s+TIER[\s\S]*?(?=\n(?:Now|Last|Next|Blocker):|\n\n|$)",
+    re.I,
+)
+META_TIER_BANNER = re.compile(
+    r"This\s+is\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?=\n(?:Now|Last|Next|Blocker):|\n\n|$)",
+    re.I,
+)
+CONTRIBUTOR_LABEL = re.compile(
+    r"CONTRIBUTOR\s+TIER\s*[—\-]\s*TRAINS?\s+ON\s+YOUR\s+DATA!?",
+    re.I,
+)
+META_TRAIN_TAIL = re.compile(
+    r"prompts\s+and\s+completions?\s+to\s+train\s+future\s+[^\n.]*\.?",
+    re.I,
+)
+
+
+def clean_memory_text(text: str) -> str:
+    """Strip Meta contributor banners so they never become INDEX memory."""
+    cleaned = text or ""
+    cleaned = CONTRIBUTOR_BANNER.sub("", cleaned)
+    cleaned = META_TIER_BANNER.sub("", cleaned)
+    cleaned = CONTRIBUTOR_LABEL.sub("", cleaned)
+    cleaned = META_TRAIN_TAIL.sub("", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def read_index() -> str:
@@ -38,7 +66,7 @@ def read_brain(name: str) -> str:
 def write_index(text: str) -> str:
     if len(text) > MAX_FILE_CHARS:
         raise ValueError("INDEX too large")
-    INDEX.write_text(text, encoding="utf-8")
+    INDEX.write_text(clean_memory_text(text), encoding="utf-8")
     return read_index()
 
 
@@ -59,7 +87,7 @@ def list_brains() -> dict[str, str]:
 def patch_index_line(label: str, value: str) -> None:
     text = read_index()
     pattern = rf"^{re.escape(label)}:.*$"
-    repl = f"{label}: {value}"
+    repl = f"{label}: {clean_memory_text(value)}"
     if re.search(pattern, text, flags=re.M):
         text = re.sub(pattern, lambda _match: repl, text, count=1, flags=re.M)
     else:

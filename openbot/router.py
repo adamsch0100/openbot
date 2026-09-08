@@ -44,6 +44,7 @@ from .bus import (
     write_draft,
 )
 from .org import (
+    RETIRED_CEO_IDS,
     add_schedule,
     ensure_ceo_engines,
     inbox_tail,
@@ -66,6 +67,7 @@ from .org import (
 from .threadstore import search_quote, thread_key, wants_quote
 from .research import fetch_page, first_url
 from .store import (
+    clean_memory_text,
     list_jobs,
     mark_job_has_log,
     now_iso,
@@ -700,7 +702,7 @@ def last_results(limit: int = 3, project_id: str | None = None) -> str:
 
 def _index_last(text: str, *, failed: bool = False) -> str:
     """INDEX Last is a recoverable snippet. Job ids live in jobs/, not as memory."""
-    snippet = re.sub(r"\s+", " ", (text or "").strip())[:160] or "—"
+    snippet = re.sub(r"\s+", " ", clean_memory_text(text or "").strip())[:160] or "—"
     if failed:
         return f"failed: {snippet}"
     return snippet
@@ -853,8 +855,11 @@ def pending_approvals(limit: int = 12) -> list[dict]:
     projects = list_projects()
     names = {str(row.get("id") or ""): str(row.get("name") or row.get("id") or "this CEO") for row in projects}
     out: list[dict] = []
+    live_ids = {str(row.get("id") or "") for row in projects}
     for job in latest.values():
         pid = str(job.get("project_id") or "")
+        if pid in RETIRED_CEO_IDS or (pid and pid not in live_ids):
+            continue
         who = names.get(pid) or "this CEO"
         if job.get("login_wall"):
             kind = "login"

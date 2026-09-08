@@ -1963,8 +1963,8 @@ function bindNodeMenu(el, kind, pid, wid) {
 }
 
 function ceoWire(project) {
-  const now = (project.index_now || "").trim();
-  const blocker = (project.index_blocker || "").trim();
+  const now = cleanBotText(project.index_now || "").trim();
+  const blocker = cleanBotText(project.index_blocker || "").trim();
   const parts = [];
   
   if (now && now !== "source of truth" && now !== "—") {
@@ -2225,7 +2225,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     ${inboxHtml()}
     ${capNoticesHtml()}
     ${projectBits}
-    ${isCollaborator() ? "" : `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>`}
+    ${isCollaborator() || (cfg && cfg.hosted) ? "" : `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>`}
   `;
   tree.querySelectorAll(".org-btn").forEach((btn) => {
     btn.addEventListener("click", () => setOrgNode(btn.dataset.project || "", btn.dataset.worker || ""));

@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Live org is Cos, OpenBot, SAA Homes, Support — drop app / Nadia Marketing / INDEX
-Last: Railway /app was being treated as a CEO; openbot was misnamed INDEX
-Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=74 then confirm four names only
+Now: Live board is Cos, OpenBot, SAA Homes, Support — junk wires and retired login cards stripped
+Last: Live still had example.com, Meta contributor Last lines, and a Nadia Marketing Facebook login on Cos
+Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=76 — four names, clean wires, no leftover login
 Blocker: —
 
 ## Vault

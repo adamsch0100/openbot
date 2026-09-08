@@ -481,6 +481,7 @@ def _public_config() -> dict:
         "share": None,
         "x_intake_enabled": bool(load_settings().get("x_intake_enabled")),
         "x_username": str(load_settings().get("x_username") or ""),
+        "hosted": ROOT.resolve() != CODE_ROOT.resolve(),
     }
 
 

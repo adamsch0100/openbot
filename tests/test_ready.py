@@ -53,7 +53,7 @@ class ReadyTests(unittest.TestCase):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         server = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
         self.assertIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
-        self.assertIn("app.js?v=73", html)
+        self.assertIn("app.js?v=76", html)
         self.assertIn("styles.css?v=72", html)
         self.assertIn("id=\"ceoBrief\"", html)
         self.assertIn("refreshThreadTail", js)

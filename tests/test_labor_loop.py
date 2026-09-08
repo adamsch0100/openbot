@@ -30,7 +30,8 @@ from openbot.bus import (
 )
 from openbot.hermes_import import _refuse_retired
 from openbot.org import RETIRED_CEO_IDS, SUPPORT_CEO_ID, ensure_support_project, retire_archived_ceos
-from openbot.router import _effective_skills
+from openbot.router import _effective_skills, pending_approvals
+from openbot.store import clean_memory_text
 from openbot.tickets import (
     classify_kind,
     create_ticket,
@@ -188,6 +189,38 @@ class RetiredOrgTests(LaborLoopIsolation):
             org_mod.add_project(str(self.home), "Nadia")
         with self.assertRaises(ValueError):
             _refuse_retired("ListLogic")
+
+    def test_clean_memory_strips_contributor_banner(self):
+        raw = (
+            "Saved inbox/ops.md. !!! CONTRIBUTOR TIER — TRAINS ON YOUR DATA !!! "
+            "This is Meta's contributor tier. Selecting it permits Meta to use your "
+            "prompts and completions to train future Meta models."
+        )
+        cleaned = clean_memory_text(raw)
+        self.assertIn("Saved inbox/ops.md.", cleaned)
+        self.assertNotIn("CONTRIBUTOR", cleaned)
+        self.assertNotIn("contributor tier", cleaned.lower())
+
+    def test_pending_skips_retired_login(self):
+        jobs = [
+            {
+                "id": "cron-nadia-marketing-1",
+                "project_id": "nadia-marketing",
+                "login_wall": True,
+                "at": "2026-09-06T01:33:08Z",
+                "engine": "Hermes Agent",
+                "preset": "ops",
+            }
+        ]
+        live = [
+            {"id": "openbot", "name": "OpenBot"},
+            {"id": "saa-homes", "name": "SAA Homes"},
+            {"id": "support", "name": "Support"},
+        ]
+        with patch("openbot.router.list_jobs", return_value=jobs):
+            with patch("openbot.router.list_projects", return_value=live):
+                rows = pending_approvals()
+        self.assertFalse(any(row.get("project_id") == "nadia-marketing" for row in rows))
 
 
 class TicketLoopTests(LaborLoopIsolation):
