@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Live SAA Hermes is shipping today — board chat hides debug and tells the truth about the stale copy
-Last: SAA Homes Hermes on Railway is up; OpenBot volume still has cron files from Sept 5
-Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=78 — SAA story + clean Cos/SAA chat
+Now: Chat keeps the user’s line, Auto no longer files inbox/ops.md for “run the crons”
+Last: Live SAA chat routed “run all cron jobs” to Ops, hid the typed line, and queued Continue
+Next: Hard-refresh https://openbot-production-9334.up.railway.app/?v=80 — type a SAA line and a cron-ish ask
 Blocker: —
 
 ## Vault

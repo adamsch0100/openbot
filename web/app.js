@@ -819,7 +819,8 @@ function lockComposer(hasKey) {
       const lane = liveLane ? jobLabel(liveLane) : "";
       const bits = [
         `${talkName()}${lane ? ` · ${lane}` : ""} is working…`,
-        "Enter queues another message",
+        "Your line stays in the thread",
+        "Enter adds another",
         "Stop cancels"
       ];
       if (queued) bits.splice(1, 0, `${queued} queued`);
@@ -917,10 +918,20 @@ function enqueueMessage(message, opts) {
   if (!text) return;
   const key = aimKey();
   const quote = (opts && opts.quote != null) ? opts.quote : (replyQuote || "");
+  const empty = $("streamEmpty");
+  if (empty) empty.remove();
+  const userEl = bubble("user", text);
+  if (quote) attachQuotePreview(userEl, quote);
+  userEl.classList.add("queued");
+  const wait = document.createElement("div");
+  wait.className = "bubble-queued";
+  wait.textContent = "Waiting until this reply finishes";
+  userEl.appendChild(wait);
   queueFor(key).push({
     message: text,
     preset: (opts && opts.preset) || preset || "cos",
-    quote: quote || ""
+    quote: quote || "",
+    userEl
   });
   if (!(opts && opts.keepQuote)) clearReply();
   paintQueueChip();
@@ -946,7 +957,12 @@ async function drainQueue() {
       chip.classList.remove("hidden");
     }
   }
-  await sendMessage(next.message, { preset: next.preset, allowSecret: false });
+  await sendMessage(next.message, {
+    preset: next.preset,
+    allowSecret: false,
+    quote: next.quote || "",
+    userEl: next.userEl
+  });
 }
 
 async function loadSpend() {
@@ -3554,6 +3570,7 @@ function isNoiseText(text) {
 
 function isNoiseTurn(turn) {
   if (!turn) return true;
+  if (turn.role === "user") return !String(turn.text || "").trim();
   const job = turn.job || {};
   const text = job.text || turn.text || "";
   const message = job.message || "";
@@ -3679,10 +3696,9 @@ async function loadThread() {
   const turns = data.turns || [];
   const prev = threadCache.get(key) || {};
   threadCache.set(key, { turns, telegram: prev.telegram || [], note: prev.note || "" });
-  renderTurns(turns, { telegram: prev.telegram || [], note: prev.note || "" });
-  if (liveFor(key)) {
-    const el = thinkingBubble();
-    el.dataset.liveKey = key;
+  const keepLive = Boolean(liveFor(key));
+  if (!keepLive) {
+    renderTurns(turns, { telegram: prev.telegram || [], note: prev.note || "" });
   }
   if (!projectId || workerId) return;
   try {
@@ -3692,10 +3708,8 @@ async function loadThread() {
     const telegram = channel.turns || [];
     const note = channel.note || "";
     threadCache.set(key, { turns, telegram, note });
-    renderTurns(turns, { telegram, note });
-    if (liveFor(key)) {
-      const el = thinkingBubble();
-      el.dataset.liveKey = key;
+    if (!keepLive && !liveFor(key)) {
+      renderTurns(turns, { telegram, note });
     }
   } catch (_err) {
     /* keep local thread */
@@ -5503,8 +5517,15 @@ async function sendMessage(message, opts) {
   const pendingQuote = (opts && opts.quote != null) ? opts.quote : replyQuote;
   clearReply();
   const displayMessage = message || "(attachment)";
-  const userEl = bubble("user", displayMessage);
-  if (pendingQuote) attachQuotePreview(userEl, pendingQuote);
+  let userEl = opts && opts.userEl;
+  if (userEl) {
+    userEl.classList.remove("queued");
+    const wait = userEl.querySelector(".bubble-queued");
+    if (wait) wait.remove();
+  } else {
+    userEl = bubble("user", displayMessage);
+    if (pendingQuote) attachQuotePreview(userEl, pendingQuote);
+  }
   if (attachmentsToSend.length) {
     const attDiv = document.createElement("div");
     attDiv.className = "bubble-attachments";

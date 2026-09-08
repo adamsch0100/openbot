@@ -24,6 +24,10 @@ class CheapChatTests(unittest.TestCase):
         self.assertEqual(route_for_node("open opencode and create a md file", "ceo"), ["builder"])
         self.assertEqual(route_for_node("Look at this site https://example.com", "ceo"), ["research"])
         self.assertEqual(route_for_node("Every morning ping the board", "ceo"), ["ops"])
+        self.assertEqual(
+            route_for_node("run all of the cron jobs and get everything working again", "ceo"),
+            ["cos"],
+        )
 
         with patch("openbot.router.seated_or_auto", return_value=""), patch(
             "openbot.router.recommended_chat_id", return_value=""
@@ -129,7 +133,10 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn("if (job) break;", js)
         self.assertIn("watchdog", js)
         self.assertIn('event.key !== "Enter"', js)
-        self.assertIn('textContent = live ? "Stop" : "Send"', js)
+        self.assertIn('send.textContent = "Queue"', js)
+        self.assertIn('send.textContent = "Stop"', js)
+        self.assertIn('send.textContent = "Send"', js)
+        self.assertIn("Your line stays in the thread", js)
         self.assertIn("think-pulse", css)
         self.assertIn("stage-opencode", html)
         self.assertIn("stage-hermes", html)

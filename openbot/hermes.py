@@ -163,6 +163,7 @@ def chat_packet(name: str, status: str, task: str) -> str:
         "Do not print session_id or Resumed session.",
         "If RECENT TELEGRAM is included, it is background only — answer the new board message, not an old thread.",
         "Never ask the operator to paste passwords, TOTP, API keys, or browser cookies into chat. Site logins go through the board vault (Keys → Site logins).",
+        "If they ask to run all existing crons or get everything working, do not claim you fired the schedule. The live Hermes box already runs those jobs. This board will not stampede every cron from chat.",
     ]
     if as_staff:
         parts = [

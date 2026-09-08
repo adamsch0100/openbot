@@ -15,7 +15,7 @@ from openbot.config import DEFAULT_SPEND_CAP_USD, load_config, save_settings, sa
 from openbot.gitutil import diff_against_head, ensure_workspace_git, restore_snapshot, snapshot
 from openbot.engine_proxy import inject_opencode_tree
 from openbot.launch import _pick_session_id
-from openbot.router import classify, resolve_preset
+from openbot.router import classify, cos_run_existing_reply, keep_going_for, resolve_preset, wants_run_existing
 from openbot.store import in_spend_period, spend_summary, write_job, patch_index_line
 from openbot.usage import parse_opencode_events
 from openbot.server import _parse_index_fields, _search_memory
@@ -138,6 +138,17 @@ class RouterClassifyTests(unittest.TestCase):
         self.assertEqual(classify("Look at this site https://example.com"), "research")
         self.assertEqual(classify("Every morning ping the board"), "ops")
         self.assertEqual(classify("hello"), "cos")
+        self.assertEqual(
+            classify("run all of the cron jobs and get everything working again"),
+            "cos",
+        )
+        self.assertEqual(classify("remind me every morning"), "ops")
+        self.assertTrue(wants_run_existing("run all of the cron jobs"))
+        self.assertFalse(wants_run_existing("Every morning ping the board"))
+        self.assertFalse(keep_going_for("ops"))
+        reply = cos_run_existing_reply(None)
+        self.assertIn("will not fire every scheduled job", reply)
+        self.assertNotIn("inbox/ops.md", reply)
 
     def test_requested_preset_wins(self):
         self.assertEqual(resolve_preset("hello", "builder"), "builder")

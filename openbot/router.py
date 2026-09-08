@@ -53,6 +53,7 @@ from .org import (
     node_label,
     patch_project_tools,
     patch_scope,
+    project_cron_bundle,
     project_tools,
     read_project_index,
     read_worker_brain,
@@ -91,7 +92,24 @@ CODE = re.compile(
     re.I,
 )
 URL = re.compile(r"https?://", re.I)
-CRON = re.compile(r"\b(every morning|every day|schedule|cron|remind|watch this)\b", re.I)
+CRON = re.compile(
+    r"\b("
+    r"every morning|every day|"
+    r"every \d+\s*(m|min|mins|minutes|h|hr|hrs|hours|d|day|days)\b|"
+    r"remind me|watch this|schedule this|"
+    r"set up a (cron|schedule|reminder)|"
+    r"add a (cron|schedule|reminder)"
+    r")\b",
+    re.I,
+)
+RUN_EXISTING = re.compile(
+    r"\b("
+    r"run\b.{0,48}\b(cron|schedule)s?\b|"
+    r"(fire|start|kick off)\b.{0,40}\b(cron|schedule)s?\b|"
+    r"get (everything|things|it all|saa|the (site|board|jobs))\b.{0,24}\bworking\b"
+    r")",
+    re.I,
+)
 THINK = re.compile(r"\b(think hard|reason (about|through)|make a plan|deep think)\b", re.I)
 LOOK = re.compile(r"\b(look at this site|open (the )?browser)\b", re.I)
 BROWSER_LOGIN = re.compile(
@@ -135,8 +153,14 @@ DEFAULT_CODE_MODEL = "opencode/deepseek-v4-flash"
 OPENROUTER_CODE_MODEL = "openrouter/deepseek/deepseek-v4-flash-0731"
 
 
+def wants_run_existing(message: str) -> bool:
+    return bool(RUN_EXISTING.search(message or ""))
+
+
 def classify(message: str) -> str:
     if STATUS.search(message):
+        return "cos"
+    if wants_run_existing(message):
         return "cos"
     if CRON.search(message):
         return "ops"
@@ -154,7 +178,7 @@ def route_plan(message: str, requested: str | None) -> list[str]:
         return [requested]
     needs_code = bool(CODE.search(message))
     needs_web = bool(URL.search(message) or LOOK.search(message))
-    needs_cron = bool(CRON.search(message))
+    needs_cron = bool(CRON.search(message)) and not wants_run_existing(message)
     steps: list[str] = []
     if needs_web:
         steps.append("research")
@@ -824,7 +848,30 @@ def keep_going_for(
         return True
     if talk or chosen == "cos":
         return False
-    return chosen in {"builder", "research", "ops", "think"}
+    return chosen in {"builder", "research", "think"}
+
+
+def cos_run_existing_reply(project_id: str | None = None) -> str:
+    who = node_label(project_id, None) if project_id else "Chief of Staff"
+    story = ""
+    enabled = 0
+    if project_id:
+        try:
+            digest = (project_cron_bundle(project_id) or {}).get("digest") or {}
+            story = str(digest.get("story") or "").strip()
+            enabled = int(digest.get("enabled") or 0)
+        except (TypeError, ValueError, OSError):
+            story = ""
+    bits = [
+        f"{who} will not fire every scheduled job from this chat. That stampede is how the board used to break things.",
+        "The live Hermes box already runs the schedule. Telegram gets today’s checks.",
+    ]
+    if enabled:
+        bits.append(f"This board’s copy lists {enabled} enabled jobs.")
+    if story:
+        bits.append(story)
+    bits.append("Open What’s happening for the last two days, or pin Think and name one failed job to retry.")
+    return " ".join(bits)
 
 
 LOGIN_WALL_MARK = re.compile(r"^LOGIN_WALL\b", re.M)
@@ -1038,7 +1085,11 @@ def handle(
     # Chat seat is auto: same composer hands Code / Think / Research / Ops
     # to the engines. Picking a work seat still forces that path.
     # Status always reads INDEX — even if Think / Research / Ops is pinned.
-    if STATUS.search(message or "") and not URL.search(message or "") and not CODE.search(message or ""):
+    if (
+        (STATUS.search(message or "") or wants_run_existing(message or ""))
+        and not URL.search(message or "")
+        and not CODE.search(message or "")
+    ):
         steps = ["cos"]
     elif preset == "cos" or not preset or preset not in PRESETS:
         steps = route_for_node(message, node)
@@ -1429,6 +1480,8 @@ def _handle_preset(
         status_ask = bool(STATUS.search(message or ""))
         skill_ask = bool(SKILL.search(message or ""))
         file_reply = "" if skill_ask or status_ask else (cos_file_reply(message or "") or "")
+        if not file_reply and wants_run_existing(message or ""):
+            file_reply = cos_run_existing_reply(project_id)
         if not file_reply and BROWSER_LOGIN.search(message or ""):
             file_reply = cos_browser_login_reply()
         use_llm = (
@@ -1842,16 +1895,15 @@ def _handle_preset(
                         patch_index_line("Next", "Ask another URL, or open Hermes for snapshot clicks")
                         patch_index_line("Blocker", "—")
     elif chosen == "ops":
-        ticket = write_ops_ticket(message)
+        write_ops_ticket(message)
         settings = load_settings()
         if not engines["hermes"]["present"]:
             engine = "board"
             blocker = "Hermes Agent missing"
             text = (
-                "Saved an Ops ticket to inbox/ops.md.\n"
-                "Install Hermes Agent, then Schedule will attach cron there. OpenBot does not invent a second scheduler.\n"
-                f"{engines['hermes'].get('install_cmd') or engines['hermes']['install']}\n\n"
-                f"{ticket}"
+                "Hermes Agent is missing, so this stayed a chat reply. "
+                "Install Hermes Agent — OpenBot does not invent a second scheduler.\n"
+                f"{engines['hermes'].get('install_cmd') or engines['hermes']['install']}"
             )
             patch_index_line("Blocker", blocker)
             patch_index_line("Last", _index_last(text))
@@ -1872,10 +1924,8 @@ def _handle_preset(
                     home=hermes_home_dir,
                 )
                 text = (
-                    f"Saved inbox/ops.md and asked Hermes cron to attach it.\n"
-                    f"schedule: {schedule}\n\n"
-                    f"{created.get('text')}\n\n"
-                    f"{ticket}"
+                    f"Asked Hermes cron to attach this schedule: {schedule}.\n\n"
+                    f"{created.get('text') or ''}".strip()
                 )
                 if not created.get("ok"):
                     blocker = f"hermes cron exited {created.get('code')}"
@@ -1959,10 +2009,8 @@ def _handle_preset(
                     # Non-wallet error: don't retry
                     break
                 
-                text = (
-                    f"Saved inbox/ops.md.\n\n"
-                    f"{ran.get('text')}\n\n"
-                    f"{ticket}"
+                text = (ran.get("text") or "").strip() or (
+                    "Asked Hermes to attach a schedule. This chat did not run the work."
                 )
                 usage = ran.get("usage") or {}
                 prompt_tokens = int(usage.get("input_tokens") or 0)
@@ -1991,8 +2039,8 @@ def _handle_preset(
                     # Only persist session on success
                     _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                     patch_index_line("Last", _index_last(text))
-                    patch_index_line("Now", "Ops cron requested in Hermes")
-                    patch_index_line("Next", "Open Hermes to confirm the schedule")
+                    patch_index_line("Now", "Ops asked Hermes to attach a schedule")
+                    patch_index_line("Next", "Open What’s happening, or pin Think for one failed job")
                     patch_index_line("Blocker", "—")
 
     cfg = load_config()
