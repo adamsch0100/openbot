@@ -2,9 +2,9 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Now running at the top of this chat. Live Railway Hermes still owns the schedule; this copy reports what it can see.
-Last: form-pipeline-health ran on the imported copy
-Next: Watch Now running. When a job finishes, it lands here and in What’s happening. Pin Think for one failed job. Do not fire every cron.
+Now: Live schedule on this board (50 jobs). form-pipeline-health ok 06:38 UTC on OpenCode Go.
+Last: 20 jobs still failed — mostly gateway shutdown from the last deploy. saved-search-alerts-immediate 401.
+Next: indexation-patrol is queued live. Then retry failed jobs one at a time. Do not stampede. Do not hermes cron run on this imported home.
 Blocker: —
 Goals: —
 

@@ -147,6 +147,8 @@ class RouterClassifyTests(unittest.TestCase):
         self.assertTrue(wants_run_existing("run all of the cron jobs"))
         self.assertTrue(wants_run_existing("do them incrementally or one at a time then. they all need caught up"))
         self.assertFalse(wants_run_existing("Every morning ping the board"))
+        self.assertFalse(wants_run_existing("run form-pipeline-health now and show the result here"))
+        self.assertFalse(wants_run_existing("start the failed ones one at a time"))
         self.assertFalse(keep_going_for("ops"))
         reply = cos_run_existing_reply(None)
         self.assertIn("will not fire every scheduled job", reply)
@@ -863,6 +865,61 @@ class AutoPickTests(unittest.TestCase):
         )
         self.assertEqual(ops["id"], "opencode/claude-haiku-4-5")
 
+    def test_chat_skips_openrouter_muse_even_when_catalog_tags_it_opencode(self):
+        from openbot.auto import auto_model_for_seat
+        from openbot.models import recommended_chat_id
+
+        models = [
+            {
+                "id": "openrouter/meta/muse-spark-1.3-contributor",
+                "label": "Muse Spark Contributor Free",
+                "provider": "opencode",
+                "in_usd": 0,
+                "out_usd": 0,
+                "connected": True,
+                "tools": True,
+                "code": True,
+                "engines": ("OpenCode", "Hermes Agent"),
+            },
+            {
+                "id": "opencode/deepseek-v4-flash",
+                "label": "Flash Go",
+                "provider": "opencode",
+                "in_usd": 0.05,
+                "out_usd": 0.1,
+                "connected": True,
+                "tools": True,
+                "code": True,
+                "engines": ("OpenCode", "Hermes Agent"),
+            },
+        ]
+        pick = auto_model_for_seat("chat", models=models, guides={})
+        self.assertEqual(pick["id"], "opencode/deepseek-v4-flash")
+        self.assertEqual(
+            recommended_chat_id(
+                [
+                    {
+                        "id": "openrouter/meta/muse-spark-1.3-contributor",
+                        "label": "Muse Spark Contributor Free",
+                        "provider": "openrouter",
+                        "in_usd": 0,
+                        "out_usd": 0,
+                        "connected": True,
+                    },
+                    {
+                        "id": "openrouter/deepseek/deepseek-v4-flash-0731",
+                        "label": "DeepSeek V4 Flash",
+                        "provider": "openrouter",
+                        "in_usd": 0.07,
+                        "out_usd": 0.28,
+                        "connected": True,
+                    },
+                ],
+                provider="openrouter",
+            ),
+            "openrouter/deepseek/deepseek-v4-flash-0731",
+        )
+
     def test_opencode_key_falls_back_to_keyring(self):
         import openbot.providers as providers
 
@@ -1030,6 +1087,47 @@ class KeyringTests(unittest.TestCase):
                 )
                 drop("patched footer")
                 self.assertEqual(seen, ["patched footer"])
+        finally:
+            keyring_mod.SECRETS_PATH = old
+            keyring_mod.clear_marked_empty()
+
+    def test_activate_does_not_jump_openrouter_ahead_of_go(self):
+        import openbot.keyring as keyring_mod
+        from openbot import router as router_mod
+
+        old = keyring_mod.SECRETS_PATH
+        keyring_mod.clear_marked_empty()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "secrets.local.json"
+                keyring_mod.SECRETS_PATH = path
+                path.write_text(
+                    json.dumps(
+                        {
+                            "accounts": [
+                                {"id": "oc1", "provider": "opencode", "label": "Go 1", "key": "x"},
+                                {"id": "oc2", "provider": "opencode", "label": "Go 2", "key": "y"},
+                                {"id": "or1", "provider": "openrouter", "label": "OR", "key": "z"},
+                            ],
+                            "fallback": ["oc1", "oc2", "or1"],
+                            "active": {},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                picked = []
+
+                def fake_activate(account_id):
+                    picked.append(account_id)
+                    return {}
+
+                with unittest.mock.patch.object(keyring_mod, "activate_account", fake_activate):
+                    router_mod._activate(
+                        "OpenCode",
+                        {},
+                        "openrouter/meta/muse-spark-1.3-contributor",
+                    )
+                self.assertEqual(picked, ["oc1"])
         finally:
             keyring_mod.SECRETS_PATH = old
             keyring_mod.clear_marked_empty()

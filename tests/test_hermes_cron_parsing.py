@@ -6,7 +6,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from openbot.hermes import _parse_cron_table, cron_digest, cron_outcome, cron_title, is_valid_job_id, read_home_crons
+from openbot.hermes import _parse_cron_table, cron_digest, cron_outcome, cron_title, is_valid_job_id, parse_skill_list, read_home_crons
 from openbot.live import finish, snapshot, start
 
 
@@ -171,7 +171,12 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertIn("No action", nxt)
         failed, fix = cron_outcome("error", "## Response\nGateway shutdown")
         self.assertTrue(failed.startswith("Failed"))
-        self.assertIn("Think", fix)
+        self.assertIn("Retry", fix)
+        gated, cred = cron_outcome("error", "", "cron endpoint returned 401")
+        self.assertIn("401", gated)
+        self.assertIn("credential", cred)
+        ok_copy, nxt2 = cron_outcome("ok", "")
+        self.assertIn("Healthy on the live box", ok_copy)
 
     def test_cron_digest_plain_story(self):
         rows = [
@@ -235,7 +240,9 @@ class TestJobIdValidation(unittest.TestCase):
                         "name": "form-pipeline-health",
                         "schedule_display": "0 14 * * *",
                         "enabled": True,
-                        "last_run_at": "2026-09-06T23:29:53",
+                        "model": "deepseek-v4-flash",
+                        "provider": "opencode-go",
+                        "last_run_at": datetime.now(timezone.utc).isoformat(),
                         "last_status": "ok",
                     }]
                 }),
@@ -251,6 +258,8 @@ class TestJobIdValidation(unittest.TestCase):
             detailed = read_home_crons(home, results=True)
             self.assertIn("[SILENT]", detailed[0]["last_result"])
             self.assertIn("Healthy", detailed[0]["outcome"])
+            self.assertEqual(detailed[0]["provider"], "opencode-go")
+            self.assertEqual(detailed[0]["model"], "deepseek-v4-flash")
 
     def test_cron_digest_now_running_and_due(self):
         now = datetime.now(timezone.utc)
@@ -291,6 +300,36 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertEqual(pack["just_finished"][0]["name"], "indexation-patrol")
         self.assertIn("Now running", pack["live_story"])
         self.assertIn("This chat is answering now", pack["live_story"])
+        self.assertEqual(pack["latest"]["name"], "daily-ranking-strike")
+        self.assertTrue(any(row["name"] == "form-pipeline-health" for row in pack["upcoming"]))
+
+    def test_cron_digest_overdue_counts_as_due(self):
+        now = datetime.now(timezone.utc)
+        rows = [
+            {
+                "id": "late1",
+                "name": "form-pipeline-health",
+                "enabled": True,
+                "state": "scheduled",
+                "last_status": "ok",
+                "last_run_at": (now - timedelta(days=3)).isoformat(),
+                "next_run_at": (now - timedelta(days=1)).isoformat(),
+            }
+        ]
+        pack = cron_digest(rows, hours=48)
+        self.assertEqual(pack["due"][0]["name"], "form-pipeline-health")
+        self.assertIn("form-pipeline-health", pack["next_up"]["name"])
+
+    def test_parse_skill_list_skips_installed_chrome(self):
+        names = parse_skill_list(
+            "Installed skills\n"
+            "Name\n"
+            "----\n"
+            "github\n"
+            "web-search\n"
+            "Installed\n"
+        )
+        self.assertEqual(names, ["github", "web-search"])
 
     def test_live_snapshot_names_the_chat(self):
         start("live-test-1", {"project_id": "saa-homes", "preset": "think", "title": "check rankings"})

@@ -21,6 +21,7 @@ from .keyring import (
     activate_account,
     activate_for_engine,
     mark_wallet_empty,
+    ordered_account_ids,
     ordered_accounts,
     public_logins,
     redact_chat_login,
@@ -28,7 +29,7 @@ from .keyring import (
     staged_logins_ready,
     wallet_marked_empty,
 )
-from .models import cheap_chat_for_provider, model_provider, recommended_chat_id
+from .models import cheap_chat_for_provider, hermes_chat_model_for_provider, model_provider, recommended_chat_id
 from .auto import seated_or_auto
 from .providers import nous_portal_connected
 from .ops import write_ops_ticket
@@ -109,10 +110,10 @@ CRON = re.compile(
 )
 RUN_EXISTING = re.compile(
     r"\b("
-    r"run\b.{0,48}\b(cron|schedule)s?\b|"
-    r"(fire|start|kick off)\b.{0,40}\b(cron|schedule)s?\b|"
+    r"run\b.{0,48}\b(all|every|the whole)\b.{0,24}\b(cron|schedule)s?\b|"
+    r"run\b.{0,24}\b(cron|schedule)s?\b.{0,16}\b(all|every)\b|"
+    r"(fire|start|kick off)\b.{0,40}\b(all|every)\b.{0,24}\b(cron|schedule)s?\b|"
     r"get (everything|things|it all|saa|the (site|board|jobs))\b.{0,24}\bworking\b|"
-    r"(incrementally|one at a time|one-by-one|one by one)|"
     r"catch(ed)? up|catch-up"
     r")",
     re.I,
@@ -263,8 +264,11 @@ def _effective_skills(preset: str, tools: dict | None, project_id: str | None = 
     # Collect skills enabled for this seat
     allowed = []
     for skill_name, seat_toggles in skills_config.items():
+        slug = str(skill_name or "").strip()
+        if not re.match(r"^[a-z0-9][a-z0-9._-]{0,79}$", slug):
+            continue
         if isinstance(seat_toggles, dict) and seat_toggles.get(seat) is True:
-            allowed.append(skill_name)
+            allowed.append(slug)
     allowed = _strip_denied_skills(allowed, tools, project_id)
     
     # If no skills are explicitly enabled, use legacy hermesSkills as fallback
@@ -319,7 +323,18 @@ def _activate(engine: str, tools: dict | None, model: str | None = None, force_g
     provider = model_provider(model) or None
     if provider == "opencode-zen":
         provider = "opencode"
-    
+    # Auto can pick an OpenRouter-prefixed promo id. Do not jump past live Go keys.
+    if provider == "openrouter":
+        go_ids = [
+            account_id
+            for account_id in ordered_account_ids(
+                prefer=_prefer_accounts(tools), engine=engine, provider="opencode"
+            )
+            if not wallet_marked_empty(account_id)
+        ]
+        if go_ids:
+            provider = "opencode"
+
     # For self-build: force OpenCode Go wallets only (no PAYG)
     if force_go and engine == "OpenCode":
         from .keyring import keyring
@@ -346,6 +361,11 @@ def _live_accounts(rows: list[dict]) -> list[dict]:
     return live or rows
 
 
+def _contributor_promo(model: str | None) -> bool:
+    low = str(model or "").lower()
+    return "muse-spark" in low or "contributor" in low
+
+
 def _go_eligible_model(account: dict, seated_model: str | None) -> str | None:
     """Return Go-eligible model for OpenCode Go wallets, else cheap chat."""
     provider = str(account.get("provider") or "")
@@ -358,17 +378,20 @@ def _go_eligible_model(account: dict, seated_model: str | None) -> str | None:
             row for row in all_models()
             if row.get("connected") is not False
             and model_provider(row) == "opencode"
+            and not str(row.get("id") or "").lower().startswith("openrouter/")
             and row.get("family") == "go"
         ]
-        if go_models:
-            return cheap_chat_for_provider("opencode", models=go_models)
+        picked = hermes_chat_model_for_provider("opencode", models=go_models or None)
+        if picked:
+            return picked
     
-    # Same provider keeps seated model
+    # Same provider keeps seated model unless it is an OpenRouter promo that 18+ gates.
     seated_provider = model_provider(seated_model) if seated_model else ""
-    if seated_model and seated_provider == provider:
+    if seated_model and seated_provider == provider and not _contributor_promo(seated_model):
         return seated_model
-    
-    return cheap_chat_for_provider(provider)
+    if provider == "openrouter":
+        return cheap_chat_for_provider("openrouter") or OPENROUTER_CODE_MODEL
+    return hermes_chat_model_for_provider(provider) or cheap_chat_for_provider(provider)
 
 
 def _chat_attempts(tools: dict | None, seated_model: str | None) -> list[tuple[dict, str]]:
@@ -415,10 +438,10 @@ def _cos_chat_fallback(project_id: str | None, worker_id: str | None, message: s
 
 def _code_model_for_provider(provider: str, seated_model: str | None) -> str:
     seated_provider = model_provider(seated_model) if seated_model else ""
-    if seated_model and seated_provider == provider:
+    if seated_model and seated_provider == provider and not _contributor_promo(seated_model):
         return seated_model
     if provider == "opencode":
-        if seated_provider in {"opencode", "opencode-zen"} and seated_model:
+        if seated_provider in {"opencode", "opencode-zen"} and seated_model and not _contributor_promo(seated_model):
             return seated_model
         return DEFAULT_CODE_MODEL
     if provider == "openrouter":

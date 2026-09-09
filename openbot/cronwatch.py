@@ -84,14 +84,14 @@ def _ingest_home_files(project_id: str | None, hermes_home: str | None) -> list[
     known = set(seen.get("lines") or [])
     now = datetime.now(timezone.utc)
     posted: list[dict] = []
-    for row in read_home_crons(hermes_home, results=True):
+    rows = [row for row in read_home_crons(hermes_home, results=True) if row.get("last_run_at")]
+    rows.sort(key=lambda row: str(row.get("last_run_at") or ""), reverse=True)
+    for row in rows[:8]:
         last = str(row.get("last_run_at") or "")
-        if not last:
-            continue
         when = _parse_when(last)
         if when is not None:
             stamp = when if when.tzinfo else when.replace(tzinfo=timezone.utc)
-            if now - stamp.astimezone(timezone.utc) > FRESH:
+            if now - stamp.astimezone(timezone.utc) > timedelta(days=14):
                 continue
         key = f"{project_id or '_staff'}:{row.get('id')}:{last}"
         if key in known:
@@ -110,7 +110,10 @@ def _post_cron_card(project_id: str | None, row: dict) -> dict:
     outcome = str(row.get("outcome") or cron_outcome(row.get("last_status") or "", row.get("last_result") or "")[0])
     nxt = str(row.get("next_action") or "No action unless something failed.")
     report = str(row.get("last_result") or "")
-    snippet = f"{title} finished.\n{outcome}\nWhat to do: {nxt}"
+    when = str(row.get("last_run_at") or "").strip()
+    snippet = f"RESULT\n{title}\n{outcome}"
+    if nxt and not re.search(r"no action", nxt, re.I):
+        snippet = f"{snippet}\nWhat to do: {nxt}"
     job_id = f"cron{abs(hash(f'{project_id}:{row.get('id')}:{row.get('last_run_at')}')) % 10**8:08x}"
     receipt = {
         "id": job_id,
@@ -129,15 +132,22 @@ def _post_cron_card(project_id: str | None, row: dict) -> dict:
         "cron_outcome": outcome,
         "cron_next": nxt,
         "cron_report": report[:4000],
+        "cron_when": when,
         "keep_going": bool(re.search(r"fail|error", f"{row.get('last_status') or ''} {outcome}", re.I)),
         "next": nxt,
     }
     write_job(receipt)
-    patch_scope(project_id, None, "Last", f"{name} ran")
     if receipt["keep_going"]:
+        patch_scope(project_id, None, "Now", f"{title} needs you · {outcome[:80]}")
+        patch_scope(project_id, None, "Last", f"{title} failed")
+        patch_scope(project_id, None, "Next", nxt[:160] or "Open this CEO and handle the failed job.")
         patch_scope(project_id, None, "Blocker", outcome[:140])
-        patch_scope(project_id, None, "Now", f"{name} failed")
-    rollup_staff(project_id, None, snippet)
+    else:
+        patch_scope(project_id, None, "Now", f"{title} is done · {outcome[:80]}")
+        patch_scope(project_id, None, "Last", f"{title} · {outcome[:80]}")
+        patch_scope(project_id, None, "Next", "On schedule. Open What’s happening for the next job.")
+        patch_scope(project_id, None, "Blocker", "—")
+    rollup_staff(project_id, None, f"{title} is done · {outcome}")
     append_turn(thread_key(project_id, None), {"role": "bot", "job": receipt})
     return receipt
 

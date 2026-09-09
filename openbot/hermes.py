@@ -414,7 +414,7 @@ def chat(
                 "text": "Chat needs a seated model with a provider prefix. Open Models and pick Chat.",
                 "usage": {},
             }
-    with tempfile.TemporaryDirectory(prefix="openbot-hermes-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="openbot-hermes-", ignore_cleanup_errors=True) as tmp:
         root = Path(tmp)
         usage_path = root / "usage.json"
         if talk:
@@ -801,6 +801,18 @@ def cron_runs(
     return {"ok": code == 0, "code": code, "text": out.strip() or ""}
 
 
+def cron_run(job_id: str, home: str | Path | None = None) -> dict:
+    """Official `hermes cron run`. Queues that job on the next scheduler tick."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
+    jid = str(job_id or "").strip()
+    if not is_valid_job_id(jid):
+        return {"ok": False, "code": 400, "text": "bad job id"}
+    code, out = _run([binary, "cron", "run", "--accept-hooks", jid], None, 60, home=home)
+    return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
+
+
 def _cron_report_body(text: str) -> str:
     raw = str(text or "")
     match = re.search(r"^## Response\s*$", raw, re.M)
@@ -842,17 +854,30 @@ def cron_title(name: str) -> str:
     return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
 
 
-def cron_outcome(status: str, result: str) -> tuple[str, str]:
+def cron_outcome(status: str, result: str, error: str = "") -> tuple[str, str]:
     """Plain outcome + next action from a cron status and report body."""
     body = _cron_report_body(result)
+    err = re.sub(r"\s+", " ", str(error or "")).strip()
+    blob = f"{body} {status} {err}"
     st = str(status or "").strip().lower()
     if re.search(r"\[silent\]", body, re.I):
         return "Healthy. Nothing new to report.", "No action. It will run again on schedule."
     if re.search(r"error|fail", st):
-        if re.search(r"gateway shutdown", f"{body} {status}", re.I):
-            return "Failed. The Hermes gateway stopped mid-run.", "Open this CEO and ask Think to retry or fix it."
-        return "Failed. The last run did not finish.", "Open this CEO and ask Think to retry or fix it."
+        if re.search(r"gateway shutdown", blob, re.I):
+            return (
+                "Failed. The Hermes gateway stopped mid-run.",
+                "Retry this job on the live box. Do not fire the whole set.",
+            )
+        if re.search(r"\b401\b", blob):
+            return (
+                "Failed. A live endpoint returned 401.",
+                "Fix the credential for that job, then retry it alone.",
+            )
+        hint = err[:160] or "The last run did not finish."
+        return f"Failed. {hint}", "Open this job, then retry or fix the cause."
     if not body:
+        if st in {"ok", "success", "completed", "succeeded"}:
+            return "Healthy on the live box.", "No action. It will run again on schedule."
         return "Ran, but this board does not have the full report yet.", "Wait for the next copy, or check Telegram."
     first = re.sub(r"\s+", " ", body.splitlines()[0])[:140]
     return first, "Read the note below, then do the next step it names."
@@ -876,6 +901,7 @@ _CRON_PAUSED = re.compile(r"paused|disabled", re.I)
 
 
 def _cron_digest_item(row: dict, enabled: bool) -> dict:
+    report = re.sub(r"\s+", " ", str(row.get("last_result") or "")).strip()
     return {
         "id": str(row.get("id") or ""),
         "name": str(row.get("name") or row.get("id") or "cron"),
@@ -884,8 +910,13 @@ def _cron_digest_item(row: dict, enabled: bool) -> dict:
         "next_run_at": str(row.get("next_run_at") or ""),
         "last_status": str(row.get("last_status") or ""),
         "state": str(row.get("state") or ""),
+        "schedule": str(row.get("schedule") or ""),
         "outcome": str(row.get("outcome") or ""),
         "next_action": str(row.get("next_action") or ""),
+        "last_result": report[:500],
+        "last_error": re.sub(r"\s+", " ", str(row.get("last_error") or "")).strip()[:240],
+        "model": str(row.get("model") or ""),
+        "provider": str(row.get("provider") or ""),
         "enabled": enabled,
     }
 
@@ -915,6 +946,9 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
     just_finished: list[dict] = []
     next_up: dict | None = None
     next_up_when: datetime | None = None
+    latest: dict | None = None
+    latest_when: datetime | None = None
+    upcoming_rows: list[tuple[datetime, dict]] = []
     enabled = 0
     for row in rows or []:
         if not isinstance(row, dict):
@@ -934,13 +968,21 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
             running.append(item)
         elif when and now - when <= timedelta(minutes=15) and not _CRON_RUNNING.search(status):
             just_finished.append(item)
+        if when and (latest_when is None or when > latest_when):
+            latest_when = when
+            latest = item
+        if on and not paused and nxt_when:
+            upcoming_rows.append((nxt_when, item))
         if on and not paused and not live and nxt_when:
             delta = nxt_when - now
-            if timedelta(minutes=-20) <= delta <= timedelta(minutes=30):
+            if delta <= timedelta(minutes=30):
                 due.append(item)
             if nxt_when > now and (next_up_when is None or nxt_when < next_up_when):
                 next_up_when = nxt_when
                 next_up = item
+            elif nxt_when <= now and next_up is None:
+                next_up = item
+                next_up_when = nxt_when
         if on and re.search(r"error|fail", status):
             failed.append(item)
         elif fresh and re.search(r"healthy|\[silent\]", f"{row.get('outcome') or ''} {row.get('last_result') or ''}", re.I):
@@ -963,6 +1005,23 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
         )
     if failed:
         bits.append("Last copy still failed: " + ", ".join(row["title"] for row in failed[:3]) + ".")
+    upcoming_rows.sort(key=lambda pair: pair[0])
+    upcoming = [item for _, item in upcoming_rows[:24]]
+    if next_up is None and upcoming:
+        next_up = upcoming[0]
+    result_row = just_finished[0] if just_finished else None
+    if result_row is None and latest and not any(row.get("id") == latest.get("id") for row in running):
+        result_row = latest
+    if result_row is None:
+        result_row = latest
+    results: list[dict] = []
+    seen_results: set[str] = set()
+    for item in ([result_row] if result_row else []) + just_finished + healthy + recent:
+        rid = str(item.get("id") or "")
+        if not rid or rid in seen_results:
+            continue
+        seen_results.add(rid)
+        results.append(item)
     if ask and not re.search(r"open hermes to confirm", ask, re.I):
         bits.append("What moves this forward: " + ask)
     elif healthy or recent:
@@ -989,13 +1048,17 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
     return {
         "story": " ".join(bits),
         "live_story": " ".join(live_bits),
-        "failed": failed[:8],
+        "failed": failed,
         "recent": (healthy + recent)[:12],
         "stale": stale[:6],
         "running": running[:8],
         "due": due[:8],
         "just_finished": just_finished[:8],
         "next_up": next_up,
+        "upcoming": upcoming,
+        "latest": latest,
+        "result": result_row,
+        "results": results[:8],
         "copy_stale": not (healthy or recent or running or just_finished),
         "enabled": enabled,
         "failed_count": len(failed),
@@ -1036,13 +1099,14 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
             continue
         jid = str(row.get("id"))
         status = str(row.get("last_status") or "").strip()
+        err = str(row.get("last_error") or "").strip()
         when = _parse_cron_when(str(row.get("last_run_at") or ""))
         fresh = bool(when and datetime.now(timezone.utc) - when <= timedelta(hours=48))
         need_md = bool(results and (fresh or re.search(r"error|fail", status, re.I)))
         result = _latest_cron_markdown(root, jid) if need_md else ""
-        if status or result:
-            if need_md or re.search(r"error|fail", status, re.I):
-                outcome, nxt = cron_outcome(status, result)
+        if status or result or err:
+            if need_md or re.search(r"error|fail", status, re.I) or (fresh and status):
+                outcome, nxt = cron_outcome(status, result or err, err)
             else:
                 outcome, nxt = (
                     "Last check is older than two days.",
@@ -1064,8 +1128,10 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
                 "last_run_at": str(row.get("last_run_at") or ""),
                 "next_run_at": str(row.get("next_run_at") or ""),
                 "last_status": status,
-                "last_error": str(row.get("last_error") or ""),
+                "last_error": err,
                 "last_result": result,
+                "model": str(row.get("model") or ""),
+                "provider": str(row.get("provider") or ""),
                 "outcome": outcome,
                 "next_action": nxt,
             }
@@ -1245,6 +1311,38 @@ def migrate_cron_delivery(home: str | Path | None = None, dry_run: bool = False)
     }
 
 
+SKILL_LIST_SKIP = frozenset({
+    "name",
+    "skill",
+    "skills",
+    "installed",
+    "available",
+    "bundled",
+    "description",
+    "status",
+    "source",
+})
+
+
+def parse_skill_list(text: str) -> list[str]:
+    """Parse `hermes skills list` into skill slugs. Skip table chrome like Installed."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for line in (text or "").splitlines():
+        token = line.strip().split()[0] if line.strip() else ""
+        if not token or token.startswith("-") or set(token) <= {"-", "="}:
+            continue
+        if token.lower() in SKILL_LIST_SKIP:
+            continue
+        if not re.match(r"^[a-z0-9][a-z0-9._-]{0,79}$", token):
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        names.append(token[:80])
+    return names
+
+
 def skills_list(cwd: str | None = None) -> dict:
     """List Hermes skills with descriptions and popular recommendations."""
     binary = which("hermes")
@@ -1257,12 +1355,7 @@ def skills_list(cwd: str | None = None) -> dict:
         }
     code, out = _run([binary, "skills", "list"], cwd, 30)
     
-    # Parse skill names from `hermes skills list` output
-    names = []
-    for line in (out or "").splitlines():
-        token = line.strip().split()[0] if line.strip() else ""
-        if token and not token.startswith("-") and token.lower() not in {"name", "skill", "skills"}:
-            names.append(token[:80])
+    names = parse_skill_list(out)
     
     # Skill descriptions (fallback when Hermes doesn't provide metadata)
     skill_descriptions = {

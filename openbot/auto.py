@@ -52,10 +52,19 @@ def _connected_rows(models: list[dict] | None) -> list[dict]:
     return [row for row in source if row.get("id") and row.get("connected") is not False]
 
 
+def _leaks_to_openrouter(row: dict) -> bool:
+    """OpenCode catalog sometimes lists upstream OpenRouter ids. Those skip the Go wallets."""
+    mid = str(row.get("id") or "").lower()
+    return mid.startswith("openrouter/")
+
+
 def _for_seat(seat_id: str, models: list[dict] | None) -> list[dict]:
     rows = []
     for row in _connected_rows(models):
-        if not allowed_for_seat(seat_id, str(row.get("id") or "")):
+        mid = str(row.get("id") or "")
+        if not allowed_for_seat(seat_id, mid):
+            continue
+        if model_provider(row) == "opencode" and _leaks_to_openrouter(row):
             continue
         rows.append(row)
     by_provider: dict[str, list[dict]] = {}

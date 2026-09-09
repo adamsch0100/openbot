@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: SAA Chat shows Now running at the top — this chat, due jobs, and just-finished. Done work lands in chat and What’s happening.
-Last: Schedule only had Needs a look / Last two days, so nothing looked live.
-Next: Hard-refresh the live board after this ships. Watch Now running on SAA Homes while you send a line.
+Now: Live SAA Hermes snapshot on the board: 50 jobs, 26 ok, 20 failed. form-pipeline-health ok 06:38 UTC on OpenCode Go.
+Last: Most failures are gateway-shutdown from the last Railway boot. saved-search-alerts-immediate 401 tonight.
+Next: Finish indexation-patrol, then retry failed jobs one at a time. Skip conversion-surge. Open Full schedule on SAA Homes.
 Blocker: —
 
 ## Vault
@@ -13,7 +13,7 @@ Blocker: —
 - Site logins live in that same vault. You → Keys → Site logins, or approve them on a login card when a job hits a wall.
 - Unlock PIN in You → Settings gates the board. Do not paste keys or passwords into chat.
 - OpenCode (three Go wallets, same catalog): shared pool first, then SAA Homes / Conversion, then ListLogic wallet if still in the keyring. OpenRouter PAYG last.
-- Seats are Auto unless you pin: Auto uses Muse Spark Contributor Free while OpenCode lists it, then Chat flash / Think-Code Arena / Ops cheap Go. Empty Chat can still be Board (INDEX) for free status.
+- Seats are Auto unless you pin: Auto stays on OpenCode Go (flash). Muse Spark on an OpenRouter id is not Auto. OpenRouter PAYG is last after the three Go wallets. Empty Chat can still be Board (INDEX) for free status.
 - CEO pins: openbot + Support → shared pool. SAA Homes → SAA Go. Nadia and ListLogic CEOs are retired from routing (folders stay on disk).
 - Hermes native: Nous Portal subscription. Subscribe at portal.nousresearch.com/r/adam-schwartz. Connect with `hermes portal` or paste `NOUS_API_KEY`. Not in this vault yet, so Auto is Go then OpenRouter.
 - PAYG: OpenRouter after the three Go wallets are empty, plus OpenCode Zen after Go quota

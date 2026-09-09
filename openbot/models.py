@@ -188,7 +188,14 @@ def recommended_chat_id(models: list[dict] | None = None, provider: str | None =
             talk.sort(key=lambda row: (price(row), str(row.get("id") or "")))
             return str(talk[0]["id"])
 
-    muse = [row for row in rows if "muse-spark" in blob(row) and "contributor" in blob(row)]
+    muse = [
+        row
+        for row in rows
+        if "muse-spark" in blob(row)
+        and "contributor" in blob(row)
+        and model_provider(row) == "opencode"
+        and str(row.get("id") or "").lower().startswith("opencode/")
+    ]
     if muse:
         def muse_version(row: dict) -> tuple[int, ...]:
             text = blob(row)

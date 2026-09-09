@@ -723,6 +723,11 @@ function isChatAtBottom() {
 
 function scrollChatBottom() {
   if (!stream) return;
+  const last = stream.querySelector(".bubble:last-of-type, .card:last-of-type, .cron-card:last-of-type");
+  if (last && typeof last.scrollIntoView === "function") {
+    last.scrollIntoView({ block: "end", inline: "nearest" });
+    return;
+  }
   stream.scrollTop = stream.scrollHeight;
 }
 
@@ -2456,6 +2461,16 @@ function cronWhenNext(value) {
   return stamp.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 }
 
+function cronWhenClock(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "unscheduled";
+  const stamp = new Date(raw);
+  if (Number.isNaN(stamp.getTime())) return raw.slice(0, 16);
+  const due = cronWhenNext(raw);
+  if (due) return due;
+  return stamp.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 function paintScheduleButton() {
   const btn = $("openSchedule");
   if (!btn) return;
@@ -2463,33 +2478,45 @@ function paintScheduleButton() {
   const count = ((project && project.crons) || []).length;
   btn.hidden = !project;
   if (!project) return;
-  btn.textContent = scheduleOpen ? "Hide schedule" : "What's happening";
+  btn.textContent = scheduleOpen ? "Hide schedule" : "Full schedule";
 }
 
 function cronCardHtml(row, open, mark) {
   const title = row.title || cronTitle(row.name || row.id);
-  const when = cronWhen(row.last_run_at);
-  const upcoming = cronWhenNext(row.next_run_at);
-  const clock = upcoming ? `${when} · next ${upcoming}` : when;
-  const outcome = row.outcome || "No result on this machine yet.";
+  const last = cronWhen(row.last_run_at);
+  const nextAt = cronWhenClock(row.next_run_at);
+  const status = String(row.last_status || "").toLowerCase();
+  const failed = /error|fail/.test(status);
+  const outcome = row.outcome || (failed ? "Failed." : "No result on this copy yet.");
   const next = row.next_action || "";
-  const showNext = next && !/no action/i.test(next) && !/ask Think to retry/i.test(next);
-  const report = open ? (row.last_result || "") : "";
+  const showNext = next && !/no action/i.test(next);
+  const engine = [row.provider, row.model].filter(Boolean).join(" · ");
+  const err = String(row.last_error || "").trim();
+  const report = String(row.last_result || "").trim();
+  const snippet = open ? report : (report || err).slice(0, 280);
   const live = mark === "live";
-  return `<article class="cron-card${open ? " open" : ""}${live ? " live" : ""}" id="cron-${escapeHtml(row.id || "")}">
+  const kind = live ? "running now" : (failed ? "failed" : (status === "ok" ? "ok" : (mark === "result" ? "Result" : (mark === "next" ? "Scheduled" : "Job"))));
+  return `<article class="cron-card${open ? " open" : ""}${live ? " live" : ""}${failed ? " failed" : ""}" id="cron-${escapeHtml(row.id || "")}">
     <div class="cron-head">
       <b>${escapeHtml(title)}</b>
-      <span>${escapeHtml(live ? "running now" : clock)}</span>
+      <span>${escapeHtml(kind)}</span>
     </div>
-    <p class="cron-outcome">${escapeHtml(live ? "This job is on the schedule right now." : outcome)}</p>
-    ${showNext && !live ? `<p class="cron-next">${escapeHtml(next)}</p>` : ""}
-    ${report ? `<details open><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
+    <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${engine ? ` · ${escapeHtml(engine)}` : ""}</p>
+    <p class="cron-outcome">${escapeHtml(live ? "This job is running now. The result will land here when it finishes." : `Result: ${outcome}`)}</p>
+    ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
+    ${snippet ? `<p class="cron-snip">${escapeHtml(snippet)}</p>` : ""}
+    ${open && report && report !== snippet ? `<details open><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
   </article>`;
 }
 
 function paintCeoBrief(digest) {
   const el = $("ceoBrief");
   if (!el) return;
+  if ($("ceoLive")) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
   if (!projectId) {
     el.hidden = true;
     el.innerHTML = "";
@@ -2523,8 +2550,21 @@ function paintCeoLive(pack) {
   const el = $("ceoLive");
   if (!el) return;
   if (!projectId) {
-    el.hidden = true;
-    el.innerHTML = "";
+    const projects = ((org && org.projects) || []).filter((row) => row && row.id);
+    if (!projects.length) {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    const rows = projects.map((row) => {
+      const now = String(row.index_now || "Idle").trim();
+      const block = String(row.index_blocker || "").trim();
+      const line = block && block !== "—" ? `Needs you · ${block}` : now;
+      return `<div class="ceo-live-item"><b>${escapeHtml(row.name || row.id)}</b><span>${escapeHtml(line)}</span></div>`;
+    }).join("");
+    el.hidden = false;
+    el.classList.remove("on");
+    el.innerHTML = `<div class="ceo-live-head"><b>CEOs</b></div><div class="ceo-lanes one">${rows}</div><p>Open a CEO for Running, Result, and Scheduled.</p>`;
     return;
   }
   const data = pack || digestCache.get(projectId) || {};
@@ -2532,40 +2572,42 @@ function paintCeoLive(pack) {
   const chatLive = Boolean(liveRunId);
   const boardRuns = (data.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
   const running = digest.running || [];
-  const due = digest.due || [];
   const finished = digest.just_finished || [];
-  const nextUp = digest.next_up || null;
+  const latest = digest.latest || finished[0] || null;
+  const upcoming = digest.upcoming || (digest.next_up ? [digest.next_up] : []);
+  const failed = digest.failed || [];
   const active = chatLive || boardRuns.length || running.length;
-  const items = [];
+  const runBits = [];
   if (chatLive) {
-    items.push(`<div class="ceo-live-item"><b>${escapeHtml(talkName())} is answering this chat</b><span>${escapeHtml(laneLabel(liveLane || preset))}</span></div>`);
+    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(talkName())}</b><span>${escapeHtml(laneLabel(liveLane || preset))} · this chat</span></div>`);
   }
   boardRuns.forEach((row) => {
     if (chatLive && String(row.id || "") === String(liveRunId)) return;
-    items.push(`<div class="ceo-live-item"><b>${escapeHtml(laneLabel(row.preset))} is working</b><span>${escapeHtml(String(row.title || "This chat").slice(0, 48))}</span></div>`);
+    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(laneLabel(row.preset))}</b><span>${escapeHtml(String(row.title || "This chat").slice(0, 48))}</span></div>`);
   });
   running.forEach((row) => {
-    items.push(`<div class="ceo-live-item"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>schedule · running</span></div>`);
+    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>schedule</span></div>`);
   });
-  if (!active && due.length) {
-    due.slice(0, 3).forEach((row) => {
-      items.push(`<div class="ceo-live-item"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>${escapeHtml(cronWhenNext(row.next_run_at) || "due now")}</span></div>`);
-    });
-  }
-  if (!active && !due.length && finished.length) {
-    finished.slice(0, 2).forEach((row) => {
-      items.push(`<div class="ceo-live-item"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>just finished</span></div>`);
-    });
-  }
-  if (!items.length && nextUp) {
-    items.push(`<div class="ceo-live-item"><b>${escapeHtml(nextUp.title || cronTitle(nextUp.name))}</b><span>${escapeHtml(cronWhenNext(nextUp.next_run_at) || "next up")}</span></div>`);
-  }
-  const note = active
-    ? "When this finishes, it lands in the chat and in What’s happening."
-    : (digest.live_story || "Nothing running on this copy. Live Hermes + Telegram still own today’s jobs.");
+  const result = latest
+    ? `<div class="ceo-lane-row"><b>${escapeHtml(latest.title || cronTitle(latest.name))}</b><span>Last ${escapeHtml(cronWhen(latest.last_run_at))}</span></div><p class="ceo-lane-result">${escapeHtml(latest.outcome || "No result on this copy yet.")}</p>`
+    : `<p class="ceo-lane-empty">No result on this copy yet.</p>`;
+  const sched = (upcoming.length ? upcoming : []).slice(0, 3).map((row) => (
+    `<div class="ceo-lane-row"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>${escapeHtml(cronWhenClock(row.next_run_at))}</span></div>`
+  )).join("") || `<p class="ceo-lane-empty">Nothing on the clock.</p>`;
+  const note = failed.length
+    ? `${failed.length} job${failed.length === 1 ? "" : "s"} need you. Open Full schedule.`
+    : (active
+      ? "When this finishes, the Result column and this chat update. Cos sees it on the CEO list."
+      : "Idle here. Live Hermes + Telegram still own today’s ticks. Cos sees the last Result on this CEO.");
   el.hidden = false;
   el.classList.toggle("on", Boolean(active));
-  el.innerHTML = `<div class="ceo-live-head"><b>${active ? "Now running" : (due.length ? "Due now" : "Now running")}</b><i class="ceo-live-dot" aria-hidden="true"></i></div>${items.join("")}<p>${escapeHtml(note)}</p>`;
+  el.innerHTML = `<div class="ceo-live-head"><b>Running · Result · Scheduled</b><i class="ceo-live-dot" aria-hidden="true"></i></div>
+    <div class="ceo-lanes">
+      <section class="ceo-lane${active ? " hot" : ""}"><h3>Running</h3>${runBits.join("") || `<p class="ceo-lane-empty">Nothing running.</p>`}</section>
+      <section class="ceo-lane"><h3>Result</h3>${result}</section>
+      <section class="ceo-lane"><h3>Scheduled</h3>${sched}</section>
+    </div>
+    <p>${escapeHtml(note)}</p>`;
 }
 
 async function loadCeoDigest() {
@@ -2612,30 +2654,22 @@ function renderChatSchedule(rows, digest, focusId) {
   const pack = digest || cached.digest || cached || {};
   const want = String(focusId || scheduleFocusId || "");
   const running = pack.running || [];
-  const due = pack.due || [];
-  const finished = pack.just_finished || [];
-  const failed = pack.failed || list.filter((row) => /error|fail/i.test(row.last_status || ""));
-  const recent = pack.recent || [];
-  const seen = new Set([...running, ...due, ...finished, ...failed, ...recent].map((row) => row.id));
+  const latest = pack.latest ? [pack.latest] : (pack.just_finished || []);
+  const upcoming = pack.upcoming || [];
+  const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")));
+  const seen = new Set([...running, ...latest, ...upcoming, ...failed].map((row) => row.id));
   const rest = list.filter((row) => row.enabled !== false && !seen.has(row.id));
   const sections = [];
-  if (pack.live_story) sections.push(`<p class="cron-story">${escapeHtml(pack.live_story)}</p>`);
-  if (pack.story) sections.push(`<p class="cron-story">${escapeHtml(pack.story)}</p>`);
-  if (running.length) {
-    sections.push(`<h3 class="cron-section">Now running</h3>${running.map((row) => cronCardHtml(row, row.id === want, "live")).join("")}`);
-  }
-  if (due.length) {
-    sections.push(`<h3 class="cron-section">Due now</h3>${due.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
-  }
-  if (finished.length) {
-    sections.push(`<h3 class="cron-section">Just finished</h3>${finished.map((row) => cronCardHtml(row, row.id === want, "done")).join("")}`);
-  }
+  const synced = cached.synced_at || pack.synced_at || "";
+  const count = list.length || Number(cached.job_count || 0);
+  const stamp = synced ? `Live snapshot ${cronWhen(synced)} · ${count} jobs.` : "Running now. Last result. What’s next.";
+  sections.push(`<p class="cron-story">${escapeHtml(stamp)} CEO and Cos see the same Result when a job finishes.</p>`);
+  sections.push(`<h3 class="cron-section">Running</h3>${running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : `<p class="cron-empty">Nothing running.</p>`}`);
+  sections.push(`<h3 class="cron-section">Result</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
   if (failed.length) {
-    sections.push(`<h3 class="cron-section">Needs a look</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+    sections.push(`<h3 class="cron-section">Needs you · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
   }
-  if (recent.length) {
-    sections.push(`<h3 class="cron-section">Last two days</h3>${recent.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
-  }
+  sections.push(`<h3 class="cron-section">Scheduled</h3>${upcoming.length ? upcoming.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing on the clock.</p>`}`);
   if (rest.length) {
     sections.push(`<details class="cron-more"><summary>Everything else · ${rest.length}</summary>${rest.map((row) => cronCardHtml(row, row.id === want)).join("")}</details>`);
   }
@@ -3462,11 +3496,14 @@ function renderJob(job) {
   }
   if (job.cron) {
     const title = cronTitle(job.cron_name || "Scheduled check");
-    const outcome = job.cron_outcome || "";
+    const outcome = job.cron_outcome || job.text || "";
     const nxt = job.cron_next || "";
-    const lines = [`${title} finished.`];
-    if (outcome) lines.push(outcome);
-    if (nxt) lines.push(`What to do: ${nxt}`);
+    const when = job.cron_when ? cronWhen(job.cron_when) : "";
+    const lines = [`RESULT · ${title}`];
+    if (when) lines.push(`Last run ${when}`);
+    if (outcome && !/^RESULT\b/i.test(outcome)) lines.push(outcome);
+    else if (job.cron_outcome) lines.push(job.cron_outcome);
+    if (nxt && !/no action/i.test(nxt)) lines.push(`If needed: ${nxt}`);
     const el = bubble("bot", lines.join("\n"));
     el.classList.add("cron");
     if (job.id) el.setAttribute("data-job-id", job.id);
@@ -3476,7 +3513,7 @@ function renderJob(job) {
     const open = document.createElement("button");
     open.type = "button";
     open.className = "send";
-    open.textContent = "Open report";
+    open.textContent = "Open schedule";
     open.addEventListener("click", () => openSchedule(job.cron_id || ""));
     actions.appendChild(open);
     el.appendChild(actions);
@@ -3659,7 +3696,7 @@ function isNoiseText(text) {
   if (/e2e_wc8_|e2e_test_routine|WC8-/i.test(raw)) return true;
   if (/hermes cron list/i.test(raw)) return true;
   if (/List every cron\/schedule\/routine/i.test(raw)) return true;
-  if (/pipeline-health/.test(raw) && /indexation-patrol/.test(raw)) return true;
+  if (/pipeline-health/.test(raw) && /indexation-patrol/.test(raw) && (/[┌│]/.test(raw) || /hermes cron list/i.test(raw))) return true;
   if (/Scheduled Jobs/.test(raw) && /[┌│]/.test(raw)) return true;
   if (/Gateway reports not running/i.test(raw)) return true;
   if (/You are the ops engine on this CEO/i.test(raw)) return true;

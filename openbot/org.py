@@ -448,18 +448,31 @@ def project_crons(project_id: str, *, results: bool = True) -> list[dict]:
 
 def project_cron_bundle(project_id: str) -> dict:
     """Schedule rows plus a last-two-days story in plain language."""
-    from .hermes import cron_digest
+    from datetime import datetime, timezone
+
+    from .hermes import cron_digest, read_home_crons
     from .live import snapshot
 
     pid = str(project_id or "").strip()
-    rows = project_crons(pid, results=True)
+    tools = project_tools(pid)
+    home = str(tools.get("hermes_home") or "").strip()
+    rows = read_home_crons(home, results=True) if home else []
     nxt = index_field(read_project_index(pid), "Next") if pid else ""
     live_runs = [row for row in snapshot() if str(row.get("project_id") or "") == pid]
+    synced_at = ""
+    path = Path(home) / "cron" / "jobs.json" if home else None
+    if path and path.is_file():
+        synced_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
+    digest = cron_digest(rows, next_ask=nxt, live_runs=live_runs)
+    digest["synced_at"] = synced_at
+    digest["job_count"] = len(rows)
     return {
         "project_id": pid,
         "crons": rows,
         "live_runs": live_runs,
-        "digest": cron_digest(rows, next_ask=nxt, live_runs=live_runs),
+        "synced_at": synced_at,
+        "job_count": len(rows),
+        "digest": digest,
     }
 
 
@@ -1119,8 +1132,8 @@ def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> 
     who = worker_id or "CEO"
     snippet = re.sub(r"\s+", " ", clean_memory_text(result or "").strip())[:160] or "—"
     patch_index_line("Last", f"{name} · {who}: {snippet}")
-    patch_index_line("Now", f"{name} just reported")
-    patch_index_line("Next", f"Open {name} or keep going from Chief of Staff")
+    patch_index_line("Now", f"{name} · {snippet[:140]}")
+    patch_index_line("Next", f"Open {name} if you want the report, or keep going from Chief of Staff")
 
 
 def write_project_inbox(project_id: str, message: str) -> Path:
