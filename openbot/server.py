@@ -65,6 +65,7 @@ from .launch import (
     opencode_web_status,
     start_hermes_dashboard,
     start_opencode_web,
+    supervise_ceo_gateways_background,
     warm_engines_background,
 )
 from .live import finish as live_finish
@@ -2478,6 +2479,11 @@ def main() -> None:
     threading.Thread(
         target=warm_engines_background,
         name="openbot-warm",
+        daemon=True,
+    ).start()
+    threading.Thread(
+        target=supervise_ceo_gateways_background,
+        name="openbot-saa-gateway",
         daemon=True,
     ).start()
     threading.Thread(

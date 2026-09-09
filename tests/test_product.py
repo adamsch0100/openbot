@@ -118,6 +118,17 @@ class EngineWireTests(unittest.TestCase):
             "Hello there."
         )
         self.assertEqual(cleaned, "Hello there.")
+        echoed = clean_hermes_text(
+            "You are the think engine on this CEO.\n"
+            "The operator is in OpenBot Chat — with this CEO, or with Chief of Staff above them.\n"
+            "Write a short RESULT with HANDOFF fields when you did specialist work.\n"
+            "TASK:\n"
+            "what is running\n\n"
+            "Nothing is running on this copy. Last result was form-pipeline-health."
+        )
+        self.assertEqual(echoed, "Nothing is running on this copy. Last result was form-pipeline-health.")
+        self.assertNotIn("You are the think engine", echoed)
+        self.assertNotIn("TASK:", echoed)
 
 
 class SimpleBoardUiTests(unittest.TestCase):

@@ -4,16 +4,16 @@ OpenBot now provides **optional** Hermes gateway supervision with strict non-blo
 
 ## Hard Constraints
 
-1. **NO boot-blocking** — Gateway start is fully lazy and never stalls the HTTP server
+1. **NO boot-blocking** — Gateway start never stalls the HTTP server
 2. **Fast health checks** — `/api/health` stays fast even if gateway is down
-3. **No synchronous warm** — Gateway starts only on first request, not on import
+3. **No synchronous warm** — `warm_engines()` starts OpenCode web + Hermes dashboard only. A separate `openbot-saa-gateway` daemon starts the SAA Homes gateway after HTTP is up (Railway `OPENBOT_DATA_DIR=/data`, or `OPENBOT_SUPERVISE_GATEWAYS=1`). It does not start a second process when `hermes gateway status` times out.
 4. **Timeout protection** — All gateway operations have timeouts (default 5s for status)
 
 ## Architecture
 
 ### Gateway Lifecycle
 
-- **Lazy start**: Gateway only starts when explicitly requested via API
+- **Supervised start**: On Railway, `openbot-saa-gateway` starts the SAA Homes gateway after the board is up. Local laptops stay off unless `OPENBOT_SUPERVISE_GATEWAYS=1`. API start remains available.
 - **Per-CEO homes**: Each CEO with `hermes_home` gets its own gateway process
 - **Daemon threads**: Gateway processes run detached, never block HTTP handlers
 - **Graceful degradation**: If gateway is down, `/api/routines` shows OpenBot routines only
@@ -335,7 +335,8 @@ curl -X POST https://openbot-production-9334.up.railway.app/api/hermes/crons/mig
 PR #36 caused Railway timeouts/502s because `warm_engines_background()` called gateway start synchronously on boot. If Hermes gateway hung or took >30s, the HTTP server never finished starting.
 
 **New design:**
-- Gateway ONLY starts on first explicit request (e.g. `/api/hermes/gateway/start`)
+- `warm_engines_background()` starts **OpenCode web** and **Hermes dashboard** only. It never calls `hermes gateway start`.
+- After the HTTP server is up, a **separate** daemon (`openbot-saa-gateway`) supervises the SAA Homes home (`/data/hermes-homes/saa-homes` on Railway). Local laptops stay off unless `OPENBOT_SUPERVISE_GATEWAYS=1`.
 - `/api/routines` gracefully degrades: shows OpenBot routines, skips Hermes crons if gateway down
 - `/api/health` never touches gateway code
 - All gateway operations use timeouts and background threads

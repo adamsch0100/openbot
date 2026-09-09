@@ -245,44 +245,163 @@ function escapeHtml(s) {
   }[c]));
 }
 
+const PACKET_LINE = /^(You are the |You report to Chief of Staff|The (human )?operator |You dispatch |Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in OpenBot Chat|Specialist lanes execute|You are Chief of Staff on a local)/i;
+
+function statusOnly(text) {
+  const rows = String(text || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  return rows.length > 0 && rows.every((line) => /^(Now|Last|Next|Blocker):/i.test(line));
+}
+
+function stripPacketEcho(text) {
+  let cleaned = String(text || "");
+  const response = cleaned.match(/^##\s*Response\s*$/im);
+  if (response) {
+    const body = cleaned.slice(cleaned.search(/^##\s*Response\s*$/im)).replace(/^##\s*Response\s*/i, "").trim();
+    if (body && !/^\[SILENT\]/i.test(body)) cleaned = body;
+  }
+  const resultAt = cleaned.search(/^RESULT(?:\s*\([^)]*\))?\s*$/im);
+  if (resultAt >= 0) {
+    let body = cleaned.slice(resultAt).replace(/^RESULT(?:\s*\([^)]*\))?\s*/i, "").trim();
+    const handoffAt = body.search(/^HANDOFF\b/im);
+    if (handoffAt >= 0) body = body.slice(0, handoffAt).trim();
+    if (body) cleaned = body;
+  }
+  if (statusOnly(cleaned)) return cleaned;
+  const kept = [];
+  let started = false;
+  let skipping = false;
+  cleaned.split("\n").forEach((line) => {
+    const stripped = line.trim();
+    if (!started) {
+      if (PACKET_LINE.test(stripped)) {
+        skipping = /^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):/i.test(stripped);
+        return;
+      }
+      if (skipping) {
+        if (!stripped) skipping = false;
+        return;
+      }
+      if (!stripped) return;
+    }
+    started = true;
+    kept.push(line);
+  });
+  return kept.join("\n").trim();
+}
+
+function splitHandoff(text) {
+  const raw = String(text || "");
+  const at = raw.search(/^HANDOFF\b/im);
+  if (at < 0) return { answer: raw.trim(), handoff: "" };
+  return { answer: raw.slice(0, at).trim(), handoff: raw.slice(at).trim() };
+}
+
 function cleanBotText(text) {
   if (!text) return "";
   let cleaned = String(text);
-  
-  // Strip Meta contributor tier MULTILINE blocks: from !!! CONTRIBUTOR or "This is Meta's contributor tier"
-  // through the entire paragraph including pricing URL, confidential warning, and "standard v" mention.
-  // Use [\s\S]*? for non-greedy multiline match, stop at double newline or "Now:" INDEX marker.
+
   cleaned = cleaned.replace(/!!!?\s*CONTRIBUTOR\s+TIER[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
   cleaned = cleaned.replace(/This\s+is\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
-  
-  // Strip mid-line CONTRIBUTOR mentions (INDEX Last: lines)
   cleaned = cleaned.replace(/CONTRIBUTOR\s+TIER\s*—\s*TRAINS?\s+ON\s+YOUR\s+DATA/gi, "");
-  
-  // Strip orphan fragments that survived multiline removal
   cleaned = cleaned.replace(/prompts\s+and\s+completions\s+to\s+train\s+future\s+Meta\s+models\.?/gi, "");
   cleaned = cleaned.replace(/See\s+current\s+pricing\s+and\s+rate\s+limits\s+for\s+the\s+Meta\s+Model\s+API[\s\S]*?https?:\/\/[^\s]+/gi, "");
-  cleaned = cleaned.replace(/https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
+  cleaned = cleaned.replace(/https?:\/\/dev\.meta\.ai\/docs\/[^\s]*/gi, "");
   cleaned = cleaned.replace(/Do\s+NOT\s+use\s+it\s+for\s+confidential,\s+proprietary,\s+personal,\s+or\s+otherwise\s+sensitive\s+data\.?/gi, "");
   cleaned = cleaned.replace(/For\s+the\s+same\s+model\s+with\s+no\s+training\s+on\s+your\s+data[\s\S]*?(?=\n\n|Now:|Last:|Next:|$)/gi, "");
   cleaned = cleaned.replace(/It\s+lowers\s+the\s+barrier\s+to\s+entry[\s\S]*?acceptable\./gi, "");
-  
-  // Strip Meta CLI banner artifacts
   cleaned = cleaned.replace(/security\.allow_data_training_tiers_noninteractive/gi, "");
   cleaned = cleaned.replace(/[┌┐└┘│─]+\s*Scheduled\s+Jobs\s*[┌┐└┘│─]+/gi, "");
-  
-  // Strip standalone Meta Model API pricing boilerplate
   cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free[\s\S]*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
-  
-  // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
-  const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  cleaned = cleaned.replace(/This\s+model\s+is\s+in\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?=\n\n|Now:|Last:|Next:|$)/gi, "");
+  cleaned = cleaned.replace(/^#\s*Cron Job:[\s\S]*?(?=^##\s*Response\s*$|\Z)/gim, "");
+
+  const lines = cleaned.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
     return "";
   }
-  
-  // Collapse multiple blank lines
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
-  
+
+  cleaned = stripPacketEcho(cleaned);
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
   return cleaned.trim();
+}
+
+function inlineBotHtml(text) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+function sentenceSplit(text) {
+  const parts = String(text || "").split(/(?<=[.!?])\s+(?=[A-Z“"])/);
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+function labeledRows(rows) {
+  const hits = rows.filter((row) => /^[^:]{1,40}:\s+\S/.test(row)).length;
+  return hits >= Math.min(2, rows.length);
+}
+
+function formatBotHtml(text) {
+  const cleaned = cleanBotText(text);
+  if (!cleaned) return "";
+  const split = splitHandoff(cleaned);
+  const chunks = split.answer.split(/\n{2,}/).map((chunk) => chunk.trim()).filter(Boolean);
+  const html = [];
+  let leadDone = false;
+  chunks.forEach((chunk) => {
+    const rows = chunk.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (!rows.length) return;
+    if (rows.length === 1 && /^#{1,3}\s+/.test(rows[0])) {
+      html.push(`<h3>${inlineBotHtml(rows[0].replace(/^#{1,3}\s+/, ""))}</h3>`);
+      return;
+    }
+    if (rows.every((row) => /^[-*•]\s+/.test(row) || /^\d+\.\s+/.test(row))) {
+      const items = rows.map((row) => `<li>${inlineBotHtml(row.replace(/^([-*•]|\d+\.)\s+/, ""))}</li>`).join("");
+      html.push(`<ul>${items}</ul>`);
+      leadDone = true;
+      return;
+    }
+    if (statusOnly(chunk) || labeledRows(rows)) {
+      const items = rows.map((row) => {
+        const match = row.match(/^([^:]{1,40}):\s*(.*)$/);
+        if (!match) return `<div><dd>${inlineBotHtml(row)}</dd></div>`;
+        return `<div><dt>${escapeHtml(match[1])}</dt><dd>${inlineBotHtml(match[2])}</dd></div>`;
+      }).join("");
+      html.push(`<dl class="bot-stats">${items}</dl>`);
+      leadDone = true;
+      return;
+    }
+    if (rows.length > 1) {
+      rows.forEach((row, index) => {
+        html.push(`<p${leadDone || index ? "" : " class=\"bot-lead\""}>${inlineBotHtml(row)}</p>`);
+      });
+      leadDone = true;
+      return;
+    }
+    const body = rows[0];
+    if (!leadDone && body.length > 280) {
+      const sentences = sentenceSplit(body);
+      if (sentences.length > 1) {
+        html.push(`<p class="bot-lead">${inlineBotHtml(sentences[0])}</p>`);
+        sentences.slice(1).forEach((sentence) => html.push(`<p>${inlineBotHtml(sentence)}</p>`));
+        leadDone = true;
+        return;
+      }
+    }
+    html.push(`<p${leadDone ? "" : " class=\"bot-lead\""}>${inlineBotHtml(body)}</p>`);
+    leadDone = true;
+  });
+  if (split.handoff) {
+    html.push(`<details class="receipt-fold"><summary>Handoff</summary><pre>${escapeHtml(split.handoff)}</pre></details>`);
+  }
+  return html.join("");
+}
+
+function paintBotText(el, text) {
+  if (!el) return;
+  const html = formatBotHtml(text);
+  if (html) el.innerHTML = html;
+  else el.textContent = "";
 }
 
 async function showReplayModal(jobId) {
@@ -698,13 +817,18 @@ function syncComposerWho() {
   const who = talkName();
   const project = currentProject();
   const worker = currentWorker();
-  let line = "Talking to Chief of Staff";
-  if (worker && project) line = `Talking to ${worker.name} · helper for ${project.name}`;
-  else if (project) line = `Talking to ${project.name}`;
+  const pin = preset && preset !== "cos";
+  const engine = pin ? (PRESET_ENGINE[preset] || "board") : "OpenCode or Hermes";
+  let desk = "Chief of Staff";
+  if (worker && project) desk = `${worker.name} · ${project.name}`;
+  else if (project) desk = project.name;
+  const line = pin
+    ? `${desk} · ${jobLabel(preset)} · ${engine}`
+    : `${desk} · Auto · ${engine}`;
   if ($("composerWho")) $("composerWho").textContent = line;
   if ($("msg")) {
-    const pin = preset && preset !== "cos" ? `${jobLabel(preset)} · ` : "";
-    $("msg").placeholder = `${pin}Message ${who}`;
+    const prefix = pin ? `${jobLabel(preset)} · ` : "";
+    $("msg").placeholder = `${prefix}Message ${who}`;
   }
 }
 
@@ -899,6 +1023,28 @@ function setLive(runId, meta) {
     renderOrg(org);
   }
   paintCeoLive(digestCache.get(projectId));
+  paintPulse();
+}
+
+function engineFoundLine() {
+  const h = (cfg.engines && cfg.engines.hermes) || {};
+  const o = (cfg.engines && cfg.engines.opencode) || {};
+  const bits = [];
+  if (o.present) bits.push("OpenCode");
+  if (h.present) bits.push("Hermes");
+  return bits.length ? bits.join(" + ") : "board";
+}
+
+function receiptLine(job) {
+  if (!job) return "board";
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board").trim() || "board";
+  const lane = job.cron
+    ? "schedule"
+    : (job.preset === "cos" || !job.preset ? "Chat" : jobLabel(job.preset));
+  const model = job.model && job.model !== "none" ? (modelName(job.model) || job.model) : "";
+  const cost = Number(job.usd_estimate || 0);
+  const money = cost ? `$${cost.toFixed(4)}` : "";
+  return [engine, lane, model, money].filter(Boolean).join(" · ");
 }
 
 async function stopLive(key) {
@@ -1052,7 +1198,8 @@ function renderSpend(spend) {
   const bind = policy.bind === "all" ? "all" : "PAYG";
   const scope = spend && spend.project_id ? "CEO" : "org";
   const halt = spend && spend.enforced ? " · stopped" : "";
-  el.textContent = `$${used} / $${cap} ${bind} ${period}${halt}`;
+  el.textContent = `$${used} of $${cap} · ${period}${halt}`;
+  paintPulse();
   const wallets = $("walletList");
   if (wallets) {
     const rows = (spend.wallets || []).map((wallet) => {
@@ -1998,22 +2145,23 @@ function bindNodeMenu(el, kind, pid, wid) {
   });
 }
 
+function clipWire(text, max) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (raw.length <= max) return raw;
+  return `${raw.slice(0, Math.max(0, max - 1))}…`;
+}
+
 function ceoWire(project) {
   const now = cleanBotText(project.index_now || "").trim();
   const blocker = cleanBotText(project.index_blocker || "").trim();
-  const parts = [];
-  
-  if (now && now !== "source of truth" && now !== "—") {
-    const truncated = now.length > 50 ? now.substring(0, 47) + "..." : now;
-    parts.push(truncated);
+  const busy = lives.has(aimKey(project.id, ""));
+  if (blocker && blocker !== "—") return `Needs you · ${clipWire(blocker, 42)}`;
+  if (busy) {
+    const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
+    return `Running · ${clipWire(line, 42)}`;
   }
-  
-  if (blocker && blocker !== "—") {
-    const truncated = blocker.length > 40 ? blocker.substring(0, 37) + "..." : blocker;
-    parts.push(`🚫 ${truncated}`);
-  }
-  
-  return parts.join(" · ");
+  if (now && now !== "source of truth" && now !== "—") return clipWire(now, 56);
+  return "";
 }
 
 function ceoInitials(name) {
@@ -2380,7 +2528,7 @@ function renderBotMeta(opts) {
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
     if (!project) {
-      $("chatFolder").textContent = "Pick a CEO on the left. Cos routes the work.";
+      $("chatFolder").textContent = "One chat. Cos routes. Pick a CEO for that desk.";
     } else {
       const nxt = String(project.index_next || "").trim();
       const now = String(project.index_now || "").trim();
@@ -2485,9 +2633,19 @@ function cronIsNoise(row) {
   return /^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$/i.test(String(row.name || ""));
 }
 
+function cronIsLive(row) {
+  if (!row || cronIsNoise(row)) return false;
+  const status = String(row.last_status || "").trim().toLowerCase();
+  if (/^(ok|error|fail|failed|unknown|skipped|success)$/.test(status)) return false;
+  if (row.claimed) return true;
+  return /running|in.?progress|started|firing/i.test(String(row.state || status));
+}
+
 function cronIsPromptDump(text) {
   const raw = String(text || "");
-  return /^#\s*Cron Job:/im.test(raw) && /^##\s*Prompt\b/im.test(raw) && !/^##\s*Response\s*$/im.test(raw);
+  if (/^#\s*Cron Job:/im.test(raw) && /^##\s*Prompt\b/im.test(raw) && !/^##\s*Response\s*$/im.test(raw)) return true;
+  if (/^#\s*Cron Job:/im.test(raw) && (/\*\*Job ID:\*\*/i.test(raw) || /\*\*Mode:\*\*/i.test(raw))) return true;
+  return false;
 }
 
 function cronReportText(row) {
@@ -2516,7 +2674,7 @@ function cronCardHtml(row, open, mark) {
       : "Healthy on the live box.";
   }
   const next = row.next_action || "";
-  const showNext = next && !/no action/i.test(next);
+  const showNext = next && !/no action/i.test(next) && !/read the note below/i.test(next);
   const engine = [row.provider, row.model].filter(Boolean).join(" · ");
   const report = cronReportText(row);
   const snippet = open ? report : (report || err).slice(0, 280);
@@ -2572,25 +2730,49 @@ function laneLabel(name) {
   return jobLabel(raw) || raw;
 }
 
+function runningStory() {
+  if (liveRunId) {
+    return { on: true, line: `Running · ${talkName()} · ${laneLabel(liveLane || preset)}` };
+  }
+  const pack = digestCache.get(projectId) || {};
+  const digest = pack.digest || pack;
+  const running = (digest.running || []).filter((row) => cronIsLive(row));
+  const claimed = (pack.crons || []).filter((row) => cronIsLive(row));
+  const boardRuns = (pack.live_runs || []).filter((row) => (
+    !projectId || String(row.project_id || "") === String(projectId)
+  ));
+  if (boardRuns.length) {
+    const row = boardRuns[0];
+    const who = (currentProject() && currentProject().name) || "Chat";
+    return { on: true, line: `Running · ${who} · ${laneLabel(row.preset)}` };
+  }
+  const liveCron = running[0] || claimed[0];
+  if (liveCron) {
+    const who = (currentProject() && currentProject().name) || "Schedule";
+    return { on: true, line: `Running · ${who} · ${liveCron.title || cronTitle(liveCron.name) || "job"}` };
+  }
+  if (!projectId && lives.size) {
+    return { on: true, line: `Running · ${lives.size} chat${lives.size === 1 ? "" : "s"}` };
+  }
+  return { on: false, line: "Idle" };
+}
+
+function paintPulse() {
+  const el = $("pulse");
+  if (!el) return;
+  const story = runningStory();
+  el.classList.toggle("on", story.on);
+  el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+}
+
 function paintCeoLive(pack) {
   const el = $("ceoLive");
   if (!el) return;
   if (!projectId) {
-    const projects = ((org && org.projects) || []).filter((row) => row && row.id);
-    if (!projects.length) {
-      el.hidden = true;
-      el.innerHTML = "";
-      return;
-    }
-    const rows = projects.map((row) => {
-      const now = String(row.index_now || "Idle").trim();
-      const block = String(row.index_blocker || "").trim();
-      const line = block && block !== "—" ? `Needs you · ${block}` : now;
-      return `<div class="ceo-live-item"><b>${escapeHtml(row.name || row.id)}</b><span>${escapeHtml(line)}</span></div>`;
-    }).join("");
-    el.hidden = false;
+    el.hidden = true;
+    el.innerHTML = "";
     el.classList.remove("on");
-    el.innerHTML = `<div class="ceo-live-head"><b>CEOs</b></div><div class="ceo-lanes one">${rows}</div><p>Open a CEO for Running, Result, and Scheduled.</p>`;
+    paintPulse();
     return;
   }
   const data = pack || digestCache.get(projectId) || {};
@@ -2598,8 +2780,8 @@ function paintCeoLive(pack) {
   const crons = data.crons || [];
   const chatLive = Boolean(liveRunId);
   const boardRuns = (data.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
-  const claimed = crons.filter((row) => row.claimed);
-  const running = [...(digest.running || [])];
+  const claimed = crons.filter((row) => cronIsLive(row));
+  const running = [...(digest.running || [])].filter((row) => cronIsLive(row));
   const seenRun = new Set(running.map((row) => row.id));
   claimed.forEach((row) => {
     if (!seenRun.has(row.id)) running.push(row);
@@ -2613,37 +2795,45 @@ function paintCeoLive(pack) {
   const upcoming = digest.upcoming || (digest.next_up ? [digest.next_up] : []);
   const failed = crons.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")));
   const active = chatLive || boardRuns.length || running.length;
-  const runBits = [];
+  let lead = "Idle";
+  let detail = "";
   if (chatLive) {
-    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(talkName())}</b><span>${escapeHtml(laneLabel(liveLane || preset))} · this chat</span></div>`);
+    lead = `Running · ${talkName()}`;
+    detail = `${laneLabel(liveLane || preset)} · this chat`;
+  } else if (boardRuns.length) {
+    const row = boardRuns[0];
+    lead = `Running · ${laneLabel(row.preset)}`;
+    detail = String(row.title || "this chat").slice(0, 48);
+  } else if (running.length) {
+    const row = running[0];
+    lead = `Running · ${row.title || cronTitle(row.name)}`;
+    detail = "schedule";
+  } else if (latest) {
+    lead = `Last · ${latest.title || cronTitle(latest.name)}`;
+    detail = cronWhen(latest.last_run_at);
   }
-  boardRuns.forEach((row) => {
-    if (chatLive && String(row.id || "") === String(liveRunId)) return;
-    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(laneLabel(row.preset))}</b><span>${escapeHtml(String(row.title || "This chat").slice(0, 48))}</span></div>`);
-  });
-  running.forEach((row) => {
-    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>schedule</span></div>`);
-  });
-  const result = latest
-    ? `<div class="ceo-lane-row"><b>${escapeHtml(latest.title || cronTitle(latest.name))}</b><span>Last ${escapeHtml(cronWhen(latest.last_run_at))}</span></div><p class="ceo-lane-result">${escapeHtml(latest.outcome || "No result on this copy yet.")}</p>`
-    : `<p class="ceo-lane-empty">No result on this copy yet.</p>`;
-  const sched = (upcoming.length ? upcoming : []).slice(0, 3).map((row) => (
-    `<div class="ceo-lane-row"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>${escapeHtml(cronWhenClock(row.next_run_at))}</span></div>`
-  )).join("") || `<p class="ceo-lane-empty">Nothing on the clock.</p>`;
-  const note = failed.length
-    ? `${failed.length} job${failed.length === 1 ? "" : "s"} need you. Open Full schedule.`
-    : (active
-      ? "When this finishes, the Result column and this chat update. Cos sees it on the CEO list."
-      : "Idle here. Live Hermes + Telegram still own today’s ticks. Cos sees the last Result on this CEO.");
+  const report = latest ? cronReportText(latest) : "";
+  const snippet = clipWire(report || (latest && latest.outcome) || "", 160);
+  const next = upcoming[0];
+  const nextLine = next
+    ? `Next · ${next.title || cronTitle(next.name)} · ${cronWhenClock(next.next_run_at)}`
+    : "";
+  const need = failed.length
+    ? `${failed.length} need you`
+    : "";
   el.hidden = false;
   el.classList.toggle("on", Boolean(active));
-  el.innerHTML = `<div class="ceo-live-head"><b>Running · Result · Scheduled</b><i class="ceo-live-dot" aria-hidden="true"></i></div>
-    <div class="ceo-lanes">
-      <section class="ceo-lane${active ? " hot" : ""}"><h3>Running</h3>${runBits.join("") || `<p class="ceo-lane-empty">Nothing running.</p>`}</section>
-      <section class="ceo-lane"><h3>Result</h3>${result}</section>
-      <section class="ceo-lane"><h3>Scheduled</h3>${sched}</section>
+  el.innerHTML = `<div class="ceo-pulse">
+      <i class="ceo-live-dot" aria-hidden="true"></i>
+      <div class="ceo-pulse-copy">
+        <b>${escapeHtml(lead)}</b>
+        ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+        ${!active && snippet ? `<p class="ceo-pulse-result">${escapeHtml(snippet)}</p>` : ""}
+      </div>
+      ${need ? `<em>${escapeHtml(need)}</em>` : ""}
     </div>
-    <p>${escapeHtml(note)}</p>`;
+    ${nextLine && !active ? `<p class="ceo-next">${escapeHtml(nextLine)}</p>` : ""}`;
+  paintPulse();
 }
 
 async function loadCeoDigest() {
@@ -2689,8 +2879,8 @@ function renderChatSchedule(rows, digest, focusId) {
   const cached = digestCache.get(projectId) || {};
   const pack = digest || cached.digest || cached || {};
   const want = String(focusId || scheduleFocusId || "");
-  const claimed = list.filter((row) => row.claimed);
-  const running = [...(pack.running || [])];
+  const claimed = list.filter((row) => cronIsLive(row));
+  const running = [...(pack.running || [])].filter((row) => cronIsLive(row));
   const seenRun = new Set(running.map((row) => row.id));
   claimed.forEach((row) => {
     if (!seenRun.has(row.id)) running.push(row);
@@ -2939,6 +3129,7 @@ function applyConfig(data) {
     renderOrg(org);
   }
   if (data.engines) renderEngines(data.engines, "firstEngines");
+  paintPulse();
   renderSpend(data.spend);
   renderActivity(data.activity);
   if (data.work_dir) {
@@ -3131,9 +3322,9 @@ function card(kind, body, meta) {
   const el = document.createElement("article");
   el.className = `card ${kind}`;
   // Clean bot responses (ops/think/research jobs) before display
-  const cleaned = kind.includes("bot") ? cleanBotText(body) : body;
+  const cleaned = kind.includes("bot") ? formatBotHtml(body) : `<pre>${escapeHtml(body)}</pre>`;
   const head = meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "";
-  el.innerHTML = `${head}<pre>${escapeHtml(cleaned)}</pre>`;
+  el.innerHTML = `${head}${kind.includes("bot") ? `<div class="bubble-text">${cleaned}</div>` : cleaned}`;
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
   return el;
@@ -3151,8 +3342,8 @@ function bubble(kind, body, actor) {
   }
   const text = document.createElement("div");
   text.className = "bubble-text";
-  const cleaned = kind === "bot" ? cleanBotText(body) : (body || "");
-  text.textContent = cleaned;
+  if (kind === "bot") paintBotText(text, body);
+  else text.textContent = body || "";
   el.appendChild(text);
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
@@ -3187,38 +3378,38 @@ function renderAttachments(el, attachments) {
   el.appendChild(attDiv);
 }
 
-function appendWorkDetails(el, job) {
-  if (!el || el.querySelector(".bubble-work")) return;
-  const engine = job.engine || "board";
-  if (engine === "board" || job.preset === "cos") return;
-  const details = document.createElement("details");
-  details.className = "bubble-work";
-  const summary = document.createElement("summary");
+function appendReceipt(el, job) {
+  if (!el || !job || el.querySelector(".receipt-fold.engine")) return;
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board");
   const cost = Number(job.usd_estimate || 0);
-  summary.textContent = [
-    job.engine || "board",
-    job.preset || "",
-    job.model && job.model !== "none" ? job.model : "",
-    cost ? `$${cost.toFixed(4)}` : ""
-  ].filter(Boolean).join(" · ");
-  details.appendChild(summary);
-  const bits = document.createElement("div");
-  bits.className = "muted";
-  bits.textContent = [
-    job.id ? `job ${job.id}` : "",
-    job.session ? `session ${job.session}` : "",
-    job.blocker ? `blocker ${job.blocker}` : ""
-  ].filter(Boolean).join(" · ");
-  if (bits.textContent) details.appendChild(bits);
-  if ((job.engine || "") === "Hermes Agent") {
+  if ((engine === "board" || job.preset === "cos") && !cost && !job.cron) return;
+  const line = receiptLine(job);
+  if (!line) return;
+  const rec = document.createElement("details");
+  rec.className = "receipt-fold engine";
+  const summary = document.createElement("summary");
+  summary.textContent = "Engine";
+  const body = document.createElement("p");
+  body.className = "receipt";
+  body.textContent = line;
+  rec.appendChild(summary);
+  rec.appendChild(body);
+  el.appendChild(rec);
+}
+
+function appendWorkDetails(el, job) {
+  if (!el || !job) return;
+  appendReceipt(el, job);
+  const fold = el.querySelector(".receipt-fold.engine");
+  if ((job.engine || "") === "Hermes Agent" && fold && !fold.querySelector("[data-open-hermes]")) {
     const open = document.createElement("button");
     open.type = "button";
-    open.className = "ghost-btn";
+    open.className = "ghost-btn receipt-go";
+    open.dataset.openHermes = "1";
     open.textContent = "Open Hermes";
     open.addEventListener("click", () => setStage("hermes"));
-    details.appendChild(open);
+    fold.appendChild(open);
   }
-  el.appendChild(details);
 }
 
 function settleLive(live, job) {
@@ -3232,7 +3423,7 @@ function settleLive(live, job) {
     const think = live.querySelector(".thinking");
     if (think) think.remove();
     const text = live.querySelector(".bubble-text");
-    if (text) text.textContent = cleanBotText(job.text || "");
+    if (text) paintBotText(text, job.text || "");
     stampLane(live, job, true);
     appendWorkDetails(live, job);
     // Add report card to settled live bubble
@@ -3545,24 +3736,28 @@ function renderJob(job) {
     return;
   }
   if (job.cron) {
+    if (cronJobIsNoise(job)) return;
     const title = cronTitle(job.cron_name || "Scheduled check");
     const outcome = job.cron_outcome || job.text || "";
     const nxt = job.cron_next || "";
     const when = job.cron_when ? cronWhen(job.cron_when) : "";
-    const lines = [`RESULT · ${title}`];
+    const report = cronReportText({ last_result: job.cron_result || job.text || "" }) || outcome;
+    const lines = [title];
     if (when) lines.push(`Last run ${when}`);
-    if (outcome && !/^RESULT\b/i.test(outcome)) lines.push(outcome);
-    else if (job.cron_outcome) lines.push(job.cron_outcome);
+    if (report && !/^RESULT\b/i.test(report) && !cronIsPromptDump(report)) {
+      lines.push(clipWire(report, 420));
+    }
     if (nxt && !/no action/i.test(nxt)) lines.push(`If needed: ${nxt}`);
     const el = bubble("bot", lines.join("\n"));
     el.classList.add("cron");
     if (job.id) el.setAttribute("data-job-id", job.id);
     stampLane(el, job);
+    appendReceipt(el, Object.assign({ engine: job.engine || "Hermes Agent", cron: true }, job));
     const actions = document.createElement("div");
     actions.className = "job-actions";
     const open = document.createElement("button");
     open.type = "button";
-    open.className = "send";
+    open.className = "ghost-btn";
     open.textContent = "Open schedule";
     open.addEventListener("click", () => openSchedule(job.cron_id || ""));
     actions.appendChild(open);
@@ -3578,6 +3773,7 @@ function renderJob(job) {
     el.setAttribute("data-job-id", job.id);
   }
   stampLane(el, job);
+  appendWorkDetails(el, job);
   if (job.step_count && job.total_steps) {
     const stepChip = document.createElement("div");
     stepChip.className = "step-chip";
@@ -3739,6 +3935,13 @@ function renderJob(job) {
   el.appendChild(diffBlock);
 }
 
+function cronJobIsNoise(job) {
+  const name = String((job && (job.cron_name || job.name)) || "").trim();
+  const slug = name.replace(/\s+/g, "-").toLowerCase();
+  return cronIsNoise({ name }) || cronIsNoise({ name: slug })
+    || /^(grok heartbeat|grok finish notify|grok build supervisor|grok build driver|alerts email outbox)$/i.test(name);
+}
+
 function isNoiseText(text) {
   const raw = String(text || "");
   if (!raw.trim()) return true;
@@ -3749,18 +3952,14 @@ function isNoiseText(text) {
   if (/pipeline-health/.test(raw) && /indexation-patrol/.test(raw) && (/[┌│]/.test(raw) || /hermes cron list/i.test(raw))) return true;
   if (/Scheduled Jobs/.test(raw) && /[┌│]/.test(raw)) return true;
   if (/Gateway reports not running/i.test(raw)) return true;
-  if (/You are the ops engine on this CEO/i.test(raw)) return true;
   if (/raw\.githubusercontent\.com\/adamsch0100\/openbot/i.test(raw)) return true;
   if (/Create file e2e_/i.test(raw)) return true;
   if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
   if (/need your google.{0,40}password/i.test(raw)) return true;
   if (/share your GBP login credentials/i.test(raw)) return true;
-  if (/You are the SAA Homes CEO/i.test(raw)) return true;
-  if (/You report to Chief of Staff, who runs the org/i.test(raw)) return true;
-  if (/You are the (think|ops|research|code) engine on this CEO/i.test(raw)) return true;
-  if (/The operator is in OpenBot Chat/i.test(raw)) return true;
   const cleaned = cleanBotText(raw);
-  if (!cleaned && /CONTRIBUTOR|contributor tier/i.test(raw)) return true;
+  if (!cleaned) return true;
+  if (cleaned.length < 80 && PACKET_LINE.test(cleaned)) return true;
   return false;
 }
 
@@ -3768,6 +3967,8 @@ function isNoiseTurn(turn) {
   if (!turn) return true;
   if (turn.role === "user") return !String(turn.text || "").trim();
   const job = turn.job || {};
+  if (cronJobIsNoise(job)) return true;
+  if (projectId && job.project_id && String(job.project_id) !== String(projectId)) return true;
   const text = job.text || turn.text || "";
   const message = job.message || "";
   return isNoiseText(text) || isNoiseText(message);
@@ -3782,25 +3983,28 @@ function emptyStreamHtml() {
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
-  let lead = "Pick a CEO on the left. Talk here like a normal chat — Cos routes the work.";
-  let showCTA = !project; // Show "Pick a CEO" on CoS empty state
+  let lead = "Type here. Cos routes the work.";
+  let showCTA = !project;
   if (worker && project) {
-    lead = `Talking to ${worker.name} on ${project.name}.`;
+    lead = `${worker.name} on ${project.name}. Type here.`;
     showCTA = false;
   } else if (project) {
     lead = project.id === "saa-homes"
-      ? "SAA Homes watches saahomes.com. Now running at the top shows this chat and any job this copy can see. Finished work lands here and in What’s happening. Telegram still owns the live schedule."
-      : `Talking to ${project.name}. Type a message — pin Code, Think, Research, or Ops only when you want that engine.`;
+      ? "Live Hermes still owns today’s ticks. Type here — this chat is the operator surface."
+      : "Type here. Pin Code, Think, Research, or Ops only when you want that engine.";
     showCTA = false;
   }
+  const nowLine = now && now !== "source of truth" && now !== "—"
+    ? `<p class="empty-now">${escapeHtml(now)}</p>`
+    : "";
+  const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
   return `
     <div class="empty-stream" id="streamEmpty">
       <p class="empty-kicker">${escapeHtml(whereLabel())}</p>
       <h1>${escapeHtml(title)}</h1>
-      <p><b>Now</b> ${escapeHtml(now === "source of truth" ? "—" : now)}</p>
-      ${nxt ? `<p><b>Next</b> ${escapeHtml(nxt)}</p>` : ""}
-      ${stuck ? `<p><b>Blocked</b> ${escapeHtml(stuck)}</p>` : "<p>Nothing blocked on the brief.</p>"}
-      <p>${lead}</p>
+      ${nowLine}
+      ${stuckLine}
+      <p>${escapeHtml(lead)}</p>
       ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">☰ Pick a CEO</button>' : ""}
     </div>`;
 }
@@ -3836,19 +4040,12 @@ function renderTurns(turns, extras) {
   if (telegramKeep.length) {
     const banner = document.createElement("p");
     banner.className = "channel-banner";
-    banner.textContent = projectId === "saa-homes"
-      ? "SAA’s live Hermes box is on Railway. Telegram gets today’s work. Replies here stay on this board."
-      : "A short slice from Telegram. Replies here stay on this board.";
+    banner.textContent = "From Telegram. Replies stay on this board.";
     stream.appendChild(banner);
     telegramKeep.forEach((turn) => {
       const el = bubble(turn.role === "user" ? "user" : "bot", turn.text || "");
       if (turn.role !== "user") el.classList.add("from-telegram");
     });
-  } else if (projectId === "saa-homes") {
-    const banner = document.createElement("p");
-    banner.className = "channel-banner";
-    banner.textContent = "SAA’s live Hermes box is on Railway. Telegram gets today’s work. This chat is the operator surface.";
-    stream.appendChild(banner);
   }
   let lastBot = "";
   rows.forEach((turn, index) => {
@@ -5932,7 +6129,7 @@ async function sendMessage(message, opts) {
             const el = activeBubble();
             const textEl = el && el.querySelector(".bubble-text");
             const thinkEl = el && el.querySelector(".thinking");
-            if (textEl) textEl.textContent = cleanBotText(liveText);
+            if (textEl) paintBotText(textEl, liveText);
             if (thinkEl) thinkEl.classList.add("hidden");
             stream.scrollTop = stream.scrollHeight;
           }

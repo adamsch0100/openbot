@@ -66,6 +66,32 @@ TOOL_MARKUP = re.compile(
     r"function\s*calls?\s*begin|function\s*calls?\s*end)",
     re.I,
 )
+PACKET_LINE = re.compile(
+    r"^(You are the |You report to Chief of Staff|The (human )?operator |"
+    r"You dispatch |Your job is triage|Before doing substantial|"
+    r"Do not hire a Bot|Reply like a person|You do not edit files|"
+    r"No RESULT\.|Do not mention Now|Do not print session_id|"
+    r"If RECENT TELEGRAM|Never ask the operator to paste|"
+    r"If they ask to run all existing|OpenCode edits your|"
+    r"You own the outcome|Chat is not memory|"
+    r"Report a short RESULT|Name the engine that ran|"
+    r"Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|"
+    r"Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
+    r"OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|"
+    r"The operator is in OpenBot Chat|Specialist lanes execute)",
+    re.I,
+)
+META_JUNK = re.compile(
+    r"(?:!!!?\s*CONTRIBUTOR\s+TIER|This\s+is\s+Meta'?s?\s+contributor\s+tier|"
+    r"This\s+model\s+is\s+in\s+Meta'?s?\s+contributor\s+tier)"
+    r"[\s\S]*?(?=\n\n(?:Now|Last|Next|RESULT):|\n(?:Now|Last|Next|RESULT):|$)",
+    re.I,
+)
+CRON_PROMPT_DUMP = re.compile(
+    r"^#\s*Cron Job:[\s\S]*?(?=^##\s*Response\s*$|\Z)",
+    re.I | re.M,
+)
+
 TOOL_ACTIVITY = re.compile(
     r"(?:^|\n)(?:→|•|\*)\s*(?:"
     r"run\s+terminal|"
@@ -149,7 +175,51 @@ def clean_hermes_text(text: str) -> str:
     cleaned = "\n".join(lines).strip()
     cleaned = TOOL_MARKUP.sub("", cleaned).strip()
     cleaned = re.sub(r"<\|?/?DSML[^>]*>", "", cleaned, flags=re.I).strip()
-    return cleaned
+    return _human_hermes_text(cleaned)
+
+
+def _status_only(text: str) -> bool:
+    rows = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    return bool(rows) and all(re.match(r"^(Now|Last|Next|Blocker):", line, re.I) for line in rows)
+
+
+def _human_hermes_text(text: str) -> str:
+    cleaned = META_JUNK.sub("", text or "").strip()
+    cleaned = re.sub(r"https?://dev\.meta\.ai/\S+", "", cleaned)
+    cleaned = CRON_PROMPT_DUMP.sub("", cleaned).strip()
+    response = re.search(r"^##\s*Response\s*$", cleaned, re.I | re.M)
+    if response:
+        body = cleaned[response.end() :].strip()
+        if body and not re.match(r"^\[SILENT\]", body, re.I):
+            cleaned = body
+    result = re.search(r"^RESULT(?:\s*\([^)]*\))?\s*$", cleaned, re.I | re.M)
+    if result:
+        body = cleaned[result.end() :].strip()
+        handoff = re.search(r"^HANDOFF\b", body, re.I | re.M)
+        if handoff:
+            body = body[: handoff.start()].strip()
+        if body:
+            cleaned = body
+    if _status_only(cleaned):
+        return cleaned
+    kept: list[str] = []
+    started = False
+    skipping = False
+    for line in cleaned.splitlines():
+        stripped = line.strip()
+        if not started:
+            if PACKET_LINE.match(stripped):
+                skipping = bool(re.match(r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):", stripped, re.I))
+                continue
+            if skipping:
+                if not stripped:
+                    skipping = False
+                continue
+            if not stripped:
+                continue
+        started = True
+        kept.append(line)
+    return "\n".join(kept).strip()
 
 
 def chat_packet(name: str, status: str, task: str) -> str:
@@ -909,6 +979,7 @@ def _parse_cron_when(value: str) -> datetime | None:
 
 _CRON_RUNNING = re.compile(r"running|in.?progress|started|firing|claimed", re.I)
 _CRON_PAUSED = re.compile(r"paused|disabled", re.I)
+_CRON_DONE = re.compile(r"^(ok|error|fail|failed|unknown|skipped|success)$", re.I)
 
 
 def _cron_digest_item(row: dict, enabled: bool) -> dict:
@@ -938,7 +1009,9 @@ def _cron_is_running(row: dict) -> bool:
     state = str(row.get("state") or "")
     if _CRON_PAUSED.search(state):
         return False
-    status = str(row.get("last_status") or "")
+    status = str(row.get("last_status") or "").strip()
+    if _CRON_DONE.match(status):
+        return False
     if _CRON_RUNNING.search(state) or _CRON_RUNNING.search(status):
         return True
     return bool(row.get("claimed") or row.get("fire_claim"))
@@ -1165,7 +1238,7 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
                 "schedule": str(row.get("schedule_display") or sched.get("expr") or ""),
                 "enabled": row.get("enabled") is not False,
                 "state": str(row.get("state") or ""),
-                "claimed": bool(row.get("fire_claim")),
+                "claimed": bool(row.get("fire_claim")) and not bool(_CRON_DONE.match(status)),
                 "last_run_at": str(row.get("last_run_at") or ""),
                 "next_run_at": str(row.get("next_run_at") or ""),
                 "last_status": status,
@@ -1178,6 +1251,34 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
             }
         )
     return out
+
+
+def _in_container() -> bool:
+    return Path("/.dockerenv").exists() or bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+
+
+def _popen_detached(cmd: list[str], home: str | Path | None = None):
+    """Spawn Hermes so a Docker/Railway parent can exit without killing the gateway."""
+    kwargs: dict = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "env": _hermes_env(home),
+        "start_new_session": True,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | getattr(
+            subprocess, "CREATE_NO_WINDOW", 0
+        )
+    return subprocess.Popen(cmd, **kwargs)
+
+
+def gateway_process_running(text: str) -> bool:
+    """True only when Hermes reports a live gateway. 'not running' contains 'running'."""
+    low = (text or "").lower()
+    if "not running" in low:
+        return False
+    return "is running" in low
 
 
 def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
@@ -1194,7 +1295,7 @@ def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
         text = out.strip()
         
         # Parse running status from output
-        running = code == 0 and "running" in text.lower()
+        running = code == 0 and gateway_process_running(text)
         
         return {
             "ok": code == 0,
@@ -1231,6 +1332,30 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
             "started": False,
         }
     
+    if _in_container():
+        cmd = [binary, "gateway", "run"]
+        try:
+            proc = _popen_detached(cmd, home)
+            time.sleep(1.5)
+            status_check = gateway_status(home, timeout=5)
+            running = bool(status_check.get("running"))
+            return {
+                "ok": running,
+                "code": 0 if running else 1,
+                "text": "hermes gateway run (container)",
+                "running": running,
+                "started": running,
+                "pid": proc.pid if hasattr(proc, "pid") else None,
+            }
+        except Exception as err:
+            return {
+                "ok": False,
+                "code": 1,
+                "error": str(err),
+                "running": False,
+                "started": False,
+            }
+
     cmd = [binary, "gateway", "start"]
     if wait:
         # Synchronous start (wait for completion)

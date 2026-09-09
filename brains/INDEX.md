@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Live SAA Hermes: 50 jobs, 27 ok, 19 failed. indexation-patrol is running now on the live box.
-Last: form-pipeline-health ok 06:38 UTC on OpenCode Go. Most remaining failures are gateway-shutdown from the last Railway boot.
-Next: Finish indexation-patrol, then retry failed jobs one at a time. Skip conversion-surge. Open Full schedule on SAA Homes.
-Blocker: —
+Now: OpenBot saa-homes gateway is up (PID 103). lead-attribution-brief succeeded. Do not Accept parked restore cards.
+Last: Railway OpenBot now supervises with hermes gateway run. warm_engines stays OpenCode web + Hermes dashboard.
+Next: One more gateway-shutdown retry later. Skip conversion-surge. Hold PR #48. Open https://github.com/adamsch0100/openbot/compare/master...board-pulse-cron-noise
+Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue. Last digest run was ok.
 
 ## Vault
 

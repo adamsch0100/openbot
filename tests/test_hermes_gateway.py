@@ -1,5 +1,6 @@
 """Tests for Hermes gateway management (lazy, non-blocking)."""
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -35,6 +36,20 @@ class TestGatewayManagement(unittest.TestCase):
         self.assertTrue(result["running"])
         self.assertTrue(result["ok"])
         self.assertIsNone(result["error"])
+
+    @patch("openbot.hermes.which")
+    @patch("openbot.hermes._run")
+    def test_gateway_status_not_running_despite_stale_state(self, mock_run, mock_which):
+        from openbot.hermes import gateway_status
+
+        mock_which.return_value = "/usr/local/bin/hermes"
+        mock_run.return_value = (
+            0,
+            "Gateway is not running\nrecorded state 'running' but the recorded process is gone",
+        )
+        result = gateway_status()
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["running"])
     
     @patch("openbot.hermes.which")
     @patch("openbot.hermes.gateway_status")
@@ -57,6 +72,28 @@ class TestGatewayManagement(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertTrue(result["started"])
         mock_popen.assert_called_once()
+
+    @patch.dict("os.environ", {"RAILWAY_ENVIRONMENT": "production"})
+    @patch("openbot.hermes.time.sleep")
+    @patch("openbot.hermes.which")
+    @patch("openbot.hermes.gateway_status")
+    @patch("openbot.hermes._popen_detached")
+    def test_gateway_start_uses_run_in_container(self, mock_detached, mock_status, mock_which, _sleep):
+        from openbot.hermes import gateway_start
+
+        mock_which.return_value = "/usr/local/bin/hermes"
+        mock_status.side_effect = [
+            {"running": False},
+            {"running": True},
+        ]
+        mock_proc = MagicMock()
+        mock_proc.pid = 99
+        mock_detached.return_value = mock_proc
+        result = gateway_start(wait=False)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["started"])
+        mock_detached.assert_called_once()
+        self.assertEqual(mock_detached.call_args[0][0][1:], ["gateway", "run"])
     
     @patch("openbot.hermes.which")
     def test_gateway_start_missing_binary(self, mock_which):
@@ -309,6 +346,60 @@ class TestNonBlocking(unittest.TestCase):
         # Should return almost immediately (< 2 seconds for 0.5s sleep + overhead)
         self.assertLess(elapsed, 2.0)
         self.assertTrue(result["ok"])
+
+
+class TestGatewaySupervise(unittest.TestCase):
+    def test_warm_engines_does_not_start_gateway(self):
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parent.parent / "openbot" / "launch.py").read_text(encoding="utf-8")
+        start = src.find("def warm_engines()")
+        end = src.find("def warm_engines_background()")
+        body = src[start:end]
+        self.assertNotIn("gateway_start", body)
+        self.assertNotIn("ensure_supervised_gateway", body)
+        self.assertIn("start_opencode_web", body)
+        self.assertIn("start_hermes_dashboard", body)
+
+    def test_supervise_off_on_local_laptop(self):
+        from openbot.launch import supervise_ceo_gateways_once, supervise_gateways_enabled
+
+        with patch.dict("os.environ", {"OPENBOT_DATA_DIR": "", "OPENBOT_SUPERVISE_GATEWAYS": "0"}):
+            self.assertFalse(supervise_gateways_enabled())
+            self.assertEqual(supervise_ceo_gateways_once(), [])
+
+    def test_supervise_on_with_data_dir(self):
+        from openbot.launch import supervise_gateways_enabled
+
+        with patch.dict("os.environ", {"OPENBOT_DATA_DIR": "/data", "OPENBOT_SUPERVISE_GATEWAYS": ""}):
+            self.assertTrue(supervise_gateways_enabled())
+
+    @patch("openbot.launch.ensure_supervised_gateway")
+    def test_supervise_once_starts_saa_only(self, mock_ensure):
+        from openbot.launch import supervise_ceo_gateways_once
+
+        mock_ensure.return_value = {"ok": True, "project_id": "saa-homes"}
+        with patch.dict("os.environ", {"OPENBOT_SUPERVISE_GATEWAYS": "1"}):
+            rows = supervise_ceo_gateways_once()
+        self.assertEqual(len(rows), 1)
+        mock_ensure.assert_called_once_with("saa-homes")
+
+    @patch("openbot.hermes.gateway_start")
+    @patch("openbot.launch._ceo_hermes_home", return_value="/data/hermes-homes/saa-homes")
+    def test_supervise_does_not_start_on_status_timeout(self, _home, mock_start):
+        from openbot.launch import ensure_supervised_gateway
+
+        with patch("openbot.hermes.gateway_status", return_value={
+            "ok": False,
+            "code": 124,
+            "running": False,
+            "error": "hermes timed out",
+            "text": "hermes timed out",
+        }):
+            row = ensure_supervised_gateway("saa-homes")
+        self.assertTrue(row.get("skipped"))
+        self.assertFalse(row.get("started"))
+        mock_start.assert_not_called()
 
 
 if __name__ == "__main__":
