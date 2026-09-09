@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
   <link rel="apple-touch-icon" href="/favicon.png?v=2" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=107" />
+  <link rel="stylesheet" href="/styles.css?v=111" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -134,7 +134,7 @@
     <div class="bar-right">
       <div class="pulse" id="pulse" title="What’s running, and which engines this board found">
         <i aria-hidden="true"></i>
-        <span>Idle</span>
+        <span>Done</span>
         <small>board</small>
       </div>
       <div class="engine-hint hidden" id="hermesHint">
@@ -239,16 +239,30 @@
 
   <section id="stage-opencode" class="workspace">
     <div class="embed-head">
-      <h1 id="ocTitle">OpenCode</h1>
-      <p class="muted" id="ocStatus"></p>
+      <div class="embed-head-row">
+        <div>
+          <div class="embed-kicker">Engine</div>
+          <h1 id="ocTitle">OpenCode</h1>
+        </div>
+        <a class="ghost-btn embed-open hidden" id="ocOpen" target="_blank" rel="noreferrer">Open raw</a>
+      </div>
+      <p class="embed-aim" id="ocStatus"></p>
+      <p class="embed-live" id="ocLive" hidden>Idle</p>
     </div>
     <iframe id="ocFrame" class="embed" title="OpenCode"></iframe>
   </section>
 
   <section id="stage-hermes" class="workspace">
     <div class="embed-head">
-      <h1 id="hermesTitle">Hermes</h1>
-      <p class="muted" id="hermesAim"></p>
+      <div class="embed-head-row">
+        <div>
+          <div class="embed-kicker">Engine</div>
+          <h1 id="hermesTitle">Hermes</h1>
+        </div>
+        <a class="ghost-btn embed-open hidden" id="hermesOpen" target="_blank" rel="noreferrer">Open raw</a>
+      </div>
+      <p class="embed-aim" id="hermesAim"></p>
+      <p class="embed-live" id="hermesLive" hidden>Idle</p>
     </div>
     <iframe id="hermesFrame" class="embed" title="Hermes Agent"></iframe>
   </section>
@@ -680,6 +694,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=107"></script>
+  <script src="/app.js?v=111"></script>
 </body>
 </html>

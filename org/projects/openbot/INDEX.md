@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OpenBot Railway gateway supervise is live (saa-homes PID 103). Health 200.
-Last: hermes gateway run in Docker; start was a no-op. lead-attribution-brief ok.
-Next: Hold PR #48. Open compare URL for board-pulse-cron-noise. One more gateway-shutdown later.
-Blocker: Digest 401 is saahomes CRON_SECRET, not this board. Do not Accept parked restore cards.
+Now: OpenBot visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes. Receipts name the engine.
+Last: Per-engine heads. Receipts are a visible line. Doing / Next / Results stay the wait story. No third agent.
+Next: Hard-refresh ?v=111. Skip conversion-surge, Competition watch, city-audit-batch-4. Leave PR #48 untouched.
+Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
 Folder: C:\Users\adamm\Projects\openbot

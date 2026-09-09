@@ -314,6 +314,8 @@ function cleanBotText(text) {
   cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free[\s\S]*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
   cleaned = cleaned.replace(/This\s+model\s+is\s+in\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?=\n\n|Now:|Last:|Next:|$)/gi, "");
   cleaned = cleaned.replace(/^#\s*Cron Job:[\s\S]*?(?=^##\s*Response\s*$|\Z)/gim, "");
+  cleaned = cleaned.replace(/[·•]\s*#\s*Cron Job:\s*[\w.-]+/gi, "");
+  cleaned = cleaned.replace(/#\s*Cron Job:\s*[\w.-]+/gi, "");
 
   const lines = cleaned.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
@@ -973,7 +975,7 @@ function lockComposer(hasKey) {
     if (live) {
       const lane = liveLane ? jobLabel(liveLane) : "";
       const bits = [
-        `${talkName()}${lane ? ` · ${lane}` : ""} is working…`,
+        `Running · ${talkName()}${lane ? ` · ${lane}` : ""}`,
         "Your line stays in the thread",
         queued ? "Send now delivers the waiting line" : "Enter adds another",
         "Stop cancels"
@@ -1058,13 +1060,12 @@ function engineFoundLine() {
 function receiptLine(job) {
   if (!job) return "board";
   const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board").trim() || "board";
-  const lane = job.cron
-    ? "schedule"
-    : (job.preset === "cos" || !job.preset ? "Chat" : jobLabel(job.preset));
+  const status = jobStatusWord(job);
   const model = job.model && job.model !== "none" ? (modelName(job.model) || job.model) : "";
   const cost = Number(job.usd_estimate || 0);
   const money = cost ? `$${cost.toFixed(4)}` : "";
-  return [engine, lane, model, money].filter(Boolean).join(" · ");
+  const named = engine === "board" ? "" : engine;
+  return [status, named, model, money].filter(Boolean).join(" · ");
 }
 
 async function stopLive(key) {
@@ -2754,17 +2755,21 @@ function workCounts() {
     !projectId || String(row.project_id || "") === String(projectId)
   ));
   const doing = list.filter((row) => cronIsLive(row)).length + boardRuns.length + (liveRunId ? 1 : 0);
-  const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")) && !cronIsLive(row));
-  const results = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row)).length + failed.length;
-  const next = list.filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row)).length;
+  const failed = list.filter((row) => cronIsFailed(row));
+  const done = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row));
+  const results = done.length + failed.length;
+  const next = list.filter((row) => (
+    row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && cronIsDueSoon(row)
+  )).length;
   if (!projectId) {
     const projects = ((cfg.org && cfg.org.projects) || []);
     const orgNext = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—").length;
-    const orgJobs = (((cfg.activity || {}).jobs) || []).length;
+    const jobs = (((cfg.activity || {}).jobs) || []);
+    const orgFailed = jobs.filter((row) => /fail|error/i.test(String(row.status || ""))).length;
     const orgLive = (((cfg.activity || {}).live_runs) || []).length + (liveRunId ? 1 : 0);
-    return { doing: orgLive, next: orgNext, results: orgJobs };
+    return { doing: orgLive, next: orgNext, results: jobs.length, failed: orgFailed };
   }
-  return { doing, next, results };
+  return { doing, next, results, failed: failed.length };
 }
 
 function paintWorkTabs() {
@@ -2777,6 +2782,8 @@ function paintWorkTabs() {
     const n = counts[view] || 0;
     const label = view === "doing" ? "Doing" : (view === "next" ? "Next" : "Results");
     btn.classList.toggle("on", scheduleOpen && scheduleView === view);
+    btn.classList.toggle("hot", view === "doing" && n > 0);
+    btn.classList.toggle("need", view === "results" && (counts.failed || 0) > 0);
     btn.innerHTML = `${label}<span class="n">${n}</span>`;
   });
 }
@@ -2796,16 +2803,39 @@ function cronSkipRetry(row) {
   return /^(conversion-surge|competitor-content-watch|city-audit-batch-4)$/i.test(String(row.name || ""));
 }
 
+const CLAIM_FRESH_MS = 25 * 60 * 1000;
+
+function cronClaimFresh(row) {
+  const at = cronClaimAt(row);
+  if (!at) return false;
+  return (Date.now() - at) < CLAIM_FRESH_MS;
+}
+
+function cronIsDueSoon(row) {
+  const raw = String((row && row.next_run_at) || "").trim();
+  if (!raw) return false;
+  const stamp = new Date(raw);
+  if (Number.isNaN(stamp.getTime())) return false;
+  const ms = stamp.getTime() - Date.now();
+  return ms <= 24 * 36e5 && ms > -7 * 864e5;
+}
+
+function cronIsFailed(row) {
+  if (!row || cronIsNoise(row) || cronIsLive(row)) return false;
+  if (row.enabled === false) return false;
+  return /error|fail/i.test(String(row.last_status || ""));
+}
+
 function cronIsLive(row) {
   if (!row || cronIsNoise(row)) return false;
   if (row.enabled === false) return false;
   if (row.live) return true;
   const claimAt = cronClaimAt(row);
   const last = Date.parse(String(row.last_run_at || ""));
-  if (claimAt && (!Number.isFinite(last) || claimAt > last)) return true;
+  if (claimAt && cronClaimFresh(row) && (!Number.isFinite(last) || claimAt > last)) return true;
   const status = String(row.last_status || "").trim().toLowerCase();
   if (/^(ok|error|fail|failed|unknown|skipped|success)$/.test(status)) return false;
-  if (row.claimed) return true;
+  if (row.claimed && cronClaimFresh(row)) return true;
   return /running|in.?progress|started|firing/i.test(String(row.state || status));
 }
 
@@ -2836,6 +2866,31 @@ function cronChangedLine(text) {
   return `Shipped / linked: ${uniq.join(" · ")}`;
 }
 
+function cronEngineName(row) {
+  if (!row) return "Hermes Agent";
+  if (row.no_agent) return "script";
+  const kind = rowEngineKind(row);
+  const model = String(row.model || "").trim();
+  return model ? `${kind} · ${model}` : kind;
+}
+
+function jobStatusWord(row) {
+  const raw = String((row && (row.status || row.last_status)) || "").toLowerCase();
+  if (/run|live|progress|start|fir/.test(raw)) return "Running";
+  if (/fail|error/.test(raw)) return "Failed";
+  if (/schedul|queue|due|pending|wait/.test(raw)) return "Scheduled";
+  if (/ok|done|success/.test(raw)) return "Done";
+  return "Done";
+}
+
+function cronKind(row, mark) {
+  if (mark === "live" || cronIsLive(row)) return "Running";
+  if (cronIsFailed(row) || /error|fail/i.test(String((row && row.last_status) || ""))) return "Failed";
+  if (mark === "next") return cronIsDueSoon(row) ? "Due" : "Scheduled";
+  if (String((row && row.last_status) || "").toLowerCase() === "ok") return "Done";
+  return "Job";
+}
+
 function cronCardHtml(row, open, mark) {
   const title = row.title || cronTitle(row.name || row.id);
   const last = cronWhen(row.last_run_at);
@@ -2847,27 +2902,28 @@ function cronCardHtml(row, open, mark) {
   if (/^#\s*Cron Job:/i.test(outcome) || cronIsPromptDump(row.last_result || "")) {
     outcome = failed
       ? (err ? `Failed. ${err.slice(0, 160)}` : "Failed. The last run did not finish.")
-      : "Healthy on the live box.";
+      : (cronReportText(row) || "Finished on the live box.");
   }
+  outcome = String(outcome).replace(/#\s*Cron Job:\s*[\w.-]+/gi, "").trim() || (failed ? "Failed." : outcome);
   const next = row.next_action || "";
   const showNext = next && !/no action/i.test(next) && !/read the note below/i.test(next);
-  const engine = [row.provider, row.model].filter(Boolean).join(" · ");
+  const engine = cronEngineName(row);
   const report = cronReportText(row);
   const changed = cronChangedLine(report);
   const live = mark === "live";
-  const kind = live ? "running now" : (failed ? "failed" : (status === "ok" ? "ok" : (mark === "result" ? "Result" : (mark === "next" ? "Scheduled" : "Job"))));
+  const kind = cronKind(row, mark);
   const sched = String(row.schedule || "").trim();
   return `<article class="cron-card${open ? " open" : ""}${live ? " live" : ""}${failed ? " failed" : ""}" id="cron-${escapeHtml(row.id || "")}">
     <div class="cron-head">
       <b>${escapeHtml(title)}</b>
       <span>${escapeHtml(kind)}</span>
     </div>
-    <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${sched ? ` · Runs ${escapeHtml(sched)}` : ""}${engine ? ` · ${escapeHtml(engine)}` : ""}</p>
-    <p class="cron-outcome">${escapeHtml(live ? "This job is running now. The result will land here when it finishes." : `Result: ${outcome}`)}</p>
+    <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${sched ? ` · Runs ${escapeHtml(sched)}` : ""} · ${escapeHtml(engine)}</p>
+    <p class="cron-outcome">${escapeHtml(live ? "Running now on this CEO's Hermes. Other jobs wait. The result lands here when it finishes." : `Result: ${outcome}`)}</p>
     ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
     ${changed && !live ? `<p class="cron-next">${escapeHtml(changed)}</p>` : ""}
     ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="ghost-btn cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry on live Hermes</button>` : ""}
-    ${report ? `<details class="cron-more"${open || mark === "result" ? " open" : ""}><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : (err && !live ? `<p class="cron-snip">${escapeHtml(err)}</p>` : "")}
+    ${report ? `<details class="cron-more"${open || mark === "result" || failed ? " open" : ""}><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : (err && !live ? `<p class="cron-snip">${escapeHtml(err)}</p>` : "")}
   </article>`;
 }
 
@@ -2908,6 +2964,66 @@ function laneLabel(name) {
   return jobLabel(raw) || raw;
 }
 
+function rowEngineKind(row) {
+  if (!row) return "Hermes Agent";
+  if (row.no_agent) return "script";
+  const named = String(row.engine || "").trim();
+  if (/^OpenCode$/i.test(named)) return "OpenCode";
+  if (/Hermes/i.test(named)) return "Hermes Agent";
+  if ((PRESET_ENGINE[row.preset] || "") === "OpenCode" || row.preset === "builder") return "OpenCode";
+  return "Hermes Agent";
+}
+
+function engineMatches(row, kind) {
+  return rowEngineKind(row) === kind;
+}
+
+function engineStory(kind) {
+  const label = kind === "OpenCode" ? "OpenCode" : "Hermes";
+  if (liveRunId) {
+    const eng = PRESET_ENGINE[liveLane || preset] || "";
+    if (engineMatches({ engine: eng, preset: liveLane || preset }, kind)) {
+      return { on: true, line: `Running · ${talkName()} · ${laneLabel(liveLane || preset)}` };
+    }
+  }
+  const pack = digestCache.get(projectId) || {};
+  const boardRuns = ((pack.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => (
+    (!projectId || String(row.project_id || "") === String(projectId)) && engineMatches(row, kind)
+  ));
+  if (boardRuns.length) {
+    return { on: true, line: `Running · ${laneLabel(boardRuns[0].preset)}` };
+  }
+  const crons = (pack.crons || []).filter((row) => !cronIsNoise(row) && engineMatches(row, kind));
+  const liveCron = crons.find((row) => cronIsLive(row));
+  if (liveCron) {
+    return { on: true, line: `Running · ${liveCron.title || cronTitle(liveCron.name) || "job"}` };
+  }
+  const due = crons
+    .filter((row) => row.enabled !== false && !cronIsLive(row) && cronIsDueSoon(row))
+    .slice()
+    .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")));
+  if (due.length) {
+    return { on: false, line: `Scheduled · ${due[0].title || cronTitle(due[0].name) || "job"}` };
+  }
+  const latest = crons
+    .filter((row) => row.last_run_at && !cronIsLive(row))
+    .slice()
+    .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")))[0];
+  if (latest) {
+    return { on: false, warn: cronIsFailed(latest), line: `Done · ${latest.title || cronTitle(latest.name) || "job"}` };
+  }
+  if (!projectId) {
+    const jobs = (((cfg.activity || {}).jobs) || []).filter((row) => engineMatches(row, kind));
+    const liveJob = jobs.find((row) => /run|live/i.test(String(row.status || "")));
+    if (liveJob) return { on: true, line: `Running · ${liveJob.title || jobLabel(liveJob.preset) || label}` };
+    const last = jobs[0];
+    if (last) {
+      return { on: false, warn: /fail|error/i.test(String(last.status || "")), line: `Done · ${last.title || jobLabel(last.preset) || label}` };
+    }
+  }
+  return { on: false, line: `Done · ${label}` };
+}
+
 function runningStory() {
   if (liveRunId) {
     return { on: true, line: `Running · ${talkName()} · ${laneLabel(liveLane || preset)}` };
@@ -2916,7 +3032,7 @@ function runningStory() {
   const digest = pack.digest || pack;
   const running = (digest.running || []).filter((row) => cronIsLive(row));
   const claimed = (pack.crons || []).filter((row) => cronIsLive(row));
-  const boardRuns = (pack.live_runs || []).filter((row) => (
+  const boardRuns = ((pack.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => (
     !projectId || String(row.project_id || "") === String(projectId)
   ));
   if (boardRuns.length) {
@@ -2932,7 +3048,44 @@ function runningStory() {
   if (!projectId && lives.size) {
     return { on: true, line: `Running · ${lives.size} chat${lives.size === 1 ? "" : "s"}` };
   }
-  return { on: false, line: "Idle" };
+  if (!projectId) {
+    const jobs = (((cfg.activity || {}).jobs) || []);
+    const liveJob = jobs.find((row) => /run|live/i.test(String(row.status || "")));
+    if (liveJob) return { on: true, line: `Running · ${liveJob.title || jobLabel(liveJob.preset) || "job"}` };
+    const last = jobs[0];
+    if (last) {
+      return { on: false, warn: /fail|error/i.test(String(last.status || "")), line: `Done · ${last.title || jobLabel(last.preset) || "job"}` };
+    }
+    return { on: false, line: "Done" };
+  }
+  const due = (pack.crons || []).filter((row) => (
+    !cronIsNoise(row) && row.enabled !== false && !cronIsLive(row) && cronIsDueSoon(row)
+  ));
+  if (due.length) {
+    const row = due.slice().sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")))[0];
+    return { on: false, line: `Scheduled · ${row.title || cronTitle(row.name) || "job"}` };
+  }
+  const latest = (pack.crons || [])
+    .filter((row) => row.last_run_at && !cronIsNoise(row) && !cronIsLive(row))
+    .slice()
+    .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")))[0];
+  if (latest) {
+    return { on: false, warn: cronIsFailed(latest), line: `Done · ${latest.title || cronTitle(latest.name) || "job"}` };
+  }
+  return { on: false, line: "Done" };
+}
+
+function paintEmbedLive() {
+  const oc = engineStory("OpenCode");
+  const hermes = engineStory("Hermes Agent");
+  [["ocLive", oc], ["hermesLive", hermes]].forEach(([id, story]) => {
+    const el = $(id);
+    if (!el || !story || !story.line) return;
+    el.hidden = false;
+    el.classList.toggle("on", story.on);
+    el.classList.toggle("warn", Boolean(story.warn) && !story.on);
+    el.textContent = story.line;
+  });
 }
 
 function paintPulse() {
@@ -2940,7 +3093,9 @@ function paintPulse() {
   if (!el) return;
   const story = runningStory();
   el.classList.toggle("on", story.on);
+  el.classList.toggle("warn", Boolean(story.warn) && !story.on);
   el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+  paintEmbedLive();
   paintWorkTabs();
 }
 
@@ -2949,13 +3104,17 @@ function paintCeoLive(pack) {
   if (!el) return;
   if (!projectId) {
     const story = runningStory();
+    const counts = workCounts();
+    const tally = [`Doing ${counts.doing}`, `Next ${counts.next}`, `Results ${counts.results}`];
+    if (counts.failed) tally.push(`${counts.failed} failed`);
     el.hidden = false;
     el.classList.toggle("on", story.on);
+    el.classList.toggle("warn", Boolean(story.warn) && !story.on);
     el.innerHTML = `<div class="ceo-pulse">
       <i class="ceo-live-dot" aria-hidden="true"></i>
       <div class="ceo-pulse-copy">
         <b>${escapeHtml(story.line)}</b>
-        <span>Doing · Next · Results stay in this chat.</span>
+        <span>${escapeHtml(tally.join(" · "))}</span>
       </div>
     </div>`;
     paintPulse();
@@ -2965,7 +3124,7 @@ function paintCeoLive(pack) {
   const digest = data.digest || data;
   const crons = data.crons || [];
   const chatLive = Boolean(liveRunId);
-  const boardRuns = (data.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
+  const boardRuns = ((data.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => String(row.project_id || "") === String(projectId));
   const claimed = crons.filter((row) => cronIsLive(row));
   const running = [...(digest.running || [])].filter((row) => cronIsLive(row));
   const seenRun = new Set(running.map((row) => row.id));
@@ -2978,10 +3137,11 @@ function paintCeoLive(pack) {
     .slice()
     .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")));
   const latest = latestOk[0] || (digest.latest && !cronIsNoise(digest.latest) ? digest.latest : null) || finished[0] || null;
-  const upcoming = digest.upcoming || (digest.next_up ? [digest.next_up] : []);
-  const failed = crons.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")) && !cronIsLive(row));
+  const upcoming = (digest.upcoming || (digest.next_up ? [digest.next_up] : [])).filter((row) => !cronIsNoise(row));
+  const failed = crons.filter((row) => cronIsFailed(row));
+  const counts = workCounts();
   const active = chatLive || boardRuns.length || running.length;
-  let lead = "Idle";
+  let lead = "Done";
   let detail = "";
   if (chatLive) {
     lead = `Running · ${talkName()}`;
@@ -2993,27 +3153,40 @@ function paintCeoLive(pack) {
   } else if (running.length) {
     const row = running[0];
     lead = `Running · ${row.title || cronTitle(row.name)}`;
-    detail = "schedule";
+    detail = rowEngineKind(row);
+  } else if (upcoming[0] && cronIsDueSoon(upcoming[0])) {
+    lead = `Scheduled · ${upcoming[0].title || cronTitle(upcoming[0].name)}`;
+    detail = cronWhenClock(upcoming[0].next_run_at);
+  } else if (failed.length) {
+    lead = `Done · ${failed[0].title || cronTitle(failed[0].name)}`;
+    detail = failed.length === 1 ? "Failed · needs retry" : `${failed.length} failed`;
   } else if (latest) {
-    lead = `Last · ${latest.title || cronTitle(latest.name)}`;
+    lead = `Done · ${latest.title || cronTitle(latest.name)}`;
     detail = cronWhen(latest.last_run_at);
   }
-  const report = latest ? cronReportText(latest) : "";
-  const snippet = clipWire(report || (latest && latest.outcome) || "", 160);
+  const reportRow = failed[0] || latest;
+  const report = reportRow ? cronReportText(reportRow) : "";
+  let snippet = clipWire(report || (reportRow && reportRow.outcome) || "", 160);
+  if (reportRow && cronIsFailed(reportRow)) {
+    snippet = clipWire(String(reportRow.last_error || report || reportRow.outcome || "Failed."), 160);
+  }
+  snippet = String(snippet).replace(/#\s*Cron Job:\s*[\w.-]+/gi, "").trim();
   const next = upcoming[0];
   const nextLine = next
-    ? `Next · ${next.title || cronTitle(next.name)} · ${cronWhenClock(next.next_run_at)}`
+    ? `Scheduled · ${next.title || cronTitle(next.name)} · ${cronWhenClock(next.next_run_at)}`
     : "";
   const need = failed.length
-    ? `${failed.length} need you`
+    ? `${failed.length} failed`
     : "";
+  const tally = [`Doing ${counts.doing}`, `Next ${counts.next}`, `Results ${counts.results}`];
   el.hidden = false;
   el.classList.toggle("on", Boolean(active));
+  el.classList.toggle("warn", Boolean(failed.length) && !active);
   el.innerHTML = `<div class="ceo-pulse">
       <i class="ceo-live-dot" aria-hidden="true"></i>
       <div class="ceo-pulse-copy">
         <b>${escapeHtml(lead)}</b>
-        ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+        <span>${escapeHtml([detail, tally.join(" · ")].filter(Boolean).join(" · "))}</span>
         ${!active && snippet ? `<p class="ceo-pulse-result">${escapeHtml(snippet)}</p>` : ""}
       </div>
       ${need ? `<em>${escapeHtml(need)}</em>` : ""}
@@ -3055,13 +3228,14 @@ async function loadCeoDigest(refreshLive) {
 
 function liveRunCard(row) {
   const who = currentProject() ? (currentProject().name || "This CEO") : "Chat";
+  const engine = String(row.engine || PRESET_ENGINE[row.preset] || "board");
   const open = [{ id: "open", label: "Open chat" }];
   return `<article class="cron-card live">
     <div class="cron-head">
       <b>${escapeHtml(laneLabel(row.preset || "cos"))}</b>
-      <span>running now</span>
+      <span>Running</span>
     </div>
-    <p class="cron-meta">${escapeHtml(who)}</p>
+    <p class="cron-meta">${escapeHtml(who)} · ${escapeHtml(engine)}</p>
     <p class="cron-outcome">${escapeHtml(row.title || "This chat is answering now.")}</p>
     <div class="need-actions">${choiceButtonsHtml(open, row)}</div>
   </article>`;
@@ -3090,7 +3264,8 @@ function renderChatSchedule(rows, digest, focusId) {
   if (!projectId) {
     const runs = ((cfg.activity || {}).live_runs) || [];
     const projects = ((cfg.org && cfg.org.projects) || []);
-    const jobs = (((cfg.activity || {}).jobs) || []).slice(0, 8);
+    const allJobs = (((cfg.activity || {}).jobs) || []);
+    const jobs = allJobs.slice(0, 12);
     const bits = [];
     if (view === "doing") {
       bits.push(`<p class="cron-story">What is moving right now across Cos and the CEOs.</p>`);
@@ -3108,11 +3283,11 @@ function renderChatSchedule(rows, digest, focusId) {
       </article>`).join("") : `<p class="cron-empty">No next step on the briefs.</p>`);
     } else {
       bits.push(`<p class="cron-story">Latest job cards from this board.</p>`);
-      bits.push(`<h3 class="cron-section">Results · ${jobs.length}</h3>`);
-      bits.push(jobs.length ? jobs.map((row) => `<article class="cron-card">
-        <div class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(row.status || row.preset || "done")}</span></div>
-        <p class="cron-meta">${escapeHtml(row.engine || "")} · ${escapeHtml(cronWhen(row.at))}</p>
-        <p class="cron-outcome">${escapeHtml(clipWire(row.text || row.summary || "", 180))}</p>
+      bits.push(`<h3 class="cron-section">Results · ${allJobs.length}</h3>`);
+      bits.push(jobs.length ? jobs.map((row) => `<article class="cron-card${/fail|error/i.test(String(row.status || "")) ? " failed" : ""}">
+        <div class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></div>
+        <p class="cron-meta">${escapeHtml(row.engine || PRESET_ENGINE[row.preset] || "board")} · ${escapeHtml(cronWhen(row.at))}</p>
+        <p class="cron-outcome">${escapeHtml(clipWire(String(row.text || row.summary || "").replace(/#\s*Cron Job:\s*[\w.-]+/gi, ""), 180))}</p>
         ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
       </article>`).join("") : `<p class="cron-empty">No job cards yet.</p>`);
     }
@@ -3121,14 +3296,14 @@ function renderChatSchedule(rows, digest, focusId) {
     paintWorkTabs();
     return;
   }
-  const list = rows || [];
+  const list = (rows || []).filter((row) => !cronIsNoise(row));
   if (rows && !list.length) {
     el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live report.</p>`;
     return;
   }
   const cached = digestCache.get(projectId) || {};
   const pack = digest || cached.digest || cached || {};
-  const boardRuns = (cached.live_runs || pack.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
+  const boardRuns = ((cached.live_runs || pack.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => String(row.project_id || "") === String(projectId));
   const claimed = list.filter((row) => cronIsLive(row));
   const running = [...(pack.running || [])].filter((row) => cronIsLive(row) || row.live);
   const seenRun = new Set(running.map((row) => row.id));
@@ -3140,16 +3315,21 @@ function renderChatSchedule(rows, digest, focusId) {
     .slice()
     .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")))
     .slice(0, 12);
-  const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")) && !cronIsLive(row));
+  const failed = list.filter((row) => cronIsFailed(row));
+  const failedIds = new Set(failed.map((row) => row.id));
+  const latestOk = latest.filter((row) => !failedIds.has(row.id));
   const paused = list.filter((row) => row.enabled === false || /paused/i.test(String(row.state || "")));
   const scheduled = list
     .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row))
     .slice()
     .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")));
+  const soon = scheduled.filter((row) => cronIsDueSoon(row));
+  const later = scheduled.filter((row) => !cronIsDueSoon(row));
   const sections = [];
   const synced = cached.synced_at || pack.synced_at || "";
+  const waitName = running.length ? (running[0].title || cronTitle(running[0].name)) : "";
   const stamp = running.length
-    ? `Running now · ${running.map((row) => row.title || cronTitle(row.name)).slice(0, 2).join(", ")}.`
+    ? `Running · ${running.map((row) => row.title || cronTitle(row.name)).slice(0, 2).join(", ")}. Other jobs on this CEO wait.`
     : (synced ? `Live Hermes ${cronWhen(synced)}.` : "What this CEO is doing, what is next, and what just landed.");
   sections.push(`<p class="cron-story">${escapeHtml(stamp)}</p>`);
   if (view === "doing") {
@@ -3157,7 +3337,13 @@ function renderChatSchedule(rows, digest, focusId) {
     if (boardRuns.length) sections.push(boardRuns.map((row) => liveRunCard(row)).join(""));
     sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : (boardRuns.length ? "" : `<p class="cron-empty">Nothing running.</p>`));
   } else if (view === "next") {
-    sections.push(`<h3 class="cron-section">Next · ${scheduled.length}</h3>${scheduled.length ? scheduled.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing on the clock.</p>`}`);
+    if (waitName) {
+      sections.push(`<p class="cron-empty">Waiting · ${escapeHtml(waitName)} is on this CEO's Hermes. Due jobs stay queued.</p>`);
+    }
+    sections.push(`<h3 class="cron-section">Due · ${soon.length}</h3>${soon.length ? soon.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing due in the next day.</p>`}`);
+    if (later.length) {
+      sections.push(`<h3 class="cron-section">Later · ${later.length}</h3>${later.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}`);
+    }
     if (paused.length) {
       sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
     }
@@ -3171,10 +3357,10 @@ function renderChatSchedule(rows, digest, focusId) {
         <div class="need-actions">${choiceButtonsHtml(needChoices(row), row)}</div>
       </article>`).join(""));
     }
-    sections.push(`<h3 class="cron-section">Results · ${latest.length}</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
     if (failed.length) {
-      sections.push(`<h3 class="cron-section">Failed checks · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+      sections.push(`<h3 class="cron-section">Failed · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}`);
     }
+    sections.push(`<h3 class="cron-section">Done · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : (failed.length ? "" : `<p class="cron-empty">No result on this copy yet.</p>`)}`);
   }
   el.innerHTML = sections.join("");
   bindNeedActions(el);
@@ -3471,7 +3657,7 @@ function applyCollaboratorChrome() {
 
 function syncHermesHint() {
   const hint = $("hermesHint");
-  if (hint) hint.classList.toggle("hidden", stage !== "hermes");
+  if (hint) hint.classList.toggle("hidden", stage !== "hermes" || !hermesFailed);
   const retry = $("retryHermes");
   if (retry) retry.classList.toggle("hidden", stage !== "hermes" || !hermesFailed);
 }
@@ -3522,6 +3708,7 @@ function setStage(name) {
   syncHermesHint();
   if (name === "opencode") startOpenCode();
   if (name === "hermes") startHermes();
+  paintPulse();
   syncHash();
 }
 
@@ -3684,36 +3871,43 @@ function renderAttachments(el, attachments) {
 }
 
 function appendReceipt(el, job) {
-  if (!el || !job || el.querySelector(".receipt-fold.engine")) return;
+  if (!el || !job || el.querySelector(".receipt-line")) return;
   const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board");
   const cost = Number(job.usd_estimate || 0);
   if ((engine === "board" || job.preset === "cos") && !cost && !job.cron) return;
   const line = receiptLine(job);
   if (!line) return;
-  const rec = document.createElement("details");
-  rec.className = "receipt-fold engine";
-  const summary = document.createElement("summary");
-  summary.textContent = "Engine";
-  const body = document.createElement("p");
-  body.className = "receipt";
-  body.textContent = line;
-  rec.appendChild(summary);
-  rec.appendChild(body);
+  const rec = document.createElement("p");
+  rec.className = "receipt receipt-line";
+  if (/^Failed\b/.test(line)) rec.classList.add("warn");
+  if (/^Running\b/.test(line)) rec.classList.add("on");
+  rec.textContent = line;
   el.appendChild(rec);
 }
 
 function appendWorkDetails(el, job) {
   if (!el || !job) return;
   appendReceipt(el, job);
-  const fold = el.querySelector(".receipt-fold.engine");
-  if ((job.engine || "") === "Hermes Agent" && fold && !fold.querySelector("[data-open-hermes]")) {
+  const rec = el.querySelector(".receipt-line");
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "");
+  if (!rec) return;
+  if (engine === "Hermes Agent" && !el.querySelector("[data-open-hermes]")) {
     const open = document.createElement("button");
     open.type = "button";
     open.className = "ghost-btn receipt-go";
     open.dataset.openHermes = "1";
     open.textContent = "Open Hermes";
     open.addEventListener("click", () => setStage("hermes"));
-    fold.appendChild(open);
+    rec.after(open);
+  }
+  if (engine === "OpenCode" && !el.querySelector("[data-open-opencode]")) {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "ghost-btn receipt-go";
+    open.dataset.openOpencode = "1";
+    open.textContent = "Open OpenCode";
+    open.addEventListener("click", () => setStage("opencode"));
+    rec.after(open);
   }
 }
 
@@ -3750,7 +3944,7 @@ function thinkingBubble() {
   el.dataset.liveKey = aimKey();
   const think = document.createElement("div");
   think.className = "thinking";
-  think.innerHTML = `<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="thinking-label">${escapeHtml(talkName())} is working…</span>`;
+  think.innerHTML = `<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="thinking-label">${escapeHtml(`Running · ${talkName()}`)}</span>`;
   const text = document.createElement("div");
   text.className = "bubble-text";
   el.appendChild(think);
@@ -4769,6 +4963,33 @@ function engineFrameLive(frame) {
   return Boolean(src) && src !== "about:blank";
 }
 
+function shortLeaf(path) {
+  const raw = String(path || "").trim().replace(/[\\/]+$/, "");
+  if (!raw) return "";
+  const parts = raw.split(/[\\/]/).filter(Boolean);
+  const leaf = parts[parts.length - 1] || raw;
+  return leaf.length > 48 ? `…${leaf.slice(-46)}` : leaf;
+}
+
+function setEmbedOpen(id, url) {
+  const el = $(id);
+  if (!el) return;
+  if (!url) {
+    el.classList.add("hidden");
+    el.removeAttribute("href");
+    return;
+  }
+  el.href = url;
+  el.classList.remove("hidden");
+}
+
+function paintEmbedAim(id, line, html) {
+  const el = $(id);
+  if (!el) return;
+  if (html) el.innerHTML = html;
+  else el.textContent = line || "";
+}
+
 function reloadEngineFrame(frameId, url, token) {
   const frame = $(frameId);
   if (!frame || !url) return;
@@ -4785,15 +5006,13 @@ async function startOpenCode() {
     ? (lastOcFolder || (($("folder") && $("folder").value.trim()) || null))
     : (aim.folder || (($("folder") && $("folder").value.trim()) || null));
   if ($("ocTitle")) $("ocTitle").textContent = aim.idle ? "OpenCode" : `OpenCode · ${aim.name}`;
-  if (aim.idle && $("ocStatus")) {
-    $("ocStatus").textContent = lastOcFolder
-      ? `Still on last CEO folder · ${lastOcFolder}. Click a CEO so Chat, OpenCode, and Hermes match.`
-      : "Click a CEO so OpenCode opens that folder.";
-  }
-  if (!ocStarted && $("ocStatus") && !aim.idle) {
-    $("ocStatus").textContent = folder
-      ? `Aiming OpenCode at ${folder}…`
-      : "Starting official OpenCode web…";
+  if (aim.idle) {
+    paintEmbedAim("ocStatus", lastOcFolder
+      ? `Last folder · ${shortLeaf(lastOcFolder)}. Pick a CEO so this matches Chat.`
+      : "Pick a CEO so OpenCode opens that folder.");
+    setEmbedOpen("ocOpen", "");
+  } else if (!ocStarted) {
+    paintEmbedAim("ocStatus", folder ? `Starting · ${shortLeaf(folder)}` : "Starting…");
   }
   const res = await fetch("/api/engines/opencode/web", {
     method: "POST",
@@ -4802,18 +5021,22 @@ async function startOpenCode() {
   });
   const data = await res.json();
   if (!data.ok && !data.url) {
-    $("ocStatus").innerHTML = `${escapeHtml(data.error || "OpenCode missing")}${data.install ? ` · <a href="${data.install}">install</a>` : ""}`;
+    setEmbedOpen("ocOpen", data.install || "");
+    paintEmbedAim("ocStatus", "", `${escapeHtml(data.error || "OpenCode missing")}${data.install ? ` · <a href="${data.install}">install</a>` : ""}`);
+    paintEmbedLive();
     return;
   }
   const url = data.url || "/engine/opencode/";
   const aimed = data.folder || folder || "";
   const sid = data.session_id || "";
   if (!aim.idle) {
-    $("ocStatus").innerHTML = `Workspace <a href="${url}" target="_blank" rel="noreferrer">${escapeHtml(aimed || url)}</a> · one OpenCode session per CEO · All files is the repo; git / branch / last turn are diffs only.`;
+    paintEmbedAim("ocStatus", aimed ? `Folder · ${shortLeaf(aimed)}` : "OpenCode is up.");
+    setEmbedOpen("ocOpen", url);
   }
   reloadEngineFrame("ocFrame", url, `${aimed}|${sid}`);
   lastOcFolder = aimed;
   ocStarted = true;
+  paintPulse();
 }
 
 async function startHermes() {
@@ -4822,17 +5045,14 @@ async function startHermes() {
   const sid = aim.idle ? "" : (aim.sessionId || "");
   if ($("hermesTitle")) $("hermesTitle").textContent = aim.idle ? "Hermes" : `Hermes · ${aim.name}`;
   if (aim.idle) {
-    if ($("hermesStatus")) {
-      $("hermesStatus").textContent = lastHermesHome
-        ? `Still on last CEO home · ${lastHermesHome}. Click a CEO so Chat, OpenCode, and Hermes match.`
-        : "Click a CEO so Hermes opens that home.";
-    }
-    if ($("hermesAim")) $("hermesAim").textContent = lastHermesHome || "—";
-  } else if ($("hermesAim")) {
-    $("hermesAim").textContent = home || "machine Hermes home";
+    paintEmbedAim("hermesAim", lastHermesHome
+      ? `Last home · ${shortLeaf(lastHermesHome)}. Pick a CEO so this matches Chat.`
+      : "Pick a CEO so Hermes opens that home.");
+    setEmbedOpen("hermesOpen", "");
+  } else {
+    paintEmbedAim("hermesAim", "Starting…");
   }
   hermesFailed = false;
-  if (!hermesStarted && $("hermesStatus") && !aim.idle) $("hermesStatus").textContent = "Starting…";
   syncHermesHint();
   const res = await fetch("/api/engines/hermes/dashboard", {
     method: "POST",
@@ -4843,8 +5063,11 @@ async function startHermes() {
   if (!res.ok || !data.ok) {
     hermesFailed = true;
     const docs = data.install ? ` · <a href="${data.install}" target="_blank" rel="noreferrer">docs</a>` : "";
-    $("hermesStatus").innerHTML = `${escapeHtml(data.error || "Hermes Agent missing")}${docs}`;
+    if ($("hermesStatus")) $("hermesStatus").innerHTML = `${escapeHtml(data.error || "Hermes Agent missing")}${docs}`;
+    setEmbedOpen("hermesOpen", data.install || "");
+    paintEmbedAim("hermesAim", "", `${escapeHtml(data.error || "Hermes Agent missing")}${docs}`);
     syncHermesHint();
+    paintEmbedLive();
     return;
   }
   const base = data.url || "/engine/hermes/";
@@ -4853,36 +5076,42 @@ async function startHermes() {
   const prefix = String(base).replace(/\/+$/, "") || "/engine/hermes";
   const url = resume ? `${prefix}/chat?resume=${encodeURIComponent(resume)}` : `${prefix}/`;
   hermesFailed = false;
-  if (!aim.idle) $("hermesStatus").innerHTML = `<a href="${url}" target="_blank" rel="noreferrer">${base}</a>`;
-  if ($("hermesAim") && !aim.idle) {
+  if ($("hermesStatus")) $("hermesStatus").textContent = "";
+  if (!aim.idle) {
     const count = Number(data.session_count || 0);
-    const title = data.session_title || "";
-    const bits = [aimed || "machine Hermes home"];
+    const title = String(data.session_title || "").trim();
+    const bits = [aimed ? `Home · ${shortLeaf(aimed)}` : "Home attached"];
     if (count) bits.push(`${count.toLocaleString()} sessions`);
-    if (title) bits.push(`Telegram ${title}`);
-    $("hermesAim").textContent = bits.join(" · ");
+    if (title) bits.push(`Telegram · ${title}`);
+    paintEmbedAim("hermesAim", bits.join(" · "));
+    setEmbedOpen("hermesOpen", url);
   }
   syncHermesHint();
   reloadEngineFrame("hermesFrame", url, `${aimed}|${resume}`);
   lastHermesHome = aimed;
   hermesStarted = true;
+  paintPulse();
 }
 
 function attachEngineFrames(data) {
   const ocUrl = data.opencode_web && data.opencode_web.url;
   if (ocUrl) {
-    $("ocStatus").innerHTML = `Running at <a href="${ocUrl}" target="_blank" rel="noreferrer">${ocUrl}</a>`;
+    paintEmbedAim("ocStatus", "OpenCode is up.");
+    setEmbedOpen("ocOpen", ocUrl);
     if ($("ocFrame").src !== ocUrl) $("ocFrame").src = ocUrl;
     ocStarted = true;
   }
   const hermesUrl = data.hermes_dash && data.hermes_dash.url;
   if (hermesUrl) {
     hermesFailed = false;
-    $("hermesStatus").innerHTML = `<a href="${hermesUrl}" target="_blank" rel="noreferrer">${hermesUrl}</a>`;
+    if ($("hermesStatus")) $("hermesStatus").textContent = "";
+    paintEmbedAim("hermesAim", "Hermes is up.");
+    setEmbedOpen("hermesOpen", hermesUrl);
     syncHermesHint();
     if ($("hermesFrame").src !== hermesUrl) $("hermesFrame").src = hermesUrl;
     hermesStarted = true;
   }
+  paintEmbedLive();
 }
 
 async function waitForUnlock() {
