@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Catch SAA leftovers on the live Hermes gateway (nudge due), not SSH. OpenBot glue seats Go then OpenRouter.
-Last: Skip jobs paused. Empty-model leftovers pinned to OpenCode Go. Telegram stays origin.
-Next: Nudge geo-citation-audit, then the next leftover after it finishes. Do not redeploy SAA Homes Hermes.
-Blocker: Do not Accept parked restore cards. Do not stampede crons. Do not redeploy live Hermes.
+Now: Live OpenBot 502 — server imports pair.py which was never deployed. Shipping that module.
+Last: Application failed to respond on openbot-production-9334.up.railway.app
+Next: Push pair.py, wait for Railway, confirm /api/health.
+Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes.
 
 ## Vault
 

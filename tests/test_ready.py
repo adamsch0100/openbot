@@ -95,6 +95,8 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("function receiptLine", js)
         self.assertIn("supervise_ceo_gateways_background", server)
         self.assertIn("overlay_saa_live_background", server)
+        self.assertIn("from .pair import pair_payload, people_rows", server)
+        self.assertTrue((ROOT / "openbot" / "pair.py").is_file())
         self.assertIn("openbot-saa-gateway", server)
         self.assertIn("function stripPacketEcho", js)
         self.assertIn("function formatBotHtml", js)
