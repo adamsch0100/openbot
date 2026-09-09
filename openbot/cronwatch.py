@@ -82,6 +82,8 @@ def ingest_cron_runs() -> list[dict]:
             jobs.extend(_ingest_home_files(str(project_id), home))
         else:
             jobs.extend(_ingest_home_runs(str(project_id), known_projects, None))
+        if str(project_id) == "saa-homes":
+            jobs.extend(_ingest_overlay_rows("saa-homes"))
     return jobs
 
 
@@ -114,6 +116,38 @@ def _ingest_home_files(project_id: str | None, hermes_home: str | None) -> list[
     return posted
 
 
+def _ingest_overlay_rows(project_id: str) -> list[dict]:
+    from .hermes import load_saa_overlay_cache, overlay_to_cron_rows
+
+    rows = overlay_to_cron_rows(load_saa_overlay_cache())
+    if not rows:
+        return []
+    seen = _load_seen()
+    known = set(seen.get("lines") or [])
+    now = datetime.now(timezone.utc)
+    posted: list[dict] = []
+    rows = [row for row in rows if row.get("last_run_at")]
+    rows.sort(key=lambda row: str(row.get("last_run_at") or ""), reverse=True)
+    for row in rows[:8]:
+        last = str(row.get("last_run_at") or "")
+        when = _parse_when(last)
+        if when is not None:
+            stamp = when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+            if now - stamp.astimezone(timezone.utc) > timedelta(days=14):
+                continue
+        key = f"{project_id or '_staff'}:{row.get('id')}:{last}"
+        if key in known:
+            continue
+        known.add(key)
+        if _cron_is_noise(str(row.get("name") or "")):
+            continue
+        posted.append(_post_cron_card(project_id, row))
+    if posted:
+        seen["lines"] = list(known)[-400:]
+        _save_seen(seen)
+    return posted
+
+
 def _post_cron_card(project_id: str | None, row: dict) -> dict:
     name = str(row.get("name") or row.get("id") or "cron")
     title = str(row.get("title") or cron_title(name))
@@ -124,6 +158,9 @@ def _post_cron_card(project_id: str | None, row: dict) -> dict:
     snippet = f"RESULT\n{title}\n{outcome}"
     if nxt and not re.search(r"no action", nxt, re.I):
         snippet = f"{snippet}\nWhat to do: {nxt}"
+    if when:
+        snippet = f"{snippet}\nRan: {when}"
+    body = str(row.get("last_result") or report)
     job_id = f"cron{abs(hash(f'{project_id}:{row.get('id')}:{row.get('last_run_at')}')) % 10**8:08x}"
     receipt = {
         "id": job_id,
@@ -141,7 +178,8 @@ def _post_cron_card(project_id: str | None, row: dict) -> dict:
         "cron_name": title,
         "cron_outcome": outcome,
         "cron_next": nxt,
-        "cron_report": report[:4000],
+        "cron_report": report[:4000] or body[:4000],
+        "cron_result": report[:4000] or body[:4000],
         "cron_when": when,
         "keep_going": bool(re.search(r"fail|error", f"{row.get('last_status') or ''} {outcome}", re.I)),
         "next": nxt,

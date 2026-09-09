@@ -450,19 +450,28 @@ def project_cron_bundle(project_id: str) -> dict:
     """Schedule rows plus a last-two-days story in plain language."""
     from datetime import datetime, timezone
 
-    from .hermes import cron_digest, read_home_crons
+    from .hermes import cron_digest, load_saa_overlay_cache, merge_saa_cron_rows, read_home_crons, saa_overlay_cache_path
     from .live import snapshot
 
     pid = str(project_id or "").strip()
     tools = project_tools(pid)
     home = str(tools.get("hermes_home") or "").strip()
     rows = read_home_crons(home, results=True) if home else []
+    overlay: list[dict] = []
+    if pid == "saa-homes":
+        overlay = load_saa_overlay_cache()
+        if overlay:
+            rows = merge_saa_cron_rows(rows, overlay)
     nxt = index_field(read_project_index(pid), "Next") if pid else ""
     live_runs = [row for row in snapshot() if str(row.get("project_id") or "") == pid]
     synced_at = ""
     path = Path(home) / "cron" / "jobs.json" if home else None
     if path and path.is_file():
         synced_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
+    if pid == "saa-homes":
+        cache_path = saa_overlay_cache_path()
+        if cache_path.is_file():
+            synced_at = datetime.fromtimestamp(cache_path.stat().st_mtime, tz=timezone.utc).isoformat()
     digest = cron_digest(rows, next_ask=nxt, live_runs=live_runs)
     digest["synced_at"] = synced_at
     digest["job_count"] = len(rows)
@@ -513,14 +522,26 @@ def public_org(data: dict | None = None) -> dict:
         seed_file_contract(_project_dir(pid) / "INDEX.md", "ceo")
         ensure_bus(pid)
         index_text = read_project_index(pid)
-        git = git_status(folder) if folder else {}
+        from .launch import resolve_ceo_folder, resolve_ceo_hermes_home
+
+        folder_live = resolve_ceo_folder(pid, folder)
+        hermes_live = resolve_ceo_hermes_home(
+            pid,
+            str(row.get("hermes_home") or (row.get("tools") or {}).get("hermes_home") or ""),
+        )
+        git = git_status(folder_live or folder) if (folder_live or folder) else {}
+        tools = _public_tools(row)
+        if hermes_live:
+            tools = dict(tools)
+            tools["hermes_home_live"] = hermes_live
         projects.append(
             {
                 "id": pid,
                 "name": name,
                 "role": "ceo",
                 "folder": folder,
-                "folder_ok": bool(folder and Path(folder).is_dir()),
+                "folder_live": folder_live,
+                "folder_ok": bool(folder_live),
                 "primary": bool(row.get("primary")),
                 "workers": [_public_worker(pid, name, item) for item in _clean_workers(row.get("workers"))],
                 "index": index_text,
@@ -536,7 +557,7 @@ def public_org(data: dict | None = None) -> dict:
                     "branch": str(git.get("branch") or ""),
                     "github": bool(git.get("github")),
                 },
-                "tools": _public_tools(row),
+                "tools": tools,
             }
         )
     return {

@@ -2828,6 +2828,14 @@ function cronReportText(row) {
   return report;
 }
 
+function cronChangedLine(text) {
+  const raw = String(text || "");
+  const urls = Array.from(raw.matchAll(/https?:\/\/[^\s)\]>'"]+/g)).map((m) => m[0]).slice(0, 6);
+  if (!urls.length) return "";
+  const uniq = [...new Set(urls)];
+  return `Shipped / linked: ${uniq.join(" · ")}`;
+}
+
 function cronCardHtml(row, open, mark) {
   const title = row.title || cronTitle(row.name || row.id);
   const last = cronWhen(row.last_run_at);
@@ -2845,20 +2853,21 @@ function cronCardHtml(row, open, mark) {
   const showNext = next && !/no action/i.test(next) && !/read the note below/i.test(next);
   const engine = [row.provider, row.model].filter(Boolean).join(" · ");
   const report = cronReportText(row);
-  const snippet = open ? report : (report || err).slice(0, 280);
+  const changed = cronChangedLine(report);
   const live = mark === "live";
   const kind = live ? "running now" : (failed ? "failed" : (status === "ok" ? "ok" : (mark === "result" ? "Result" : (mark === "next" ? "Scheduled" : "Job"))));
+  const sched = String(row.schedule || "").trim();
   return `<article class="cron-card${open ? " open" : ""}${live ? " live" : ""}${failed ? " failed" : ""}" id="cron-${escapeHtml(row.id || "")}">
     <div class="cron-head">
       <b>${escapeHtml(title)}</b>
       <span>${escapeHtml(kind)}</span>
     </div>
-    <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${engine ? ` · ${escapeHtml(engine)}` : ""}</p>
+    <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${sched ? ` · Runs ${escapeHtml(sched)}` : ""}${engine ? ` · ${escapeHtml(engine)}` : ""}</p>
     <p class="cron-outcome">${escapeHtml(live ? "This job is running now. The result will land here when it finishes." : `Result: ${outcome}`)}</p>
     ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
+    ${changed && !live ? `<p class="cron-next">${escapeHtml(changed)}</p>` : ""}
     ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="ghost-btn cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry on live Hermes</button>` : ""}
-    ${snippet ? `<p class="cron-snip">${escapeHtml(snippet)}</p>` : ""}
-    ${open && report && report !== snippet ? `<details open><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
+    ${report ? `<details class="cron-more"${open || mark === "result" ? " open" : ""}><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : (err && !live ? `<p class="cron-snip">${escapeHtml(err)}</p>` : "")}
   </article>`;
 }
 
@@ -3127,10 +3136,10 @@ function renderChatSchedule(rows, digest, focusId) {
     if (!seenRun.has(row.id)) running.push(row);
   });
   const latest = list
-    .filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsNoise(row) && !cronIsLive(row))
+    .filter((row) => row.last_run_at && !cronIsNoise(row) && !cronIsLive(row))
     .slice()
     .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")))
-    .slice(0, 8);
+    .slice(0, 12);
   const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")) && !cronIsLive(row));
   const paused = list.filter((row) => row.enabled === false || /paused/i.test(String(row.state || "")));
   const scheduled = list
@@ -3162,7 +3171,7 @@ function renderChatSchedule(rows, digest, focusId) {
         <div class="need-actions">${choiceButtonsHtml(needChoices(row), row)}</div>
       </article>`).join(""));
     }
-    sections.push(`<h3 class="cron-section">Results</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
+    sections.push(`<h3 class="cron-section">Results · ${latest.length}</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
     if (failed.length) {
       sections.push(`<h3 class="cron-section">Failed checks · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
     }
@@ -4046,21 +4055,28 @@ function renderJob(job) {
   if (job.cron) {
     if (cronJobIsNoise(job)) return;
     const title = cronTitle(job.cron_name || "Scheduled check");
-    const outcome = job.cron_outcome || job.text || "";
+    const outcome = job.cron_outcome || "";
     const nxt = job.cron_next || "";
     const when = job.cron_when ? cronWhen(job.cron_when) : "";
-    const report = cronReportText({ last_result: job.cron_result || job.text || "" }) || outcome;
-    const lines = [title];
-    if (when) lines.push(`Last run ${when}`);
-    if (report && !/^RESULT\b/i.test(report) && !cronIsPromptDump(report)) {
-      lines.push(clipWire(report, 420));
-    }
-    if (nxt && !/no action/i.test(nxt)) lines.push(`If needed: ${nxt}`);
-    const el = bubble("bot", lines.join("\n"));
+    const report = cronReportText({ last_result: job.cron_report || job.cron_result || "" });
+    const changed = cronChangedLine(report);
+    const el = bubble("bot", [title, when ? `Last run ${when}` : "", outcome, changed, nxt && !/no action/i.test(nxt) ? `If needed: ${nxt}` : ""].filter(Boolean).join("\n"));
     el.classList.add("cron");
     if (job.id) el.setAttribute("data-job-id", job.id);
     stampLane(el, job);
     appendReceipt(el, Object.assign({ engine: job.engine || "Hermes Agent", cron: true }, job));
+    if (report) {
+      const det = document.createElement("details");
+      det.className = "cron-more";
+      det.open = true;
+      const sum = document.createElement("summary");
+      sum.textContent = "Full report";
+      const pre = document.createElement("pre");
+      pre.textContent = report;
+      det.appendChild(sum);
+      det.appendChild(pre);
+      el.appendChild(det);
+    }
     const actions = document.createElement("div");
     actions.className = "job-actions";
     const open = document.createElement("button");
@@ -4720,14 +4736,16 @@ async function refreshProviders() {
 function currentAim() {
   const project = currentProject();
   if (!project) {
-    return { name: "Chief of Staff", folder: "", hermesHome: "", sessionId: "", idle: true };
+    return { name: "Chief of Staff", folder: "", hermesHome: "", sessionId: "", idle: true, projectId: "" };
   }
+  const tools = project.tools || {};
   return {
     name: project.name,
-    folder: project.folder || "",
-    hermesHome: (project.tools && project.tools.hermes_home) || "",
-    sessionId: (project.tools && project.tools.hermes_session_id) || "",
-    idle: false
+    folder: project.folder_live || project.folder || "",
+    hermesHome: tools.hermes_home_live || tools.hermes_home || "",
+    sessionId: tools.hermes_session_id || "",
+    idle: false,
+    projectId: project.id || ""
   };
 }
 
@@ -4780,7 +4798,7 @@ async function startOpenCode() {
   const res = await fetch("/api/engines/opencode/web", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder })
+    body: JSON.stringify({ folder, project_id: aim.projectId || projectId || "" })
   });
   const data = await res.json();
   if (!data.ok && !data.url) {
@@ -4819,7 +4837,7 @@ async function startHermes() {
   const res = await fetch("/api/engines/hermes/dashboard", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hermes_home: home })
+    body: JSON.stringify({ hermes_home: home, project_id: aim.projectId || projectId || "" })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -4832,7 +4850,8 @@ async function startHermes() {
   const base = data.url || "/engine/hermes/";
   const aimed = data.home || home || "";
   const resume = data.session_id || sid || "";
-  const url = resume ? `/chat?resume=${encodeURIComponent(resume)}` : (data.url || "/engine/hermes/");
+  const prefix = String(base).replace(/\/+$/, "") || "/engine/hermes";
+  const url = resume ? `${prefix}/chat?resume=${encodeURIComponent(resume)}` : `${prefix}/`;
   hermesFailed = false;
   if (!aim.idle) $("hermesStatus").innerHTML = `<a href="${url}" target="_blank" rel="noreferrer">${base}</a>`;
   if ($("hermesAim") && !aim.idle) {

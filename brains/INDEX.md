@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Live OpenBot 502 — server imports pair.py which was never deployed. Shipping that module.
-Last: Application failed to respond on openbot-production-9334.up.railway.app
-Next: Push pair.py, wait for Railway, confirm /api/health.
-Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes.
+Now: Live board was aiming OpenCode/Hermes at laptop paths. Resolve to dirs that exist on this box.
+Last: SAA Hermes has 51 jobs. Hosted Doing/Next/Results were 0 because overlay SSH had no railway CLI.
+Next: Ship overlay cache plus live engine path resolve. Do not redeploy SAA Homes Hermes.
+Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 
 ## Vault
 

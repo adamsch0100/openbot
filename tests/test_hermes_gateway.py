@@ -1,6 +1,7 @@
 """Tests for Hermes gateway management (lazy, non-blocking)."""
 
 import os
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -383,12 +384,39 @@ class TestGatewaySupervise(unittest.TestCase):
         mock_kill.assert_not_called()
         self.assertTrue(result.get("ok"))
 
-    def test_supervise_off_on_local_laptop(self):
+    def test_existing_dir_skips_missing_laptop_path(self):
+        from openbot.launch import existing_dir, resolve_ceo_folder, resolve_ceo_hermes_home
+
+        self.assertEqual(existing_dir(r"Z:\not-a-real-openbot-path\hermes-homes\saa-homes"), "")
+        self.assertEqual(existing_dir(""), "")
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "saa-homes"
+            home.mkdir()
+            self.assertEqual(existing_dir(str(home)), str(home.resolve()))
+            with patch("openbot.org.project_tools", return_value={"hermes_home": r"C:\missing\saa-homes"}):
+                with patch("openbot.org.HERMES_HOMES", Path(raw)):
+                    found = resolve_ceo_hermes_home("saa-homes", r"C:\missing\saa-homes")
+            self.assertEqual(found, str(home.resolve()))
+
+    def test_openbot_folder_falls_back_to_this_repo(self):
+        from openbot.launch import resolve_ceo_folder
+        from openbot.store import CODE_ROOT
+
+        with patch("openbot.org.project_tools", return_value={"folder": r"Z:\not-here\openbot"}):
+            found = resolve_ceo_folder("openbot", r"Z:\not-here\openbot")
+        self.assertEqual(Path(found).resolve(), CODE_ROOT.resolve())
         from openbot.launch import supervise_ceo_gateways_once, supervise_gateways_enabled
 
         with patch.dict("os.environ", {"OPENBOT_DATA_DIR": "", "OPENBOT_SUPERVISE_GATEWAYS": "0"}):
             self.assertFalse(supervise_gateways_enabled())
             self.assertEqual(supervise_ceo_gateways_once(), [])
+
+    def test_supervise_homes_default_empty(self):
+        from openbot.launch import supervised_project_ids
+
+        with patch.dict("os.environ"):
+            os.environ.pop("OPENBOT_SUPERVISE_HOMES", None)
+            self.assertEqual(supervised_project_ids(), [])
 
     def test_supervise_on_with_data_dir(self):
         from openbot.launch import supervise_gateways_enabled
@@ -401,7 +429,7 @@ class TestGatewaySupervise(unittest.TestCase):
         from openbot.launch import supervise_ceo_gateways_once
 
         mock_ensure.return_value = {"ok": True, "project_id": "saa-homes"}
-        with patch.dict("os.environ", {"OPENBOT_SUPERVISE_GATEWAYS": "1"}):
+        with patch.dict("os.environ", {"OPENBOT_SUPERVISE_GATEWAYS": "1", "OPENBOT_SUPERVISE_HOMES": "saa-homes"}):
             rows = supervise_ceo_gateways_once()
         self.assertEqual(len(rows), 1)
         mock_ensure.assert_called_once_with("saa-homes")

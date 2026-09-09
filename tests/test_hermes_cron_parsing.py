@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from openbot.hermes import _parse_cron_table, cron_digest, cron_outcome, cron_title, is_valid_job_id, parse_skill_list, read_home_crons
 from openbot.live import finish, snapshot, start
@@ -477,6 +478,49 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertEqual(nxt, "38041c7a6501")
         caught = saa_catchup_next([{"id": "38041c7a6501", "last_status": "ok", "state": "scheduled", "enabled": True}])
         self.assertEqual(caught, "77bfe1c9f7a1")
+
+    def test_overlay_rows_fill_empty_board_copy(self):
+        from openbot.hermes import merge_saa_cron_rows, overlay_to_cron_rows, save_saa_overlay_cache, load_saa_overlay_cache
+
+        overlay = [{
+            "id": "7cb2a72c1cc8",
+            "name": "form-pipeline-health",
+            "enabled": True,
+            "state": "scheduled",
+            "last_status": "ok",
+            "last_run_at": "2026-09-09T14:02:33+00:00",
+            "next_run_at": "2026-09-10T14:00:00+00:00",
+            "schedule": "0 14 * * *",
+            "provider": "opencode-go",
+            "model": "deepseek-v4-flash",
+            "last_result": "## Response\nForms healthy. No change.",
+        }]
+        rows = overlay_to_cron_rows(overlay)
+        self.assertEqual(rows[0]["title"], "Site and form check")
+        self.assertIn("Forms healthy", rows[0]["last_result"])
+        merged = merge_saa_cron_rows([], overlay)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["last_status"], "ok")
+        with tempfile.TemporaryDirectory() as raw:
+            from openbot import hermes as hermes_mod
+            from pathlib import Path
+
+            cache = Path(raw) / "saa-live-overlay.json"
+            with patch.object(hermes_mod, "saa_overlay_cache_path", return_value=cache):
+                save_saa_overlay_cache(overlay)
+                loaded = load_saa_overlay_cache()
+            self.assertEqual(loaded[0]["id"], "7cb2a72c1cc8")
+            self.assertIn("Forms healthy", loaded[0]["last_result"])
+
+    def test_dump_overlay_uses_cache_when_railway_missing(self):
+        from openbot.hermes import dump_saa_live_cron_overlay
+
+        with patch("openbot.hermes.railway_cmd", return_value=[]), patch(
+            "openbot.hermes.load_saa_overlay_cache",
+            return_value=[{"id": "7cb2a72c1cc8", "name": "form-pipeline-health"}],
+        ):
+            rows = dump_saa_live_cron_overlay()
+        self.assertEqual(rows[0]["id"], "7cb2a72c1cc8")
 
 
 if __name__ == "__main__":

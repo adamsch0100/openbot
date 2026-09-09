@@ -26,6 +26,12 @@ RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/
     bash -s -- --skip-setup --skip-browser --non-interactive \
     && hermes --version
 
+# Railway CLI: this board overlays SAA Homes Hermes over SSH. Do not start a second SAA gateway.
+ENV RAILWAY_VERSION=5.33.0
+RUN curl -fsSL "https://github.com/railwayapp/cli/releases/download/v${RAILWAY_VERSION}/railway-v${RAILWAY_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+    | tar -xz -C /usr/local/bin railway \
+    && railway --version
+
 WORKDIR /app
 COPY . /app
 

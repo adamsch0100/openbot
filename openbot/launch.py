@@ -58,6 +58,84 @@ def _work_dir() -> str:
     return str(Path.cwd())
 
 
+def existing_dir(raw: str | Path | None) -> str:
+    """Only return a path that exists on this machine. Laptop paths stay empty on Railway."""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    path = Path(text).expanduser()
+    try:
+        if path.is_dir():
+            return str(path.resolve())
+    except OSError:
+        return ""
+    return ""
+
+
+def resolve_ceo_hermes_home(project_id: str = "", stored: str = "") -> str:
+    """CEO Hermes home that exists here. Do not keep a Windows path on a Linux box."""
+    found = existing_dir(stored)
+    if found:
+        return found
+    pid = str(project_id or "").strip()
+    if pid:
+        from .org import HERMES_HOMES, project_tools
+        from .store import CODE_ROOT, ROOT
+
+        tools = project_tools(pid)
+        found = existing_dir(str((tools or {}).get("hermes_home") or ""))
+        if found:
+            return found
+        for candidate in (
+            HERMES_HOMES / pid,
+            ROOT / "hermes-homes" / pid,
+            CODE_ROOT / "hermes-homes" / pid,
+        ):
+            found = existing_dir(candidate)
+            if found:
+                return found
+    return ""
+
+
+def resolve_ceo_folder(project_id: str = "", stored: str = "") -> str:
+    """CEO Code folder that exists here. OpenBot itself is this repo on Railway."""
+    found = existing_dir(stored)
+    if found:
+        return found
+    pid = str(project_id or "").strip()
+    if not pid:
+        return ""
+    from .org import HOST_CEO_ID, SUPPORT_CEO_ID, project_tools
+    from .store import CODE_ROOT, ROOT
+
+    tools = project_tools(pid)
+    found = existing_dir(str((tools or {}).get("folder") or ""))
+    if found:
+        return found
+    if pid == HOST_CEO_ID:
+        found = existing_dir(CODE_ROOT)
+        if found:
+            return found
+    for candidate in (
+        ROOT / "workspaces" / pid,
+        ROOT / "org" / "projects" / pid / "work",
+        CODE_ROOT / "workspaces" / pid,
+    ):
+        found = existing_dir(candidate)
+        if found:
+            return found
+    if pid == SUPPORT_CEO_ID:
+        found = existing_dir(ROOT / "org" / "projects" / SUPPORT_CEO_ID / "work")
+        if found:
+            return found
+    data = os.environ.get("OPENBOT_DATA_DIR", "").strip()
+    if data and pid:
+        dest = Path(data) / "workspaces" / pid
+        dest.mkdir(parents=True, exist_ok=True)
+        return str(dest)
+    return ""
+
+
 def _hidden_kwargs() -> dict:
     kwargs: dict = {"stdin": subprocess.DEVNULL}
     if os.name == "nt":
@@ -119,6 +197,17 @@ def _opencode_env() -> dict[str, str]:
     # `opencode web` always calls npm `open`. A non-browser BROWSER value
     # makes that fail silently so the UI stays in the OpenBot iframe.
     env["BROWSER"] = os.environ.get("OPENBOT_ENGINE_BROWSER", ":")
+    data = os.environ.get("OPENBOT_DATA_DIR", "").strip()
+    if data:
+        root = Path(data)
+        for key, name in (
+            ("XDG_DATA_HOME", "xdg"),
+            ("XDG_STATE_HOME", "xdg-state"),
+            ("XDG_CACHE_HOME", "xdg-cache"),
+        ):
+            path = root / name
+            path.mkdir(parents=True, exist_ok=True)
+            env.setdefault(key, str(path))
     return env
 
 
@@ -135,6 +224,17 @@ def _kill(proc: subprocess.Popen | None) -> None:
 def _kill_port(port: int) -> None:
     """Stop whatever still owns an engine port so a CEO retarget can bind."""
     kwargs = _hidden_kwargs()
+    if os.name != "nt":
+        for cmd in (
+            ["fuser", "-k", f"{port}/tcp"],
+            ["sh", "-c", f"command -v fuser >/dev/null && fuser -k {port}/tcp"],
+        ):
+            try:
+                subprocess.run(cmd, timeout=8, **kwargs)
+                return
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+        return
     try:
         out = subprocess.check_output(
             ["netstat", "-ano"],
@@ -487,12 +587,12 @@ def opencode_web_status() -> dict:
     }
 
 
-def start_opencode_web(folder: str | None = None) -> dict:
+def start_opencode_web(folder: str | None = None, project_id: str | None = None) -> dict:
     with _oc_lock:
-        return _start_opencode_web(folder)
+        return _start_opencode_web(folder, project_id)
 
 
-def _start_opencode_web(folder: str | None = None) -> dict:
+def _start_opencode_web(folder: str | None = None, project_id: str | None = None) -> dict:
     global _opencode_proc, _opencode_cwd
     engines = detect()
     path = engines["opencode"].get("path")
@@ -503,7 +603,10 @@ def _start_opencode_web(folder: str | None = None) -> dict:
             "install": engines["opencode"]["install"],
             **opencode_web_status(),
         }
-    target = str(Path(folder).expanduser()) if folder else _work_dir()
+    target = resolve_ceo_folder(str(project_id or ""), folder or "")
+    if not target:
+        raw = str(folder).strip() if folder else ""
+        target = existing_dir(raw) or _work_dir()
     try:
         target = str(Path(target).resolve())
     except OSError:
@@ -632,9 +735,9 @@ def prepare_hermes() -> dict:
     return {"ok": completed.returncode == 0, "returncode": completed.returncode}
 
 
-def start_hermes_dashboard(home: str | None = None) -> dict:
+def start_hermes_dashboard(home: str | None = None, project_id: str | None = None) -> dict:
     with _hermes_lock:
-        return _start_hermes_dashboard(home)
+        return _start_hermes_dashboard(home, project_id)
 
 
 def _homes_match(left: str | None, right: str | None) -> bool:
@@ -660,7 +763,7 @@ def _dash_ok(target: str) -> dict:
     return status
 
 
-def _start_hermes_dashboard(home: str | None = None) -> dict:
+def _start_hermes_dashboard(home: str | None = None, project_id: str | None = None) -> dict:
     global _hermes_dash_proc, _hermes_dash_home
     engines = detect()
     path = engines["hermes"].get("path")
@@ -672,12 +775,9 @@ def _start_hermes_dashboard(home: str | None = None) -> dict:
             "install_cmd": engines["hermes"].get("install_cmd"),
             **hermes_dash_status(),
         }
-    target = str(hermes_home())
-    if home and str(home).strip():
-        try:
-            target = str(Path(home).expanduser().resolve())
-        except OSError:
-            target = str(home).strip()
+    target = resolve_ceo_hermes_home(str(project_id or ""), str(home or ""))
+    if not target:
+        target = str(hermes_home())
     _push_wallets(home=target)
     if _port_open("127.0.0.1", HERMES_DASH_PORT):
         if not _hermes_dash_home:
@@ -830,22 +930,15 @@ def supervise_gateways_enabled() -> bool:
 
 
 def supervised_project_ids() -> list[str]:
-    raw = os.environ.get("OPENBOT_SUPERVISE_HOMES", "saa-homes").strip() or "saa-homes"
+    """Empty by default. Live SAA Homes Hermes owns Telegram; this board only overlays status."""
+    raw = os.environ.get("OPENBOT_SUPERVISE_HOMES")
+    if raw is None:
+        return []
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
 def _ceo_hermes_home(project_id: str) -> str:
-    from .org import HERMES_HOMES, project_tools
-    from .store import ROOT
-
-    tools = project_tools(project_id)
-    home = str(tools.get("hermes_home") or "").strip()
-    if home:
-        return home
-    for candidate in (HERMES_HOMES / project_id, ROOT / "hermes-homes" / project_id):
-        if candidate.is_dir():
-            return str(candidate)
-    return ""
+    return resolve_ceo_hermes_home(project_id)
 
 
 def ensure_supervised_gateway(project_id: str) -> dict:

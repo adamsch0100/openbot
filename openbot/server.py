@@ -1814,12 +1814,14 @@ class Handler(SimpleHTTPRequestHandler):
             if self._require_perm("engines_view"):
                 return None
             folder = str(data.get("folder") or "").strip() or None
-            return self._json(200, start_opencode_web(folder))
+            pid = str(data.get("project_id") or "").strip() or None
+            return self._json(200, start_opencode_web(folder, project_id=pid))
         if path == "/api/engines/hermes/dashboard":
             if self._require_perm("engines_view"):
                 return None
             home = str(data.get("hermes_home") or "").strip() or None
-            result = start_hermes_dashboard(home)
+            pid = str(data.get("project_id") or "").strip() or None
+            result = start_hermes_dashboard(home, project_id=pid)
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/engines/hermes/open":
             if self._require_owner():

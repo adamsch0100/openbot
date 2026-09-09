@@ -925,10 +925,72 @@ _SAA_OVERLAY_KEYS = (
     "state",
     "enabled",
 )
+_SAA_OVERLAY_MARK_START = "OVERLAY_JSON_START"
+_SAA_OVERLAY_MARK_END = "OVERLAY_JSON_END"
+_SAA_OVERLAY_REMOTE = r"""
+import glob, json, os
+from datetime import datetime, timezone
+path = "/opt/data/cron/jobs.json"
+data = json.loads(open(path, encoding="utf-8").read())
+now = datetime.now(timezone.utc)
+out = []
+for job in data.get("jobs") or []:
+    if not isinstance(job, dict) or not job.get("id"):
+        continue
+    jid = str(job.get("id"))
+    sched = job.get("schedule") if isinstance(job.get("schedule"), dict) else {}
+    status = str(job.get("last_status") or "")
+    when = str(job.get("last_run_at") or "")
+    fresh = False
+    if when:
+        try:
+            stamp = datetime.fromisoformat(when.replace("Z", "+00:00"))
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            fresh = (now - stamp.astimezone(timezone.utc)).total_seconds() <= 48 * 3600
+        except ValueError:
+            fresh = False
+    row = {
+        "id": jid,
+        "name": str(job.get("name") or jid),
+        "last_status": job.get("last_status"),
+        "last_error": job.get("last_error"),
+        "last_run_at": job.get("last_run_at"),
+        "next_run_at": job.get("next_run_at"),
+        "fire_claim": job.get("fire_claim"),
+        "state": job.get("state"),
+        "enabled": job.get("enabled"),
+        "model": job.get("model"),
+        "provider": job.get("provider"),
+        "schedule": str(job.get("schedule_display") or sched.get("display") or sched.get("expr") or ""),
+    }
+    need = fresh or ("error" in status.lower()) or ("fail" in status.lower())
+    folder = "/opt/data/cron/output/" + jid
+    files = sorted(glob.glob(folder + "/*.md"), reverse=True) if need else []
+    if files:
+        row["last_result"] = open(files[0], encoding="utf-8", errors="replace").read()[:4000]
+        row["result_file"] = os.path.basename(files[0])
+    out.append(row)
+print("OVERLAY_JSON_START")
+print(json.dumps({"jobs": out}))
+print("OVERLAY_JSON_END")
+"""
+_overlay_miss_logged = False
 
 
 def railway_ssh_identity() -> str:
-    return os.environ.get("OPENBOT_RAILWAY_SSH_IDENTITY") or str(Path.home() / ".ssh" / "id_ed25519_railway")
+    env_path = os.environ.get("OPENBOT_RAILWAY_SSH_IDENTITY", "").strip()
+    if env_path:
+        return env_path
+    key = os.environ.get("OPENBOT_RAILWAY_SSH_KEY", "").strip()
+    if key:
+        path = Path("/tmp/openbot-railway-ssh")
+        body = key.replace("\\n", "\n") if "BEGIN" in key else key
+        if (not path.is_file()) or path.read_text(encoding="utf-8", errors="replace") != body:
+            path.write_text(body, encoding="utf-8")
+            os.chmod(path, 0o600)
+        return str(path)
+    return str(Path.home() / ".ssh" / "id_ed25519_railway")
 
 
 def apply_cron_status_overlay(home: str | Path | None, overlay: list[dict]) -> int:
@@ -972,7 +1034,10 @@ def railway_cmd() -> list[str]:
     js = Path.home() / "AppData" / "Roaming" / "npm" / "node_modules" / "@railway" / "cli" / "bin" / "railway.js"
     if js.is_file():
         return ["node", str(js)]
-    return ["railway"]
+    linux = Path("/usr/local/bin/railway")
+    if linux.is_file():
+        return [str(linux)]
+    return []
 
 
 def saa_ssh_payload(remote: list[str]) -> str:
@@ -985,9 +1050,12 @@ def saa_live_ssh(
     timeout: int = 30,
     stdin: str | None = None,
 ) -> subprocess.CompletedProcess:
+    binary = railway_cmd()
+    if not binary:
+        raise FileNotFoundError("railway")
     identity = railway_ssh_identity()
     cmd = [
-        *railway_cmd(),
+        *binary,
         "ssh",
         "--identity-file",
         identity,
@@ -1017,27 +1085,115 @@ def saa_live_ssh(
     )
 
 
-def dump_saa_live_cron_overlay() -> list[dict]:
-    ran = saa_live_ssh(["cat", "/opt/data/cron/jobs.json"], timeout=45)
-    if ran.returncode != 0:
-        return []
-    text = ran.stdout or ""
-    start = text.find("{")
-    if start < 0:
+def saa_overlay_cache_path() -> Path:
+    from .store import ROOT
+
+    return ROOT / "saa-live-overlay.json"
+
+
+def load_saa_overlay_cache() -> list[dict]:
+    path = saa_overlay_cache_path()
+    if not path.is_file():
         return []
     try:
-        data = json.loads(text[start:])
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return []
+    return [row for row in jobs if isinstance(row, dict) and row.get("id")]
+
+
+def save_saa_overlay_cache(overlay: list[dict]) -> None:
+    if not overlay:
+        return
+    path = saa_overlay_cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    blob = {
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+        "jobs": overlay,
+    }
+    path.write_text(json.dumps(blob, indent=2) + "\n", encoding="utf-8")
+
+
+def _overlay_jobs_from_text(text: str) -> list[dict]:
+    raw = str(text or "")
+    start = raw.find(_SAA_OVERLAY_MARK_START)
+    end = raw.find(_SAA_OVERLAY_MARK_END)
+    if start >= 0 and end > start:
+        raw = raw[start + len(_SAA_OVERLAY_MARK_START) : end]
+    brace = raw.find("{")
+    if brace < 0:
+        return []
+    try:
+        data = json.loads(raw[brace:])
     except json.JSONDecodeError:
         return []
     jobs = data.get("jobs") if isinstance(data, dict) else None
     if not isinstance(jobs, list):
         return []
-    keys = ("id",) + _SAA_OVERLAY_KEYS
     out = []
     for job in jobs:
         if not isinstance(job, dict) or not job.get("id"):
             continue
-        out.append({key: job.get(key) for key in keys})
+        out.append(job)
+    return out
+
+
+def dump_saa_live_cron_overlay() -> list[dict]:
+    cached = load_saa_overlay_cache()
+    if not railway_cmd():
+        return cached
+    try:
+        wrote = saa_live_ssh(["tee", "/tmp/saa-overlay-dump.py"], timeout=20, stdin=_SAA_OVERLAY_REMOTE)
+        if wrote.returncode != 0:
+            return cached
+        ran = saa_live_ssh(["python3", "/tmp/saa-overlay-dump.py"], timeout=60)
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return cached
+    overlay = _overlay_jobs_from_text((ran.stdout or "") + "\n" + (ran.stderr or ""))
+    if not overlay:
+        return cached
+    save_saa_overlay_cache(overlay)
+    return overlay
+
+
+def overlay_to_cron_rows(overlay: list[dict]) -> list[dict]:
+    """Shape live overlay jobs like read_home_crons so the board can count them."""
+    out = []
+    for row in overlay or []:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        out.append(_cron_row_payload(row, str(row.get("last_result") or "")))
+    return out
+
+
+def merge_saa_cron_rows(local: list[dict], overlay: list[dict]) -> list[dict]:
+    live_rows = overlay_to_cron_rows(overlay)
+    if not live_rows:
+        return local
+    by_local = {str(row.get("id") or ""): row for row in local or []}
+    seen: set[str] = set()
+    out: list[dict] = []
+    for row in live_rows:
+        jid = str(row.get("id") or "")
+        seen.add(jid)
+        loc = by_local.get(jid) or {}
+        if not str(row.get("last_result") or "").strip() and loc.get("last_result"):
+            merged = dict(row)
+            result = str(loc.get("last_result") or "")
+            merged["last_result"] = result
+            outcome, nxt = cron_outcome(merged.get("last_status") or "", result, merged.get("last_error") or "")
+            merged["outcome"] = outcome
+            merged["next_action"] = nxt
+            out.append(merged)
+        else:
+            out.append(row)
+    for row in local or []:
+        jid = str(row.get("id") or "")
+        if jid and jid not in seen:
+            out.append(row)
     return out
 
 
@@ -1045,11 +1201,13 @@ def sync_saa_live_crons(home: str | Path | None) -> dict:
     overlay = dump_saa_live_cron_overlay()
     if not overlay:
         return {"ok": False, "updated": 0, "error": "live overlay empty"}
-    return {"ok": True, "updated": apply_cron_status_overlay(home, overlay), "live": True}
+    updated = apply_cron_status_overlay(home, overlay) if home else 0
+    return {"ok": True, "updated": updated, "live": True, "jobs": len(overlay)}
 
 
 def overlay_saa_live_background(interval: int | None = None) -> None:
     """Keep the SAA Homes board copy of jobs.json in step with live Hermes."""
+    global _overlay_miss_logged
     delay = interval if interval is not None else int(os.environ.get("OPENBOT_SAA_OVERLAY_INTERVAL", "12") or "12")
     time.sleep(3)
     while True:
@@ -1057,8 +1215,11 @@ def overlay_saa_live_background(interval: int | None = None) -> None:
             from .org import project_tools
 
             home = str((project_tools("saa-homes") or {}).get("hermes_home") or "").strip()
-            if home:
-                sync_saa_live_crons(home)
+            sync_saa_live_crons(home)
+        except FileNotFoundError:
+            if not _overlay_miss_logged:
+                print("[openbot] saa live overlay: railway CLI missing; using cached live jobs", flush=True)
+                _overlay_miss_logged = True
         except Exception as err:
             print(f"[openbot] saa live overlay: {err}", flush=True)
         time.sleep(max(8, delay))
@@ -1422,7 +1583,7 @@ def _cron_digest_item(row: dict, enabled: bool) -> dict:
         "schedule": str(row.get("schedule") or ""),
         "outcome": str(row.get("outcome") or ""),
         "next_action": str(row.get("next_action") or ""),
-        "last_result": report[:500],
+        "last_result": report[:4000],
         "last_error": re.sub(r"\s+", " ", str(row.get("last_error") or "")).strip()[:240],
         "model": str(row.get("model") or ""),
         "provider": str(row.get("provider") or ""),
@@ -1625,6 +1786,53 @@ def _latest_cron_markdown(home: Path, job_id: str, last_run: datetime | None = N
     return text[:limit]
 
 
+def _cron_row_payload(row: dict, result: str = "") -> dict:
+    jid = str(row.get("id") or "")
+    status = str(row.get("last_status") or "").strip()
+    err = str(row.get("last_error") or "").strip()
+    report = str(result or row.get("last_result") or "")
+    when = _parse_cron_when(str(row.get("last_run_at") or ""))
+    fresh = bool(when and datetime.now(timezone.utc) - when <= timedelta(hours=48))
+    if status or report or err:
+        if fresh or re.search(r"error|fail", status, re.I) or report:
+            outcome, nxt = cron_outcome(status, report or err, err)
+        else:
+            outcome, nxt = (
+                "Last check is older than two days.",
+                "No action unless something failed.",
+            )
+    else:
+        outcome, nxt = "", ""
+    sched = row.get("schedule") if isinstance(row.get("schedule"), dict) else {}
+    name = str(row.get("name") or jid)
+    live_now = _cron_is_running(row)
+    claim = row.get("fire_claim") if isinstance(row.get("fire_claim"), dict) else None
+    schedule = str(row.get("schedule_display") or row.get("schedule") or sched.get("expr") or "")
+    if isinstance(row.get("schedule"), dict):
+        schedule = str(row.get("schedule_display") or sched.get("display") or sched.get("expr") or "")
+    return {
+        "id": jid,
+        "name": name,
+        "title": cron_title(name),
+        "schedule": schedule,
+        "enabled": row.get("enabled") is not False,
+        "state": str(row.get("state") or ""),
+        "claimed": live_now,
+        "live": live_now,
+        "fire_claim": claim,
+        "last_run_at": str(row.get("last_run_at") or ""),
+        "next_run_at": str(row.get("next_run_at") or ""),
+        "last_status": status,
+        "last_error": err,
+        "last_result": report,
+        "result_file": str(row.get("result_file") or ""),
+        "model": str(row.get("model") or ""),
+        "provider": str(row.get("provider") or ""),
+        "outcome": outcome,
+        "next_action": nxt,
+    }
+
+
 def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[dict]:
     """Read Hermes jobs.json. results=True attaches last markdown. Never opens sqlite."""
     if not home:
@@ -1644,47 +1852,11 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
             continue
         jid = str(row.get("id"))
         status = str(row.get("last_status") or "").strip()
-        err = str(row.get("last_error") or "").strip()
         when = _parse_cron_when(str(row.get("last_run_at") or ""))
         fresh = bool(when and datetime.now(timezone.utc) - when <= timedelta(hours=48))
         need_md = bool(results and (fresh or re.search(r"error|fail", status, re.I)))
         result = _latest_cron_markdown(root, jid, last_run=when) if need_md else ""
-        if status or result or err:
-            if need_md or re.search(r"error|fail", status, re.I) or (fresh and status):
-                outcome, nxt = cron_outcome(status, result or err, err)
-            else:
-                outcome, nxt = (
-                    "Last check is older than two days.",
-                    "No action unless something failed.",
-                )
-        else:
-            outcome, nxt = "", ""
-        sched = row.get("schedule") if isinstance(row.get("schedule"), dict) else {}
-        name = str(row.get("name") or jid)
-        live_now = _cron_is_running(row)
-        claim = row.get("fire_claim") if isinstance(row.get("fire_claim"), dict) else None
-        out.append(
-            {
-                "id": jid,
-                "name": name,
-                "title": cron_title(name),
-                "schedule": str(row.get("schedule_display") or sched.get("expr") or ""),
-                "enabled": row.get("enabled") is not False,
-                "state": str(row.get("state") or ""),
-                "claimed": live_now,
-                "live": live_now,
-                "fire_claim": claim,
-                "last_run_at": str(row.get("last_run_at") or ""),
-                "next_run_at": str(row.get("next_run_at") or ""),
-                "last_status": status,
-                "last_error": err,
-                "last_result": result,
-                "model": str(row.get("model") or ""),
-                "provider": str(row.get("provider") or ""),
-                "outcome": outcome,
-                "next_action": nxt,
-            }
-        )
+        out.append(_cron_row_payload(row, result))
     return out
 
 
