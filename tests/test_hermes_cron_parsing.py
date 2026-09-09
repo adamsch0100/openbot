@@ -256,10 +256,54 @@ class TestJobIdValidation(unittest.TestCase):
             self.assertEqual(listed[0]["name"], "form-pipeline-health")
             self.assertEqual(listed[0]["last_result"], "")
             detailed = read_home_crons(home, results=True)
-            self.assertIn("[SILENT]", detailed[0]["last_result"])
+            self.assertEqual(detailed[0]["last_result"], "")
             self.assertIn("Healthy", detailed[0]["outcome"])
             self.assertEqual(detailed[0]["provider"], "opencode-go")
             self.assertEqual(detailed[0]["model"], "deepseek-v4-flash")
+            when = datetime.now(timezone.utc)
+            (home / "cron" / "jobs.json").write_text(
+                json.dumps({
+                    "jobs": [{
+                        "id": "7cb2a72c1cc8",
+                        "name": "form-pipeline-health",
+                        "schedule_display": "0 14 * * *",
+                        "enabled": True,
+                        "model": "deepseek-v4-flash",
+                        "provider": "opencode-go",
+                        "last_run_at": when.isoformat(),
+                        "last_status": "ok",
+                    }]
+                }),
+                encoding="utf-8",
+            )
+            (out / f"{when.strftime('%Y-%m-%d_%H-%M-%S')}.md").write_text(
+                "## Response\n[SILENT] healthy\n",
+                encoding="utf-8",
+            )
+            fresh = read_home_crons(home, results=True)
+            self.assertIn("[SILENT]", fresh[0]["last_result"])
+            dump = home / "cron" / "output" / "deadjob"
+            dump.mkdir(parents=True)
+            (home / "cron" / "jobs.json").write_text(
+                json.dumps({
+                    "jobs": [{
+                        "id": "deadjob",
+                        "name": "indexation-patrol",
+                        "enabled": True,
+                        "last_run_at": when.isoformat(),
+                        "last_status": "error",
+                        "last_error": "Gateway shutdown (final-cleanup)",
+                    }]
+                }),
+                encoding="utf-8",
+            )
+            (dump / f"{when.strftime('%Y-%m-%d_%H-%M-%S')}.md").write_text(
+                "# Cron Job: indexation-patrol\n## Prompt\nDo the patrol.\n",
+                encoding="utf-8",
+            )
+            failed = read_home_crons(home, results=True)
+            self.assertEqual(failed[0]["last_result"], "")
+            self.assertIn("gateway", failed[0]["outcome"].lower())
 
     def test_cron_digest_now_running_and_due(self):
         now = datetime.now(timezone.utc)

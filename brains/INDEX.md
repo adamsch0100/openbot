@@ -2,8 +2,8 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Live SAA Hermes snapshot on the board: 50 jobs, 26 ok, 20 failed. form-pipeline-health ok 06:38 UTC on OpenCode Go.
-Last: Most failures are gateway-shutdown from the last Railway boot. saved-search-alerts-immediate 401 tonight.
+Now: Live SAA Hermes: 50 jobs, 27 ok, 19 failed. indexation-patrol is running now on the live box.
+Last: form-pipeline-health ok 06:38 UTC on OpenCode Go. Most remaining failures are gateway-shutdown from the last Railway boot.
 Next: Finish indexation-patrol, then retry failed jobs one at a time. Skip conversion-surge. Open Full schedule on SAA Homes.
 Blocker: —
 

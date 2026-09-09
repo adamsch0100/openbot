@@ -15,6 +15,14 @@ SEEN = ORG / "cron_seen.json"
 OPENBOT_JOB = re.compile(r"openbot-([a-z0-9-]{1,40})-(?:ceo|[a-z0-9-]+)", re.I)
 ROUTINE_CRON = re.compile(r"^openbot-routine-(.+)-(routine-[a-f0-9]{8})$")
 FRESH = timedelta(hours=36)
+CRON_INDEX_NOISE = re.compile(
+    r"^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$",
+    re.I,
+)
+
+
+def _cron_is_noise(name: str) -> bool:
+    return bool(CRON_INDEX_NOISE.match(str(name or "").strip()))
 
 
 def _load_seen() -> dict:
@@ -97,6 +105,8 @@ def _ingest_home_files(project_id: str | None, hermes_home: str | None) -> list[
         if key in known:
             continue
         known.add(key)
+        if _cron_is_noise(str(row.get("name") or "")):
+            continue
         posted.append(_post_cron_card(project_id, row))
     if posted:
         seen["lines"] = list(known)[-400:]

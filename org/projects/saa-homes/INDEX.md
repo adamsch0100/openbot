@@ -2,9 +2,9 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Live schedule on this board (50 jobs). form-pipeline-health ok 06:38 UTC on OpenCode Go.
-Last: 20 jobs still failed — mostly gateway shutdown from the last deploy. saved-search-alerts-immediate 401.
-Next: indexation-patrol is queued live. Then retry failed jobs one at a time. Do not stampede. Do not hermes cron run on this imported home.
+Now: Live schedule on this board (50 jobs). indexation-patrol is running on Railway. form-pipeline-health ok 06:38 UTC on OpenCode Go.
+Last: 19 jobs still failed — mostly gateway shutdown from the last deploy. saved-search-alerts-immediate 401.
+Next: Wait for indexation-patrol, then retry failed jobs one at a time. Do not stampede. Do not hermes cron run on this imported home.
 Blocker: —
 Goals: —
 

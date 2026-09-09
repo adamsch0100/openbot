@@ -739,7 +739,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);
-  max-height: 46vh;
+  max-height: min(70vh, 640px);
   overflow: auto;
 }
 .chat-schedule[hidden] { display: none; }

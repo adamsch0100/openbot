@@ -40,7 +40,10 @@ class ReadyTests(unittest.TestCase):
 
         job = handle("What is going on?", project_id="openbot")
         self.assertEqual(job.get("preset"), "cos")
-        self.assertIn("Ticket 1", job.get("text") or "")
+        text = job.get("text") or ""
+        self.assertTrue(text)
+        self.assertIn("OpenBot", text)
+        self.assertNotIn("secrets.local.json", text)
 
     def test_board_swallows_client_abort(self):
         src = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
@@ -53,8 +56,8 @@ class ReadyTests(unittest.TestCase):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         server = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
         self.assertIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
-        self.assertIn("app.js?v=88", html)
-        self.assertIn("styles.css?v=80", html)
+        self.assertIn("app.js?v=91", html)
+        self.assertIn("styles.css?v=81", html)
         self.assertIn("id=\"ceoBrief\"", html)
         self.assertIn("refreshThreadTail", js)
         self.assertIn("data-lane=\"all\"", html)
@@ -66,10 +69,13 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("data-inbox-open", js)
         self.assertIn("function openSchedule", js)
         self.assertIn("Open schedule", js)
+        self.assertIn("All scheduled", js)
+        self.assertIn("function cronIsPromptDump", js)
+        self.assertIn("function cronIsNoise", js)
         self.assertIn("id=\"chatSchedule\"", html)
         self.assertIn("/api/crons", server)
         self.assertIn("Chief of Staff", html)
-        self.assertIn("data-preset=\"builder\"", html)
+        self.assertIn("data-lane=\"builder\"", html)
         self.assertIn("loadOrgTree", js)
         self.assertIn("Add CEO", js)
         self.assertIn("Type", js)
@@ -131,7 +137,7 @@ class LiveBoardTests(unittest.TestCase):
         self.assertIn("event-stream", ctype)
         self.assertIn("event: start", body)
         self.assertIn("event: done", body)
-        self.assertIn("openbot:", body)
+        self.assertIn("openbot:", body.lower())
 
     def test_engine_ports(self):
         if not self.live:

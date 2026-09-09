@@ -1851,6 +1851,14 @@ class CronWatchTests(unittest.TestCase):
         lines = parse_run_lines("Job ID    Name\n--------\nopenbot-atlas-morning  ok  hello")
         self.assertTrue(any("openbot-atlas" in line for line in lines))
 
+    def test_cron_noise_skips_heartbeats(self):
+        from openbot.cronwatch import _cron_is_noise
+
+        self.assertTrue(_cron_is_noise("grok-finish-notify"))
+        self.assertTrue(_cron_is_noise("grok-heartbeat"))
+        self.assertFalse(_cron_is_noise("form-pipeline-health"))
+        self.assertFalse(_cron_is_noise("indexation-patrol"))
+
 
 class ProjectToolsTests(unittest.TestCase):
     def test_tools_survive_ensure_org(self):

@@ -2481,18 +2481,44 @@ function paintScheduleButton() {
   btn.textContent = scheduleOpen ? "Hide schedule" : "Full schedule";
 }
 
+function cronIsNoise(row) {
+  return /^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$/i.test(String(row.name || ""));
+}
+
+function cronIsPromptDump(text) {
+  const raw = String(text || "");
+  return /^#\s*Cron Job:/im.test(raw) && /^##\s*Prompt\b/im.test(raw) && !/^##\s*Response\s*$/im.test(raw);
+}
+
+function cronReportText(row) {
+  const report = String(row.last_result || "").trim();
+  const match = report.match(/^## Response\s*$/im);
+  if (match) {
+    const body = report.slice(report.search(/^## Response\s*$/im)).replace(/^## Response\s*/i, "").trim();
+    if (!body || /^\[SILENT\]/i.test(body)) return "";
+    return body;
+  }
+  if (cronIsPromptDump(report)) return "";
+  return report;
+}
+
 function cronCardHtml(row, open, mark) {
   const title = row.title || cronTitle(row.name || row.id);
   const last = cronWhen(row.last_run_at);
   const nextAt = cronWhenClock(row.next_run_at);
   const status = String(row.last_status || "").toLowerCase();
   const failed = /error|fail/.test(status);
-  const outcome = row.outcome || (failed ? "Failed." : "No result on this copy yet.");
+  const err = String(row.last_error || "").trim();
+  let outcome = row.outcome || (failed ? "Failed." : "No result on this copy yet.");
+  if (/^#\s*Cron Job:/i.test(outcome) || cronIsPromptDump(row.last_result || "")) {
+    outcome = failed
+      ? (err ? `Failed. ${err.slice(0, 160)}` : "Failed. The last run did not finish.")
+      : "Healthy on the live box.";
+  }
   const next = row.next_action || "";
   const showNext = next && !/no action/i.test(next);
   const engine = [row.provider, row.model].filter(Boolean).join(" · ");
-  const err = String(row.last_error || "").trim();
-  const report = String(row.last_result || "").trim();
+  const report = cronReportText(row);
   const snippet = open ? report : (report || err).slice(0, 280);
   const live = mark === "live";
   const kind = live ? "running now" : (failed ? "failed" : (status === "ok" ? "ok" : (mark === "result" ? "Result" : (mark === "next" ? "Scheduled" : "Job"))));
@@ -2569,13 +2595,23 @@ function paintCeoLive(pack) {
   }
   const data = pack || digestCache.get(projectId) || {};
   const digest = data.digest || data;
+  const crons = data.crons || [];
   const chatLive = Boolean(liveRunId);
   const boardRuns = (data.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
-  const running = digest.running || [];
+  const claimed = crons.filter((row) => row.claimed);
+  const running = [...(digest.running || [])];
+  const seenRun = new Set(running.map((row) => row.id));
+  claimed.forEach((row) => {
+    if (!seenRun.has(row.id)) running.push(row);
+  });
   const finished = digest.just_finished || [];
-  const latest = digest.latest || finished[0] || null;
+  const latestOk = crons
+    .filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsNoise(row))
+    .slice()
+    .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")));
+  const latest = latestOk[0] || (digest.latest && !cronIsNoise(digest.latest) ? digest.latest : null) || finished[0] || null;
   const upcoming = digest.upcoming || (digest.next_up ? [digest.next_up] : []);
-  const failed = digest.failed || [];
+  const failed = crons.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")));
   const active = chatLive || boardRuns.length || running.length;
   const runBits = [];
   if (chatLive) {
@@ -2653,25 +2689,39 @@ function renderChatSchedule(rows, digest, focusId) {
   const cached = digestCache.get(projectId) || {};
   const pack = digest || cached.digest || cached || {};
   const want = String(focusId || scheduleFocusId || "");
-  const running = pack.running || [];
-  const latest = pack.latest ? [pack.latest] : (pack.just_finished || []);
-  const upcoming = pack.upcoming || [];
+  const claimed = list.filter((row) => row.claimed);
+  const running = [...(pack.running || [])];
+  const seenRun = new Set(running.map((row) => row.id));
+  claimed.forEach((row) => {
+    if (!seenRun.has(row.id)) running.push(row);
+  });
+  const latest = list
+    .filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsNoise(row))
+    .slice()
+    .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")))
+    .slice(0, 3);
   const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")));
-  const seen = new Set([...running, ...latest, ...upcoming, ...failed].map((row) => row.id));
-  const rest = list.filter((row) => row.enabled !== false && !seen.has(row.id));
+  const paused = list.filter((row) => row.enabled === false || /paused/i.test(String(row.state || "")));
+  const scheduled = list
+    .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !/error|fail/i.test(String(row.last_status || "")))
+    .slice()
+    .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")));
   const sections = [];
   const synced = cached.synced_at || pack.synced_at || "";
   const count = list.length || Number(cached.job_count || 0);
-  const stamp = synced ? `Live snapshot ${cronWhen(synced)} · ${count} jobs.` : "Running now. Last result. What’s next.";
-  sections.push(`<p class="cron-story">${escapeHtml(stamp)} CEO and Cos see the same Result when a job finishes.</p>`);
-  sections.push(`<h3 class="cron-section">Running</h3>${running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : `<p class="cron-empty">Nothing running.</p>`}`);
-  sections.push(`<h3 class="cron-section">Result</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
+  const ok = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok").length;
+  const stamp = synced
+    ? `Live snapshot ${cronWhen(synced)} · ${count} jobs · ${ok} ok · ${failed.length} failed.`
+    : `${count} jobs · ${ok} ok · ${failed.length} failed. Running, last result, next clock.`;
+  sections.push(`<p class="cron-story">${escapeHtml(stamp)} Open a card for the last error or report.</p>`);
+  sections.push(`<h3 class="cron-section">Running · ${running.length}</h3>${running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : `<p class="cron-empty">Nothing running.</p>`}`);
+  sections.push(`<h3 class="cron-section">Last result</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
   if (failed.length) {
     sections.push(`<h3 class="cron-section">Needs you · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
   }
-  sections.push(`<h3 class="cron-section">Scheduled</h3>${upcoming.length ? upcoming.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing on the clock.</p>`}`);
-  if (rest.length) {
-    sections.push(`<details class="cron-more"><summary>Everything else · ${rest.length}</summary>${rest.map((row) => cronCardHtml(row, row.id === want)).join("")}</details>`);
+  sections.push(`<h3 class="cron-section">All scheduled · ${scheduled.length}</h3>${scheduled.length ? scheduled.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing on the clock.</p>`}`);
+  if (paused.length) {
+    sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
   }
   el.innerHTML = sections.join("");
   if (want && window.CSS && CSS.escape) {

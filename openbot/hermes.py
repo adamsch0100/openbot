@@ -813,8 +813,19 @@ def cron_run(job_id: str, home: str | Path | None = None) -> dict:
     return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
 
 
+def _cron_is_prompt_dump(text: str) -> bool:
+    raw = str(text or "")
+    return bool(
+        re.search(r"^#\s*Cron Job:", raw, re.I | re.M)
+        and re.search(r"^##\s*Prompt\b", raw, re.I | re.M)
+        and not re.search(r"^##\s*Response\s*$", raw, re.I | re.M)
+    )
+
+
 def _cron_report_body(text: str) -> str:
     raw = str(text or "")
+    if _cron_is_prompt_dump(raw):
+        return ""
     match = re.search(r"^## Response\s*$", raw, re.M)
     body = raw[match.end() :].strip() if match else raw.strip()
     return body
@@ -1006,7 +1017,7 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
     if failed:
         bits.append("Last copy still failed: " + ", ".join(row["title"] for row in failed[:3]) + ".")
     upcoming_rows.sort(key=lambda pair: pair[0])
-    upcoming = [item for _, item in upcoming_rows[:24]]
+    upcoming = [item for _, item in upcoming_rows]
     if next_up is None and upcoming:
         next_up = upcoming[0]
     result_row = just_finished[0] if just_finished else None
@@ -1051,7 +1062,7 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
         "failed": failed,
         "recent": (healthy + recent)[:12],
         "stale": stale[:6],
-        "running": running[:8],
+        "running": running,
         "due": due[:8],
         "just_finished": just_finished[:8],
         "next_up": next_up,
@@ -1066,16 +1077,46 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
     }
 
 
-def _latest_cron_markdown(home: Path, job_id: str, limit: int = 4000) -> str:
+_CRON_MD_STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2})[_T](\d{2})-(\d{2})-(\d{2})")
+
+
+def _cron_md_stamp(path: Path) -> datetime | None:
+    match = _CRON_MD_STAMP.match(path.stem)
+    if not match:
+        return None
+    try:
+        day = datetime.fromisoformat(match.group(1)).date()
+        stamp = datetime(
+            day.year,
+            day.month,
+            day.day,
+            int(match.group(2)),
+            int(match.group(3)),
+            int(match.group(4)),
+            tzinfo=timezone.utc,
+        )
+    except ValueError:
+        return None
+    return stamp
+
+
+def _latest_cron_markdown(home: Path, job_id: str, last_run: datetime | None = None, limit: int = 4000) -> str:
     folder = home / "cron" / "output" / str(job_id)
     if not folder.is_dir():
         return ""
     files = sorted(folder.glob("*.md"), key=lambda path: path.name, reverse=True)
     if not files:
         return ""
+    chosen = files[0]
+    if last_run is not None:
+        stamp = _cron_md_stamp(chosen)
+        if stamp is None or abs((stamp - last_run).total_seconds()) > 6 * 3600:
+            return ""
     try:
-        text = files[0].read_text(encoding="utf-8", errors="replace")
+        text = chosen.read_text(encoding="utf-8", errors="replace")
     except OSError:
+        return ""
+    if _cron_is_prompt_dump(text):
         return ""
     return text[:limit]
 
@@ -1103,7 +1144,7 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
         when = _parse_cron_when(str(row.get("last_run_at") or ""))
         fresh = bool(when and datetime.now(timezone.utc) - when <= timedelta(hours=48))
         need_md = bool(results and (fresh or re.search(r"error|fail", status, re.I)))
-        result = _latest_cron_markdown(root, jid) if need_md else ""
+        result = _latest_cron_markdown(root, jid, last_run=when) if need_md else ""
         if status or result or err:
             if need_md or re.search(r"error|fail", status, re.I) or (fresh and status):
                 outcome, nxt = cron_outcome(status, result or err, err)

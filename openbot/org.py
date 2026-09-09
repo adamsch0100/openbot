@@ -796,7 +796,7 @@ def staff_status_reply() -> str:
         pid = str(row.get("id"))
         name = str(row.get("name") or pid)
         text = read_project_index(pid)
-        bit = f"{name}: {index_field(text, 'Now') or '—'}"
+        bit = f"{pid}: {name} — {index_field(text, 'Now') or '—'}"
         stuck = index_field(text, "Blocker")
         if stuck and stuck != "—":
             bit += f" · blocked {stuck}"
