@@ -336,6 +336,9 @@ class OpenCodeTreeInjectTests(unittest.TestCase):
         self.assertIn(b"tab:'all'", out)
         self.assertIn(b"clickAll", out)
         self.assertIn(b"all files", out)
+        self.assertNotIn(b"/settings/i", out)
+        self.assertIn(b"panelOpened=false", out)
+        self.assertIn(b"home.selection.server", out)
         skip = inject_opencode_tree(out, "text/html")
         self.assertEqual(skip, out)
         self.assertEqual(inject_opencode_tree(html, "application/json"), html)
@@ -449,7 +452,8 @@ class BrandMarkTests(unittest.TestCase):
         self.assertIn("id=\"profileDock\"", html)
         self.assertIn('id="settings"', html)
         self.assertIn(">You</button>", html)
-        self.assertIn(">OpenCode</button>", html)
+        self.assertIn('data-stage="opencode"', html)
+        self.assertIn("stage-full\">OpenCode</span>", html)
         self.assertIn(">Hermes</button>", html)
         self.assertIn("Models", html)
         self.assertIn("id=\"panel-you\"", html)
@@ -513,6 +517,10 @@ class BrandMarkTests(unittest.TestCase):
         self.assertIn("bubble-work", js)
         self.assertIn("startOpenCode()", js)
         self.assertIn("startHermes()", js)
+        self.assertIn("startOpenCode();\n  startHermes();", js)
+        self.assertIn("function frameUrlMatches", js)
+        self.assertNotIn('frame.src = "about:blank"', js)
+        self.assertIn("${aimed}|${sid}", js)
         self.assertIn("syncHermesHint", js)
         self.assertIn("add-project", js)
         self.assertIn("fillImport", js)
@@ -1132,6 +1140,71 @@ class KeyringTests(unittest.TestCase):
             keyring_mod.SECRETS_PATH = old
             keyring_mod.clear_marked_empty()
 
+    def test_push_engine_wallets_seats_go_then_openrouter(self):
+        import openbot.keyring as keyring_mod
+
+        old = keyring_mod.SECRETS_PATH
+        keyring_mod.clear_marked_empty()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "secrets.local.json"
+                keyring_mod.SECRETS_PATH = path
+                path.write_text(
+                    json.dumps(
+                        {
+                            "accounts": [
+                                {"id": "oc1", "provider": "opencode", "label": "Go 1", "key": "x"},
+                                {"id": "oc2", "provider": "opencode", "label": "Go 2", "key": "y"},
+                                {"id": "or1", "provider": "openrouter", "label": "OR", "key": "z"},
+                            ],
+                            "fallback": ["oc1", "oc2", "or1"],
+                            "active": {},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                picked = []
+                written = []
+                home = Path(tmp) / "ceo-home"
+                old_go = os.environ.get("OPENCODE_GO_API_KEY")
+                old_or = os.environ.get("OPENROUTER_API_KEY")
+
+                def activate_and_env(account_id):
+                    picked.append(account_id)
+                    row = next(item for item in keyring_mod._load()["accounts"] if item["id"] == account_id)
+                    if row["provider"] == "opencode":
+                        os.environ["OPENCODE_GO_API_KEY"] = row["key"]
+                    if row["provider"] == "openrouter":
+                        os.environ["OPENROUTER_API_KEY"] = row["key"]
+                    return {}
+
+                def fake_write(updates, home=None):
+                    written.append((dict(updates), str(home or "")))
+
+                try:
+                    with unittest.mock.patch.object(keyring_mod, "activate_account", activate_and_env):
+                        with unittest.mock.patch.object(keyring_mod, "_write_hermes_env", fake_write):
+                            chosen = keyring_mod.push_engine_wallets({}, hermes_home_dir=str(home))
+                finally:
+                    if old_go is None:
+                        os.environ.pop("OPENCODE_GO_API_KEY", None)
+                    else:
+                        os.environ["OPENCODE_GO_API_KEY"] = old_go
+                    if old_or is None:
+                        os.environ.pop("OPENROUTER_API_KEY", None)
+                    else:
+                        os.environ["OPENROUTER_API_KEY"] = old_or
+                self.assertEqual(chosen, "oc1")
+                self.assertEqual(picked[0], "oc1")
+                self.assertIn("or1", picked)
+                self.assertTrue(written)
+                self.assertEqual(written[0][0].get("OPENCODE_GO_API_KEY"), "x")
+                self.assertEqual(written[0][0].get("OPENROUTER_API_KEY"), "z")
+                self.assertEqual(written[0][1], str(home))
+        finally:
+            keyring_mod.SECRETS_PATH = old
+            keyring_mod.clear_marked_empty()
+
     def test_nous_key_becomes_hermes_primary(self):
         import openbot.keyring as keyring_mod
 
@@ -1268,14 +1341,42 @@ class KeyringTests(unittest.TestCase):
             },
         ]
         with patch("openbot.router.list_jobs", return_value=jobs), patch(
-            "openbot.router.list_projects", return_value=[]
-        ):
+            "openbot.router.list_projects",
+            return_value=[
+                {"id": "saa-homes", "name": "SAA Homes"},
+                {"id": "openbot", "name": "OpenBot"},
+            ],
+        ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"):
             rows = pending_approvals()
         kinds = {row["project_id"]: row["kind"] for row in rows}
         self.assertEqual(kinds["saa-homes"], "login")
         self.assertEqual(kinds["openbot"], "diff")
         self.assertIn("login", next(row["label"] for row in rows if row["kind"] == "login").lower())
-        self.assertIn("accept", next(row["label"] for row in rows if row["kind"] == "diff").lower())
+        diff = next(row for row in rows if row["kind"] == "diff")
+        self.assertEqual([c["id"] for c in diff.get("choices") or []], ["accept", "reject", "open"])
+
+    def test_need_choices_match_the_wait(self):
+        from openbot.router import job_choices, need_choices
+
+        login = need_choices(
+            {
+                "kind": "login",
+                "url": "https://example.com",
+                "logins": [{"id": "1", "label": "GBP"}],
+            }
+        )
+        self.assertEqual([c["id"] for c in login], ["open_page", "use_login", "logged_in", "open"])
+        self.assertNotIn("accept", [c["id"] for c in login])
+        self.assertEqual([c["id"] for c in need_choices({"kind": "diff"})], ["accept", "reject", "open"])
+        self.assertEqual([c["id"] for c in need_choices({"kind": "gate"})], ["allow", "deny"])
+        self.assertEqual([c["id"] for c in need_choices({"kind": "continue"})], ["continue"])
+        self.assertEqual([c["id"] for c in need_choices({"kind": "brief"})], ["open"])
+        self.assertEqual([c["id"] for c in job_choices({"keep_going": True})], ["continue"])
+        self.assertEqual(job_choices({"text": "done"}), [])
+        self.assertEqual(
+            [c["id"] for c in job_choices({"diff_pending": True})],
+            ["accept", "reject", "open"],
+        )
 
     def test_pending_approvals_brief_from_index(self):
         from unittest.mock import patch
@@ -2756,9 +2857,6 @@ class HermesSessionPersistenceTests(unittest.TestCase):
             # Should work (returns some model)
             self.assertTrue(model_zen)
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class ProjectNotFoundTests(unittest.TestCase):
     """Tests for patch_project_tools handling missing projects gracefully."""
@@ -2906,6 +3004,89 @@ class ProjectNotFoundTests(unittest.TestCase):
                 org_mod.ORG = old_org_path
                 org_mod.PROFILE_PATH = old_profile_path
                 org_mod.HERMES_HOMES = old_hermes_homes
+
+
+class EngineProxyTests(unittest.TestCase):
+    def test_engine_paths_keep_websockets(self):
+        from openbot.engine_proxy import HERMES_PREFIX, OPENCODE_PREFIX, engine_target
+
+        self.assertEqual(engine_target("/engine/hermes/ws")[0], HERMES_PREFIX)
+        self.assertEqual(engine_target("/engine/opencode/session")[0], OPENCODE_PREFIX)
+        self.assertEqual(engine_target("/api/session/ses_abc/model")[0], OPENCODE_PREFIX)
+        self.assertEqual(engine_target("/hermes/chat")[0], "/hermes")
+        self.assertEqual(engine_target("/chat?resume=abc")[0], HERMES_PREFIX)
+        self.assertIsNone(engine_target("/api/health"))
+        self.assertIsNone(engine_target("/index.html"))
+
+    def test_opencode_dir_roundtrip_and_spa(self):
+        from openbot.engine_proxy import (
+            _decode_opencode_dir,
+            _opencode_spa_route,
+            encode_opencode_dir,
+        )
+
+        folder = r"C:\Users\adamm\Projects\saahomes"
+        enc = encode_opencode_dir(folder)
+        self.assertEqual(_decode_opencode_dir(enc), folder)
+        self.assertTrue(_opencode_spa_route(f"/engine/opencode/{enc}/session/ses_abc"))
+        self.assertFalse(_opencode_spa_route("/engine/opencode/session"))
+
+    def test_opencode_embed_url_aims_folder_and_session(self):
+        from unittest.mock import patch
+
+        from openbot import launch
+        from openbot.engine_proxy import (
+            OPENCODE_PREFIX,
+            _opencode_spa_route,
+            encode_opencode_dir,
+            engine_target,
+        )
+
+        folder = r"C:\Users\adamm\Projects\saahomes"
+        enc = encode_opencode_dir(folder)
+        with patch("openbot.launch._port_open", return_value=True):
+            url = launch.opencode_embed_url(folder, "ses_f7b1a42ceffe9s3umKO2OzvdLS")
+        self.assertEqual(url, f"/{enc}/session/ses_f7b1a42ceffe9s3umKO2OzvdLS")
+        self.assertTrue(_opencode_spa_route(f"/{enc}/session/ses_abc"))
+        self.assertEqual(engine_target(f"/{enc}/session/ses_abc")[0], OPENCODE_PREFIX)
+
+    def test_aim_opencode_go_model_rewrites_openrouter_promo(self):
+        from unittest.mock import patch
+
+        from openbot import launch
+
+        calls = []
+
+        def fake_http(method, path, body=None, directory=None, timeout=8.0):
+            calls.append((method, path, body))
+            if method == "GET":
+                return {
+                    "model": {
+                        "id": "meta/muse-spark-1.3-contributor",
+                        "providerID": "openrouter",
+                    }
+                }
+            return {}
+
+        with patch("openbot.launch._opencode_http", side_effect=fake_http):
+            launch._aim_opencode_go_model("ses_abc", r"C:\Users\adamm\Projects\saahomes")
+        self.assertEqual(calls[0][0], "GET")
+        self.assertEqual(calls[1][0], "POST")
+        self.assertEqual(calls[1][1], "/api/session/ses_abc/model")
+        self.assertEqual(calls[1][2]["model"]["providerID"], "opencode")
+        self.assertEqual(calls[1][2]["model"]["id"], launch.OPENCODE_GO_MODEL)
+
+    def test_project_id_for_folder_uses_folder_field(self):
+        from unittest.mock import patch
+
+        from openbot.org import project_id_for_folder
+
+        row = {
+            "id": "saa-homes",
+            "folder": r"C:\Users\adamm\Projects\saahomes",
+        }
+        with patch("openbot.org._load_saved", return_value={"projects": [row]}):
+            self.assertEqual(project_id_for_folder(r"C:\Users\adamm\Projects\saahomes"), "saa-homes")
 
 
 if __name__ == "__main__":

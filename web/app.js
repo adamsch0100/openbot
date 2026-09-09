@@ -245,11 +245,15 @@ function escapeHtml(s) {
   }[c]));
 }
 
-const PACKET_LINE = /^(You are the |You report to Chief of Staff|The (human )?operator |You dispatch |Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in OpenBot Chat|Specialist lanes execute|You are Chief of Staff on a local)/i;
+const PACKET_LINE = /^(You are the |You are Chief of Staff|You report to Chief of Staff|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in OpenBot Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |.+ CEO — reports to Chief of Staff)/i;
 
 function statusOnly(text) {
   const rows = String(text || "").split("\n").map((line) => line.trim()).filter(Boolean);
-  return rows.length > 0 && rows.every((line) => /^(Now|Last|Next|Blocker):/i.test(line));
+  return rows.length > 0 && rows.every((line) => /^(Now|Last|Next|Blocker|Blocked):/i.test(line));
+}
+
+function isLabeledRow(row) {
+  return /^(Now|Last|Next|Blocker|Blocked):/i.test(row) || /^[^:]{1,40}:\s+\S/.test(row);
 }
 
 function stripPacketEcho(text) {
@@ -268,22 +272,18 @@ function stripPacketEcho(text) {
   }
   if (statusOnly(cleaned)) return cleaned;
   const kept = [];
-  let started = false;
   let skipping = false;
   cleaned.split("\n").forEach((line) => {
     const stripped = line.trim();
-    if (!started) {
-      if (PACKET_LINE.test(stripped)) {
-        skipping = /^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):/i.test(stripped);
-        return;
-      }
-      if (skipping) {
-        if (!stripped) skipping = false;
-        return;
-      }
-      if (!stripped) return;
+    if (PACKET_LINE.test(stripped)) {
+      skipping = /^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):/i.test(stripped);
+      return;
     }
-    started = true;
+    if (skipping) {
+      if (!stripped) skipping = false;
+      return;
+    }
+    if (!stripped && !kept.length) return;
     kept.push(line);
   });
   return kept.join("\n").trim();
@@ -351,6 +351,26 @@ function formatBotHtml(text) {
   chunks.forEach((chunk) => {
     const rows = chunk.split("\n").map((line) => line.trim()).filter(Boolean);
     if (!rows.length) return;
+    const leadRows = [];
+    let rowIndex = 0;
+    while (rowIndex < rows.length && !isLabeledRow(rows[rowIndex])) {
+      leadRows.push(rows[rowIndex]);
+      rowIndex += 1;
+    }
+    const rest = rows.slice(rowIndex);
+    if (leadRows.length && rest.length && (statusOnly(rest.join("\n")) || labeledRows(rest))) {
+      leadRows.forEach((row, index) => {
+        html.push(`<p${leadDone || index ? "" : " class=\"bot-lead\""}>${inlineBotHtml(row)}</p>`);
+      });
+      const items = rest.map((row) => {
+        const match = row.match(/^([^:]{1,40}):\s*(.*)$/);
+        if (!match) return `<div><dd>${inlineBotHtml(row)}</dd></div>`;
+        return `<div><dt>${escapeHtml(match[1])}</dt><dd>${inlineBotHtml(match[2])}</dd></div>`;
+      }).join("");
+      html.push(`<dl class="bot-stats">${items}</dl>`);
+      leadDone = true;
+      return;
+    }
     if (rows.length === 1 && /^#{1,3}\s+/.test(rows[0])) {
       html.push(`<h3>${inlineBotHtml(rows[0].replace(/^#{1,3}\s+/, ""))}</h3>`);
       return;
@@ -1262,8 +1282,30 @@ function renderActivity(data) {
   lockComposer(Boolean(activity.has_key || cfg.has_key));
   if (data) {
     cfg.activity = activity;
-    if (org && org.projects) renderOrg(org);
+    if (org && org.projects) {
+      paintOrgLife();
+      const tree = $("orgTree");
+      const inbox = tree && tree.querySelector(".org-inbox");
+      const next = inboxHtml();
+      if (inbox && next) inbox.outerHTML = next;
+      else if (inbox && !next) inbox.remove();
+      else if (!inbox && next) renderOrg(org);
+      if (tree) bindNeedActions(tree);
+    }
   }
+}
+
+function paintOrgLife() {
+  document.querySelectorAll(".org-btn[data-kind]").forEach((btn) => {
+    const pid = btn.dataset.project || "";
+    const busy = lives.has(aimKey(pid, "")) || ((cfg.activity || {}).live_runs || []).some((row) => String(row.project_id || "") === String(pid));
+    const blocked = projectNeedsYou(pid);
+    const life = busy ? "working" : (blocked ? "blocked" : (((cfg.activity || {}).hermes_running || (cfg.activity || {}).opencode_running) ? "idle" : "offline"));
+    const avatar = btn.querySelector(".org-avatar");
+    if (avatar) avatar.setAttribute("data-life", life);
+    btn.classList.toggle("working", life === "working");
+    btn.classList.toggle("has-blocker", life === "blocked");
+  });
 }
 
 let menuJustOpened = false;
@@ -1364,6 +1406,7 @@ async function applyOrg(next) {
   renderBotMeta();
   fillCeoPanel();
   fillChannels();
+  paintWorkTabs();
 }
 
 async function postProject(folder, name) {
@@ -2175,12 +2218,145 @@ function ceoInitials(name) {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-function inboxActionLabel(kind) {
-  if (kind === "diff") return "Open chat";
-  if (kind === "login") return "Open CEO";
-  if (kind === "gate") return "Approve";
-  if (kind === "expired") return "Dismiss";
-  return "Open";
+function needChoices(row) {
+  if (Array.isArray(row && row.choices) && row.choices.length) return row.choices;
+  const kind = row && row.kind;
+  if (kind === "login") {
+    const out = [];
+    if (row.url) out.push({ id: "open_page", label: "Open page", url: row.url });
+    (row.logins || []).forEach((login) => {
+      out.push({ id: "use_login", label: `Approve ${login.label || login.username || "saved login"}`, login_id: login.id });
+    });
+    out.push({ id: "logged_in", label: "I already logged in" });
+    out.push({ id: "open", label: "Type a login" });
+    return out;
+  }
+  if (kind === "diff") return [{ id: "accept", label: "Accept" }, { id: "reject", label: "Reject" }, { id: "open", label: "See diff" }];
+  if (kind === "gate") return [{ id: "allow", label: "Allow" }, { id: "deny", label: "Deny" }];
+  if (kind === "expired") return [{ id: "dismiss", label: "Dismiss" }];
+  if (kind === "continue") return [{ id: "continue", label: "Continue" }];
+  if (kind === "brief") return [{ id: "open", label: "Open chat" }];
+  return [{ id: "open", label: "Open" }];
+}
+
+function jobChoices(job) {
+  if (!job) return [];
+  if (Array.isArray(job.choices) && job.choices.length) return job.choices;
+  if (job.login_wall) {
+    const row = { kind: "login", url: job.url, logins: job.logins || [] };
+    return needChoices(row);
+  }
+  if (job.diff_pending) return needChoices({ kind: "diff" });
+  if (job.keep_going && !job.stopped) {
+    const n = job.step_count && job.total_steps ? `Continue (${job.step_count}/${job.total_steps})` : "Continue";
+    return [{ id: "continue", label: n }];
+  }
+  const status = String(job.status || job.last_status || "").toLowerCase();
+  const cronId = job.cron_id || "";
+  if (job.cron || cronId) {
+    if (/error|fail/.test(status)) {
+      return [
+        { id: "retry", label: "Retry on live Hermes", cron_id: cronId },
+        { id: "schedule", label: "Open schedule", cron_id: cronId }
+      ];
+    }
+    return [{ id: "schedule", label: "Open schedule", cron_id: cronId }];
+  }
+  return [];
+}
+
+function choiceButtonsHtml(choices, row) {
+  return (choices || []).map((choice) => {
+    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue";
+    const danger = choice.id === "reject" || choice.id === "deny";
+    return `<button type="button" class="${primary ? "send" : "ghost-btn"}${danger ? " danger" : ""}" data-need-act="${escapeHtml(choice.id)}" data-need-id="${escapeHtml(row.id || "")}" data-need-project="${escapeHtml(row.project_id || "")}" data-need-preset="${escapeHtml(row.preset || "")}" data-need-approval="${escapeHtml(row.approval_id || row.id || "")}" data-need-login="${escapeHtml(choice.login_id || "")}" data-need-url="${escapeHtml(choice.url || row.url || "")}" data-need-cron="${escapeHtml(choice.cron_id || row.cron_id || "")}">${escapeHtml(choice.label || choice.id)}</button>`;
+  }).join("");
+}
+
+async function runNeedChoice(btn) {
+  const act = btn.dataset.needAct || "";
+  const id = btn.dataset.needId || "";
+  const pid = btn.dataset.needProject || "";
+  const presetLane = btn.dataset.needPreset || "";
+  const approvalId = btn.dataset.needApproval || "";
+  const loginId = btn.dataset.needLogin || "";
+  const url = btn.dataset.needUrl || "";
+  const cronId = btn.dataset.needCron || "";
+  if (act === "open_page" && url) {
+    window.open(url, "_blank", "noreferrer");
+    return;
+  }
+  if (act === "open" || act === "schedule") {
+    if (pid) await setOrgNode(pid, "");
+    if (presetLane && presetLane !== "cos") focusLane(presetLane);
+    if (act === "schedule") openSchedule(cronId || "");
+    return;
+  }
+  if (act === "dismiss") {
+    inboxSeen.add(id);
+    renderOrg(org);
+    return;
+  }
+  if (act === "allow" || act === "deny") {
+    await fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accept: act === "allow" })
+    });
+    const data = await (await fetch("/api/config")).json();
+    applyConfig(data);
+    return;
+  }
+  if (act === "accept" || act === "reject") {
+    await decide(id, act);
+    return;
+  }
+  if (act === "use_login" && loginId) {
+    const res = await fetch("/api/logins/use", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login_id: loginId, project_id: pid || null })
+    });
+    if (!res.ok) return;
+    if (pid) await setOrgNode(pid, "");
+    sendMessage(
+      "Continue. An approved site login is in .openbot-logins.json in this Hermes home. Fill the page from that file. Never print the file or any password. If TOTP or CAPTCHA appears, stop with LOGIN_WALL.",
+      { preset: presetLane && presetLane !== "cos" ? presetLane : "think", allowSecret: true }
+    );
+    return;
+  }
+  if (act === "logged_in") {
+    if (pid) await setOrgNode(pid, "");
+    sendMessage("Continue. I logged in on my screen.", { preset: presetLane && presetLane !== "cos" ? presetLane : "think", allowSecret: true });
+    return;
+  }
+  if (act === "continue") {
+    if (pid) await setOrgNode(pid, "");
+    sendMessage("Continue from Last and Next on the brief.", presetLane && presetLane !== "cos" ? { preset: presetLane } : {});
+    return;
+  }
+  if (act === "retry" && cronId && pid) {
+    await setOrgNode(pid, "");
+    await fetch("/api/crons/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: pid, job_id: cronId })
+    });
+    await loadCeoDigest(true);
+  }
+}
+
+function bindNeedActions(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-need-act]").forEach((btn) => {
+    if (btn.dataset.needBound) return;
+    btn.dataset.needBound = "1";
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      runNeedChoice(btn);
+    });
+  });
 }
 
 function visibleNeedsYou() {
@@ -2195,25 +2371,16 @@ function inboxHtml() {
   if (!rows.length) return "";
   const items = rows.map((row) => {
     const ping = row.kind === "brief" ? "" : " ping";
-    const done = row.kind === "brief"
-      ? `<button type="button" class="ghost-btn" data-inbox-done="${escapeHtml(row.id)}">Done</button>`
-      : "";
-    const deny = row.kind === "gate"
-      ? `<button type="button" class="ghost-btn" data-inbox-deny="${escapeHtml(row.approval_id || row.id || "")}">Dismiss</button>`
-      : "";
-    return `<div class="org-inbox-item${ping}" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}" data-preset="${escapeHtml(row.preset || "")}" data-approval="${escapeHtml(row.approval_id || row.id || "")}">
+    return `<div class="org-inbox-item${ping}" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
       <b>${escapeHtml(row.name || "CEO")}</b>
       <span>${escapeHtml(row.label || "Needs you")}</span>
-      <div class="org-inbox-actions">
-        <button type="button" class="ghost-btn" data-inbox-open="${escapeHtml(row.id)}">${escapeHtml(inboxActionLabel(row.kind))}</button>
-        ${deny}
-        ${done}
+      <div class="org-inbox-actions need-actions">
+        ${choiceButtonsHtml(needChoices(row), row)}
       </div>
     </div>`;
   }).join("");
   return `<div class="org-inbox">
     <div class="org-inbox-head">Needs you</div>
-    <p class="org-inbox-empty">One thing at a time. Open the CEO, do the step, then come back.</p>
     ${items}
   </div>`;
 }
@@ -2374,7 +2541,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
         <div class="org-row">
           <button type="button" class="org-twist" data-toggle="${escapeHtml(project.id)}" aria-label="${open ? "Collapse" : "Expand"} ${escapeHtml(project.name)}">${open ? "▾" : "▸"}</button>
           <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}${hasBlocker ? " has-blocker" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}${busy ? " · working" : ""}">
-            <span class="org-avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+            <span class="org-avatar" data-life="${busy ? "working" : (hasBlocker || projectNeedsYou(project.id) ? "blocked" : "idle")}" aria-hidden="true">${escapeHtml(initials)}</span>
             <span class="org-btn-text">
               <b>${escapeHtml(project.name)}${statusChip}</b>
               ${wire ? `<span class="org-now">${escapeHtml(wire)}</span>` : ""}
@@ -2400,7 +2567,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
   
   tree.innerHTML = `
     ${isCollaborator() ? `<p class="share-banner">Shared with you by ${escapeHtml((cfg.share && cfg.share.owner_name) || "the owner")} · you are a collaborator</p>` : `<button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
-      <span class="org-avatar" aria-hidden="true">${escapeHtml(cosInitials)}</span>
+      <span class="org-avatar" data-life="${staffBusy ? "working" : "idle"}" aria-hidden="true">${escapeHtml(cosInitials)}</span>
       <span class="org-btn-text">
         <b>Chief of Staff${staffStatusChip}</b>
         <span class="org-now">runs the CEOs</span>
@@ -2415,53 +2582,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     btn.addEventListener("click", () => setOrgNode(btn.dataset.project || "", btn.dataset.worker || ""));
     bindNodeMenu(btn, btn.dataset.kind, btn.dataset.project || "", btn.dataset.worker || "");
   });
-  tree.querySelectorAll("[data-inbox-open]").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      const card = btn.closest("[data-inbox]");
-      if (!card) return;
-      const pid = card.dataset.project || "";
-      const kind = card.dataset.kind || "";
-      if (kind === "gate") {
-        const approvalId = card.dataset.approval || card.dataset.inbox;
-        if (approvalId) {
-          fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ accept: true })
-          }).then((r) => r.json()).then(() => fetch("/api/config").then((c) => c.json()).then(applyConfig));
-        }
-        return;
-      }
-      if (kind === "expired") {
-        inboxSeen.add(card.dataset.inbox);
-        renderOrg(org);
-        return;
-      }
-      const lane = kind === "diff" ? "builder" : (card.dataset.preset || "");
-      setOrgNode(pid, "");
-      if (lane && lane !== "cos") focusLane(lane);
-    });
-  });
-  tree.querySelectorAll("[data-inbox-done]").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      inboxSeen.add(btn.dataset.inboxDone);
-      renderOrg(org);
-    });
-  });
-  tree.querySelectorAll("[data-inbox-deny]").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      const approvalId = btn.dataset.inboxDeny;
-      if (!approvalId) return;
-      fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accept: false })
-      }).then((r) => r.json()).then(() => fetch("/api/config").then((c) => c.json()).then(applyConfig));
-    });
-  });
+  bindNeedActions(tree);
   const addCeo = $("addCeoBtn");
   if (addCeo) {
     addCeo.addEventListener("click", (event) => {
@@ -2565,6 +2686,7 @@ function renderSchedules(project) {
 
 let scheduleOpen = false;
 let scheduleFocusId = "";
+let scheduleView = "doing";
 
 function cronTitle(name) {
   const map = {
@@ -2620,21 +2742,67 @@ function cronWhenClock(value) {
 }
 
 function paintScheduleButton() {
+  paintWorkTabs();
   const btn = $("openSchedule");
-  if (!btn) return;
-  const project = currentProject();
-  const count = ((project && project.crons) || []).length;
-  btn.hidden = !project;
-  if (!project) return;
-  btn.textContent = scheduleOpen ? "Hide schedule" : "Full schedule";
+  if (btn) btn.hidden = true;
+}
+
+function workCounts() {
+  const pack = digestCache.get(projectId) || {};
+  const list = (pack.crons || []).filter((row) => !cronIsNoise(row));
+  const boardRuns = ((pack.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => (
+    !projectId || String(row.project_id || "") === String(projectId)
+  ));
+  const doing = list.filter((row) => cronIsLive(row)).length + boardRuns.length + (liveRunId ? 1 : 0);
+  const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")) && !cronIsLive(row));
+  const results = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row)).length + failed.length;
+  const next = list.filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row)).length;
+  if (!projectId) {
+    const projects = ((cfg.org && cfg.org.projects) || []);
+    const orgNext = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—").length;
+    const orgJobs = (((cfg.activity || {}).jobs) || []).length;
+    const orgLive = (((cfg.activity || {}).live_runs) || []).length + (liveRunId ? 1 : 0);
+    return { doing: orgLive, next: orgNext, results: orgJobs };
+  }
+  return { doing, next, results };
+}
+
+function paintWorkTabs() {
+  const tabs = $("workTabs");
+  if (!tabs) return;
+  const counts = workCounts();
+  tabs.hidden = false;
+  tabs.querySelectorAll(".work-tab").forEach((btn) => {
+    const view = btn.getAttribute("data-work") || "";
+    const n = counts[view] || 0;
+    const label = view === "doing" ? "Doing" : (view === "next" ? "Next" : "Results");
+    btn.classList.toggle("on", scheduleOpen && scheduleView === view);
+    btn.innerHTML = `${label}<span class="n">${n}</span>`;
+  });
+}
+
+function cronClaimAt(row) {
+  const claim = row && row.fire_claim;
+  const raw = claim && claim.at;
+  const ms = Date.parse(String(raw || ""));
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 function cronIsNoise(row) {
   return /^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$/i.test(String(row.name || ""));
 }
 
+function cronSkipRetry(row) {
+  return /^(conversion-surge|competitor-content-watch|city-audit-batch-4)$/i.test(String(row.name || ""));
+}
+
 function cronIsLive(row) {
   if (!row || cronIsNoise(row)) return false;
+  if (row.enabled === false) return false;
+  if (row.live) return true;
+  const claimAt = cronClaimAt(row);
+  const last = Date.parse(String(row.last_run_at || ""));
+  if (claimAt && (!Number.isFinite(last) || claimAt > last)) return true;
   const status = String(row.last_status || "").trim().toLowerCase();
   if (/^(ok|error|fail|failed|unknown|skipped|success)$/.test(status)) return false;
   if (row.claimed) return true;
@@ -2688,6 +2856,7 @@ function cronCardHtml(row, open, mark) {
     <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${engine ? ` · ${escapeHtml(engine)}` : ""}</p>
     <p class="cron-outcome">${escapeHtml(live ? "This job is running now. The result will land here when it finishes." : `Result: ${outcome}`)}</p>
     ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
+    ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="ghost-btn cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry on live Hermes</button>` : ""}
     ${snippet ? `<p class="cron-snip">${escapeHtml(snippet)}</p>` : ""}
     ${open && report && report !== snippet ? `<details open><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
   </article>`;
@@ -2763,15 +2932,23 @@ function paintPulse() {
   const story = runningStory();
   el.classList.toggle("on", story.on);
   el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+  paintWorkTabs();
 }
 
 function paintCeoLive(pack) {
   const el = $("ceoLive");
   if (!el) return;
   if (!projectId) {
-    el.hidden = true;
-    el.innerHTML = "";
-    el.classList.remove("on");
+    const story = runningStory();
+    el.hidden = false;
+    el.classList.toggle("on", story.on);
+    el.innerHTML = `<div class="ceo-pulse">
+      <i class="ceo-live-dot" aria-hidden="true"></i>
+      <div class="ceo-pulse-copy">
+        <b>${escapeHtml(story.line)}</b>
+        <span>Doing · Next · Results stay in this chat.</span>
+      </div>
+    </div>`;
     paintPulse();
     return;
   }
@@ -2793,7 +2970,7 @@ function paintCeoLive(pack) {
     .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")));
   const latest = latestOk[0] || (digest.latest && !cronIsNoise(digest.latest) ? digest.latest : null) || finished[0] || null;
   const upcoming = digest.upcoming || (digest.next_up ? [digest.next_up] : []);
-  const failed = crons.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")));
+  const failed = crons.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")) && !cronIsLive(row));
   const active = chatLive || boardRuns.length || running.length;
   let lead = "Idle";
   let detail = "";
@@ -2836,10 +3013,12 @@ function paintCeoLive(pack) {
   paintPulse();
 }
 
-async function loadCeoDigest() {
+async function loadCeoDigest(refreshLive) {
+  paintWorkTabs();
   if (!projectId) {
     paintCeoBrief(null);
     paintCeoLive(null);
+    if (scheduleOpen) renderChatSchedule([], {}, scheduleFocusId);
     return null;
   }
   const cached = digestCache.get(projectId);
@@ -2849,12 +3028,14 @@ async function loadCeoDigest() {
   }
   try {
     const pid = projectId;
-    const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`);
+    const live = pid === "saa-homes" && (refreshLive || scheduleOpen) ? "&refresh=1" : "";
+    const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}${live}`);
     const data = await res.json();
     digestCache.set(pid, data);
     if (projectId === pid) {
       paintCeoBrief(data.digest);
       paintCeoLive(data);
+      paintWorkTabs();
       if (scheduleOpen) renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
     }
     return data;
@@ -2863,14 +3044,74 @@ async function loadCeoDigest() {
   }
 }
 
+function liveRunCard(row) {
+  const who = currentProject() ? (currentProject().name || "This CEO") : "Chat";
+  const open = [{ id: "open", label: "Open chat" }];
+  return `<article class="cron-card live">
+    <div class="cron-head">
+      <b>${escapeHtml(laneLabel(row.preset || "cos"))}</b>
+      <span>running now</span>
+    </div>
+    <p class="cron-meta">${escapeHtml(who)}</p>
+    <p class="cron-outcome">${escapeHtml(row.title || "This chat is answering now.")}</p>
+    <div class="need-actions">${choiceButtonsHtml(open, row)}</div>
+  </article>`;
+}
+
+function closeSchedule() {
+  scheduleOpen = false;
+  const panel = $("chatSchedule");
+  if (panel) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+  }
+  paintWorkTabs();
+}
+
 function renderChatSchedule(rows, digest, focusId) {
   const el = $("chatSchedule");
   if (!el) return;
-  if (!projectId || !scheduleOpen) {
+  if (!scheduleOpen) {
     el.hidden = true;
     return;
   }
   el.hidden = false;
+  const want = String(focusId || scheduleFocusId || "");
+  const view = scheduleView || "doing";
+  if (!projectId) {
+    const runs = ((cfg.activity || {}).live_runs) || [];
+    const projects = ((cfg.org && cfg.org.projects) || []);
+    const jobs = (((cfg.activity || {}).jobs) || []).slice(0, 8);
+    const bits = [];
+    if (view === "doing") {
+      bits.push(`<p class="cron-story">What is moving right now across Cos and the CEOs.</p>`);
+      bits.push(`<h3 class="cron-section">Doing · ${runs.length + (liveRunId ? 1 : 0)}</h3>`);
+      if (liveRunId) bits.push(liveRunCard({ preset: liveLane || preset, title: "This chat" }));
+      bits.push(runs.length ? runs.map((row) => liveRunCard(row)).join("") : (liveRunId ? "" : `<p class="cron-empty">Nothing running.</p>`));
+    } else if (view === "next") {
+      bits.push(`<p class="cron-story">What each CEO is lined up to do next.</p>`);
+      const next = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—");
+      bits.push(`<h3 class="cron-section">Next · ${next.length}</h3>`);
+      bits.push(next.length ? next.map((row) => `<article class="cron-card">
+        <div class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></div>
+        <p class="cron-outcome">${escapeHtml(row.index_next)}</p>
+        <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
+      </article>`).join("") : `<p class="cron-empty">No next step on the briefs.</p>`);
+    } else {
+      bits.push(`<p class="cron-story">Latest job cards from this board.</p>`);
+      bits.push(`<h3 class="cron-section">Results · ${jobs.length}</h3>`);
+      bits.push(jobs.length ? jobs.map((row) => `<article class="cron-card">
+        <div class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(row.status || row.preset || "done")}</span></div>
+        <p class="cron-meta">${escapeHtml(row.engine || "")} · ${escapeHtml(cronWhen(row.at))}</p>
+        <p class="cron-outcome">${escapeHtml(clipWire(row.text || row.summary || "", 180))}</p>
+        ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
+      </article>`).join("") : `<p class="cron-empty">No job cards yet.</p>`);
+    }
+    el.innerHTML = bits.join("");
+    bindNeedActions(el);
+    paintWorkTabs();
+    return;
+  }
   const list = rows || [];
   if (rows && !list.length) {
     el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live report.</p>`;
@@ -2878,61 +3119,90 @@ function renderChatSchedule(rows, digest, focusId) {
   }
   const cached = digestCache.get(projectId) || {};
   const pack = digest || cached.digest || cached || {};
-  const want = String(focusId || scheduleFocusId || "");
+  const boardRuns = (cached.live_runs || pack.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
   const claimed = list.filter((row) => cronIsLive(row));
-  const running = [...(pack.running || [])].filter((row) => cronIsLive(row));
+  const running = [...(pack.running || [])].filter((row) => cronIsLive(row) || row.live);
   const seenRun = new Set(running.map((row) => row.id));
   claimed.forEach((row) => {
     if (!seenRun.has(row.id)) running.push(row);
   });
   const latest = list
-    .filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsNoise(row))
+    .filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsNoise(row) && !cronIsLive(row))
     .slice()
     .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")))
-    .slice(0, 3);
-  const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")));
+    .slice(0, 8);
+  const failed = list.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")) && !cronIsLive(row));
   const paused = list.filter((row) => row.enabled === false || /paused/i.test(String(row.state || "")));
   const scheduled = list
-    .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !/error|fail/i.test(String(row.last_status || "")))
+    .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row))
     .slice()
     .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")));
   const sections = [];
   const synced = cached.synced_at || pack.synced_at || "";
-  const count = list.length || Number(cached.job_count || 0);
-  const ok = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok").length;
-  const stamp = synced
-    ? `Live snapshot ${cronWhen(synced)} · ${count} jobs · ${ok} ok · ${failed.length} failed.`
-    : `${count} jobs · ${ok} ok · ${failed.length} failed. Running, last result, next clock.`;
-  sections.push(`<p class="cron-story">${escapeHtml(stamp)} Open a card for the last error or report.</p>`);
-  sections.push(`<h3 class="cron-section">Running · ${running.length}</h3>${running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : `<p class="cron-empty">Nothing running.</p>`}`);
-  sections.push(`<h3 class="cron-section">Last result</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
-  if (failed.length) {
-    sections.push(`<h3 class="cron-section">Needs you · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
-  }
-  sections.push(`<h3 class="cron-section">All scheduled · ${scheduled.length}</h3>${scheduled.length ? scheduled.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing on the clock.</p>`}`);
-  if (paused.length) {
-    sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+  const stamp = running.length
+    ? `Running now · ${running.map((row) => row.title || cronTitle(row.name)).slice(0, 2).join(", ")}.`
+    : (synced ? `Live Hermes ${cronWhen(synced)}.` : "What this CEO is doing, what is next, and what just landed.");
+  sections.push(`<p class="cron-story">${escapeHtml(stamp)}</p>`);
+  if (view === "doing") {
+    sections.push(`<h3 class="cron-section">Doing · ${running.length + boardRuns.length}</h3>`);
+    if (boardRuns.length) sections.push(boardRuns.map((row) => liveRunCard(row)).join(""));
+    sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : (boardRuns.length ? "" : `<p class="cron-empty">Nothing running.</p>`));
+  } else if (view === "next") {
+    sections.push(`<h3 class="cron-section">Next · ${scheduled.length}</h3>${scheduled.length ? scheduled.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing on the clock.</p>`}`);
+    if (paused.length) {
+      sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+    }
+  } else {
+    const waits = visibleNeedsYou().filter((row) => String(row.project_id || "") === String(projectId || ""));
+    if (waits.length) {
+      sections.push(`<h3 class="cron-section">Needs you · ${waits.length}</h3>`);
+      sections.push(waits.map((row) => `<article class="cron-card">
+        <div class="cron-head"><b>${escapeHtml(row.name || "CEO")}</b><span>${escapeHtml(row.kind || "")}</span></div>
+        <p class="cron-outcome">${escapeHtml(row.label || "")}</p>
+        <div class="need-actions">${choiceButtonsHtml(needChoices(row), row)}</div>
+      </article>`).join(""));
+    }
+    sections.push(`<h3 class="cron-section">Results</h3>${latest.length ? latest.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : `<p class="cron-empty">No result on this copy yet.</p>`}`);
+    if (failed.length) {
+      sections.push(`<h3 class="cron-section">Failed checks · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+    }
   }
   el.innerHTML = sections.join("");
+  bindNeedActions(el);
+  paintWorkTabs();
   if (want && window.CSS && CSS.escape) {
     const target = el.querySelector(`#cron-${CSS.escape(want)}`);
     if (target) target.scrollIntoView({ block: "nearest" });
   }
 }
 
+async function openWork(view, focusId) {
+  const next = view || "doing";
+  if (scheduleOpen && scheduleView === next && !focusId) {
+    closeSchedule();
+    return;
+  }
+  scheduleView = next;
+  await openSchedule(focusId || "");
+}
+
 async function openSchedule(focusId) {
-  if (!projectId) return;
   scheduleOpen = true;
   scheduleFocusId = focusId || "";
-  paintScheduleButton();
+  paintWorkTabs();
   const el = $("chatSchedule");
-  const cached = digestCache.get(projectId);
+  const cached = projectId ? digestCache.get(projectId) : null;
   if (el) {
     el.hidden = false;
-    if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
-    else el.innerHTML = `<p class="muted">Loading the last two days…</p>`;
+    if (!projectId) renderChatSchedule([], {}, focusId);
+    else if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
+    else el.innerHTML = `<p class="muted">Loading what’s moving…</p>`;
   }
-  const data = await loadCeoDigest();
+  if (!projectId) {
+    paintWorkTabs();
+    return;
+  }
+  const data = await loadCeoDigest(true);
   if (data) renderChatSchedule(data.crons || [], data.digest || {}, focusId);
   else if (el && !cached) el.innerHTML = `<p class="muted">Could not load the schedule.</p>`;
 }
@@ -2957,6 +3227,37 @@ function fillProfile(data) {
     $("licenseNote").textContent = data.has_license
       ? "A license key is stored on this machine."
       : "Stored on this machine. Billing check comes later.";
+  }
+  fillPair();
+}
+
+async function fillPair() {
+  const host = $("pairUrls");
+  if (!host) return;
+  try {
+    const data = await (await fetch("/api/pair")).json();
+    const urls = data.urls || [];
+    host.innerHTML = urls.length
+      ? urls.map((url) => `<button type="button" class="ghost-btn pair-url" data-pair-url="${escapeHtml(url)}">${escapeHtml(url)}</button>`).join("")
+      : `<p class="muted">No reachable address yet.</p>`;
+    host.querySelectorAll("[data-pair-url]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const url = btn.dataset.pairUrl || "";
+        try {
+          await navigator.clipboard.writeText(url);
+          if ($("pairStatus")) $("pairStatus").textContent = "Copied.";
+        } catch (_err) {
+          if ($("pairStatus")) $("pairStatus").textContent = url;
+        }
+      });
+    });
+    if ($("pairStatus") && !$("pairStatus").textContent) {
+      $("pairStatus").textContent = data.pin_required
+        ? (data.hint || "Paste an address on the phone.")
+        : "Set a PIN before you leave this machine.";
+    }
+  } catch (_err) {
+    host.innerHTML = `<p class="muted">Could not load addresses.</p>`;
   }
 }
 
@@ -3144,6 +3445,7 @@ function applyConfig(data) {
   }
   renderBotMeta();
   applyCollaboratorChrome();
+  paintWorkTabs();
 }
 
 function applyCollaboratorChrome() {
@@ -3296,17 +3598,11 @@ async function setOrgNode(project, worker) {
   await loadThread();
   syncComposerWho();
   scrollChatBottom();
-  if (stage === "opencode") startOpenCode();
-  if (stage === "hermes") startHermes();
-  if (scheduleOpen && projectId) openSchedule("");
+  startOpenCode();
+  startHermes();
+  if (scheduleOpen) openSchedule("");
   else {
-    scheduleOpen = false;
-    const panel = $("chatSchedule");
-    if (panel) {
-      panel.hidden = true;
-      panel.innerHTML = "";
-    }
-    paintScheduleButton();
+    closeSchedule();
   }
   if (!liveRunId) await drainQueue();
 }
@@ -3484,7 +3780,19 @@ function renderTalk(job) {
   }
   stampLane(el, job);
   appendWorkDetails(el, job);
-  // Add report card for talk jobs too
+  const choices = jobChoices(job);
+  if (choices.length && !el.querySelector(".need-actions")) {
+    const actions = document.createElement("div");
+    actions.className = "job-actions need-actions";
+    actions.innerHTML = choiceButtonsHtml(choices, job);
+    actions.querySelectorAll("[data-need-act]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        runNeedChoice(btn);
+      });
+    });
+    el.appendChild(actions);
+  }
   const reportCard = renderReportCard(job);
   if (reportCard) el.appendChild(reportCard);
   return el;
@@ -3983,15 +4291,13 @@ function emptyStreamHtml() {
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
-  let lead = "Type here. Cos routes the work.";
+  let lead = "Type here.";
   let showCTA = !project;
   if (worker && project) {
     lead = `${worker.name} on ${project.name}. Type here.`;
     showCTA = false;
   } else if (project) {
-    lead = project.id === "saa-homes"
-      ? "Live Hermes still owns today’s ticks. Type here — this chat is the operator surface."
-      : "Type here. Pin Code, Think, Research, or Ops only when you want that engine.";
+    lead = "Type here.";
     showCTA = false;
   }
   const nowLine = now && now !== "source of truth" && now !== "—"
@@ -4425,33 +4731,52 @@ function currentAim() {
   };
 }
 
+function frameUrlMatches(frame, url) {
+  if (!frame || !url) return false;
+  const src = frame.getAttribute("src") || "";
+  if (!src || src === "about:blank") return false;
+  try {
+    const now = new URL(frame.src, location.href);
+    const want = new URL(url, location.href);
+    const trim = (path) => path.replace(/\/+$/, "") || "/";
+    return trim(now.pathname) === trim(want.pathname) && now.search === want.search;
+  } catch (_err) {
+    return false;
+  }
+}
+
+function engineFrameLive(frame) {
+  if (!frame) return false;
+  const src = frame.getAttribute("src") || "";
+  return Boolean(src) && src !== "about:blank";
+}
+
 function reloadEngineFrame(frameId, url, token) {
   const frame = $(frameId);
   if (!frame || !url) return;
   const prev = frame.getAttribute("data-aim") || "";
-  if (prev === token && frame.src && frame.src.indexOf("127.0.0.1") !== -1) return;
+  if (prev === token && frameUrlMatches(frame, url)) return;
   frame.setAttribute("data-aim", token);
-  frame.src = "about:blank";
-  window.setTimeout(() => {
-    const next = $(frameId);
-    if (next) next.src = url;
-  }, 40);
+  if (frameUrlMatches(frame, url)) return;
+  frame.src = url;
 }
 
 async function startOpenCode() {
   const aim = currentAim();
-  if (aim.idle) {
-    if ($("ocTitle")) $("ocTitle").textContent = "OpenCode";
+  const folder = aim.idle
+    ? (lastOcFolder || (($("folder") && $("folder").value.trim()) || null))
+    : (aim.folder || (($("folder") && $("folder").value.trim()) || null));
+  if ($("ocTitle")) $("ocTitle").textContent = aim.idle ? "OpenCode" : `OpenCode · ${aim.name}`;
+  if (aim.idle && $("ocStatus")) {
     $("ocStatus").textContent = lastOcFolder
       ? `Still on last CEO folder · ${lastOcFolder}. Click a CEO so Chat, OpenCode, and Hermes match.`
       : "Click a CEO so OpenCode opens that folder.";
-    return;
   }
-  const folder = aim.folder || (($("folder") && $("folder").value.trim()) || null);
-  if ($("ocTitle")) $("ocTitle").textContent = `OpenCode · ${aim.name}`;
-  $("ocStatus").textContent = folder
-    ? `Aiming OpenCode at ${folder}…`
-    : "Starting official OpenCode web…";
+  if (!ocStarted && $("ocStatus") && !aim.idle) {
+    $("ocStatus").textContent = folder
+      ? `Aiming OpenCode at ${folder}…`
+      : "Starting official OpenCode web…";
+  }
   const res = await fetch("/api/engines/opencode/web", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4462,33 +4787,39 @@ async function startOpenCode() {
     $("ocStatus").innerHTML = `${escapeHtml(data.error || "OpenCode missing")}${data.install ? ` · <a href="${data.install}">install</a>` : ""}`;
     return;
   }
-  const url = data.url || "http://127.0.0.1:4096";
+  const url = data.url || "/engine/opencode/";
   const aimed = data.folder || folder || "";
-  $("ocStatus").innerHTML = `Workspace <a href="${url}" target="_blank" rel="noreferrer">${url}</a>${aimed ? ` · ${escapeHtml(aimed)}` : ""} · one OpenCode session per CEO · All files is the repo; git / branch / last turn are diffs only.`;
-  reloadEngineFrame("ocFrame", url, aimed || aim.name);
+  const sid = data.session_id || "";
+  if (!aim.idle) {
+    $("ocStatus").innerHTML = `Workspace <a href="${url}" target="_blank" rel="noreferrer">${escapeHtml(aimed || url)}</a> · one OpenCode session per CEO · All files is the repo; git / branch / last turn are diffs only.`;
+  }
+  reloadEngineFrame("ocFrame", url, `${aimed}|${sid}`);
   lastOcFolder = aimed;
   ocStarted = true;
 }
 
 async function startHermes() {
   const aim = currentAim();
+  const home = aim.idle ? (lastHermesHome || "") : (aim.hermesHome || "");
+  const sid = aim.idle ? "" : (aim.sessionId || "");
+  if ($("hermesTitle")) $("hermesTitle").textContent = aim.idle ? "Hermes" : `Hermes · ${aim.name}`;
   if (aim.idle) {
-    if ($("hermesTitle")) $("hermesTitle").textContent = "Hermes";
-    $("hermesStatus").textContent = lastHermesHome
-      ? `Still on last CEO home · ${lastHermesHome}. Click a CEO so Chat, OpenCode, and Hermes match.`
-      : "Click a CEO so Hermes opens that home.";
+    if ($("hermesStatus")) {
+      $("hermesStatus").textContent = lastHermesHome
+        ? `Still on last CEO home · ${lastHermesHome}. Click a CEO so Chat, OpenCode, and Hermes match.`
+        : "Click a CEO so Hermes opens that home.";
+    }
     if ($("hermesAim")) $("hermesAim").textContent = lastHermesHome || "—";
-    return;
+  } else if ($("hermesAim")) {
+    $("hermesAim").textContent = home || "machine Hermes home";
   }
   hermesFailed = false;
-  if ($("hermesTitle")) $("hermesTitle").textContent = `Hermes · ${aim.name}`;
-  $("hermesStatus").textContent = "Starting…";
-  if ($("hermesAim")) $("hermesAim").textContent = aim.hermesHome || "machine Hermes home";
+  if (!hermesStarted && $("hermesStatus") && !aim.idle) $("hermesStatus").textContent = "Starting…";
   syncHermesHint();
   const res = await fetch("/api/engines/hermes/dashboard", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hermes_home: aim.hermesHome || "" })
+    body: JSON.stringify({ hermes_home: home })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -4498,13 +4829,13 @@ async function startHermes() {
     syncHermesHint();
     return;
   }
-  const base = data.url || "http://127.0.0.1:9119";
-  const aimed = data.home || aim.hermesHome || "";
-  const sid = data.session_id || aim.sessionId || "";
-  const url = sid ? `${base.replace(/\/$/, "")}/chat?resume=${encodeURIComponent(sid)}` : base;
+  const base = data.url || "/engine/hermes/";
+  const aimed = data.home || home || "";
+  const resume = data.session_id || sid || "";
+  const url = resume ? `/chat?resume=${encodeURIComponent(resume)}` : (data.url || "/engine/hermes/");
   hermesFailed = false;
-  $("hermesStatus").innerHTML = `<a href="${url}" target="_blank" rel="noreferrer">${base}</a>`;
-  if ($("hermesAim")) {
+  if (!aim.idle) $("hermesStatus").innerHTML = `<a href="${url}" target="_blank" rel="noreferrer">${base}</a>`;
+  if ($("hermesAim") && !aim.idle) {
     const count = Number(data.session_count || 0);
     const title = data.session_title || "";
     const bits = [aimed || "machine Hermes home"];
@@ -4513,7 +4844,7 @@ async function startHermes() {
     $("hermesAim").textContent = bits.join(" · ");
   }
   syncHermesHint();
-  reloadEngineFrame("hermesFrame", url, `${aimed}|${sid}`);
+  reloadEngineFrame("hermesFrame", url, `${aimed}|${resume}`);
   lastHermesHome = aimed;
   hermesStarted = true;
 }
@@ -4665,11 +4996,43 @@ async function loadOrgTree() {
 
 let digestTimer = 0;
 
+function digestPollMs() {
+  if (scheduleOpen || liveRunId) return 4000;
+  const pack = digestCache.get(projectId) || {};
+  if ((pack.crons || []).some((row) => cronIsLive(row))) return 4000;
+  return 8000;
+}
+
 function startDigestPoll() {
   if (digestTimer) return;
-  digestTimer = window.setInterval(() => {
-    if (projectId) loadCeoDigest();
-  }, 15000);
+  const tick = () => {
+    loadCeoDigest(scheduleOpen);
+    paintWorkTabs();
+    digestTimer = window.setTimeout(tick, digestPollMs());
+  };
+  digestTimer = window.setTimeout(tick, 400);
+}
+
+function startLiveTick() {
+  if (window.openbotLive || !window.EventSource) return;
+  try {
+    const es = new EventSource("/api/live");
+    window.openbotLive = es;
+    es.addEventListener("tick", (ev) => {
+      let data = {};
+      try { data = JSON.parse(ev.data); } catch (_err) { return; }
+      if (data.activity) renderActivity(data.activity);
+      if (data.people) cfg.people = data.people;
+      paintPulse();
+      paintWorkTabs();
+      if (scheduleOpen) {
+        const pack = digestCache.get(projectId) || {};
+        renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId);
+      }
+    });
+  } catch (_err) {
+    window.openbotLive = null;
+  }
 }
 
 async function boot() {
@@ -4677,6 +5040,7 @@ async function boot() {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
   startDigestPoll();
+  startLiveTick();
   const invite = new URLSearchParams(location.search).get("invite");
   if (invite) {
     const joined = await waitForShareInvite(invite);
@@ -4730,6 +5094,10 @@ async function boot() {
   sizeComposer();
   if (location.hash) applyHash();
   window.addEventListener("hashchange", applyHash);
+  window.setTimeout(() => {
+    startOpenCode();
+    startHermes();
+  }, 200);
 }
 
 function setWizardStep(name) {
@@ -4777,10 +5145,12 @@ async function pollActivity() {
       });
       if (freshCron.length) loadCeoDigest();
     }
-    if (projectId && Array.isArray(data.live_runs)) {
+    if (Array.isArray(data.live_runs)) {
       const pack = digestCache.get(projectId) || {};
       digestCache.set(projectId, Object.assign({}, pack, { live_runs: data.live_runs }));
       paintCeoLive(digestCache.get(projectId));
+      paintWorkTabs();
+      if (scheduleOpen) renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId);
     }
     if (!liveRunId) {
       const fresh = (data.jobs || []).some((job) => {
@@ -4792,7 +5162,7 @@ async function pollActivity() {
   } catch (_err) {
     /* board still usable */
   }
-  window.setTimeout(pollActivity, liveRunId ? 4000 : 8000);
+  window.setTimeout(pollActivity, liveRunId ? 4000 : (window.openbotLive ? 12000 : 8000));
 }
 
 document.querySelectorAll(".stage-btn").forEach((btn) => {
@@ -4816,16 +5186,49 @@ if ($("modelSearch")) {
 if ($("openSpend")) {
   $("openSpend").addEventListener("click", () => setSettings(true, "usage"));
 }
-if ($("openSchedule")) {
-  $("openSchedule").addEventListener("click", () => {
-    if (scheduleOpen) {
-      scheduleOpen = false;
-      const panel = $("chatSchedule");
-      if (panel) panel.hidden = true;
-      paintScheduleButton();
-      return;
+if ($("workTabs") && !$("workTabs").dataset.workBound) {
+  $("workTabs").dataset.workBound = "1";
+  $("workTabs").addEventListener("click", (event) => {
+    const btn = event.target.closest(".work-tab");
+    if (!btn) return;
+    openWork(btn.getAttribute("data-work") || "doing");
+  });
+}
+if ($("ceoLive") && !$("ceoLive").dataset.workBound) {
+  $("ceoLive").dataset.workBound = "1";
+  $("ceoLive").addEventListener("click", () => {
+    const pack = digestCache.get(projectId) || {};
+    const live = (pack.crons || []).some((row) => cronIsLive(row)) || (pack.live_runs || []).length || liveRunId;
+    openWork(live ? "doing" : "results");
+  });
+}
+if ($("chatSchedule") && !$("chatSchedule").dataset.retryBound) {
+  $("chatSchedule").dataset.retryBound = "1";
+  $("chatSchedule").addEventListener("click", async (event) => {
+    const btn = event.target.closest(".cron-retry");
+    if (!btn || !projectId) return;
+    const jobId = btn.getAttribute("data-cron-id") || "";
+    if (!jobId) return;
+    btn.disabled = true;
+    btn.textContent = "Retrying…";
+    try {
+      const res = await fetch("/api/crons/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId, job_id: jobId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        btn.textContent = data.error || data.text || "Retry failed";
+        btn.disabled = false;
+        return;
+      }
+      btn.textContent = "Running on live Hermes";
+      await loadCeoDigest(true);
+    } catch (_err) {
+      btn.textContent = "Retry failed";
+      btn.disabled = false;
     }
-    openSchedule("");
   });
 }
 $("openSettings").addEventListener("click", (event) => {
@@ -4918,6 +5321,12 @@ $("saveWorkspace").addEventListener("click", async () => {
   if (res.ok) applyConfig(data);
 });
 
+if ($("refreshPair")) {
+  $("refreshPair").addEventListener("click", () => {
+    if ($("pairStatus")) $("pairStatus").textContent = "";
+    fillPair();
+  });
+}
 if ($("saveYou")) {
   $("saveYou").addEventListener("click", async () => {
     const pin = $("operatorPin").value;

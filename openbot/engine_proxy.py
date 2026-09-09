@@ -21,13 +21,17 @@ HERMES_PREFIX = "/engine/hermes"
 ENGINES = {
     OPENCODE_PREFIX: 4096,
     HERMES_PREFIX: 9119,
+    "/opencode": 4096,
+    "/hermes": 9119,
 }
 OPENCODE_ROOTS = (
     "/session",
+    "/api/session",
     "/global",
     "/event",
     "/config",
     "/provider",
+    "/api/provider",
     "/pty",
     "/file",
     "/tui",
@@ -122,7 +126,11 @@ def _root_hit(path: str, roots: tuple[str, ...]) -> bool:
 
 def _opencode_spa_route(path: str) -> bool:
     parts = [part for part in (path or "").split("/") if part]
+    if parts[:2] == ["engine", "opencode"]:
+        parts = parts[2:]
     if not parts or parts[0] in {"engine", "api", "web", "assets"}:
+        return False
+    if _root_hit("/" + parts[0], OPENCODE_ROOTS):
         return False
     decoded = _decode_opencode_dir(parts[0])
     if not decoded:
@@ -224,17 +232,16 @@ OPENCODE_TREE_SCRIPT = (
     "return orig(q);};}catch(e){}"
     "function withState(raw){if(!raw)return raw;try{var o=JSON.parse(raw);"
     "if(!o||typeof o!=='object'||Array.isArray(o))return raw;"
-    "if('fileTree' in o||'sidebar' in o||'review' in o){"
+    "if(o.home&&o.home.selection&&typeof o.home.selection.server==='string'&&o.home.selection.server.trim().charAt(0)==='{'){delete o.home.selection.server;}"
+    "if(o.sidebar&&typeof o.sidebar==='object')o.sidebar.opened=true;"
+    "if(!('fileTree' in o||'sidebar' in o||'review' in o))return JSON.stringify(o);"
     "o.fileTree=Object.assign({width:260},o.fileTree||{},{opened:true,tab:'all'});"
-    "if(o.review&&typeof o.review==='object')o.review.panelOpened=false;}"
+    "if(o.review&&typeof o.review==='object')o.review.panelOpened=false;"
     "if(o.general&&typeof o.general==='object')o.general.showFileTree=true;"
     "return JSON.stringify(o);}catch(e){return raw;}}"
     "try{var get=localStorage.getItem.bind(localStorage);"
     "var set=localStorage.setItem.bind(localStorage);"
-    "localStorage.getItem=function(k){var v=get(k);if(v)return withState(v);"
-    "if(/layout/i.test(String(k||'')))return JSON.stringify({fileTree:{opened:true,width:260,tab:'all'},review:{panelOpened:false}});"
-    "if(/settings/i.test(String(k||'')))return JSON.stringify({general:{showFileTree:true}});"
-    "return v;};"
+    "localStorage.getItem=function(k){return withState(get(k));};"
     "localStorage.setItem=function(k,v){return set(k,withState(String(v)));};}catch(e){}"
     "function labelOf(el){return (el.getAttribute('aria-label')||el.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase();}"
     "function clickNamed(want){var nodes=document.querySelectorAll('button,[role=\"tab\"],[role=\"button\"]');"
@@ -285,6 +292,8 @@ def _inject_embed_guard(body: bytes, prefix: str) -> bytes:
         + "if(x.pathname.indexOf(p)===0)return u;if(!isApi(x.pathname))return u;"
         + "x.pathname=p+x.pathname;return x.pathname+x.search+x.hash;}"
         + "catch(e){return u.charAt(0)==='/'&&u.indexOf(p)!==0&&isApi(u.split('?')[0])?p+u:u;}}"
+        + "try{if(location.pathname.indexOf(p+'/')===0){var rest=location.pathname.slice(p.length);"
+        + "if(rest&&rest!=='/')history.replaceState(null,'',rest+location.search+location.hash);}}catch(e){}"
         + "var ps=history.pushState.bind(history);"
         + "var rs=history.replaceState.bind(history);history.pushState=function(s,t,u){return ps(s,t,u==null?u:prefixed(u));};"
         + "history.replaceState=function(s,t,u){return rs(s,t,u==null?u:prefixed(u));};"
@@ -341,6 +350,17 @@ def _copy_sockets(left, right) -> None:
 def _query_value(request_path: str, name: str) -> str:
     qs = parse_qs(urlparse(request_path).query)
     return (qs.get(name) or [""])[0].strip()
+
+
+def encode_opencode_dir(folder: str) -> str:
+    """OpenCode web SPA segment for a workspace folder."""
+    import base64
+
+    raw = str(folder or "").strip()
+    if not raw:
+        return ""
+    blob = base64.b64encode(raw.encode("utf-8")).decode("ascii")
+    return blob.replace("+", "-").replace("/", "_").rstrip("=")
 
 
 def _decode_opencode_dir(segment: str) -> str:

@@ -695,8 +695,53 @@ def _write_opencode_auth(provider_id: str, key: str) -> None:
     path.write_text(json.dumps(blob, indent=2), encoding="utf-8")
 
 
-def _write_hermes_env(updates: dict[str, str]) -> None:
-    path = hermes_home() / ".env"
+def prefer_account_ids(tools: dict | None = None) -> list[str]:
+    """CEO pin first, then that CEO's fallback, then instance profile."""
+    prefer: list[str] = []
+    blob = tools or {}
+    account_id = str(blob.get("account_id") or "").strip()
+    if not account_id:
+        from .config import load_settings
+
+        account_id = str(load_settings().get("profile_account_id") or "").strip()
+    if account_id:
+        prefer.append(account_id)
+    for item in blob.get("fallback") or []:
+        value = str(item or "").strip()
+        if value:
+            prefer.append(value)
+    return prefer
+
+
+def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None = None) -> str | None:
+    """Three OpenCode Go keys, then OpenRouter. Writes OpenCode auth.json and Hermes .env."""
+    prefer = prefer_account_ids(tools)
+    chosen = activate_for_engine("OpenCode", prefer=prefer, provider="opencode")
+    if not chosen:
+        chosen = activate_for_engine("OpenCode", prefer=prefer)
+    activate_for_engine("OpenCode", prefer=prefer, provider="openrouter")
+    activate_for_engine("Hermes Agent", prefer=prefer, provider="opencode") or activate_for_engine(
+        "Hermes Agent", prefer=prefer
+    )
+    activate_for_engine("Hermes Agent", prefer=prefer, provider="openrouter")
+    if hermes_home_dir:
+        updates = {
+            name: os.environ[name]
+            for name in (
+                "OPENCODE_API_KEY",
+                "OPENCODE_ZEN_API_KEY",
+                "OPENCODE_GO_API_KEY",
+                "OPENROUTER_API_KEY",
+            )
+            if os.environ.get(name)
+        }
+        if updates:
+            _write_hermes_env(updates, home=hermes_home_dir)
+    return chosen
+
+
+def _write_hermes_env(updates: dict[str, str], home: str | Path | None = None) -> None:
+    path = (Path(home) if home else hermes_home()) / ".env"
     path.parent.mkdir(parents=True, exist_ok=True)
     existing: list[str] = []
     if path.is_file():

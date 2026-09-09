@@ -361,6 +361,28 @@ class TestGatewaySupervise(unittest.TestCase):
         self.assertIn("start_opencode_web", body)
         self.assertIn("start_hermes_dashboard", body)
 
+    def test_warm_engines_keep_running(self):
+        src = (Path(__file__).resolve().parent.parent / "openbot" / "launch.py").read_text(encoding="utf-8")
+        start = src.find("def warm_engines_background()")
+        end = src.find("def supervise_gateways_enabled()")
+        body = src[start:end]
+        self.assertIn("while True", body)
+        self.assertNotIn("gateway_start", body)
+
+    @patch("openbot.launch._kill_port")
+    @patch("openbot.launch._port_open", return_value=True)
+    @patch("openbot.launch.detect")
+    def test_dashboard_reuses_running_port(self, mock_detect, _port, mock_kill):
+        import openbot.launch as launch
+
+        mock_detect.return_value = {
+            "hermes": {"present": True, "path": "hermes", "install": "", "install_cmd": ""}
+        }
+        launch._hermes_dash_home = None
+        result = launch.start_hermes_dashboard("/tmp/saa-homes")
+        mock_kill.assert_not_called()
+        self.assertTrue(result.get("ok"))
+
     def test_supervise_off_on_local_laptop(self):
         from openbot.launch import supervise_ceo_gateways_once, supervise_gateways_enabled
 

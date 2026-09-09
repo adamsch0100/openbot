@@ -37,8 +37,9 @@ class CheapChatTests(unittest.TestCase):
         self.assertEqual(job.get("preset"), "cos")
         self.assertTrue(job.get("talk"))
         self.assertFalse(job.get("keep_going"))
-        self.assertIn("report to Chief of Staff", job.get("text") or "")
-        self.assertIn("openbot", job.get("text") or "")
+        self.assertIn("Chief of Staff", job.get("text") or "")
+        self.assertIn("Hello", job.get("text") or "")
+        self.assertNotIn("You are Chief of Staff", job.get("text") or "")
         self.assertNotIn("session_id", (job.get("text") or "").lower())
         self.assertNotIn("Resumed session", job.get("text") or "")
 
@@ -129,6 +130,43 @@ class EngineWireTests(unittest.TestCase):
         self.assertEqual(echoed, "Nothing is running on this copy. Last result was form-pipeline-health.")
         self.assertNotIn("You are the think engine", echoed)
         self.assertNotIn("TASK:", echoed)
+        dumped = clean_hermes_text(
+            "Live gateway is up. Patrol is still running.\n"
+            "Next: Wait for 1099.\n"
+            "saa-homes: SAA Homes — indexation-patrol\n"
+            "You are Chief of Staff. The operator is above you. CEOs report to you. "
+            "Ask, and you dispatch: Code → OpenCode in that CEO's folder.\n"
+            "Code: OpenCode in C:\\Users\\adamm\\Projects\\saahomes (local git)\n"
+            "Hermes: C:\\Users\\adamm\\Projects\\openbot\\hermes-homes\\saa-homes\n"
+            "Bus: org/projects/saa-homes/bus/handoffs — files, not chat.\n"
+            "Telegram: no imported session yet. Chat is still the operator surface."
+        )
+        self.assertIn("Live gateway is up", dumped)
+        self.assertIn("Next: Wait for 1099", dumped)
+        self.assertNotIn("You are Chief of Staff", dumped)
+        self.assertNotIn("Ask, and you dispatch", dumped)
+        self.assertNotIn("Code: OpenCode in", dumped)
+        self.assertNotIn("Bus: org/projects", dumped)
+
+
+class HumanStatusTests(unittest.TestCase):
+    def test_staff_status_has_no_wiring_lecture(self):
+        from openbot.org import staff_status_reply
+        from openbot.router import status_reply
+
+        status = staff_status_reply()
+        self.assertNotIn("You are Chief of Staff", status)
+        self.assertNotIn("Ask, and you dispatch", status)
+        self.assertNotIn("Bus: org/projects", status)
+        wired = status_reply(
+            "Now: ticket 1\nLast: builder\nNext: folder then diff\nBlocker: —",
+            "What is going on?",
+            "openbot",
+            wiring="You are Chief of Staff. Ask, and you dispatch.",
+        )
+        self.assertIn("ticket 1", wired)
+        self.assertNotIn("You are Chief of Staff", wired)
+        self.assertNotIn("Ask, and you dispatch", wired)
 
 
 class SimpleBoardUiTests(unittest.TestCase):
@@ -152,8 +190,15 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn("Your line stays in the thread", js)
         self.assertNotIn("clearTimeout(watchdog)", js)
         self.assertIn("think-pulse", css)
-        self.assertIn("stage-opencode", html)
-        self.assertIn("stage-hermes", html)
+        self.assertIn("function startOpenCode", js)
+        self.assertIn("function startHermes", js)
+        self.assertIn("function frameUrlMatches", js)
+        self.assertNotIn('frame.src = "about:blank"', js)
+        self.assertIn("/engine/opencode/", js)
+        self.assertIn("data.session_id", js)
+        self.assertIn("visibility: hidden", css)
+        self.assertIn("/engine/hermes/", (ROOT / "openbot" / "launch.py").read_text(encoding="utf-8"))
+        self.assertIn("maybe_proxy", (ROOT / "openbot" / "server.py").read_text(encoding="utf-8"))
         self.assertIn('id="composerWho"', html)
         self.assertIn("function syncComposerWho", js)
         self.assertNotIn("Name a helper", js)

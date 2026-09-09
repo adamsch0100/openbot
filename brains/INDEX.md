@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: OpenBot saa-homes gateway is up (PID 103). lead-attribution-brief succeeded. Do not Accept parked restore cards.
-Last: Railway OpenBot now supervises with hermes gateway run. warm_engines stays OpenCode web + Hermes dashboard.
-Next: One more gateway-shutdown retry later. Skip conversion-surge. Hold PR #48. Open https://github.com/adamsch0100/openbot/compare/master...board-pulse-cron-noise
-Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue. Last digest run was ok.
+Now: Catch SAA leftovers on the live Hermes gateway (nudge due), not SSH. OpenBot glue seats Go then OpenRouter.
+Last: Skip jobs paused. Empty-model leftovers pinned to OpenCode Go. Telegram stays origin.
+Next: Nudge geo-citation-audit, then the next leftover after it finishes. Do not redeploy SAA Homes Hermes.
+Blocker: Do not Accept parked restore cards. Do not stampede crons. Do not redeploy live Hermes.
 
 ## Vault
 

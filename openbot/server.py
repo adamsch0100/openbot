@@ -73,11 +73,13 @@ from .live import snapshot as live_snapshot
 from .live import start as live_start
 from .live import stop as live_stop
 from .models import ensure_chat_model, public_catalog, validate_seats
+from .pair import pair_payload, people_rows
 from .org import (
     add_project,
     add_worker,
     ensure_org,
     patch_project_tools,
+    project_cron_bundle,
     project_tools,
     remove_project,
     remove_worker,
@@ -87,9 +89,9 @@ from .org import (
     write_project_index,
     write_worker_brain,
 )
-from .engine_proxy import inject_opencode_tree
+from .engine_proxy import inject_opencode_tree, maybe_proxy
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
-from .router import decide_diff, revert_accept, handle, pending_approvals, public_job
+from .router import decide_diff, revert_accept, handle, need_choices, pending_approvals, public_job
 from .share import (
     actor_stamp,
     allows_project,
@@ -190,21 +192,17 @@ def companion_payload(project_id: str | None = None) -> dict:
         item = dict(row)
         kind = str(item.get("kind") or "")
         if kind == "login":
-            item["logins"] = public_logins(item.get("project_id") or None)
-            item["actions"] = ["login"]
+            item["logins"] = item.get("logins") or public_logins(item.get("project_id") or None)
             item["text"] = item.get("label") or ""
         elif kind == "diff":
-            item["actions"] = ["accept", "reject"]
             item["text"] = item.get("label") or ""
             job = read_job(str(item.get("id") or "")) or {}
             if job.get("text"):
                 item["text"] = str(job.get("text") or "")
-        elif kind in {"gate", "expired"}:
-            item["actions"] = ["accept", "reject"] if kind == "gate" else []
-            item["text"] = item.get("label") or ""
         else:
-            item["actions"] = []
             item["text"] = item.get("label") or ""
+        item["choices"] = item.get("choices") or need_choices(item)
+        item["actions"] = [str(choice.get("id") or "") for choice in item["choices"] if choice.get("id")]
         needs.append(item)
     return {
         "now": activity.get("now") or four.get("Now") or "",
@@ -218,6 +216,16 @@ def companion_payload(project_id: str | None = None) -> dict:
         "preset_engines": PRESET_ENGINE,
         "has_key": bool(activity.get("has_key")),
         "companion": True,
+        "people": people_rows(ensure_org(), activity),
+    }
+
+
+def _live_tick(project_id: str | None = None) -> dict:
+    activity = _activity(ingest_cron=False, project_id=project_id)
+    return {
+        "activity": activity,
+        "people": people_rows(ensure_org(), activity),
+        "has_key": bool(activity.get("has_key")),
     }
 
 
@@ -643,7 +651,11 @@ class Handler(SimpleHTTPRequestHandler):
         return _locked_payload()
 
     def _lock_api(self, path: str, method: str) -> bool:
-        if path.startswith("/opencode/") or path.startswith("/hermes/"):
+        if (
+            path.startswith("/opencode/")
+            or path.startswith("/hermes/")
+            or path.startswith("/engine/")
+        ):
             if self._member() and not member_can(self._member(), "engines_view"):
                 return True
             return not self._unlocked()
@@ -698,6 +710,29 @@ class Handler(SimpleHTTPRequestHandler):
                 return None, None
         return requested, actor_stamp(member)
 
+    def _sse_live(self, project_id: str | None = None):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        for name, value in _CORS_HEADERS:
+            self.send_header(name, value)
+        self.end_headers()
+        last = ""
+        try:
+            for _ in range(400):
+                blob = json.dumps(_live_tick(project_id), default=str)
+                if blob != last:
+                    last = blob
+                    self.wfile.write(f"event: tick\ndata: {blob}\n\n".encode("utf-8"))
+                else:
+                    self.wfile.write(b": ping\n\n")
+                self.wfile.flush()
+                time.sleep(1.5)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            return None
+        return None
+
     def _json(self, code: int, payload: dict, set_cookie: str | None = None):
         raw = json.dumps(payload).encode("utf-8")
         try:
@@ -715,11 +750,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.log_error(f"_json: {e}")
 
     def do_OPTIONS(self):
-        path = urlparse(self.path).path
-        if path.startswith("/opencode/"):
-            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
-        if path.startswith("/hermes/"):
-            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
+        if maybe_proxy(self):
+            return None
         self.send_response(204)
         for name, value in _CORS_HEADERS:
             self.send_header(name, value)
@@ -973,15 +1005,9 @@ class Handler(SimpleHTTPRequestHandler):
         return fields, files
 
     def do_GET(self):
+        if maybe_proxy(self):
+            return None
         path = urlparse(self.path).path
-        
-        # Proxy OpenCode web UI
-        if path.startswith("/opencode/"):
-            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
-        
-        # Proxy Hermes dashboard
-        if path.startswith("/hermes/"):
-            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if path == "/api/health":
             host, _ = listen_addr()
@@ -1062,6 +1088,22 @@ class Handler(SimpleHTTPRequestHandler):
             member = self._actor_row()
             pid = member_project_id(member) if member else None
             return self._json(200, companion_payload(pid))
+        if path == "/api/pair":
+            host, port = listen_addr()
+            operator = public_operator()
+            return self._json(
+                200,
+                pair_payload(
+                    port,
+                    host,
+                    pin_required=bool(operator.get("has_pin")),
+                    name=str(operator.get("operator_name") or "OpenBot"),
+                ),
+            )
+        if path == "/api/live":
+            member = self._actor_row()
+            pid = member_project_id(member) if member else None
+            return self._sse_live(pid)
         if path == "/api/activity":
             member = self._actor_row()
             pid = member_project_id(member) if member else None
@@ -1147,8 +1189,6 @@ class Handler(SimpleHTTPRequestHandler):
                 org = filter_org(org, member_project_id(member))
             return self._json(200, org)
         if path == "/api/crons":
-            from .org import project_cron_bundle
-
             qs = parse_qs(urlparse(self.path).query)
             pid = (qs.get("project_id") or [""])[0].strip()
             if not pid:
@@ -1156,6 +1196,13 @@ class Handler(SimpleHTTPRequestHandler):
             member = self._actor_row()
             if member and not allows_project(member, pid):
                 return self._forbid("not on this CEO")
+            refresh = (qs.get("refresh") or [""])[0].strip() in {"1", "true", "yes"}
+            if pid == "saa-homes" and refresh:
+                from .hermes import sync_saa_live_crons
+
+                home = str((project_tools(pid) or {}).get("hermes_home") or "").strip()
+                if home:
+                    sync_saa_live_crons(home)
             return self._json(200, project_cron_bundle(pid))
         if path == "/api/spend/dashboard":
             if self._require_owner():
@@ -1407,15 +1454,9 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        if maybe_proxy(self):
+            return None
         path = urlparse(self.path).path
-        
-        # Proxy OpenCode web UI
-        if path.startswith("/opencode/"):
-            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
-        
-        # Proxy Hermes dashboard
-        if path.startswith("/hermes/"):
-            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if path == "/api/onboarding/test-job":
             if self._require_owner():
@@ -1918,6 +1959,30 @@ class Handler(SimpleHTTPRequestHandler):
             result = migrate_cron_delivery(hermes_home, dry_run=dry_run)
             result["project_id"] = project_id
             return self._json(200 if result.get("ok") else 400, result)
+
+        if path == "/api/crons/run":
+            project_id = str(data.get("project_id") or "").strip()
+            job_id = str(data.get("job_id") or data.get("id") or "").strip()
+            if self._require_perm("jobs_run", project_id or None):
+                return None
+            if not project_id or not job_id:
+                return self._json(400, {"error": "project_id and job_id required"})
+            from .hermes import SAA_CRON_SKIP, cron_run, saa_live_nudge_due, sync_saa_live_crons
+            from .org import project_tools
+
+            if job_id in SAA_CRON_SKIP:
+                return self._json(400, {"ok": False, "error": "skipped", "id": job_id})
+            tools = project_tools(project_id) if project_id else {}
+            home = str(tools.get("hermes_home") or "").strip() or None
+            if project_id == "saa-homes":
+                result = saa_live_nudge_due(job_id)
+                if home:
+                    sync_saa_live_crons(home)
+            else:
+                result = cron_run(job_id, home=home)
+            result["project_id"] = project_id
+            result["engine"] = "Hermes Agent"
+            return self._json(200 if result.get("ok") else 400, result)
         
         if path == "/api/routines":
             if self._require_owner():
@@ -2252,15 +2317,9 @@ class Handler(SimpleHTTPRequestHandler):
         return None
 
     def do_PATCH(self):
+        if maybe_proxy(self):
+            return None
         path = urlparse(self.path).path
-        
-        # Proxy OpenCode web UI
-        if path.startswith("/opencode/"):
-            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
-        
-        # Proxy Hermes dashboard
-        if path.startswith("/hermes/"):
-            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if not self._unlocked():
             return self._json(401, {"error": "locked"})
@@ -2296,15 +2355,9 @@ class Handler(SimpleHTTPRequestHandler):
         return None
 
     def do_PUT(self):
+        if maybe_proxy(self):
+            return None
         path = urlparse(self.path).path
-        
-        # Proxy OpenCode web UI
-        if path.startswith("/opencode/"):
-            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
-        
-        # Proxy Hermes dashboard
-        if path.startswith("/hermes/"):
-            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if self._lock_api(path, "PUT"):
             return self._json(403, _locked_payload())
@@ -2345,15 +2398,9 @@ class Handler(SimpleHTTPRequestHandler):
         return None
 
     def do_DELETE(self):
+        if maybe_proxy(self):
+            return None
         path = urlparse(self.path).path
-        
-        # Proxy OpenCode web UI
-        if path.startswith("/opencode/"):
-            return self._proxy("127.0.0.1", 4096, path[len("/opencode"):])
-        
-        # Proxy Hermes dashboard
-        if path.startswith("/hermes/"):
-            return self._proxy("127.0.0.1", 9119, path[len("/hermes"):])
         
         if self._lock_api(path, "DELETE"):
             return self._json(403, _locked_payload())
@@ -2484,6 +2531,13 @@ def main() -> None:
     threading.Thread(
         target=supervise_ceo_gateways_background,
         name="openbot-saa-gateway",
+        daemon=True,
+    ).start()
+    from .hermes import overlay_saa_live_background
+
+    threading.Thread(
+        target=overlay_saa_live_background,
+        name="openbot-saa-overlay",
         daemon=True,
     ).start()
     threading.Thread(

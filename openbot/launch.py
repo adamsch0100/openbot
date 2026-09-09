@@ -19,6 +19,7 @@ from .hermes import _dotenv
 
 OPENCODE_WEB_PORT = 4096
 HERMES_DASH_PORT = 9119
+OPENCODE_GO_MODEL = "opencode/deepseek-v4-flash"
 _opencode_proc: subprocess.Popen | None = None
 _hermes_dash_proc: subprocess.Popen | None = None
 _opencode_cwd: str | None = None
@@ -28,6 +29,8 @@ _hermes_lock = threading.Lock()
 _warmed = False
 _warm_lock = threading.Lock()
 _opencode_session_id: str | None = None
+_wallet_aim = ""
+_go_aimed: set[str] = set()
 _opencode_sessions: dict[str, str] = {}
 
 
@@ -379,6 +382,67 @@ def _open_opencode_session(folder: str, title: str) -> str:
     return found
 
 
+def _tools_for_folder(folder: str | None) -> dict:
+    try:
+        from .org import project_id_for_folder, project_tools
+
+        pid = project_id_for_folder(folder)
+        return project_tools(pid) if pid else {}
+    except Exception:
+        return {}
+
+
+def _tools_for_home(home: str | None) -> dict:
+    try:
+        from .org import project_id_for_hermes_home, project_tools
+
+        pid = project_id_for_hermes_home(home)
+        return project_tools(pid) if pid else {}
+    except Exception:
+        return {}
+
+
+def _push_wallets(folder: str | None = None, home: str | None = None) -> None:
+    """OpenBot keyring → official OpenCode auth + Hermes env. Go first, OpenRouter last."""
+    global _wallet_aim
+    from .keyring import push_engine_wallets
+
+    tools = _tools_for_folder(folder) if folder else _tools_for_home(home)
+    hermes = home or str((tools or {}).get("hermes_home") or "") or None
+    key = f"{folder or ''}|{hermes or ''}"
+    if key == _wallet_aim:
+        return
+    try:
+        push_engine_wallets(tools, hermes_home_dir=hermes)
+        _wallet_aim = key
+    except Exception:
+        pass
+
+
+def _aim_opencode_go_model(sid: str, directory: str | None = None) -> None:
+    """Official POST /api/session/{id}/model. Do not leave Muse Spark / OpenRouter on Auto."""
+    sid = str(sid or "").strip()
+    if not sid:
+        return
+    if sid in _go_aimed:
+        return
+    payload = _opencode_http("GET", f"/session/{sid}", directory=directory) or {}
+    model = payload.get("model") if isinstance(payload, dict) else {}
+    if not isinstance(model, dict):
+        model = {}
+    provider = str(model.get("providerID") or "")
+    mid = str(model.get("id") or "").lower()
+    if provider == "opencode" and mid and "muse-spark" not in mid and "contributor" not in mid:
+        _go_aimed.add(sid)
+        return
+    _opencode_http(
+        "POST",
+        f"/api/session/{sid}/model",
+        body={"model": {"id": OPENCODE_GO_MODEL, "providerID": "opencode"}},
+        directory=directory,
+    )
+
+
 def settle_opencode_session(folder: str | None = None, session_id: str | None = None) -> None:
     sid = str(session_id or _opencode_session_id or "").strip()
     directory = str(folder or _opencode_cwd or "").strip() or None
@@ -387,20 +451,38 @@ def settle_opencode_session(folder: str | None = None, session_id: str | None = 
     _opencode_http("POST", f"/session/{sid}/abort", body={}, directory=directory, timeout=4.0)
 
 
+def opencode_embed_url(folder: str | None = None, session_id: str | None = None) -> str | None:
+    """Same-origin OpenCode SPA for this CEO folder + session. Empty home is last resort."""
+    if not _port_open("127.0.0.1", OPENCODE_WEB_PORT):
+        return None
+    from .engine_proxy import encode_opencode_dir
+
+    target = str(folder or _opencode_cwd or "").strip()
+    sid = str(session_id or _opencode_session_id or "").strip()
+    enc = encode_opencode_dir(target)
+    if not enc:
+        return "/engine/opencode/"
+    # Official OpenCode reads location.pathname. /engine/opencode/{enc} looks like
+    # a project named "engine" and the iframe stays empty.
+    if sid:
+        return f"/{enc}/session/{sid}"
+    return f"/{enc}"
+
+
 def opencode_web_status() -> dict:
     engines = detect()
     running = _port_open("127.0.0.1", OPENCODE_WEB_PORT)
-    # Same-origin relative URL so it works from any public hostname
-    url = "/opencode/" if running else None
+    folder = _opencode_cwd or _work_dir()
+    sid = _opencode_session_id or ""
     return {
         "engine": "OpenCode",
         "present": engines["opencode"]["present"],
         "running": running,
-        "url": url,
+        "url": opencode_embed_url(folder, sid) if running else None,
         "install": engines["opencode"]["install"],
         "embed": "iframe_or_tab",
-        "folder": _opencode_cwd or _work_dir(),
-        "session_id": _opencode_session_id or "",
+        "folder": folder,
+        "session_id": sid,
         "note": "Official opencode web. OpenBot does not reimplement this UI.",
     }
 
@@ -432,13 +514,17 @@ def _start_opencode_web(folder: str | None = None) -> dict:
         ensure_workspace_git(target)
     except Exception:
         pass
+    _push_wallets(folder=target)
     if _port_open("127.0.0.1", OPENCODE_WEB_PORT):
         # Official OpenCode web can reuse OpenCode web across CEO folders.
         _opencode_cwd = target
+        sid = _open_opencode_session(target, Path(target).name) or _opencode_session_id
+        _aim_opencode_go_model(sid or "", target)
         status = opencode_web_status()
         status["ok"] = True
         status["folder"] = target
-        status["session_id"] = _open_opencode_session(target, Path(target).name) or _opencode_session_id
+        status["session_id"] = sid or ""
+        status["url"] = opencode_embed_url(target, sid)
         return status
     board = os.environ.get("OPENBOT_HOST", "127.0.0.1")
     board_port = os.environ.get("OPENBOT_PORT", "8787")
@@ -484,19 +570,23 @@ def _start_opencode_web(folder: str | None = None) -> dict:
             "error": f"OpenCode web exited after bind. See {log}",
             **opencode_web_status(),
         }
+    aimed = target if Path(target).is_dir() else _work_dir()
+    sid = _open_opencode_session(aimed, Path(aimed).name)
+    _aim_opencode_go_model(sid or "", aimed)
     status = opencode_web_status()
     status["ok"] = True
     status["pid"] = _opencode_proc.pid
-    status["folder"] = target
-    status["session_id"] = _open_opencode_session(target if Path(target).is_dir() else _work_dir(), Path(target).name)
+    status["folder"] = aimed
+    status["session_id"] = sid or ""
+    status["url"] = opencode_embed_url(aimed, sid)
     return status
 
 
 def hermes_dash_status() -> dict:
     engines = detect()
     running = _port_open("127.0.0.1", HERMES_DASH_PORT)
-    # Same-origin relative URL so it works from any public hostname
-    url = "/hermes/" if running else None
+    # Same-origin engine proxy so Railway / LAN / Tailscale keep WebSockets.
+    url = "/engine/hermes/" if running else None
     return {
         "engine": "Hermes Agent",
         "present": engines["hermes"]["present"],
@@ -547,6 +637,29 @@ def start_hermes_dashboard(home: str | None = None) -> dict:
         return _start_hermes_dashboard(home)
 
 
+def _homes_match(left: str | None, right: str | None) -> bool:
+    if not left or not right:
+        return False
+    try:
+        return Path(left).expanduser().resolve() == Path(right).expanduser().resolve()
+    except OSError:
+        return str(left).rstrip("\\/") == str(right).rstrip("\\/")
+
+
+def _dash_ok(target: str) -> dict:
+    status = hermes_dash_status()
+    status["ok"] = True
+    status["home"] = target
+    try:
+        from .channel import home_summary, telegram_session_id
+
+        status.update(home_summary(target))
+        status["session_id"] = telegram_session_id(target)
+    except Exception:
+        pass
+    return status
+
+
 def _start_hermes_dashboard(home: str | None = None) -> dict:
     global _hermes_dash_proc, _hermes_dash_home
     engines = detect()
@@ -565,11 +678,13 @@ def _start_hermes_dashboard(home: str | None = None) -> dict:
             target = str(Path(home).expanduser().resolve())
         except OSError:
             target = str(home).strip()
-    same = _hermes_dash_home and Path(_hermes_dash_home) == Path(target)
-    if _port_open("127.0.0.1", HERMES_DASH_PORT) and same:
-        status = hermes_dash_status()
-        status["ok"] = True
-        return status
+    _push_wallets(home=target)
+    if _port_open("127.0.0.1", HERMES_DASH_PORT):
+        if not _hermes_dash_home:
+            _hermes_dash_home = target
+            return _dash_ok(target)
+        if _homes_match(_hermes_dash_home, target):
+            return _dash_ok(target)
     if _port_open("127.0.0.1", HERMES_DASH_PORT):
         _kill(_hermes_dash_proc)
         _hermes_dash_proc = None
@@ -676,25 +791,32 @@ def warm_engines() -> dict:
             activate_for_engine("Hermes Agent")
         except Exception as err:
             print(f"[openbot] key push skipped: {err}", flush=True)
-        opencode = start_opencode_web()
-        hermes = start_hermes_dashboard()
+        opencode = start_opencode_web(_opencode_cwd)
+        hermes = start_hermes_dashboard(_hermes_dash_home)
         _warmed = True
         return {"opencode": opencode, "hermes": hermes}
 
 
 def warm_engines_background() -> None:
-    try:
-        result = warm_engines()
-        print(
-            "Engines warmed:",
-            {
-                name: _public_engine(payload)
-                for name, payload in result.items()
-            },
-            flush=True,
-        )
-    except Exception as err:
-        print(f"[openbot] engine warm failed: {err}", flush=True)
+    """Keep OpenCode web and the Hermes dashboard bound. Does not start gateways."""
+    announced = False
+    while True:
+        try:
+            result = warm_engines()
+            if not announced:
+                print(
+                    "Engines warmed:",
+                    {
+                        name: _public_engine(payload)
+                        for name, payload in result.items()
+                    },
+                    flush=True,
+                )
+                announced = True
+        except Exception as err:
+            print(f"[openbot] engine warm failed: {err}", flush=True)
+            announced = False
+        time.sleep(12)
 
 
 def supervise_gateways_enabled() -> bool:

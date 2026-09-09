@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
   <link rel="apple-touch-icon" href="/favicon.png?v=2" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=84" />
+  <link rel="stylesheet" href="/styles.css?v=106" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -176,6 +176,11 @@
             <div class="chat-where" id="chatWhere">Chief of Staff</div>
             <div class="chat-folder" id="chatFolder">You → Chief of Staff → CEOs</div>
           </div>
+          <nav class="work-tabs" id="workTabs" aria-label="Work in motion">
+            <button type="button" class="work-tab" data-work="doing" id="workDoing">Doing</button>
+            <button type="button" class="work-tab" data-work="next" id="workNext">Next</button>
+            <button type="button" class="work-tab" data-work="results" id="workResults">Results</button>
+          </nav>
           <button type="button" class="ghost-btn" id="openSchedule" hidden>Schedule</button>
         </div>
         <aside id="ceoLive" class="ceo-live" hidden></aside>
@@ -293,6 +298,15 @@
               </div>
             </div>
             <p class="muted" id="pinNote">Leave blank to keep the current PIN. Unlock is once per board session.</p>
+            <div class="pair-card" id="pairCard">
+              <h3 class="drawer-sub">Phone</h3>
+              <p class="muted">Same Wi-Fi or Tailscale. Copy an address, paste it on the phone, unlock with this PIN.</p>
+              <div id="pairUrls" class="pair-urls"></div>
+              <div class="actions">
+                <button type="button" class="ghost-btn" id="refreshPair">Refresh addresses</button>
+                <p class="muted" id="pairStatus"></p>
+              </div>
+            </div>
             <div class="field">
               <label for="licenseKey">License key</label>
               <input id="licenseKey" type="password" autocomplete="off" placeholder="stored on this machine" />
@@ -666,6 +680,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=96"></script>
+  <script src="/app.js?v=106"></script>
 </body>
 </html>

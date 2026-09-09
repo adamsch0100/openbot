@@ -346,11 +346,23 @@ class TestJobIdValidation(unittest.TestCase):
             "enabled": True,
             "state": "scheduled",
             "last_status": "error",
-            "fire_claim": {"at": now.isoformat(), "by": "test"},
+            "fire_claim": {"at": (now - timedelta(hours=1)).isoformat(), "by": "test"},
             "last_run_at": (now - timedelta(hours=1)).isoformat(),
             "last_error": "Gateway shutdown (final-cleanup)",
         }])
         self.assertEqual(stale["running"], [])
+        retrying = cron_digest([{
+            "id": "cacaa7f4ab75",
+            "name": "Neighborhood audit + expansion (weekly)",
+            "enabled": True,
+            "state": "scheduled",
+            "last_status": "error",
+            "fire_claim": {"at": now.isoformat(), "by": "box:1223"},
+            "last_run_at": (now - timedelta(hours=1)).isoformat(),
+            "last_error": "Gateway shutdown (final-cleanup)",
+        }])
+        self.assertEqual(retrying["running"][0]["id"], "cacaa7f4ab75")
+        self.assertEqual(retrying["failed"], [])
         self.assertEqual(pack["due"][0]["name"], "form-pipeline-health")
         self.assertEqual(pack["just_finished"][0]["name"], "indexation-patrol")
         self.assertIn("Now running", pack["live_story"])
@@ -394,6 +406,77 @@ class TestJobIdValidation(unittest.TestCase):
         finally:
             finish("live-test-1")
         self.assertFalse(any(row["id"] == "live-test-1" for row in snapshot()))
+
+    def test_apply_cron_status_overlay_and_skip(self):
+        from openbot.hermes import SAA_CRON_SKIP, apply_cron_status_overlay, saa_live_cron_run
+
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            cron = home / "cron"
+            cron.mkdir()
+            (cron / "jobs.json").write_text(json.dumps({
+                "jobs": [{
+                    "id": "1172c8911e5d",
+                    "name": "weekly-war-room",
+                    "last_status": "error",
+                    "last_error": "Gateway shutdown",
+                    "prompt": "keep",
+                }]
+            }), encoding="utf-8")
+            n = apply_cron_status_overlay(home, [{
+                "id": "1172c8911e5d",
+                "last_status": "ok",
+                "last_error": None,
+                "last_run_at": "2026-09-09T16:00:00+00:00",
+            }])
+            self.assertEqual(n, 1)
+            jobs = json.loads((cron / "jobs.json").read_text(encoding="utf-8"))["jobs"]
+            self.assertEqual(jobs[0]["last_status"], "ok")
+            self.assertEqual(jobs[0]["prompt"], "keep")
+        self.assertIn("7bdaa3b6fb9e", SAA_CRON_SKIP)
+        skipped = saa_live_cron_run("7bdaa3b6fb9e")
+        self.assertFalse(skipped["ok"])
+        self.assertEqual(skipped["text"], "skipped")
+        from openbot.hermes import SAA_CRON_PIN_GO, pin_saa_live_jobs_json, saa_ssh_payload
+        payload = saa_ssh_payload(["python3", "-c", "import json; print(1)"])
+        self.assertIn("python3", payload)
+        self.assertIn("print(1)", payload)
+        self.assertTrue("'" in payload)
+        data = {
+            "jobs": [
+                {"id": "dadd8574d37f", "model": None, "provider": None, "deliver": "origin", "prompt": "keep"},
+                {"id": "7cb2a72c1cc8", "model": "deepseek-v4-flash", "provider": "opencode-go", "deliver": "origin"},
+            ]
+        }
+        changed = pin_saa_live_jobs_json(data)
+        self.assertEqual(changed, ["dadd8574d37f"])
+        self.assertEqual(data["jobs"][0]["model"], "deepseek-v4-flash")
+        self.assertEqual(data["jobs"][0]["provider"], "opencode-go")
+        self.assertEqual(data["jobs"][0]["deliver"], "origin")
+        self.assertEqual(data["jobs"][0]["prompt"], "keep")
+        self.assertIn("dadd8574d37f", SAA_CRON_PIN_GO)
+        from openbot.hermes import nudge_saa_job_due, saa_catchup_next
+
+        row = {
+            "id": "38041c7a6501",
+            "enabled": True,
+            "state": "scheduled",
+            "deliver": "origin",
+            "prompt": "keep",
+            "last_status": "error",
+            "fire_claim": {"at": "x"},
+        }
+        blob = {"jobs": [row]}
+        self.assertTrue(nudge_saa_job_due(blob, "38041c7a6501", "2026-09-09T20:00:00+00:00"))
+        self.assertEqual(row["next_run_at"], "2026-09-09T20:00:00+00:00")
+        self.assertIsNone(row["fire_claim"])
+        self.assertEqual(row["deliver"], "origin")
+        self.assertEqual(row["prompt"], "keep")
+        self.assertFalse(nudge_saa_job_due(blob, "7bdaa3b6fb9e", "2026-09-09T20:00:00+00:00"))
+        nxt = saa_catchup_next([{"id": "38041c7a6501", "last_status": "error", "state": "scheduled", "enabled": True}])
+        self.assertEqual(nxt, "38041c7a6501")
+        caught = saa_catchup_next([{"id": "38041c7a6501", "last_status": "ok", "state": "scheduled", "enabled": True}])
+        self.assertEqual(caught, "77bfe1c9f7a1")
 
 
 if __name__ == "__main__":

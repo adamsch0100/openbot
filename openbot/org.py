@@ -637,7 +637,30 @@ def project_id_for_folder(folder: str | None) -> str:
     for row in (_load_saved().get("projects") or []):
         if not isinstance(row, dict):
             continue
-        work = str(row.get("work_dir") or "").strip()
+        for key in ("folder", "work_dir"):
+            work = str(row.get(key) or "").strip()
+            if not work:
+                continue
+            try:
+                if Path(work).expanduser().resolve() == target:
+                    return str(row.get("id") or "")
+            except OSError:
+                continue
+    return ""
+
+
+def project_id_for_hermes_home(home: str | None) -> str:
+    raw = str(home or "").strip()
+    if not raw:
+        return ""
+    try:
+        target = Path(raw).expanduser().resolve()
+    except OSError:
+        return ""
+    for row in (_load_saved().get("projects") or []):
+        if not isinstance(row, dict):
+            continue
+        work = str(row.get("hermes_home") or "").strip()
         if not work:
             continue
         try:
@@ -801,7 +824,6 @@ def staff_status_reply() -> str:
         if stuck and stuck != "—":
             bit += f" · blocked {stuck}"
         lines.append(bit)
-    lines.append(wiring_brief(None))
     return "\n".join(lines).strip()
 
 

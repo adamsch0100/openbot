@@ -305,18 +305,9 @@ def _effective_mcp_github(tools: dict | None) -> bool:
 
 
 def _prefer_accounts(tools: dict | None) -> list[str]:
-    prefer = []
-    blob = tools or {}
-    account_id = str(blob.get("account_id") or "").strip()
-    if not account_id:
-        account_id = str(load_settings().get("profile_account_id") or "").strip()
-    if account_id:
-        prefer.append(account_id)
-    for item in blob.get("fallback") or []:
-        value = str(item or "").strip()
-        if value:
-            prefer.append(value)
-    return prefer
+    from .keyring import prefer_account_ids
+
+    return prefer_account_ids(tools)
 
 
 def _activate(engine: str, tools: dict | None, model: str | None = None, force_go: bool = False) -> str | None:
@@ -425,7 +416,6 @@ def _cos_chat_fallback(project_id: str | None, worker_id: str | None, message: s
             read_project_index(project_id) if project_id else read_index(),
             message,
             node_label(project_id, worker_id) or "Chief of Staff",
-            wiring=wiring_brief(project_id),
             live=_live_status_line(project_id),
         )
     else:
@@ -857,8 +847,6 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
             lines.append(f"Last: {last}")
         if blocker and blocker != "—":
             lines.append(f"Blocked: {blocker}")
-        if wiring:
-            lines.append(wiring)
         return "\n".join(lines).strip() or now
     if name in {"OpenBot", "Chief of Staff"}:
         return "Chief of Staff. Ask what's going on across the org, or open a CEO and talk to them directly."
@@ -936,6 +924,79 @@ def _capture_login_wall(text: str, page_url: str | None = None) -> tuple[bool, s
     return True, url
 
 
+def need_choices(row: dict) -> list[dict]:
+    """Next clicks for this wait. Accept/Reject only when that is the gate."""
+    kind = str(row.get("kind") or "")
+    if kind == "login":
+        out = []
+        if str(row.get("url") or "").strip():
+            out.append({"id": "open_page", "label": "Open page", "url": str(row.get("url") or "")})
+        for login in row.get("logins") or []:
+            if not isinstance(login, dict):
+                continue
+            lid = str(login.get("id") or "")
+            if not lid:
+                continue
+            name = str(login.get("label") or login.get("username") or "saved login")
+            out.append({"id": "use_login", "label": f"Approve {name}", "login_id": lid})
+        out.append({"id": "logged_in", "label": "I already logged in"})
+        out.append({"id": "open", "label": "Type a login"})
+        return out
+    if kind == "diff":
+        return [
+            {"id": "accept", "label": "Accept"},
+            {"id": "reject", "label": "Reject"},
+            {"id": "open", "label": "See diff"},
+        ]
+    if kind == "gate":
+        return [
+            {"id": "allow", "label": "Allow"},
+            {"id": "deny", "label": "Deny"},
+        ]
+    if kind == "expired":
+        return [{"id": "dismiss", "label": "Dismiss"}]
+    if kind == "continue":
+        return [{"id": "continue", "label": "Continue"}]
+    if kind == "brief":
+        return [{"id": "open", "label": "Open chat"}]
+    return [{"id": "open", "label": "Open"}]
+
+
+def job_choices(job: dict) -> list[dict]:
+    """Same next clicks as the chat card for this result. Accept/Reject only for diffs."""
+    if not isinstance(job, dict):
+        return []
+    if job.get("login_wall"):
+        logins = job.get("logins") if isinstance(job.get("logins"), list) else None
+        pid = job.get("project_id") if isinstance(job.get("project_id"), str) else None
+        return need_choices(
+            {
+                "kind": "login",
+                "url": str(job.get("url") or ""),
+                "logins": logins if logins is not None else public_logins(pid),
+            }
+        )
+    if job.get("diff_pending"):
+        return need_choices({"kind": "diff"})
+    if job.get("keep_going") and not job.get("stopped"):
+        label = "Continue"
+        step = job.get("step_count")
+        total = job.get("total_steps")
+        if step and total:
+            label = f"Continue ({step}/{total})"
+        return [{"id": "continue", "label": label}]
+    status = str(job.get("status") or job.get("last_status") or "").lower()
+    cron_id = str(job.get("cron_id") or "")
+    if job.get("cron") or cron_id:
+        if "error" in status or "fail" in status:
+            return [
+                {"id": "retry", "label": "Retry on live Hermes", "cron_id": cron_id},
+                {"id": "schedule", "label": "Open schedule", "cron_id": cron_id},
+            ]
+        return [{"id": "schedule", "label": "Open schedule", "cron_id": cron_id}]
+    return []
+
+
 def pending_approvals(limit: int = 12) -> list[dict]:
     jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
     latest: dict[str, dict] = {}
@@ -957,25 +1018,30 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         who = names.get(pid) or "this CEO"
         if job.get("login_wall"):
             kind = "login"
-            label = f"{who}: a site asked for a login. Open this CEO, approve the saved login, then continue."
+            label = f"{who}: a site asked for a login."
         elif job.get("diff_pending"):
             kind = "diff"
-            label = f"{who}: a code change is waiting. Open chat and Accept to keep it or Reject to undo."
+            label = f"{who}: a code change is waiting."
+        elif job.get("keep_going") and not job.get("stopped"):
+            kind = "continue"
+            label = f"{who}: ready for the next step."
         else:
             continue
-        out.append(
-            {
-                "id": str(job.get("id") or ""),
-                "kind": kind,
-                "name": who,
-                "label": label,
-                "project_id": pid,
-                "engine": str(job.get("engine") or "board"),
-                "preset": str(job.get("preset") or ""),
-                "url": str(job.get("url") or ""),
-                "at": str(job.get("at") or ""),
-            }
-        )
+        item = {
+            "id": str(job.get("id") or ""),
+            "kind": kind,
+            "name": who,
+            "label": label,
+            "project_id": pid,
+            "engine": str(job.get("engine") or "board"),
+            "preset": str(job.get("preset") or ""),
+            "url": str(job.get("url") or ""),
+            "at": str(job.get("at") or ""),
+        }
+        if kind == "login":
+            item["logins"] = public_logins(pid or None)
+        item["choices"] = need_choices(item)
+        out.append(item)
         if len(out) >= limit:
             break
     have = {str(row.get("project_id") or "") for row in out}
@@ -999,19 +1065,19 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             if stuck
             else f"{who} needs you: {ask[:140]}"
         )
-        out.append(
-            {
-                "id": f"brief-{pid}",
-                "kind": "brief",
-                "name": who,
-                "label": label,
-                "project_id": pid,
-                "engine": "board",
-                "preset": "cos",
-                "url": "",
-                "at": "",
-            }
-        )
+        brief = {
+            "id": f"brief-{pid}",
+            "kind": "brief",
+            "name": who,
+            "label": label,
+            "project_id": pid,
+            "engine": "board",
+            "preset": "cos",
+            "url": "",
+            "at": "",
+        }
+        brief["choices"] = need_choices(brief)
+        out.append(brief)
         have.add(pid)
     try:
         from .bus import list_approvals
@@ -1019,36 +1085,36 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         for row in list_approvals("pending"):
             if len(out) >= limit:
                 break
-            out.append(
-                {
-                    "id": str(row.get("id") or ""),
-                    "kind": "gate",
-                    "label": "Something is waiting for your yes before it can continue.",
-                    "project_id": str(row.get("project_id") or ""),
-                    "engine": "board",
-                    "preset": "ops",
-                    "url": "",
-                    "at": str(row.get("created_at") or ""),
-                    "approval_id": str(row.get("id") or ""),
-                    "job_id": str(row.get("job_id") or ""),
-                }
-            )
+            gate = {
+                "id": str(row.get("id") or ""),
+                "kind": "gate",
+                "label": "Something is waiting for your yes before it can continue.",
+                "project_id": str(row.get("project_id") or ""),
+                "engine": "board",
+                "preset": "ops",
+                "url": "",
+                "at": str(row.get("created_at") or ""),
+                "approval_id": str(row.get("id") or ""),
+                "job_id": str(row.get("job_id") or ""),
+            }
+            gate["choices"] = need_choices(gate)
+            out.append(gate)
         for row in list_approvals("expired")[:4]:
             if len(out) >= limit:
                 break
-            out.append(
-                {
-                    "id": str(row.get("id") or ""),
-                    "kind": "expired",
-                    "label": "A yes/no window expired. It did not auto-approve. Dismiss it.",
-                    "project_id": str(row.get("project_id") or ""),
-                    "engine": "board",
-                    "preset": "ops",
-                    "url": "",
-                    "at": str(row.get("expires_at") or ""),
-                    "approval_id": str(row.get("id") or ""),
-                }
-            )
+            expired = {
+                "id": str(row.get("id") or ""),
+                "kind": "expired",
+                "label": "A yes/no window expired. It did not auto-approve. Dismiss it.",
+                "project_id": str(row.get("project_id") or ""),
+                "engine": "board",
+                "preset": "ops",
+                "url": "",
+                "at": str(row.get("expires_at") or ""),
+                "approval_id": str(row.get("id") or ""),
+            }
+            expired["choices"] = need_choices(expired)
+            out.append(expired)
     except Exception:
         pass
     return out
@@ -1670,7 +1736,6 @@ def _handle_preset(
                     index_text,
                     message,
                     node_label(project_id, worker_id) or "Chief of Staff",
-                    wiring=wiring_brief(project_id),
                     live=_live_status_line(project_id),
                 )
     elif chosen == "builder":
@@ -2200,6 +2265,10 @@ def public_job(receipt: dict | None) -> dict:
         out["text"] = sanitize_job_text(out.get("text"))
     if "message" in out:
         out["message"] = redact_chat_login(out.get("message") or "")
+    if out.get("login_wall") and not isinstance(out.get("logins"), list):
+        pid = out.get("project_id") if isinstance(out.get("project_id"), str) else None
+        out["logins"] = public_logins(pid)
+    out["choices"] = job_choices(out)
     return out
 
 

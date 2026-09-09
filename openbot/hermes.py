@@ -6,6 +6,8 @@ import json
 import os
 import re
 import select
+import shlex
+import shutil
 import subprocess
 import tempfile
 import time
@@ -67,8 +69,9 @@ TOOL_MARKUP = re.compile(
     re.I,
 )
 PACKET_LINE = re.compile(
-    r"^(You are the |You report to Chief of Staff|The (human )?operator |"
-    r"You dispatch |Your job is triage|Before doing substantial|"
+    r"^(You are the |You are Chief of Staff|You report to Chief of Staff|"
+    r"The (human )?operator |You dispatch |Ask, and you dispatch|"
+    r"Your job is triage|Before doing substantial|"
     r"Do not hire a Bot|Reply like a person|You do not edit files|"
     r"No RESULT\.|Do not mention Now|Do not print session_id|"
     r"If RECENT TELEGRAM|Never ask the operator to paste|"
@@ -78,7 +81,10 @@ PACKET_LINE = re.compile(
     r"Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|"
     r"Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
     r"OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|"
-    r"The operator is in OpenBot Chat|Specialist lanes execute)",
+    r"The operator is in OpenBot Chat|The operator can also open|"
+    r"Specialist lanes execute|Code: OpenCode in |Hermes: |"
+    r"Bus: org/projects/|Telegram: |"
+    r".+ CEO — reports to Chief of Staff)",
     re.I,
 )
 META_JUNK = re.compile(
@@ -203,21 +209,18 @@ def _human_hermes_text(text: str) -> str:
     if _status_only(cleaned):
         return cleaned
     kept: list[str] = []
-    started = False
     skipping = False
     for line in cleaned.splitlines():
         stripped = line.strip()
-        if not started:
-            if PACKET_LINE.match(stripped):
-                skipping = bool(re.match(r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):", stripped, re.I))
-                continue
-            if skipping:
-                if not stripped:
-                    skipping = False
-                continue
+        if PACKET_LINE.match(stripped):
+            skipping = bool(re.match(r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):", stripped, re.I))
+            continue
+        if skipping:
             if not stripped:
-                continue
-        started = True
+                skipping = False
+            continue
+        if not stripped and not kept:
+            continue
         kept.append(line)
     return "\n".join(kept).strip()
 
@@ -883,6 +886,399 @@ def cron_run(job_id: str, home: str | Path | None = None) -> dict:
     return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
 
 
+SAA_LIVE_PROJECT = os.environ.get("OPENBOT_SAA_HERMES_PROJECT", "87dc0fc7-9858-4e63-8c89-d9af0533b470")
+SAA_LIVE_SERVICE = os.environ.get("OPENBOT_SAA_HERMES_SERVICE", "SAA Homes Hermes")
+SAA_LIVE_ENV = os.environ.get("OPENBOT_SAA_HERMES_ENV", "production")
+SAA_CRON_SKIP = frozenset({
+    "7bdaa3b6fb9e",  # conversion-surge
+    "1ee83ff221a4",  # competitor-content-watch
+    "0f3bc267a48e",  # city-audit-batch-4
+})
+SAA_GO_MODEL = "deepseek-v4-flash"
+SAA_GO_PROVIDER = "opencode-go"
+SAA_CRON_PIN_GO = frozenset({
+    "dadd8574d37f",  # citation-submission-layer1
+    "72d59f31d8d4",  # batch-2-citystatsband-blogs
+    "2148be2f2516",  # erie-video-blog-strengthen
+    "a68690276a73",  # batch1-tier-s-remaining-fixes
+})
+# Gateway-owned catch-up only. Do not SSH-fire. Skip jobs stay paused.
+SAA_CATCHUP_IDS = (
+    "38041c7a6501",  # geo-citation-audit
+    "77bfe1c9f7a1",  # content-gap-offense
+    "dadd8574d37f",  # citation-submission-layer1
+    "3e0cbb9af8f6",  # keyword-opportunity-engine
+    "6fc2243d4eb1",  # city-audit-batch-2
+    "b5896a99b0a7",  # monthly-market-blog
+    "56999ea3827f",  # monthly-market-digital-press
+    "72d59f31d8d4",  # batch-2-citystatsband-blogs
+    "2148be2f2516",  # erie-video-blog-strengthen
+    "a68690276a73",  # batch1-tier-s-remaining-fixes
+    "2eb1f17f9599",  # city-audit-batch-3
+)
+_SAA_OVERLAY_KEYS = (
+    "last_status",
+    "last_error",
+    "last_run_at",
+    "next_run_at",
+    "fire_claim",
+    "state",
+    "enabled",
+)
+
+
+def railway_ssh_identity() -> str:
+    return os.environ.get("OPENBOT_RAILWAY_SSH_IDENTITY") or str(Path.home() / ".ssh" / "id_ed25519_railway")
+
+
+def apply_cron_status_overlay(home: str | Path | None, overlay: list[dict]) -> int:
+    """Copy live last_status fields onto a board home. Does not rewrite prompts."""
+    if not home:
+        return 0
+    path = Path(home) / "cron" / "jobs.json"
+    if not path.is_file():
+        return 0
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return 0
+    by_id = {
+        str(row.get("id") or ""): row
+        for row in overlay
+        if isinstance(row, dict) and row.get("id")
+    }
+    updated = 0
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        src = by_id.get(str(job.get("id") or ""))
+        if not src:
+            continue
+        for key in _SAA_OVERLAY_KEYS:
+            if key in src:
+                job[key] = src.get(key)
+        updated += 1
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return updated
+
+
+def railway_cmd() -> list[str]:
+    found = shutil.which("railway")
+    if found:
+        return [found]
+    js = Path.home() / "AppData" / "Roaming" / "npm" / "node_modules" / "@railway" / "cli" / "bin" / "railway.js"
+    if js.is_file():
+        return ["node", str(js)]
+    return ["railway"]
+
+
+def saa_ssh_payload(remote: list[str]) -> str:
+    """Quote argv so Railway's `bash -c <joined>` keeps python -c / redirects intact."""
+    return " ".join(shlex.quote(part) for part in remote)
+
+
+def saa_live_ssh(
+    remote: list[str],
+    timeout: int = 30,
+    stdin: str | None = None,
+) -> subprocess.CompletedProcess:
+    identity = railway_ssh_identity()
+    cmd = [
+        *railway_cmd(),
+        "ssh",
+        "--identity-file",
+        identity,
+        "--project",
+        SAA_LIVE_PROJECT,
+        "--environment",
+        SAA_LIVE_ENV,
+        "--service",
+        SAA_LIVE_SERVICE,
+        "--",
+        saa_ssh_payload(remote),
+    ]
+    payload = stdin
+    if payload is not None:
+        payload = payload.replace("\r\n", "\n").replace("\r", "\n")
+    ran = subprocess.run(
+        cmd,
+        capture_output=True,
+        timeout=timeout,
+        input=None if payload is None else payload.encode("utf-8"),
+    )
+    return subprocess.CompletedProcess(
+        ran.args,
+        ran.returncode,
+        (ran.stdout or b"").decode("utf-8", "replace"),
+        (ran.stderr or b"").decode("utf-8", "replace"),
+    )
+
+
+def dump_saa_live_cron_overlay() -> list[dict]:
+    ran = saa_live_ssh(["cat", "/opt/data/cron/jobs.json"], timeout=45)
+    if ran.returncode != 0:
+        return []
+    text = ran.stdout or ""
+    start = text.find("{")
+    if start < 0:
+        return []
+    try:
+        data = json.loads(text[start:])
+    except json.JSONDecodeError:
+        return []
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return []
+    keys = ("id",) + _SAA_OVERLAY_KEYS
+    out = []
+    for job in jobs:
+        if not isinstance(job, dict) or not job.get("id"):
+            continue
+        out.append({key: job.get(key) for key in keys})
+    return out
+
+
+def sync_saa_live_crons(home: str | Path | None) -> dict:
+    overlay = dump_saa_live_cron_overlay()
+    if not overlay:
+        return {"ok": False, "updated": 0, "error": "live overlay empty"}
+    return {"ok": True, "updated": apply_cron_status_overlay(home, overlay), "live": True}
+
+
+def overlay_saa_live_background(interval: int | None = None) -> None:
+    """Keep the SAA Homes board copy of jobs.json in step with live Hermes."""
+    delay = interval if interval is not None else int(os.environ.get("OPENBOT_SAA_OVERLAY_INTERVAL", "12") or "12")
+    time.sleep(3)
+    while True:
+        try:
+            from .org import project_tools
+
+            home = str((project_tools("saa-homes") or {}).get("hermes_home") or "").strip()
+            if home:
+                sync_saa_live_crons(home)
+        except Exception as err:
+            print(f"[openbot] saa live overlay: {err}", flush=True)
+        time.sleep(max(8, delay))
+
+
+def saa_live_cron_run(job_id: str) -> dict:
+    """Start a job on live Railway SAA Hermes, detached from the SSH session."""
+    jid = str(job_id or "").strip()
+    if not is_valid_job_id(jid):
+        return {"ok": False, "code": 400, "text": "bad job id"}
+    if jid in SAA_CRON_SKIP:
+        return {"ok": False, "code": 400, "text": "skipped", "id": jid}
+    script = (
+        "#!/bin/sh\n"
+        f"setsid -f hermes cron run --accept-hooks {jid} "
+        f">/tmp/cron-{jid}.log 2>&1 < /dev/null\n"
+        "echo QUEUED\n"
+        "exit 0\n"
+    )
+    path = f"/tmp/fire-{jid}.sh"
+    try:
+        wrote = saa_live_ssh(["tee", path], timeout=20, stdin=script)
+        if wrote.returncode != 0:
+            err = ((wrote.stderr or "") + "\n" + (wrote.stdout or "")).strip()
+            return {
+                "ok": False,
+                "code": wrote.returncode,
+                "text": err[-400:] or "tee failed",
+                "id": jid,
+            }
+        ran = saa_live_ssh(["sh", path], timeout=20)
+    except (subprocess.TimeoutExpired, OSError) as err:
+        return {"ok": False, "code": 1, "text": str(err)[:200], "id": jid}
+    out = ((ran.stdout or "") + "\n" + (ran.stderr or "")).strip()
+    queued = "QUEUED" in out
+    return {
+        "ok": ran.returncode == 0 and queued,
+        "code": ran.returncode,
+        "text": out[-400:] or "(no output)",
+        "id": jid,
+        "live": True,
+    }
+
+
+def pin_saa_live_jobs_json(data: dict) -> list[str]:
+    """Pin leftover empty-model jobs to OpenCode Go flash. Does not touch prompts or Telegram deliver."""
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return []
+    changed: list[str] = []
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        jid = str(job.get("id") or "")
+        if jid not in SAA_CRON_PIN_GO:
+            continue
+        if str(job.get("model") or "") and str(job.get("provider") or ""):
+            continue
+        job["model"] = SAA_GO_MODEL
+        job["provider"] = SAA_GO_PROVIDER
+        changed.append(jid)
+    return changed
+
+
+def pause_saa_live_skips() -> dict:
+    """Pause spend/skip jobs on live Railway. Does not migrate Telegram off origin."""
+    paused: list[str] = []
+    errors: list[str] = []
+    for jid in sorted(SAA_CRON_SKIP):
+        try:
+            ran = saa_live_ssh(["hermes", "cron", "pause", jid], timeout=40)
+        except (subprocess.TimeoutExpired, OSError) as err:
+            errors.append(f"{jid}:{err}")
+            continue
+        if ran.returncode == 0:
+            paused.append(jid)
+        else:
+            errors.append(jid)
+    return {"ok": not errors, "paused": paused, "errors": errors, "live": True}
+
+
+def pin_saa_live_go_jobs() -> dict:
+    """Write Go flash onto leftover empty-model jobs in live jobs.json."""
+    script = (
+        "import json\n"
+        "path='/opt/data/cron/jobs.json'\n"
+        "pins=" + json.dumps(sorted(SAA_CRON_PIN_GO)) + "\n"
+        "model=" + json.dumps(SAA_GO_MODEL) + "\n"
+        "provider=" + json.dumps(SAA_GO_PROVIDER) + "\n"
+        "data=json.loads(open(path,encoding='utf-8').read())\n"
+        "changed=[]\n"
+        "for job in data.get('jobs') or []:\n"
+        "    jid=str(job.get('id') or '')\n"
+        "    if jid not in pins:\n"
+        "        continue\n"
+        "    if str(job.get('model') or '') and str(job.get('provider') or ''):\n"
+        "        continue\n"
+        "    job['model']=model\n"
+        "    job['provider']=provider\n"
+        "    changed.append(jid)\n"
+        "open(path,'w',encoding='utf-8').write(json.dumps(data, indent=2)+'\\n')\n"
+        "print('PINNED', ','.join(changed))\n"
+    )
+    path = "/tmp/pin-saa-go.py"
+    try:
+        wrote = saa_live_ssh(["tee", path], timeout=20, stdin=script)
+        if wrote.returncode != 0:
+            return {"ok": False, "pinned": [], "text": "tee failed", "live": True}
+        ran = saa_live_ssh(["python3", path], timeout=40)
+    except (subprocess.TimeoutExpired, OSError) as err:
+        return {"ok": False, "pinned": [], "text": str(err)[:200], "live": True}
+    out = ((ran.stdout or "") + "\n" + (ran.stderr or "")).strip()
+    pinned = []
+    if "PINNED" in out:
+        rest = out.split("PINNED", 1)[-1].strip()
+        pinned = [part for part in rest.split(",") if part]
+    return {
+        "ok": ran.returncode == 0 and "PINNED" in out,
+        "pinned": pinned,
+        "text": out[-400:],
+        "live": True,
+    }
+
+
+def align_saa_live_cron_config() -> dict:
+    """Pause skip jobs and pin leftover empty-model jobs on live Hermes. No redeploy."""
+    paused = pause_saa_live_skips()
+    pinned = pin_saa_live_go_jobs()
+    return {
+        "ok": bool(paused.get("ok") and pinned.get("ok")),
+        "paused": paused.get("paused") or [],
+        "pinned": pinned.get("pinned") or [],
+        "live": True,
+    }
+
+
+def nudge_saa_job_due(data: dict, job_id: str, when: str) -> bool:
+    """Point one live job at now so the gateway scheduler owns it. Does not touch prompts or deliver."""
+    jid = str(job_id or "").strip()
+    if not jid or jid in SAA_CRON_SKIP:
+        return False
+    jobs = data.get("jobs") if isinstance(data, dict) else None
+    if not isinstance(jobs, list):
+        return False
+    for job in jobs:
+        if not isinstance(job, dict) or str(job.get("id") or "") != jid:
+            continue
+        if job.get("enabled") is False or str(job.get("state") or "") == "paused":
+            return False
+        job["next_run_at"] = when
+        job["fire_claim"] = None
+        return True
+    return False
+
+
+def saa_live_nudge_due(job_id: str) -> dict:
+    """Ask the live gateway to run this job on the next tick. Do not hermes cron run over SSH."""
+    jid = str(job_id or "").strip()
+    if not is_valid_job_id(jid):
+        return {"ok": False, "code": 400, "text": "bad job id"}
+    if jid in SAA_CRON_SKIP:
+        return {"ok": False, "code": 400, "text": "skipped", "id": jid}
+    when = datetime.now(timezone.utc).isoformat()
+    script = (
+        "import json\n"
+        "path='/opt/data/cron/jobs.json'\n"
+        "jid=" + json.dumps(jid) + "\n"
+        "when=" + json.dumps(when) + "\n"
+        "skip=" + json.dumps(sorted(SAA_CRON_SKIP)) + "\n"
+        "data=json.loads(open(path,encoding='utf-8').read())\n"
+        "ok=False\n"
+        "for job in data.get('jobs') or []:\n"
+        "    if str(job.get('id') or '')!=jid:\n"
+        "        continue\n"
+        "    if jid in skip or job.get('enabled') is False or str(job.get('state') or '')=='paused':\n"
+        "        break\n"
+        "    job['next_run_at']=when\n"
+        "    job['fire_claim']=None\n"
+        "    ok=True\n"
+        "    break\n"
+        "if ok:\n"
+        "    open(path,'w',encoding='utf-8').write(json.dumps(data, indent=2)+'\\n')\n"
+        "print('NUDGED' if ok else 'SKIP')\n"
+    )
+    path = f"/tmp/nudge-{jid}.py"
+    try:
+        wrote = saa_live_ssh(["tee", path], timeout=20, stdin=script)
+        if wrote.returncode != 0:
+            return {"ok": False, "code": wrote.returncode, "text": "tee failed", "id": jid}
+        ran = saa_live_ssh(["python3", path], timeout=40)
+    except (subprocess.TimeoutExpired, OSError) as err:
+        return {"ok": False, "code": 1, "text": str(err)[:200], "id": jid}
+    out = ((ran.stdout or "") + "\n" + (ran.stderr or "")).strip()
+    return {
+        "ok": ran.returncode == 0 and "NUDGED" in out,
+        "code": ran.returncode,
+        "text": out[-400:] or "(no output)",
+        "id": jid,
+        "live": True,
+        "due": when,
+    }
+
+
+def saa_catchup_next(overlay: list[dict]) -> str:
+    """Next leftover job the live gateway should own. Empty if caught up or a run is in flight."""
+    by_id = {str(row.get("id") or ""): row for row in overlay if isinstance(row, dict)}
+    for jid in SAA_CATCHUP_IDS:
+        if jid in SAA_CRON_SKIP:
+            continue
+        row = by_id.get(jid) or {}
+        if row.get("enabled") is False or str(row.get("state") or "") == "paused":
+            continue
+        if _claim_is_live(row):
+            return ""
+        status = str(row.get("last_status") or "").strip().lower()
+        if status in {"", "never", "error", "fail", "failed"}:
+            return jid
+    return ""
+
+
 def _cron_is_prompt_dump(text: str) -> bool:
     raw = str(text or "")
     return bool(
@@ -982,6 +1378,29 @@ _CRON_PAUSED = re.compile(r"paused|disabled", re.I)
 _CRON_DONE = re.compile(r"^(ok|error|fail|failed|unknown|skipped|success)$", re.I)
 
 
+def _claim_at(row: dict) -> datetime | None:
+    claim = row.get("fire_claim")
+    if isinstance(claim, dict):
+        return _parse_cron_when(str(claim.get("at") or ""))
+    return None
+
+
+def _claim_is_live(row: dict) -> bool:
+    """A fire_claim newer than last_run_at is a retry in flight. last_status stays the previous run."""
+    if row.get("enabled") is False:
+        return False
+    claim = row.get("fire_claim")
+    if not claim and not row.get("claimed"):
+        return False
+    claim_at = _claim_at(row)
+    last = _parse_cron_when(str(row.get("last_run_at") or ""))
+    if claim_at and last:
+        return claim_at > last
+    if claim_at and last is None:
+        return True
+    return False
+
+
 def _cron_digest_item(row: dict, enabled: bool) -> dict:
     report = re.sub(r"\s+", " ", str(row.get("last_result") or "")).strip()
     return {
@@ -1000,6 +1419,8 @@ def _cron_digest_item(row: dict, enabled: bool) -> dict:
         "model": str(row.get("model") or ""),
         "provider": str(row.get("provider") or ""),
         "enabled": enabled,
+        "live": _cron_is_running(row),
+        "fire_claim": row.get("fire_claim") if isinstance(row.get("fire_claim"), dict) else None,
     }
 
 
@@ -1009,12 +1430,14 @@ def _cron_is_running(row: dict) -> bool:
     state = str(row.get("state") or "")
     if _CRON_PAUSED.search(state):
         return False
+    if _claim_is_live(row):
+        return True
     status = str(row.get("last_status") or "").strip()
     if _CRON_DONE.match(status):
         return False
     if _CRON_RUNNING.search(state) or _CRON_RUNNING.search(status):
         return True
-    return bool(row.get("claimed") or row.get("fire_claim"))
+    return bool(row.get("claimed"))
 
 
 def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_runs: list[dict] | None = None) -> dict:
@@ -1067,7 +1490,7 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
             elif nxt_when <= now and next_up is None:
                 next_up = item
                 next_up_when = nxt_when
-        if on and re.search(r"error|fail", status):
+        if on and re.search(r"error|fail", status) and not live:
             failed.append(item)
         elif fresh and re.search(r"healthy|\[silent\]", f"{row.get('outcome') or ''} {row.get('last_result') or ''}", re.I):
             healthy.append(item)
@@ -1230,6 +1653,8 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
             outcome, nxt = "", ""
         sched = row.get("schedule") if isinstance(row.get("schedule"), dict) else {}
         name = str(row.get("name") or jid)
+        live_now = _cron_is_running(row)
+        claim = row.get("fire_claim") if isinstance(row.get("fire_claim"), dict) else None
         out.append(
             {
                 "id": jid,
@@ -1238,7 +1663,9 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
                 "schedule": str(row.get("schedule_display") or sched.get("expr") or ""),
                 "enabled": row.get("enabled") is not False,
                 "state": str(row.get("state") or ""),
-                "claimed": bool(row.get("fire_claim")) and not bool(_CRON_DONE.match(status)),
+                "claimed": live_now,
+                "live": live_now,
+                "fire_claim": claim,
                 "last_run_at": str(row.get("last_run_at") or ""),
                 "next_run_at": str(row.get("next_run_at") or ""),
                 "last_status": status,
