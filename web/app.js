@@ -245,46 +245,143 @@ function escapeHtml(s) {
   }[c]));
 }
 
+const PACKET_LINE = /^(You are the |You report to Chief of Staff|The (human )?operator |You dispatch |Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in OpenBot Chat|Specialist lanes execute|You are Chief of Staff on a local)/i;
+
+function statusOnly(text) {
+  const rows = String(text || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  return rows.length > 0 && rows.every((line) => /^(Now|Last|Next|Blocker):/i.test(line));
+}
+
+function stripPacketEcho(text) {
+  let cleaned = String(text || "");
+  const response = cleaned.match(/^##\s*Response\s*$/im);
+  if (response) {
+    const body = cleaned.slice(cleaned.search(/^##\s*Response\s*$/im)).replace(/^##\s*Response\s*/i, "").trim();
+    if (body && !/^\[SILENT\]/i.test(body)) cleaned = body;
+  }
+  const resultAt = cleaned.search(/^RESULT(?:\s*\([^)]*\))?\s*$/im);
+  if (resultAt >= 0) {
+    let body = cleaned.slice(resultAt).replace(/^RESULT(?:\s*\([^)]*\))?\s*/i, "").trim();
+    const handoffAt = body.search(/^HANDOFF\b/im);
+    if (handoffAt >= 0) body = body.slice(0, handoffAt).trim();
+    if (body) cleaned = body;
+  }
+  if (statusOnly(cleaned)) return cleaned;
+  const kept = [];
+  let started = false;
+  let skipping = false;
+  cleaned.split("\n").forEach((line) => {
+    const stripped = line.trim();
+    if (!started) {
+      if (PACKET_LINE.test(stripped)) {
+        skipping = /^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):/i.test(stripped);
+        return;
+      }
+      if (skipping) {
+        if (!stripped) skipping = false;
+        return;
+      }
+      if (!stripped) return;
+    }
+    started = true;
+    kept.push(line);
+  });
+  return kept.join("\n").trim();
+}
+
+function splitHandoff(text) {
+  const raw = String(text || "");
+  const at = raw.search(/^HANDOFF\b/im);
+  if (at < 0) return { answer: raw.trim(), handoff: "" };
+  return { answer: raw.slice(0, at).trim(), handoff: raw.slice(at).trim() };
+}
+
 function cleanBotText(text) {
   if (!text) return "";
   let cleaned = String(text);
-  
-  // Strip Meta contributor tier MULTILINE blocks: from !!! CONTRIBUTOR or "This is Meta's contributor tier"
-  // through the entire paragraph including pricing URL, confidential warning, and "standard v" mention.
-  // Use [\s\S]*? for non-greedy multiline match, stop at double newline or "Now:" INDEX marker.
+
   cleaned = cleaned.replace(/!!!?\s*CONTRIBUTOR\s+TIER[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
   cleaned = cleaned.replace(/This\s+is\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
-  
-  // Strip mid-line CONTRIBUTOR mentions (INDEX Last: lines)
   cleaned = cleaned.replace(/CONTRIBUTOR\s+TIER\s*—\s*TRAINS?\s+ON\s+YOUR\s+DATA/gi, "");
-  
-  // Strip orphan fragments that survived multiline removal
   cleaned = cleaned.replace(/prompts\s+and\s+completions\s+to\s+train\s+future\s+Meta\s+models\.?/gi, "");
   cleaned = cleaned.replace(/See\s+current\s+pricing\s+and\s+rate\s+limits\s+for\s+the\s+Meta\s+Model\s+API[\s\S]*?https?:\/\/[^\s]+/gi, "");
-  cleaned = cleaned.replace(/https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
+  cleaned = cleaned.replace(/https?:\/\/dev\.meta\.ai\/docs\/[^\s]*/gi, "");
   cleaned = cleaned.replace(/Do\s+NOT\s+use\s+it\s+for\s+confidential,\s+proprietary,\s+personal,\s+or\s+otherwise\s+sensitive\s+data\.?/gi, "");
   cleaned = cleaned.replace(/For\s+the\s+same\s+model\s+with\s+no\s+training\s+on\s+your\s+data[\s\S]*?(?=\n\n|Now:|Last:|Next:|$)/gi, "");
   cleaned = cleaned.replace(/It\s+lowers\s+the\s+barrier\s+to\s+entry[\s\S]*?acceptable\./gi, "");
-  
-  // Strip Meta CLI banner artifacts
   cleaned = cleaned.replace(/security\.allow_data_training_tiers_noninteractive/gi, "");
   cleaned = cleaned.replace(/[┌┐└┘│─]+\s*Scheduled\s+Jobs\s*[┌┐└┘│─]+/gi, "");
-  
-  // Strip standalone Meta Model API pricing boilerplate
   cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free[\s\S]*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
-  cleaned = cleaned.replace(/dev\.meta\.ai\/docs\/[^\s]*/gi, "");
   cleaned = cleaned.replace(/This\s+model\s+is\s+in\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?=\n\n|Now:|Last:|Next:|$)/gi, "");
-  
-  // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
-  const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  cleaned = cleaned.replace(/^#\s*Cron Job:[\s\S]*?(?=^##\s*Response\s*$|\Z)/gim, "");
+
+  const lines = cleaned.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
     return "";
   }
-  
-  // Collapse multiple blank lines
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
-  
+
+  cleaned = stripPacketEcho(cleaned);
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
   return cleaned.trim();
+}
+
+function inlineBotHtml(text) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+function sentenceSplit(text) {
+  const parts = String(text || "").split(/(?<=[.!?])\s+(?=[A-Z“"])/);
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+function formatBotHtml(text) {
+  const cleaned = cleanBotText(text);
+  if (!cleaned) return "";
+  const split = splitHandoff(cleaned);
+  const chunks = split.answer.split(/\n{2,}/).map((chunk) => chunk.trim()).filter(Boolean);
+  const html = [];
+  let leadDone = false;
+  chunks.forEach((chunk) => {
+    const rows = chunk.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (!rows.length) return;
+    if (rows.length === 1 && /^#{1,3}\s+/.test(rows[0])) {
+      html.push(`<h3>${inlineBotHtml(rows[0].replace(/^#{1,3}\s+/, ""))}</h3>`);
+      return;
+    }
+    if (rows.every((row) => /^[-*•]\s+/.test(row) || /^\d+\.\s+/.test(row))) {
+      const items = rows.map((row) => `<li>${inlineBotHtml(row.replace(/^([-*•]|\d+\.)\s+/, ""))}</li>`).join("");
+      html.push(`<ul>${items}</ul>`);
+      leadDone = true;
+      return;
+    }
+    const body = rows.join(" ");
+    if (!leadDone && !html.length && body.length > 280) {
+      const sentences = sentenceSplit(body);
+      if (sentences.length > 1) {
+        html.push(`<p class="bot-lead">${inlineBotHtml(sentences[0])}</p>`);
+        sentences.slice(1).forEach((sentence) => {
+          html.push(`<p>${inlineBotHtml(sentence)}</p>`);
+        });
+        leadDone = true;
+        return;
+      }
+    }
+    html.push(`<p${leadDone ? "" : " class=\"bot-lead\""}>${inlineBotHtml(rows.join("\n"))}</p>`);
+    leadDone = true;
+  });
+  if (split.handoff) {
+    html.push(`<details class="receipt-fold"><summary>Handoff</summary><pre>${escapeHtml(split.handoff)}</pre></details>`);
+  }
+  return html.join("");
+}
+
+function paintBotText(el, text) {
+  if (!el) return;
+  const html = formatBotHtml(text);
+  if (html) el.innerHTML = html;
+  else el.textContent = "";
 }
 
 async function showReplayModal(jobId) {
@@ -3197,9 +3294,9 @@ function card(kind, body, meta) {
   const el = document.createElement("article");
   el.className = `card ${kind}`;
   // Clean bot responses (ops/think/research jobs) before display
-  const cleaned = kind.includes("bot") ? cleanBotText(body) : body;
+  const cleaned = kind.includes("bot") ? formatBotHtml(body) : `<pre>${escapeHtml(body)}</pre>`;
   const head = meta ? `<div class="meta">${escapeHtml(meta)}</div>` : "";
-  el.innerHTML = `${head}<pre>${escapeHtml(cleaned)}</pre>`;
+  el.innerHTML = `${head}${kind.includes("bot") ? `<div class="bubble-text">${cleaned}</div>` : cleaned}`;
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
   return el;
@@ -3217,8 +3314,8 @@ function bubble(kind, body, actor) {
   }
   const text = document.createElement("div");
   text.className = "bubble-text";
-  const cleaned = kind === "bot" ? cleanBotText(body) : (body || "");
-  text.textContent = cleaned;
+  if (kind === "bot") paintBotText(text, body);
+  else text.textContent = body || "";
   el.appendChild(text);
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;
@@ -3254,26 +3351,33 @@ function renderAttachments(el, attachments) {
 }
 
 function appendReceipt(el, job) {
-  if (!el || !job || el.querySelector(".receipt")) return;
+  if (!el || !job || el.querySelector(".receipt-fold.engine")) return;
   const line = receiptLine(job);
   if (!line) return;
-  const rec = document.createElement("p");
-  rec.className = "receipt";
-  rec.textContent = line;
+  const rec = document.createElement("details");
+  rec.className = "receipt-fold engine";
+  const summary = document.createElement("summary");
+  summary.textContent = "Engine";
+  const body = document.createElement("p");
+  body.className = "receipt";
+  body.textContent = line;
+  rec.appendChild(summary);
+  rec.appendChild(body);
   el.appendChild(rec);
 }
 
 function appendWorkDetails(el, job) {
   if (!el || !job) return;
   appendReceipt(el, job);
-  if ((job.engine || "") === "Hermes Agent" && !el.querySelector("[data-open-hermes]")) {
+  const fold = el.querySelector(".receipt-fold.engine");
+  if ((job.engine || "") === "Hermes Agent" && fold && !fold.querySelector("[data-open-hermes]")) {
     const open = document.createElement("button");
     open.type = "button";
     open.className = "ghost-btn receipt-go";
     open.dataset.openHermes = "1";
     open.textContent = "Open Hermes";
     open.addEventListener("click", () => setStage("hermes"));
-    el.appendChild(open);
+    fold.appendChild(open);
   }
 }
 
@@ -3288,7 +3392,7 @@ function settleLive(live, job) {
     const think = live.querySelector(".thinking");
     if (think) think.remove();
     const text = live.querySelector(".bubble-text");
-    if (text) text.textContent = cleanBotText(job.text || "");
+    if (text) paintBotText(text, job.text || "");
     stampLane(live, job, true);
     appendWorkDetails(live, job);
     // Add report card to settled live bubble
@@ -3817,18 +3921,14 @@ function isNoiseText(text) {
   if (/pipeline-health/.test(raw) && /indexation-patrol/.test(raw) && (/[┌│]/.test(raw) || /hermes cron list/i.test(raw))) return true;
   if (/Scheduled Jobs/.test(raw) && /[┌│]/.test(raw)) return true;
   if (/Gateway reports not running/i.test(raw)) return true;
-  if (/You are the ops engine on this CEO/i.test(raw)) return true;
   if (/raw\.githubusercontent\.com\/adamsch0100\/openbot/i.test(raw)) return true;
   if (/Create file e2e_/i.test(raw)) return true;
   if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
   if (/need your google.{0,40}password/i.test(raw)) return true;
   if (/share your GBP login credentials/i.test(raw)) return true;
-  if (/You are the SAA Homes CEO/i.test(raw)) return true;
-  if (/You report to Chief of Staff, who runs the org/i.test(raw)) return true;
-  if (/You are the (think|ops|research|code) engine on this CEO/i.test(raw)) return true;
-  if (/The operator is in OpenBot Chat/i.test(raw)) return true;
   const cleaned = cleanBotText(raw);
-  if (!cleaned && /CONTRIBUTOR|contributor tier/i.test(raw)) return true;
+  if (!cleaned) return true;
+  if (cleaned.length < 80 && PACKET_LINE.test(cleaned)) return true;
   return false;
 }
 
@@ -5998,7 +6098,7 @@ async function sendMessage(message, opts) {
             const el = activeBubble();
             const textEl = el && el.querySelector(".bubble-text");
             const thinkEl = el && el.querySelector(".thinking");
-            if (textEl) textEl.textContent = cleanBotText(liveText);
+            if (textEl) paintBotText(textEl, liveText);
             if (thinkEl) thinkEl.classList.add("hidden");
             stream.scrollTop = stream.scrollHeight;
           }

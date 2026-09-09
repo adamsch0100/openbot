@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Board chat is one conversation — pulse, spend, engines. Live SAA: wait for weekly-operator-schedule; do not stampede.
-Last: Frontend craft — Cos dump gone, SAA lecture gone, honest receipts. indexation-patrol ended unknown; form-pipeline-health ok.
-Next: Watch the board. Then one more gateway-shutdown job. Skip conversion-surge.
-Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue. Patrol result unknown; do not assume pages were fixed.
+Now: Human chat strips packet/Meta echo and leads with the answer. weekly-operator-schedule succeeded on live Hermes.
+Last: Structured bot bubbles; engine receipts in a fold. Patrol ended unknown; form-pipeline-health ok.
+Next: One more gateway-shutdown job. Skip conversion-surge. Hard-refresh ?v=94.
+Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue.
 
 ## Vault
 

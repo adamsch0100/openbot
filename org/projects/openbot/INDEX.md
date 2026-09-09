@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Board UI pulse + receipts + quiet Cos/SAA chat. Hold PR #48.
-Last: Frontend craft on Chat — status in chrome, not a dump on the stream.
-Next: Watch the live board. Do not fire SAA crons until weekly-operator-schedule finishes.
-Blocker: Do not fire another SAA cron until weekly-operator-schedule finishes. Digest 401 is saahomes CRON_SECRET, not this board.
+Now: Structured bot chat — answer first, packet/Meta stripped, engine in a fold. Hold PR #48.
+Last: Human-facing bubbles, same bar on mobile and desktop.
+Next: Watch the live board. Then one more gateway-shutdown job.
+Blocker: Digest 401 is saahomes CRON_SECRET, not this board.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
 Folder: C:\Users\adamm\Projects\openbot

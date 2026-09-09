@@ -204,12 +204,19 @@ def _human_hermes_text(text: str) -> str:
         return cleaned
     kept: list[str] = []
     started = False
+    skipping = False
     for line in cleaned.splitlines():
         stripped = line.strip()
-        if not started and PACKET_LINE.match(stripped):
-            continue
-        if not started and not stripped:
-            continue
+        if not started:
+            if PACKET_LINE.match(stripped):
+                skipping = bool(re.match(r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):", stripped, re.I))
+                continue
+            if skipping:
+                if not stripped:
+                    skipping = False
+                continue
+            if not stripped:
+                continue
         started = True
         kept.append(line)
     return "\n".join(kept).strip()

@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Patrol finished unknown (scheduler restart). Firing weekly-operator-schedule 4aac3bc70343 alone.
-Last: 19 failed — mostly gateway shutdown. saved-search-alerts-immediate recovered; digest still 401.
-Next: Wait for that one job. Do not stampede. Do not hermes cron run on this imported home.
-Blocker: digest 401 = saahomes CRON_SECRET mismatch. Do not fire a second job until this one ends.
+Now: weekly-operator-schedule 4aac3bc70343 succeeded on live Hermes.
+Last: 19 still failed — mostly gateway shutdown. digest still 401. patrol unknown.
+Next: One more gateway-shutdown retry. Do not stampede. Do not hermes cron run on this imported home.
+Blocker: digest 401 = saahomes CRON_SECRET mismatch.
 Goals: —
 
 Folder: C:\Users\adamm\Projects\saahomes
