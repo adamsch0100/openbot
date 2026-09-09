@@ -1253,6 +1253,14 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
     return out
 
 
+def gateway_process_running(text: str) -> bool:
+    """True only when Hermes reports a live gateway. 'not running' contains 'running'."""
+    low = (text or "").lower()
+    if "not running" in low:
+        return False
+    return "is running" in low
+
+
 def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
     """Check Hermes gateway status. Does NOT start gateway. Returns immediately.
     
@@ -1267,7 +1275,7 @@ def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
         text = out.strip()
         
         # Parse running status from output
-        running = code == 0 and "running" in text.lower()
+        running = code == 0 and gateway_process_running(text)
         
         return {
             "ok": code == 0,

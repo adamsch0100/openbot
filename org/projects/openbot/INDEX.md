@@ -2,8 +2,8 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Deploy saa-homes gateway supervise to Railway OpenBot. lead-attribution-brief is the one live retry.
-Last: Production OpenBot (01:20) only warms OpenCode web + Hermes dashboard. local-events-monthly succeeded.
+Now: Redeploy OpenBot with gateway "not running" parse fix. lead-attribution-brief is the one live retry.
+Last: Production supervise never started saa-homes because "not running" counted as running.
 Next: Wait for 5024ba46. Hold PR #48. Open PR for board-pulse-cron-noise.
 Blocker: Digest 401 is saahomes CRON_SECRET, not this board. Do not Accept parked restore cards.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.

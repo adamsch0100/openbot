@@ -790,8 +790,14 @@ def _delivery_migrate_enabled() -> bool:
 def supervise_ceo_gateways_background(interval: int | None = None) -> None:
     """Keep the SAA Hermes gateway up after a Railway deploy. Not warm_engines."""
     delay = interval if interval is not None else int(os.environ.get("OPENBOT_SUPERVISE_INTERVAL", "60") or "60")
+    print(
+        f"[openbot] gateway supervise enabled={supervise_gateways_enabled()} "
+        f"homes={supervised_project_ids()}",
+        flush=True,
+    )
     time.sleep(3)
     delivery_done = False
+    announced_up: set[str] = set()
     while True:
         try:
             rows = supervise_ceo_gateways_once()
@@ -799,6 +805,10 @@ def supervise_ceo_gateways_background(interval: int | None = None) -> None:
                 pid = row.get("project_id")
                 if row.get("started"):
                     print(f"[openbot] Hermes gateway supervised for {pid} at {row.get('home')}", flush=True)
+                    announced_up.add(str(pid))
+                elif row.get("running") and pid not in announced_up:
+                    print(f"[openbot] Hermes gateway already up for {pid} at {row.get('home')}", flush=True)
+                    announced_up.add(str(pid))
                 elif row.get("skipped"):
                     print(f"[openbot] gateway skip {pid}: {row.get('reason')}", flush=True)
                 elif not row.get("ok"):

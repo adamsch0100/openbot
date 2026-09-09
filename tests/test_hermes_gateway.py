@@ -36,6 +36,20 @@ class TestGatewayManagement(unittest.TestCase):
         self.assertTrue(result["running"])
         self.assertTrue(result["ok"])
         self.assertIsNone(result["error"])
+
+    @patch("openbot.hermes.which")
+    @patch("openbot.hermes._run")
+    def test_gateway_status_not_running_despite_stale_state(self, mock_run, mock_which):
+        from openbot.hermes import gateway_status
+
+        mock_which.return_value = "/usr/local/bin/hermes"
+        mock_run.return_value = (
+            0,
+            "Gateway is not running\nrecorded state 'running' but the recorded process is gone",
+        )
+        result = gateway_status()
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["running"])
     
     @patch("openbot.hermes.which")
     @patch("openbot.hermes.gateway_status")
