@@ -659,7 +659,7 @@ def open_hermes() -> dict:
 
 
 def warm_engines() -> dict:
-    """Start OpenCode and Hermes when the board opens. Safe to call twice."""
+    """Start OpenCode web and the Hermes dashboard. Does not start CEO gateways."""
     global _warmed
     with _warm_lock:
         if _warmed and _port_open("127.0.0.1", OPENCODE_WEB_PORT) and _port_open(
@@ -695,3 +695,117 @@ def warm_engines_background() -> None:
         )
     except Exception as err:
         print(f"[openbot] engine warm failed: {err}", flush=True)
+
+
+def supervise_gateways_enabled() -> bool:
+    """Railway sets OPENBOT_DATA_DIR=/data. Local laptops stay off unless flagged."""
+    flag = os.environ.get("OPENBOT_SUPERVISE_GATEWAYS", "").strip().lower()
+    if flag in {"0", "false", "off", "no"}:
+        return False
+    if flag in {"1", "true", "on", "yes"}:
+        return True
+    return bool(os.environ.get("OPENBOT_DATA_DIR", "").strip())
+
+
+def supervised_project_ids() -> list[str]:
+    raw = os.environ.get("OPENBOT_SUPERVISE_HOMES", "saa-homes").strip() or "saa-homes"
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _ceo_hermes_home(project_id: str) -> str:
+    from .org import HERMES_HOMES, project_tools
+    from .store import ROOT
+
+    tools = project_tools(project_id)
+    home = str(tools.get("hermes_home") or "").strip()
+    if home:
+        return home
+    for candidate in (HERMES_HOMES / project_id, ROOT / "hermes-homes" / project_id):
+        if candidate.is_dir():
+            return str(candidate)
+    return ""
+
+
+def ensure_supervised_gateway(project_id: str) -> dict:
+    from .hermes import gateway_start, gateway_status
+
+    home = _ceo_hermes_home(project_id)
+    if not home:
+        return {
+            "ok": False,
+            "skipped": True,
+            "project_id": project_id,
+            "reason": "no hermes home",
+        }
+    status = gateway_status(home, timeout=5)
+    if status.get("running"):
+        return {
+            "ok": True,
+            "running": True,
+            "started": False,
+            "project_id": project_id,
+            "home": home,
+        }
+    result = gateway_start(home, wait=False)
+    result["project_id"] = project_id
+    result["home"] = home
+    return result
+
+
+def migrate_supervised_delivery(project_id: str, dry_run: bool = False) -> dict:
+    from .hermes import migrate_cron_delivery
+
+    home = _ceo_hermes_home(project_id)
+    if not home:
+        return {"ok": False, "skipped": True, "project_id": project_id}
+    result = migrate_cron_delivery(home, dry_run=dry_run)
+    result["project_id"] = project_id
+    result["home"] = home
+    return result
+
+
+def supervise_ceo_gateways_once() -> list[dict]:
+    if not supervise_gateways_enabled():
+        return []
+    return [ensure_supervised_gateway(pid) for pid in supervised_project_ids()]
+
+
+def _delivery_migrate_enabled() -> bool:
+    flag = os.environ.get("OPENBOT_MIGRATE_CRON_DELIVERY", "1").strip().lower()
+    return flag not in {"0", "false", "off", "no"}
+
+
+def supervise_ceo_gateways_background(interval: int | None = None) -> None:
+    """Keep the SAA Hermes gateway up after a Railway deploy. Not warm_engines."""
+    delay = interval if interval is not None else int(os.environ.get("OPENBOT_SUPERVISE_INTERVAL", "60") or "60")
+    time.sleep(3)
+    delivery_done = False
+    while True:
+        try:
+            rows = supervise_ceo_gateways_once()
+            for row in rows:
+                pid = row.get("project_id")
+                if row.get("started"):
+                    print(f"[openbot] Hermes gateway supervised for {pid} at {row.get('home')}", flush=True)
+                elif row.get("skipped"):
+                    print(f"[openbot] gateway skip {pid}: {row.get('reason')}", flush=True)
+                elif not row.get("ok"):
+                    print(f"[openbot] gateway supervise {pid}: {row.get('error') or row.get('text')}", flush=True)
+                if delivery_done or not _delivery_migrate_enabled():
+                    continue
+                dry = migrate_supervised_delivery(str(pid), dry_run=True)
+                pending = dry.get("migrated") or []
+                if not pending:
+                    delivery_done = True
+                    continue
+                real = migrate_supervised_delivery(str(pid), dry_run=False)
+                failed = real.get("failed") or []
+                print(
+                    f"[openbot] cron delivery migrate {pid}: "
+                    f"migrated={len(real.get('migrated') or [])} failed={len(failed)}",
+                    flush=True,
+                )
+                delivery_done = not failed
+        except Exception as err:
+            print(f"[openbot] gateway supervise failed: {err}", flush=True)
+        time.sleep(max(15, delay))

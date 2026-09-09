@@ -340,6 +340,17 @@ class TestJobIdValidation(unittest.TestCase):
         ]
         pack = cron_digest(rows, live_runs=[{"project_id": "saa-homes", "preset": "think"}])
         self.assertEqual(pack["running"][0]["name"], "daily-ranking-strike")
+        stale = cron_digest([{
+            "id": "95222909917e",
+            "name": "indexation-patrol",
+            "enabled": True,
+            "state": "scheduled",
+            "last_status": "error",
+            "fire_claim": {"at": now.isoformat(), "by": "test"},
+            "last_run_at": (now - timedelta(hours=1)).isoformat(),
+            "last_error": "Gateway shutdown (final-cleanup)",
+        }])
+        self.assertEqual(stale["running"], [])
         self.assertEqual(pack["due"][0]["name"], "form-pipeline-health")
         self.assertEqual(pack["just_finished"][0]["name"], "indexation-patrol")
         self.assertIn("Now running", pack["live_story"])

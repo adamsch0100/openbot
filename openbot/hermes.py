@@ -979,6 +979,7 @@ def _parse_cron_when(value: str) -> datetime | None:
 
 _CRON_RUNNING = re.compile(r"running|in.?progress|started|firing|claimed", re.I)
 _CRON_PAUSED = re.compile(r"paused|disabled", re.I)
+_CRON_DONE = re.compile(r"^(ok|error|fail|failed|unknown|skipped|success)$", re.I)
 
 
 def _cron_digest_item(row: dict, enabled: bool) -> dict:
@@ -1008,7 +1009,9 @@ def _cron_is_running(row: dict) -> bool:
     state = str(row.get("state") or "")
     if _CRON_PAUSED.search(state):
         return False
-    status = str(row.get("last_status") or "")
+    status = str(row.get("last_status") or "").strip()
+    if _CRON_DONE.match(status):
+        return False
     if _CRON_RUNNING.search(state) or _CRON_RUNNING.search(status):
         return True
     return bool(row.get("claimed") or row.get("fire_claim"))
@@ -1235,7 +1238,7 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
                 "schedule": str(row.get("schedule_display") or sched.get("expr") or ""),
                 "enabled": row.get("enabled") is not False,
                 "state": str(row.get("state") or ""),
-                "claimed": bool(row.get("fire_claim")),
+                "claimed": bool(row.get("fire_claim")) and not bool(_CRON_DONE.match(status)),
                 "last_run_at": str(row.get("last_run_at") or ""),
                 "next_run_at": str(row.get("next_run_at") or ""),
                 "last_status": status,

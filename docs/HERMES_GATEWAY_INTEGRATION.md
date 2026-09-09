@@ -335,7 +335,8 @@ curl -X POST https://openbot-production-9334.up.railway.app/api/hermes/crons/mig
 PR #36 caused Railway timeouts/502s because `warm_engines_background()` called gateway start synchronously on boot. If Hermes gateway hung or took >30s, the HTTP server never finished starting.
 
 **New design:**
-- Gateway ONLY starts on first explicit request (e.g. `/api/hermes/gateway/start`)
+- `warm_engines_background()` starts **OpenCode web** and **Hermes dashboard** only. It never calls `hermes gateway start`.
+- After the HTTP server is up, a **separate** daemon (`openbot-saa-gateway`) supervises the SAA Homes home (`/data/hermes-homes/saa-homes` on Railway). Local laptops stay off unless `OPENBOT_SUPERVISE_GATEWAYS=1`.
 - `/api/routines` gracefully degrades: shows OpenBot routines, skips Hermes crons if gateway down
 - `/api/health` never touches gateway code
 - All gateway operations use timeouts and background threads

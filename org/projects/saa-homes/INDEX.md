@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: weekly-operator-schedule 4aac3bc70343 succeeded on live Hermes.
-Last: 19 still failed — mostly gateway shutdown. digest still 401. patrol unknown.
-Next: One more gateway-shutdown retry. Do not stampede. Do not hermes cron run on this imported home.
-Blocker: digest 401 = saahomes CRON_SECRET mismatch.
+Now: Board idle. Firing local-events-monthly 10d8085a794c alone on live Hermes.
+Last: weekly-operator-schedule succeeded. Stale patrol claim no longer looks like running.
+Next: Wait for that one job. Do not stampede. Do not hermes cron run on this imported home.
+Blocker: digest 401 = saahomes CRON_SECRET mismatch. Do not fire a second job until this one ends.
 Goals: —
 
 Folder: C:\Users\adamm\Projects\saahomes

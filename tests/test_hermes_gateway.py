@@ -1,5 +1,6 @@
 """Tests for Hermes gateway management (lazy, non-blocking)."""
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -309,6 +310,43 @@ class TestNonBlocking(unittest.TestCase):
         # Should return almost immediately (< 2 seconds for 0.5s sleep + overhead)
         self.assertLess(elapsed, 2.0)
         self.assertTrue(result["ok"])
+
+
+class TestGatewaySupervise(unittest.TestCase):
+    def test_warm_engines_does_not_start_gateway(self):
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parent.parent / "openbot" / "launch.py").read_text(encoding="utf-8")
+        start = src.find("def warm_engines()")
+        end = src.find("def warm_engines_background()")
+        body = src[start:end]
+        self.assertNotIn("gateway_start", body)
+        self.assertNotIn("ensure_supervised_gateway", body)
+        self.assertIn("start_opencode_web", body)
+        self.assertIn("start_hermes_dashboard", body)
+
+    def test_supervise_off_on_local_laptop(self):
+        from openbot.launch import supervise_ceo_gateways_once, supervise_gateways_enabled
+
+        with patch.dict("os.environ", {"OPENBOT_DATA_DIR": "", "OPENBOT_SUPERVISE_GATEWAYS": "0"}):
+            self.assertFalse(supervise_gateways_enabled())
+            self.assertEqual(supervise_ceo_gateways_once(), [])
+
+    def test_supervise_on_with_data_dir(self):
+        from openbot.launch import supervise_gateways_enabled
+
+        with patch.dict("os.environ", {"OPENBOT_DATA_DIR": "/data", "OPENBOT_SUPERVISE_GATEWAYS": ""}):
+            self.assertTrue(supervise_gateways_enabled())
+
+    @patch("openbot.launch.ensure_supervised_gateway")
+    def test_supervise_once_starts_saa_only(self, mock_ensure):
+        from openbot.launch import supervise_ceo_gateways_once
+
+        mock_ensure.return_value = {"ok": True, "project_id": "saa-homes"}
+        with patch.dict("os.environ", {"OPENBOT_SUPERVISE_GATEWAYS": "1"}):
+            rows = supervise_ceo_gateways_once()
+        self.assertEqual(len(rows), 1)
+        mock_ensure.assert_called_once_with("saa-homes")
 
 
 if __name__ == "__main__":

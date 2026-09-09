@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Structured bot chat — answer first, packet/Meta stripped, engine in a fold. Hold PR #48.
-Last: Human-facing bubbles, same bar on mobile and desktop.
-Next: Watch the live board. Then one more gateway-shutdown job.
+Now: SAA gateway supervised after Railway deploy. warm_engines stays OpenCode web + Hermes dashboard.
+Last: Ignore leftover fire_claim so the board can go Idle. Hold PR #48.
+Next: Merge board-pulse-cron-noise. Wait for local-events-monthly.
 Blocker: Digest 401 is saahomes CRON_SECRET, not this board.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

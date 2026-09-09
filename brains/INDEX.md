@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Human chat strips packet/Meta echo and leads with the answer. weekly-operator-schedule succeeded on live Hermes.
-Last: Structured bot bubbles; engine receipts in a fold. Patrol ended unknown; form-pipeline-health ok.
-Next: One more gateway-shutdown job. Skip conversion-surge. Hard-refresh ?v=94.
+Now: Board idle. Supervising SAA Hermes gateway after Railway deploy (not warm_engines). Firing local-events-monthly alone.
+Last: weekly-operator-schedule succeeded. Stale patrol fire_claim no longer paints as running.
+Next: Wait for local-events-monthly 10d8085a794c. Then one more gateway-shutdown. Skip conversion-surge. Hard-refresh ?v=96.
 Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue.
 
 ## Vault

@@ -2633,6 +2633,14 @@ function cronIsNoise(row) {
   return /^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$/i.test(String(row.name || ""));
 }
 
+function cronIsLive(row) {
+  if (!row || cronIsNoise(row)) return false;
+  const status = String(row.last_status || "").trim().toLowerCase();
+  if (/^(ok|error|fail|failed|unknown|skipped|success)$/.test(status)) return false;
+  if (row.claimed) return true;
+  return /running|in.?progress|started|firing/i.test(String(row.state || status));
+}
+
 function cronIsPromptDump(text) {
   const raw = String(text || "");
   if (/^#\s*Cron Job:/im.test(raw) && /^##\s*Prompt\b/im.test(raw) && !/^##\s*Response\s*$/im.test(raw)) return true;
@@ -2728,8 +2736,8 @@ function runningStory() {
   }
   const pack = digestCache.get(projectId) || {};
   const digest = pack.digest || pack;
-  const running = (digest.running || []).filter((row) => !cronIsNoise(row));
-  const claimed = (pack.crons || []).filter((row) => row && row.claimed && !cronIsNoise(row));
+  const running = (digest.running || []).filter((row) => cronIsLive(row));
+  const claimed = (pack.crons || []).filter((row) => cronIsLive(row));
   const boardRuns = (pack.live_runs || []).filter((row) => (
     !projectId || String(row.project_id || "") === String(projectId)
   ));
@@ -2772,8 +2780,8 @@ function paintCeoLive(pack) {
   const crons = data.crons || [];
   const chatLive = Boolean(liveRunId);
   const boardRuns = (data.live_runs || []).filter((row) => String(row.project_id || "") === String(projectId));
-  const claimed = crons.filter((row) => row.claimed);
-  const running = [...(digest.running || [])];
+  const claimed = crons.filter((row) => cronIsLive(row));
+  const running = [...(digest.running || [])].filter((row) => cronIsLive(row));
   const seenRun = new Set(running.map((row) => row.id));
   claimed.forEach((row) => {
     if (!seenRun.has(row.id)) running.push(row);
@@ -2871,8 +2879,8 @@ function renderChatSchedule(rows, digest, focusId) {
   const cached = digestCache.get(projectId) || {};
   const pack = digest || cached.digest || cached || {};
   const want = String(focusId || scheduleFocusId || "");
-  const claimed = list.filter((row) => row.claimed);
-  const running = [...(pack.running || [])];
+  const claimed = list.filter((row) => cronIsLive(row));
+  const running = [...(pack.running || [])].filter((row) => cronIsLive(row));
   const seenRun = new Set(running.map((row) => row.id));
   claimed.forEach((row) => {
     if (!seenRun.has(row.id)) running.push(row);
