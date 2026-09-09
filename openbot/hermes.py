@@ -1253,6 +1253,26 @@ def read_home_crons(home: str | Path | None, *, results: bool = False) -> list[d
     return out
 
 
+def _in_container() -> bool:
+    return Path("/.dockerenv").exists() or bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+
+
+def _popen_detached(cmd: list[str], home: str | Path | None = None):
+    """Spawn Hermes so a Docker/Railway parent can exit without killing the gateway."""
+    kwargs: dict = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "env": _hermes_env(home),
+        "start_new_session": True,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | getattr(
+            subprocess, "CREATE_NO_WINDOW", 0
+        )
+    return subprocess.Popen(cmd, **kwargs)
+
+
 def gateway_process_running(text: str) -> bool:
     """True only when Hermes reports a live gateway. 'not running' contains 'running'."""
     low = (text or "").lower()
@@ -1312,6 +1332,30 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
             "started": False,
         }
     
+    if _in_container():
+        cmd = [binary, "gateway", "run"]
+        try:
+            proc = _popen_detached(cmd, home)
+            time.sleep(1.5)
+            status_check = gateway_status(home, timeout=5)
+            running = bool(status_check.get("running"))
+            return {
+                "ok": running,
+                "code": 0 if running else 1,
+                "text": "hermes gateway run (container)",
+                "running": running,
+                "started": running,
+                "pid": proc.pid if hasattr(proc, "pid") else None,
+            }
+        except Exception as err:
+            return {
+                "ok": False,
+                "code": 1,
+                "error": str(err),
+                "running": False,
+                "started": False,
+            }
+
     cmd = [binary, "gateway", "start"]
     if wait:
         # Synchronous start (wait for completion)

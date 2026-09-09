@@ -72,6 +72,28 @@ class TestGatewayManagement(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertTrue(result["started"])
         mock_popen.assert_called_once()
+
+    @patch.dict("os.environ", {"RAILWAY_ENVIRONMENT": "production"})
+    @patch("openbot.hermes.time.sleep")
+    @patch("openbot.hermes.which")
+    @patch("openbot.hermes.gateway_status")
+    @patch("openbot.hermes._popen_detached")
+    def test_gateway_start_uses_run_in_container(self, mock_detached, mock_status, mock_which, _sleep):
+        from openbot.hermes import gateway_start
+
+        mock_which.return_value = "/usr/local/bin/hermes"
+        mock_status.side_effect = [
+            {"running": False},
+            {"running": True},
+        ]
+        mock_proc = MagicMock()
+        mock_proc.pid = 99
+        mock_detached.return_value = mock_proc
+        result = gateway_start(wait=False)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["started"])
+        mock_detached.assert_called_once()
+        self.assertEqual(mock_detached.call_args[0][0][1:], ["gateway", "run"])
     
     @patch("openbot.hermes.which")
     def test_gateway_start_missing_binary(self, mock_which):

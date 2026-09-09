@@ -2,8 +2,8 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Redeploying OpenBot so saa-homes gateway start sees "not running" as down. lead-attribution-brief 5024ba46 is the one live retry.
-Last: Supervise was silent because status treated "not running" as running. local-events-monthly succeeded.
+Now: Redeploying OpenBot with `hermes gateway run` in Docker. lead-attribution-brief 5024ba46 is the one live retry.
+Last: `hermes gateway start` is a no-op in the OpenBot container. local-events-monthly succeeded.
 Next: Wait for 5024ba46. Do not stampede. Hold PR #48. Do not Accept parked restore cards.
 Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue. Last digest run was ok.
 
