@@ -272,6 +272,8 @@ function cleanBotText(text) {
   
   // Strip standalone Meta Model API pricing boilerplate
   cleaned = cleaned.replace(/Meta\s+Model\s+API\s+is\s+free[\s\S]*?https?:\/\/dev\.meta\.ai\/docs\/pricing-rate-limits?\/?/gi, "");
+  cleaned = cleaned.replace(/dev\.meta\.ai\/docs\/[^\s]*/gi, "");
+  cleaned = cleaned.replace(/This\s+model\s+is\s+in\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?=\n\n|Now:|Last:|Next:|$)/gi, "");
   
   // Only strip single-line SMOKE test patterns (don't touch multi-line or legitimate short replies)
   const lines = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0);
@@ -698,13 +700,18 @@ function syncComposerWho() {
   const who = talkName();
   const project = currentProject();
   const worker = currentWorker();
-  let line = "Talking to Chief of Staff";
-  if (worker && project) line = `Talking to ${worker.name} · helper for ${project.name}`;
-  else if (project) line = `Talking to ${project.name}`;
+  const pin = preset && preset !== "cos";
+  const engine = pin ? (PRESET_ENGINE[preset] || "board") : "OpenCode or Hermes";
+  let desk = "Chief of Staff";
+  if (worker && project) desk = `${worker.name} · ${project.name}`;
+  else if (project) desk = project.name;
+  const line = pin
+    ? `${desk} · ${jobLabel(preset)} · ${engine}`
+    : `${desk} · Auto · ${engine}`;
   if ($("composerWho")) $("composerWho").textContent = line;
   if ($("msg")) {
-    const pin = preset && preset !== "cos" ? `${jobLabel(preset)} · ` : "";
-    $("msg").placeholder = `${pin}Message ${who}`;
+    const prefix = pin ? `${jobLabel(preset)} · ` : "";
+    $("msg").placeholder = `${prefix}Message ${who}`;
   }
 }
 
@@ -899,6 +906,28 @@ function setLive(runId, meta) {
     renderOrg(org);
   }
   paintCeoLive(digestCache.get(projectId));
+  paintPulse();
+}
+
+function engineFoundLine() {
+  const h = (cfg.engines && cfg.engines.hermes) || {};
+  const o = (cfg.engines && cfg.engines.opencode) || {};
+  const bits = [];
+  if (o.present) bits.push("OpenCode");
+  if (h.present) bits.push("Hermes");
+  return bits.length ? bits.join(" + ") : "board";
+}
+
+function receiptLine(job) {
+  if (!job) return "board";
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board").trim() || "board";
+  const lane = job.cron
+    ? "schedule"
+    : (job.preset === "cos" || !job.preset ? "Chat" : jobLabel(job.preset));
+  const model = job.model && job.model !== "none" ? (modelName(job.model) || job.model) : "";
+  const cost = Number(job.usd_estimate || 0);
+  const money = cost ? `$${cost.toFixed(4)}` : "";
+  return [engine, lane, model, money].filter(Boolean).join(" · ");
 }
 
 async function stopLive(key) {
@@ -1052,7 +1081,8 @@ function renderSpend(spend) {
   const bind = policy.bind === "all" ? "all" : "PAYG";
   const scope = spend && spend.project_id ? "CEO" : "org";
   const halt = spend && spend.enforced ? " · stopped" : "";
-  el.textContent = `$${used} / $${cap} ${bind} ${period}${halt}`;
+  el.textContent = `$${used} of $${cap} · ${period}${halt}`;
+  paintPulse();
   const wallets = $("walletList");
   if (wallets) {
     const rows = (spend.wallets || []).map((wallet) => {
@@ -1998,22 +2028,23 @@ function bindNodeMenu(el, kind, pid, wid) {
   });
 }
 
+function clipWire(text, max) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (raw.length <= max) return raw;
+  return `${raw.slice(0, Math.max(0, max - 1))}…`;
+}
+
 function ceoWire(project) {
   const now = cleanBotText(project.index_now || "").trim();
   const blocker = cleanBotText(project.index_blocker || "").trim();
-  const parts = [];
-  
-  if (now && now !== "source of truth" && now !== "—") {
-    const truncated = now.length > 50 ? now.substring(0, 47) + "..." : now;
-    parts.push(truncated);
+  const busy = lives.has(aimKey(project.id, ""));
+  if (blocker && blocker !== "—") return `Needs you · ${clipWire(blocker, 42)}`;
+  if (busy) {
+    const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
+    return `Running · ${clipWire(line, 42)}`;
   }
-  
-  if (blocker && blocker !== "—") {
-    const truncated = blocker.length > 40 ? blocker.substring(0, 37) + "..." : blocker;
-    parts.push(`🚫 ${truncated}`);
-  }
-  
-  return parts.join(" · ");
+  if (now && now !== "source of truth" && now !== "—") return clipWire(now, 56);
+  return "";
 }
 
 function ceoInitials(name) {
@@ -2380,7 +2411,7 @@ function renderBotMeta(opts) {
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
     if (!project) {
-      $("chatFolder").textContent = "Pick a CEO on the left. Cos routes the work.";
+      $("chatFolder").textContent = "One chat. Cos routes. Pick a CEO for that desk.";
     } else {
       const nxt = String(project.index_next || "").trim();
       const now = String(project.index_now || "").trim();
@@ -2487,7 +2518,9 @@ function cronIsNoise(row) {
 
 function cronIsPromptDump(text) {
   const raw = String(text || "");
-  return /^#\s*Cron Job:/im.test(raw) && /^##\s*Prompt\b/im.test(raw) && !/^##\s*Response\s*$/im.test(raw);
+  if (/^#\s*Cron Job:/im.test(raw) && /^##\s*Prompt\b/im.test(raw) && !/^##\s*Response\s*$/im.test(raw)) return true;
+  if (/^#\s*Cron Job:/im.test(raw) && (/\*\*Job ID:\*\*/i.test(raw) || /\*\*Mode:\*\*/i.test(raw))) return true;
+  return false;
 }
 
 function cronReportText(row) {
@@ -2516,7 +2549,7 @@ function cronCardHtml(row, open, mark) {
       : "Healthy on the live box.";
   }
   const next = row.next_action || "";
-  const showNext = next && !/no action/i.test(next);
+  const showNext = next && !/no action/i.test(next) && !/read the note below/i.test(next);
   const engine = [row.provider, row.model].filter(Boolean).join(" · ");
   const report = cronReportText(row);
   const snippet = open ? report : (report || err).slice(0, 280);
@@ -2572,25 +2605,49 @@ function laneLabel(name) {
   return jobLabel(raw) || raw;
 }
 
+function runningStory() {
+  if (liveRunId) {
+    return { on: true, line: `Running · ${talkName()} · ${laneLabel(liveLane || preset)}` };
+  }
+  const pack = digestCache.get(projectId) || {};
+  const digest = pack.digest || pack;
+  const running = (digest.running || []).filter((row) => !cronIsNoise(row));
+  const claimed = (pack.crons || []).filter((row) => row && row.claimed && !cronIsNoise(row));
+  const boardRuns = (pack.live_runs || []).filter((row) => (
+    !projectId || String(row.project_id || "") === String(projectId)
+  ));
+  if (boardRuns.length) {
+    const row = boardRuns[0];
+    const who = (currentProject() && currentProject().name) || "Chat";
+    return { on: true, line: `Running · ${who} · ${laneLabel(row.preset)}` };
+  }
+  const liveCron = running[0] || claimed[0];
+  if (liveCron) {
+    const who = (currentProject() && currentProject().name) || "Schedule";
+    return { on: true, line: `Running · ${who} · ${liveCron.title || cronTitle(liveCron.name) || "job"}` };
+  }
+  if (!projectId && lives.size) {
+    return { on: true, line: `Running · ${lives.size} chat${lives.size === 1 ? "" : "s"}` };
+  }
+  return { on: false, line: "Idle" };
+}
+
+function paintPulse() {
+  const el = $("pulse");
+  if (!el) return;
+  const story = runningStory();
+  el.classList.toggle("on", story.on);
+  el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+}
+
 function paintCeoLive(pack) {
   const el = $("ceoLive");
   if (!el) return;
   if (!projectId) {
-    const projects = ((org && org.projects) || []).filter((row) => row && row.id);
-    if (!projects.length) {
-      el.hidden = true;
-      el.innerHTML = "";
-      return;
-    }
-    const rows = projects.map((row) => {
-      const now = String(row.index_now || "Idle").trim();
-      const block = String(row.index_blocker || "").trim();
-      const line = block && block !== "—" ? `Needs you · ${block}` : now;
-      return `<div class="ceo-live-item"><b>${escapeHtml(row.name || row.id)}</b><span>${escapeHtml(line)}</span></div>`;
-    }).join("");
-    el.hidden = false;
+    el.hidden = true;
+    el.innerHTML = "";
     el.classList.remove("on");
-    el.innerHTML = `<div class="ceo-live-head"><b>CEOs</b></div><div class="ceo-lanes one">${rows}</div><p>Open a CEO for Running, Result, and Scheduled.</p>`;
+    paintPulse();
     return;
   }
   const data = pack || digestCache.get(projectId) || {};
@@ -2613,37 +2670,45 @@ function paintCeoLive(pack) {
   const upcoming = digest.upcoming || (digest.next_up ? [digest.next_up] : []);
   const failed = crons.filter((row) => row.enabled !== false && /error|fail/i.test(String(row.last_status || "")));
   const active = chatLive || boardRuns.length || running.length;
-  const runBits = [];
+  let lead = "Idle";
+  let detail = "";
   if (chatLive) {
-    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(talkName())}</b><span>${escapeHtml(laneLabel(liveLane || preset))} · this chat</span></div>`);
+    lead = `Running · ${talkName()}`;
+    detail = `${laneLabel(liveLane || preset)} · this chat`;
+  } else if (boardRuns.length) {
+    const row = boardRuns[0];
+    lead = `Running · ${laneLabel(row.preset)}`;
+    detail = String(row.title || "this chat").slice(0, 48);
+  } else if (running.length) {
+    const row = running[0];
+    lead = `Running · ${row.title || cronTitle(row.name)}`;
+    detail = "schedule";
+  } else if (latest) {
+    lead = `Last · ${latest.title || cronTitle(latest.name)}`;
+    detail = cronWhen(latest.last_run_at);
   }
-  boardRuns.forEach((row) => {
-    if (chatLive && String(row.id || "") === String(liveRunId)) return;
-    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(laneLabel(row.preset))}</b><span>${escapeHtml(String(row.title || "This chat").slice(0, 48))}</span></div>`);
-  });
-  running.forEach((row) => {
-    runBits.push(`<div class="ceo-lane-row"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>schedule</span></div>`);
-  });
-  const result = latest
-    ? `<div class="ceo-lane-row"><b>${escapeHtml(latest.title || cronTitle(latest.name))}</b><span>Last ${escapeHtml(cronWhen(latest.last_run_at))}</span></div><p class="ceo-lane-result">${escapeHtml(latest.outcome || "No result on this copy yet.")}</p>`
-    : `<p class="ceo-lane-empty">No result on this copy yet.</p>`;
-  const sched = (upcoming.length ? upcoming : []).slice(0, 3).map((row) => (
-    `<div class="ceo-lane-row"><b>${escapeHtml(row.title || cronTitle(row.name))}</b><span>${escapeHtml(cronWhenClock(row.next_run_at))}</span></div>`
-  )).join("") || `<p class="ceo-lane-empty">Nothing on the clock.</p>`;
-  const note = failed.length
-    ? `${failed.length} job${failed.length === 1 ? "" : "s"} need you. Open Full schedule.`
-    : (active
-      ? "When this finishes, the Result column and this chat update. Cos sees it on the CEO list."
-      : "Idle here. Live Hermes + Telegram still own today’s ticks. Cos sees the last Result on this CEO.");
+  const report = latest ? cronReportText(latest) : "";
+  const snippet = clipWire(report || (latest && latest.outcome) || "", 160);
+  const next = upcoming[0];
+  const nextLine = next
+    ? `Next · ${next.title || cronTitle(next.name)} · ${cronWhenClock(next.next_run_at)}`
+    : "";
+  const need = failed.length
+    ? `${failed.length} need you`
+    : "";
   el.hidden = false;
   el.classList.toggle("on", Boolean(active));
-  el.innerHTML = `<div class="ceo-live-head"><b>Running · Result · Scheduled</b><i class="ceo-live-dot" aria-hidden="true"></i></div>
-    <div class="ceo-lanes">
-      <section class="ceo-lane${active ? " hot" : ""}"><h3>Running</h3>${runBits.join("") || `<p class="ceo-lane-empty">Nothing running.</p>`}</section>
-      <section class="ceo-lane"><h3>Result</h3>${result}</section>
-      <section class="ceo-lane"><h3>Scheduled</h3>${sched}</section>
+  el.innerHTML = `<div class="ceo-pulse">
+      <i class="ceo-live-dot" aria-hidden="true"></i>
+      <div class="ceo-pulse-copy">
+        <b>${escapeHtml(lead)}</b>
+        ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+        ${!active && snippet ? `<p class="ceo-pulse-result">${escapeHtml(snippet)}</p>` : ""}
+      </div>
+      ${need ? `<em>${escapeHtml(need)}</em>` : ""}
     </div>
-    <p>${escapeHtml(note)}</p>`;
+    ${nextLine && !active ? `<p class="ceo-next">${escapeHtml(nextLine)}</p>` : ""}`;
+  paintPulse();
 }
 
 async function loadCeoDigest() {
@@ -2939,6 +3004,7 @@ function applyConfig(data) {
     renderOrg(org);
   }
   if (data.engines) renderEngines(data.engines, "firstEngines");
+  paintPulse();
   renderSpend(data.spend);
   renderActivity(data.activity);
   if (data.work_dir) {
@@ -3187,38 +3253,28 @@ function renderAttachments(el, attachments) {
   el.appendChild(attDiv);
 }
 
+function appendReceipt(el, job) {
+  if (!el || !job || el.querySelector(".receipt")) return;
+  const line = receiptLine(job);
+  if (!line) return;
+  const rec = document.createElement("p");
+  rec.className = "receipt";
+  rec.textContent = line;
+  el.appendChild(rec);
+}
+
 function appendWorkDetails(el, job) {
-  if (!el || el.querySelector(".bubble-work")) return;
-  const engine = job.engine || "board";
-  if (engine === "board" || job.preset === "cos") return;
-  const details = document.createElement("details");
-  details.className = "bubble-work";
-  const summary = document.createElement("summary");
-  const cost = Number(job.usd_estimate || 0);
-  summary.textContent = [
-    job.engine || "board",
-    job.preset || "",
-    job.model && job.model !== "none" ? job.model : "",
-    cost ? `$${cost.toFixed(4)}` : ""
-  ].filter(Boolean).join(" · ");
-  details.appendChild(summary);
-  const bits = document.createElement("div");
-  bits.className = "muted";
-  bits.textContent = [
-    job.id ? `job ${job.id}` : "",
-    job.session ? `session ${job.session}` : "",
-    job.blocker ? `blocker ${job.blocker}` : ""
-  ].filter(Boolean).join(" · ");
-  if (bits.textContent) details.appendChild(bits);
-  if ((job.engine || "") === "Hermes Agent") {
+  if (!el || !job) return;
+  appendReceipt(el, job);
+  if ((job.engine || "") === "Hermes Agent" && !el.querySelector("[data-open-hermes]")) {
     const open = document.createElement("button");
     open.type = "button";
-    open.className = "ghost-btn";
+    open.className = "ghost-btn receipt-go";
+    open.dataset.openHermes = "1";
     open.textContent = "Open Hermes";
     open.addEventListener("click", () => setStage("hermes"));
-    details.appendChild(open);
+    el.appendChild(open);
   }
-  el.appendChild(details);
 }
 
 function settleLive(live, job) {
@@ -3545,24 +3601,28 @@ function renderJob(job) {
     return;
   }
   if (job.cron) {
+    if (cronJobIsNoise(job)) return;
     const title = cronTitle(job.cron_name || "Scheduled check");
     const outcome = job.cron_outcome || job.text || "";
     const nxt = job.cron_next || "";
     const when = job.cron_when ? cronWhen(job.cron_when) : "";
-    const lines = [`RESULT · ${title}`];
+    const report = cronReportText({ last_result: job.cron_result || job.text || "" }) || outcome;
+    const lines = [title];
     if (when) lines.push(`Last run ${when}`);
-    if (outcome && !/^RESULT\b/i.test(outcome)) lines.push(outcome);
-    else if (job.cron_outcome) lines.push(job.cron_outcome);
+    if (report && !/^RESULT\b/i.test(report) && !cronIsPromptDump(report)) {
+      lines.push(clipWire(report, 420));
+    }
     if (nxt && !/no action/i.test(nxt)) lines.push(`If needed: ${nxt}`);
     const el = bubble("bot", lines.join("\n"));
     el.classList.add("cron");
     if (job.id) el.setAttribute("data-job-id", job.id);
     stampLane(el, job);
+    appendReceipt(el, Object.assign({ engine: job.engine || "Hermes Agent", cron: true }, job));
     const actions = document.createElement("div");
     actions.className = "job-actions";
     const open = document.createElement("button");
     open.type = "button";
-    open.className = "send";
+    open.className = "ghost-btn";
     open.textContent = "Open schedule";
     open.addEventListener("click", () => openSchedule(job.cron_id || ""));
     actions.appendChild(open);
@@ -3578,6 +3638,7 @@ function renderJob(job) {
     el.setAttribute("data-job-id", job.id);
   }
   stampLane(el, job);
+  appendWorkDetails(el, job);
   if (job.step_count && job.total_steps) {
     const stepChip = document.createElement("div");
     stepChip.className = "step-chip";
@@ -3739,6 +3800,13 @@ function renderJob(job) {
   el.appendChild(diffBlock);
 }
 
+function cronJobIsNoise(job) {
+  const name = String((job && (job.cron_name || job.name)) || "").trim();
+  const slug = name.replace(/\s+/g, "-").toLowerCase();
+  return cronIsNoise({ name }) || cronIsNoise({ name: slug })
+    || /^(grok heartbeat|grok finish notify|grok build supervisor|grok build driver|alerts email outbox)$/i.test(name);
+}
+
 function isNoiseText(text) {
   const raw = String(text || "");
   if (!raw.trim()) return true;
@@ -3768,6 +3836,8 @@ function isNoiseTurn(turn) {
   if (!turn) return true;
   if (turn.role === "user") return !String(turn.text || "").trim();
   const job = turn.job || {};
+  if (cronJobIsNoise(job)) return true;
+  if (projectId && job.project_id && String(job.project_id) !== String(projectId)) return true;
   const text = job.text || turn.text || "";
   const message = job.message || "";
   return isNoiseText(text) || isNoiseText(message);
@@ -3782,25 +3852,28 @@ function emptyStreamHtml() {
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
-  let lead = "Pick a CEO on the left. Talk here like a normal chat — Cos routes the work.";
-  let showCTA = !project; // Show "Pick a CEO" on CoS empty state
+  let lead = "Type here. Cos routes the work.";
+  let showCTA = !project;
   if (worker && project) {
-    lead = `Talking to ${worker.name} on ${project.name}.`;
+    lead = `${worker.name} on ${project.name}. Type here.`;
     showCTA = false;
   } else if (project) {
     lead = project.id === "saa-homes"
-      ? "SAA Homes watches saahomes.com. Now running at the top shows this chat and any job this copy can see. Finished work lands here and in What’s happening. Telegram still owns the live schedule."
-      : `Talking to ${project.name}. Type a message — pin Code, Think, Research, or Ops only when you want that engine.`;
+      ? "Live Hermes still owns today’s ticks. Type here — this chat is the operator surface."
+      : "Type here. Pin Code, Think, Research, or Ops only when you want that engine.";
     showCTA = false;
   }
+  const nowLine = now && now !== "source of truth" && now !== "—"
+    ? `<p class="empty-now">${escapeHtml(now)}</p>`
+    : "";
+  const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
   return `
     <div class="empty-stream" id="streamEmpty">
       <p class="empty-kicker">${escapeHtml(whereLabel())}</p>
       <h1>${escapeHtml(title)}</h1>
-      <p><b>Now</b> ${escapeHtml(now === "source of truth" ? "—" : now)}</p>
-      ${nxt ? `<p><b>Next</b> ${escapeHtml(nxt)}</p>` : ""}
-      ${stuck ? `<p><b>Blocked</b> ${escapeHtml(stuck)}</p>` : "<p>Nothing blocked on the brief.</p>"}
-      <p>${lead}</p>
+      ${nowLine}
+      ${stuckLine}
+      <p>${escapeHtml(lead)}</p>
       ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">☰ Pick a CEO</button>' : ""}
     </div>`;
 }
@@ -3836,19 +3909,12 @@ function renderTurns(turns, extras) {
   if (telegramKeep.length) {
     const banner = document.createElement("p");
     banner.className = "channel-banner";
-    banner.textContent = projectId === "saa-homes"
-      ? "SAA’s live Hermes box is on Railway. Telegram gets today’s work. Replies here stay on this board."
-      : "A short slice from Telegram. Replies here stay on this board.";
+    banner.textContent = "From Telegram. Replies stay on this board.";
     stream.appendChild(banner);
     telegramKeep.forEach((turn) => {
       const el = bubble(turn.role === "user" ? "user" : "bot", turn.text || "");
       if (turn.role !== "user") el.classList.add("from-telegram");
     });
-  } else if (projectId === "saa-homes") {
-    const banner = document.createElement("p");
-    banner.className = "channel-banner";
-    banner.textContent = "SAA’s live Hermes box is on Railway. Telegram gets today’s work. This chat is the operator surface.";
-    stream.appendChild(banner);
   }
   let lastBot = "";
   rows.forEach((turn, index) => {

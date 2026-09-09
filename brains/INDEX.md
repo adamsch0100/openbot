@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Live SAA Hermes: 50 jobs, 27 ok, 19 failed. indexation-patrol is running now on the live box.
-Last: form-pipeline-health ok 06:38 UTC on OpenCode Go. Most remaining failures are gateway-shutdown from the last Railway boot.
-Next: Finish indexation-patrol, then retry failed jobs one at a time. Skip conversion-surge. Open Full schedule on SAA Homes.
-Blocker: —
+Now: Board chat is one conversation — pulse, spend, engines. Live SAA: wait for weekly-operator-schedule; do not stampede.
+Last: Frontend craft — Cos dump gone, SAA lecture gone, honest receipts. indexation-patrol ended unknown; form-pipeline-health ok.
+Next: Watch the board. Then one more gateway-shutdown job. Skip conversion-surge.
+Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue. Patrol result unknown; do not assume pages were fixed.
 
 ## Vault
 

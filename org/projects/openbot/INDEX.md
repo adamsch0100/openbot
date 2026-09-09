@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: WC-8 harness+partial live smoke (2/4; Builder/Research PIN-blocked; Ops GET /api/routines only, not create-cron).
-Last: WC-7 Self-Build Loop, WC-6 Polish Pack (skills catalog, routine templates), WC-5 Observability, WC-4 Onboarding, WC-3 Spend Dashboard, WC-2 Coding Worker Hardening, WC-1 True Parallel Multi-Agent.
-Next: WC-8 live smoke (PIN unlock) OR operator directs next
-Blocker: reject restore failed (5c6c274481)
+Now: Board UI pulse + receipts + quiet Cos/SAA chat. Hold PR #48.
+Last: Frontend craft on Chat — status in chrome, not a dump on the stream.
+Next: Watch the live board. Do not fire SAA crons until weekly-operator-schedule finishes.
+Blocker: Do not fire another SAA cron until weekly-operator-schedule finishes. Digest 401 is saahomes CRON_SECRET, not this board.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
 Folder: C:\Users\adamm\Projects\openbot

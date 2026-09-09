@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
   <link rel="apple-touch-icon" href="/favicon.png?v=2" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=81" />
+  <link rel="stylesheet" href="/styles.css?v=82" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -132,6 +132,11 @@
       <button type="button" class="stage-btn" data-stage="hermes">Hermes</button>
     </nav>
     <div class="bar-right">
+      <div class="pulse" id="pulse" title="What’s running, and which engines this board found">
+        <i aria-hidden="true"></i>
+        <span>Idle</span>
+        <small>board</small>
+      </div>
       <div class="engine-hint hidden" id="hermesHint">
         <p class="muted" id="hermesStatus"></p>
         <button type="button" class="ghost-btn hidden" id="retryHermes">Retry</button>
@@ -661,6 +666,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=91"></script>
+  <script src="/app.js?v=93"></script>
 </body>
 </html>
