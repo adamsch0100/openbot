@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Redeploy OpenBot with hermes gateway run in Docker. lead-attribution-brief is the one live retry.
-Last: Container `gateway start` does not keep a process. local-events-monthly succeeded.
-Next: Wait for 5024ba46. Hold PR #48. Open PR for board-pulse-cron-noise.
+Now: OpenBot Railway gateway supervise is live (saa-homes PID 103). Health 200.
+Last: hermes gateway run in Docker; start was a no-op. lead-attribution-brief ok.
+Next: Hold PR #48. Open compare URL for board-pulse-cron-noise. One more gateway-shutdown later.
 Blocker: Digest 401 is saahomes CRON_SECRET, not this board. Do not Accept parked restore cards.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
