@@ -1029,7 +1029,7 @@ def apply_cron_status_overlay(home: str | Path | None, overlay: list[dict]) -> i
 
 def railway_cmd() -> list[str]:
     found = shutil.which("railway")
-    if found:
+    if found and not str(found).lower().endswith(".cmd"):
         return [found]
     js = Path.home() / "AppData" / "Roaming" / "npm" / "node_modules" / "@railway" / "cli" / "bin" / "railway.js"
     if js.is_file():
@@ -1037,6 +1037,8 @@ def railway_cmd() -> list[str]:
     linux = Path("/usr/local/bin/railway")
     if linux.is_file():
         return [str(linux)]
+    if found:
+        return [found]
     return []
 
 
@@ -1141,22 +1143,42 @@ def _overlay_jobs_from_text(text: str) -> list[dict]:
     return out
 
 
+def _mark_overlay_live(overlay: list[dict], live_ids: set[str] | None = None) -> list[dict]:
+    ids = live_ids if live_ids is not None else set()
+    if live_ids is None and overlay and railway_cmd():
+        try:
+            ran = saa_live_ssh(["hermes", "cron", "runs", "--limit", "25"], timeout=40)
+            ids = set(parse_hermes_running_job_ids((ran.stdout or "") + "\n" + (ran.stderr or "")))
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            ids = set()
+    out = []
+    for row in overlay or []:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        item["live"] = str(item.get("id") or "") in ids
+        out.append(item)
+    return out
+
+
 def dump_saa_live_cron_overlay() -> list[dict]:
     cached = load_saa_overlay_cache()
-    if not railway_cmd():
-        return cached
-    try:
-        wrote = saa_live_ssh(["tee", "/tmp/saa-overlay-dump.py"], timeout=20, stdin=_SAA_OVERLAY_REMOTE)
-        if wrote.returncode != 0:
-            return cached
-        ran = saa_live_ssh(["python3", "/tmp/saa-overlay-dump.py"], timeout=60)
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        return cached
-    overlay = _overlay_jobs_from_text((ran.stdout or "") + "\n" + (ran.stderr or ""))
-    if not overlay:
-        return cached
-    save_saa_overlay_cache(overlay)
-    return overlay
+    overlay = cached
+    if railway_cmd():
+        try:
+            wrote = saa_live_ssh(["tee", "/tmp/saa-overlay-dump.py"], timeout=20, stdin=_SAA_OVERLAY_REMOTE)
+            if wrote.returncode == 0:
+                ran = saa_live_ssh(["python3", "/tmp/saa-overlay-dump.py"], timeout=60)
+                dumped = _overlay_jobs_from_text((ran.stdout or "") + "\n" + (ran.stderr or ""))
+                if dumped:
+                    overlay = dumped
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            overlay = cached
+        overlay = _mark_overlay_live(overlay)
+        if overlay:
+            save_saa_overlay_cache(overlay)
+            return overlay
+    return overlay or cached
 
 
 def overlay_to_cron_rows(overlay: list[dict]) -> list[dict]:
@@ -1425,7 +1447,10 @@ def saa_live_nudge_due(job_id: str) -> dict:
 
 def saa_catchup_next(overlay: list[dict]) -> str:
     """Next leftover job the live gateway should own. Empty if caught up or a run is in flight."""
-    by_id = {str(row.get("id") or ""): row for row in overlay if isinstance(row, dict)}
+    rows = [row for row in overlay if isinstance(row, dict)]
+    if any(row.get("live") is True for row in rows):
+        return ""
+    by_id = {str(row.get("id") or ""): row for row in rows}
     for jid in SAA_CATCHUP_IDS:
         if jid in SAA_CRON_SKIP:
             continue
@@ -1593,9 +1618,32 @@ def _cron_digest_item(row: dict, enabled: bool) -> dict:
     }
 
 
+_HERMES_RUN_JOB = re.compile(r"job=([0-9a-f]{8,})", re.I)
+
+
+def parse_hermes_running_job_ids(text: str) -> list[str]:
+    """Job ids Hermes lists as running. last_status on jobs.json stays the previous run."""
+    ids: list[str] = []
+    seen: set[str] = set()
+    for line in str(text or "").splitlines():
+        if not re.search(r"\brunning\b", line, re.I):
+            continue
+        match = _HERMES_RUN_JOB.search(line)
+        if not match:
+            continue
+        jid = match.group(1)
+        if jid in seen:
+            continue
+        seen.add(jid)
+        ids.append(jid)
+    return ids
+
+
 def _cron_is_running(row: dict) -> bool:
     if row.get("enabled") is False:
         return False
+    if row.get("live") is True:
+        return True
     state = str(row.get("state") or "")
     if _CRON_PAUSED.search(state):
         return False

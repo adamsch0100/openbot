@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Live board was aiming OpenCode/Hermes at laptop paths. Resolve to dirs that exist on this box.
-Last: SAA Hermes has 51 jobs. Hosted Doing/Next/Results were 0 because overlay SSH had no railway CLI.
-Next: Ship overlay cache plus live engine path resolve. Do not redeploy SAA Homes Hermes.
-Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
+Now: Visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes; receipts name the engine
+Last: Per-engine heads. Receipts are a visible line. Cron cards say Hermes Agent, not the Go wallet. No third agent.
+Next: Hard-refresh ?v=111. Open SAA Homes if you want the report, or keep going from Chief of Staff
+Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes. GBP login: skip. Do not stampede.
 
 ## Vault
 

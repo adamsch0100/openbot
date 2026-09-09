@@ -522,6 +522,42 @@ class TestJobIdValidation(unittest.TestCase):
             rows = dump_saa_live_cron_overlay()
         self.assertEqual(rows[0]["id"], "7cb2a72c1cc8")
 
+    def test_hermes_running_ids_mark_live_even_when_last_status_is_error(self):
+        from openbot.hermes import _mark_overlay_live, cron_digest, parse_hermes_running_job_ids, saa_catchup_next
+
+        text = (
+            "0e523a0b687b457a83aef8175a9274a9  running    job=77bfe1c9f7a1  source=builtin  2026-09-09T21:44:54Z\n"
+            "3c628d9a67ec4d1e9aabe1fded643104  unknown    job=38041c7a6501  source=builtin  2026-09-09T21:31:57Z\n"
+        )
+        self.assertEqual(parse_hermes_running_job_ids(text), ["77bfe1c9f7a1"])
+        marked = _mark_overlay_live(
+            [
+                {
+                    "id": "77bfe1c9f7a1",
+                    "name": "content-gap-offense",
+                    "last_status": "error",
+                    "enabled": True,
+                    "state": "scheduled",
+                    "last_error": "Gateway shutdown",
+                },
+                {
+                    "id": "38041c7a6501",
+                    "name": "geo-citation-audit",
+                    "last_status": "error",
+                    "enabled": True,
+                    "state": "scheduled",
+                },
+            ],
+            {"77bfe1c9f7a1"},
+        )
+        self.assertTrue(marked[0]["live"])
+        self.assertFalse(marked[1]["live"])
+        pack = cron_digest(marked)
+        self.assertEqual(pack["running"][0]["id"], "77bfe1c9f7a1")
+        self.assertTrue("Now running" in pack["live_story"])
+        self.assertFalse(any(row["id"] == "77bfe1c9f7a1" for row in pack["failed"]))
+        self.assertEqual(saa_catchup_next(marked), "")
+
 
 if __name__ == "__main__":
     unittest.main()
