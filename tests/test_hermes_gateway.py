@@ -348,6 +348,23 @@ class TestGatewaySupervise(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         mock_ensure.assert_called_once_with("saa-homes")
 
+    @patch("openbot.hermes.gateway_start")
+    @patch("openbot.launch._ceo_hermes_home", return_value="/data/hermes-homes/saa-homes")
+    def test_supervise_does_not_start_on_status_timeout(self, _home, mock_start):
+        from openbot.launch import ensure_supervised_gateway
+
+        with patch("openbot.hermes.gateway_status", return_value={
+            "ok": False,
+            "code": 124,
+            "running": False,
+            "error": "hermes timed out",
+            "text": "hermes timed out",
+        }):
+            row = ensure_supervised_gateway("saa-homes")
+        self.assertTrue(row.get("skipped"))
+        self.assertFalse(row.get("started"))
+        mock_start.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

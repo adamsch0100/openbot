@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Board idle. Supervising SAA Hermes gateway after Railway deploy (not warm_engines). Firing local-events-monthly alone.
-Last: weekly-operator-schedule succeeded. Stale patrol fire_claim no longer paints as running.
-Next: Wait for local-events-monthly 10d8085a794c. Then one more gateway-shutdown. Skip conversion-surge. Hard-refresh ?v=96.
-Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue.
+Now: OpenBot Railway (01:20) still only warms OpenCode + Hermes dashboard. lead-attribution-brief 5024ba46 is the one live retry.
+Last: local-events-monthly succeeded (46f73407). Live SAA gateway is up, not a system service.
+Next: Deploy board-pulse-cron-noise to OpenBot. Wait for 5024ba46. Do not stampede. Hold PR #48. Do not Accept parked restore cards.
+Blocker: saved-search-alerts-digest 401 is saahomes CRON_SECRET on the site API — not OpenBot glue. Last digest run was ok.
 
 ## Vault
 

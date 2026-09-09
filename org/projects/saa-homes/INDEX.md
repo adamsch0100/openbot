@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Board idle. Firing local-events-monthly 10d8085a794c alone on live Hermes.
-Last: weekly-operator-schedule succeeded. Stale patrol claim no longer looks like running.
-Next: Wait for that one job. Do not stampede. Do not hermes cron run on this imported home.
-Blocker: digest 401 = saahomes CRON_SECRET mismatch. Do not fire a second job until this one ends.
+Now: lead-attribution-brief 4653f6aafc76 running detached (5024ba46 at 12:47 UTC).
+Last: local-events-monthly succeeded (46f73407). Live gateway is up, not installed as a service.
+Next: Wait for that one job. Do not stampede. Do not hermes cron run on this imported home. Do not Accept parked restore cards.
+Blocker: digest 401 = saahomes CRON_SECRET mismatch. Skip conversion-surge.
 Goals: —
 
 Folder: C:\Users\adamm\Projects\saahomes

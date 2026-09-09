@@ -746,6 +746,18 @@ def ensure_supervised_gateway(project_id: str) -> dict:
             "project_id": project_id,
             "home": home,
         }
+    code = int(status.get("code") or 0)
+    err = str(status.get("error") or status.get("text") or "").lower()
+    if code == 124 or "timed out" in err:
+        return {
+            "ok": True,
+            "skipped": True,
+            "started": False,
+            "running": False,
+            "project_id": project_id,
+            "home": home,
+            "reason": "gateway status timed out; not starting a second process",
+        }
     result = gateway_start(home, wait=False)
     result["project_id"] = project_id
     result["home"] = home
@@ -792,6 +804,8 @@ def supervise_ceo_gateways_background(interval: int | None = None) -> None:
                 elif not row.get("ok"):
                     print(f"[openbot] gateway supervise {pid}: {row.get('error') or row.get('text')}", flush=True)
                 if delivery_done or not _delivery_migrate_enabled():
+                    continue
+                if row.get("skipped") or not row.get("ok"):
                     continue
                 dry = migrate_supervised_delivery(str(pid), dry_run=True)
                 pending = dry.get("migrated") or []
