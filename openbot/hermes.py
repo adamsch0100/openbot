@@ -1271,7 +1271,7 @@ def saa_catchup_next(overlay: list[dict]) -> str:
         row = by_id.get(jid) or {}
         if row.get("enabled") is False or str(row.get("state") or "") == "paused":
             continue
-        if _claim_is_live(row):
+        if _claim_is_live(row) and not _claim_is_stale(row):
             return ""
         status = str(row.get("last_status") or "").strip().lower()
         if status in {"", "never", "error", "fail", "failed"}:
@@ -1399,6 +1399,14 @@ def _claim_is_live(row: dict) -> bool:
     if claim_at and last is None:
         return True
     return False
+
+
+def _claim_is_stale(row: dict, max_age: float = 20 * 60) -> bool:
+    """SSH-owned claims that never got last_run_at should not block gateway catch-up."""
+    claim_at = _claim_at(row)
+    if not claim_at:
+        return False
+    return (datetime.now(timezone.utc) - claim_at).total_seconds() > max_age
 
 
 def _cron_digest_item(row: dict, enabled: bool) -> dict:
