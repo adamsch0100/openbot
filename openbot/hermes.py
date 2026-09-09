@@ -66,6 +66,32 @@ TOOL_MARKUP = re.compile(
     r"function\s*calls?\s*begin|function\s*calls?\s*end)",
     re.I,
 )
+PACKET_LINE = re.compile(
+    r"^(You are the |You report to Chief of Staff|The (human )?operator |"
+    r"You dispatch |Your job is triage|Before doing substantial|"
+    r"Do not hire a Bot|Reply like a person|You do not edit files|"
+    r"No RESULT\.|Do not mention Now|Do not print session_id|"
+    r"If RECENT TELEGRAM|Never ask the operator to paste|"
+    r"If they ask to run all existing|OpenCode edits your|"
+    r"You own the outcome|Chat is not memory|"
+    r"Report a short RESULT|Name the engine that ran|"
+    r"Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|"
+    r"Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
+    r"OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|"
+    r"The operator is in OpenBot Chat|Specialist lanes execute)",
+    re.I,
+)
+META_JUNK = re.compile(
+    r"(?:!!!?\s*CONTRIBUTOR\s+TIER|This\s+is\s+Meta'?s?\s+contributor\s+tier|"
+    r"This\s+model\s+is\s+in\s+Meta'?s?\s+contributor\s+tier)"
+    r"[\s\S]*?(?=\n\n(?:Now|Last|Next|RESULT):|\n(?:Now|Last|Next|RESULT):|$)",
+    re.I,
+)
+CRON_PROMPT_DUMP = re.compile(
+    r"^#\s*Cron Job:[\s\S]*?(?=^##\s*Response\s*$|\Z)",
+    re.I | re.M,
+)
+
 TOOL_ACTIVITY = re.compile(
     r"(?:^|\n)(?:→|•|\*)\s*(?:"
     r"run\s+terminal|"
@@ -149,7 +175,44 @@ def clean_hermes_text(text: str) -> str:
     cleaned = "\n".join(lines).strip()
     cleaned = TOOL_MARKUP.sub("", cleaned).strip()
     cleaned = re.sub(r"<\|?/?DSML[^>]*>", "", cleaned, flags=re.I).strip()
-    return cleaned
+    return _human_hermes_text(cleaned)
+
+
+def _status_only(text: str) -> bool:
+    rows = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    return bool(rows) and all(re.match(r"^(Now|Last|Next|Blocker):", line, re.I) for line in rows)
+
+
+def _human_hermes_text(text: str) -> str:
+    cleaned = META_JUNK.sub("", text or "").strip()
+    cleaned = re.sub(r"https?://dev\.meta\.ai/\S+", "", cleaned)
+    cleaned = CRON_PROMPT_DUMP.sub("", cleaned).strip()
+    response = re.search(r"^##\s*Response\s*$", cleaned, re.I | re.M)
+    if response:
+        body = cleaned[response.end() :].strip()
+        if body and not re.match(r"^\[SILENT\]", body, re.I):
+            cleaned = body
+    result = re.search(r"^RESULT(?:\s*\([^)]*\))?\s*$", cleaned, re.I | re.M)
+    if result:
+        body = cleaned[result.end() :].strip()
+        handoff = re.search(r"^HANDOFF\b", body, re.I | re.M)
+        if handoff:
+            body = body[: handoff.start()].strip()
+        if body:
+            cleaned = body
+    if _status_only(cleaned):
+        return cleaned
+    kept: list[str] = []
+    started = False
+    for line in cleaned.splitlines():
+        stripped = line.strip()
+        if not started and PACKET_LINE.match(stripped):
+            continue
+        if not started and not stripped:
+            continue
+        started = True
+        kept.append(line)
+    return "\n".join(kept).strip()
 
 
 def chat_packet(name: str, status: str, task: str) -> str:

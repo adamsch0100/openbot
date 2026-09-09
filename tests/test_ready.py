@@ -72,7 +72,7 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("Open schedule", js)
         self.assertIn("All scheduled", js)
         self.assertIn("function cronIsPromptDump", js)
-        self.assertIn("**Job ID:**", js)
+        self.assertIn("Job ID:", js)
         self.assertIn("function cronIsNoise", js)
         self.assertIn("function cronJobIsNoise", js)
         self.assertIn("function paintPulse", js)
