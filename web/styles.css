@@ -1673,6 +1673,31 @@ body {
   padding: 0.05em 0.35em;
   border-radius: 4px;
 }
+.bot-stats {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 0.7em;
+}
+.bot-stats:last-child { margin-bottom: 0; }
+.bot-stats > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.bot-stats dt {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bronze);
+}
+.bot-stats dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.45;
+}
 .bubble-work { margin-top: 2px; min-width: 0; }
 .bubble-work summary {
   cursor: pointer;
@@ -2160,6 +2185,10 @@ footer a { color: var(--bronze); }
     padding: 4px 8px;
   }
   .pulse small { display: none; }
+  .bot-stats > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
   
   /* Chat stage: full-width chat, rail as overlay */
   #stage-chat.on { 

@@ -336,6 +336,11 @@ function sentenceSplit(text) {
   return parts.map((part) => part.trim()).filter(Boolean);
 }
 
+function labeledRows(rows) {
+  const hits = rows.filter((row) => /^[^:]{1,40}:\s+\S/.test(row)).length;
+  return hits >= Math.min(2, rows.length);
+}
+
 function formatBotHtml(text) {
   const cleaned = cleanBotText(text);
   if (!cleaned) return "";
@@ -356,19 +361,34 @@ function formatBotHtml(text) {
       leadDone = true;
       return;
     }
-    const body = rows.join(" ");
-    if (!leadDone && !html.length && body.length > 280) {
+    if (statusOnly(chunk) || labeledRows(rows)) {
+      const items = rows.map((row) => {
+        const match = row.match(/^([^:]{1,40}):\s*(.*)$/);
+        if (!match) return `<div><dd>${inlineBotHtml(row)}</dd></div>`;
+        return `<div><dt>${escapeHtml(match[1])}</dt><dd>${inlineBotHtml(match[2])}</dd></div>`;
+      }).join("");
+      html.push(`<dl class="bot-stats">${items}</dl>`);
+      leadDone = true;
+      return;
+    }
+    if (rows.length > 1) {
+      rows.forEach((row, index) => {
+        html.push(`<p${leadDone || index ? "" : " class=\"bot-lead\""}>${inlineBotHtml(row)}</p>`);
+      });
+      leadDone = true;
+      return;
+    }
+    const body = rows[0];
+    if (!leadDone && body.length > 280) {
       const sentences = sentenceSplit(body);
       if (sentences.length > 1) {
         html.push(`<p class="bot-lead">${inlineBotHtml(sentences[0])}</p>`);
-        sentences.slice(1).forEach((sentence) => {
-          html.push(`<p>${inlineBotHtml(sentence)}</p>`);
-        });
+        sentences.slice(1).forEach((sentence) => html.push(`<p>${inlineBotHtml(sentence)}</p>`));
         leadDone = true;
         return;
       }
     }
-    html.push(`<p${leadDone ? "" : " class=\"bot-lead\""}>${inlineBotHtml(rows.join("\n"))}</p>`);
+    html.push(`<p${leadDone ? "" : " class=\"bot-lead\""}>${inlineBotHtml(body)}</p>`);
     leadDone = true;
   });
   if (split.handoff) {
@@ -3352,6 +3372,9 @@ function renderAttachments(el, attachments) {
 
 function appendReceipt(el, job) {
   if (!el || !job || el.querySelector(".receipt-fold.engine")) return;
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board");
+  const cost = Number(job.usd_estimate || 0);
+  if ((engine === "board" || job.preset === "cos") && !cost && !job.cron) return;
   const line = receiptLine(job);
   if (!line) return;
   const rec = document.createElement("details");
