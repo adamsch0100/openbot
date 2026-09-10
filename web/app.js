@@ -560,6 +560,21 @@ function renderEngines(engines, targetId) {
   `;
 }
 
+function briefHonestyLine(cleaned) {
+  const counts = workCounts();
+  const project = currentProject();
+  const fromNow = indexLineUseful(project && project.index_now)
+    || indexLineUseful(indexField(cleaned, "Now"));
+  const fromNext = indexLineUseful(project && project.index_next)
+    || indexLineUseful(indexField(cleaned, "Next"));
+  const rawNow = indexNow(cleaned);
+  let line = fromNow || fromNext || (rawNow !== "source of truth" ? indexLineUseful(rawNow) : "");
+  line = honestWorkLine(line, counts) || line;
+  if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
+  else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Next`;
+  return line || rawNow || "source of truth";
+}
+
 function indexNow(text) {
   const match = String(text || "").match(/^Now:\s*(.*)$/m);
   return (match && match[1].trim()) || "source of truth";
@@ -574,7 +589,7 @@ function indexField(text, field) {
 function renderIndex(text) {
   const cleaned = cleanBotText(text);
   if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty brief)";
-  if ($("indexSummary")) $("indexSummary").textContent = `Brief · ${indexNow(cleaned)}`;
+  if ($("indexSummary")) $("indexSummary").textContent = `Brief · ${briefHonestyLine(cleaned)}`;
   paintWorkStatus();
 }
 
@@ -2617,14 +2632,20 @@ function jobStoryTitle(job) {
 
 function ceoWire(project) {
   const now = cleanBotText(project.index_now || "").trim();
+  const nxt = cleanBotText(project.index_next || "").trim();
   const blocker = cleanBotText(project.index_blocker || "").trim();
   const busy = lives.has(aimKey(project.id, ""));
+  const counts = workCounts(project.id);
   if (blocker && blocker !== "—") return `Blocked · ${clipWire(blocker, 42)}`;
   if (busy) {
     const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
     return `Running · ${clipWire(line, 42)}`;
   }
-  if (now && now !== "source of truth" && now !== "—") return clipWire(now, 56);
+  let line = (now && now !== "source of truth" && now !== "—") ? now : ((nxt && nxt !== "—") ? nxt : "");
+  line = honestWorkLine(line, counts) || line;
+  if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
+  else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Next`;
+  if (line) return clipWire(line, 56);
   return "";
 }
 
@@ -3187,7 +3208,7 @@ function renderBotMeta(opts) {
   const project = currentProject();
   const label = worker ? `${worker.name} brief` : project ? `${project.name} brief` : "Chief of Staff brief";
   if ($("indexSummary")) {
-    $("indexSummary").textContent = `${label} · ${indexNow(cleaned)}`;
+    $("indexSummary").textContent = `${label} · ${briefHonestyLine(cleaned)}`;
   }
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
@@ -3350,20 +3371,21 @@ function paintScheduleButton() {
   if (btn) btn.hidden = true;
 }
 
-function workCounts() {
-  const pack = digestCache.get(projectId) || {};
+function workCounts(forProjectId) {
+  const aim = (forProjectId === undefined) ? projectId : forProjectId;
+  const pack = digestCache.get(aim) || {};
   const list = (pack.crons || []).filter((row) => !cronIsNoise(row));
   const boardRuns = ((pack.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => (
-    !projectId || String(row.project_id || "") === String(projectId)
+    !aim || String(row.project_id || "") === String(aim)
   ));
   const liveChats = [...lives.keys()].filter((key) => {
-    if (!projectId) return true;
-    return String(key || "").startsWith(`${projectId}::`);
+    if (!aim) return true;
+    return String(key || "").startsWith(`${aim}::`);
   }).length;
   const doing = list.filter((row) => cronIsLive(row)).length
     + boardRuns.length
     + liveChats
-    + ((liveRunId && !liveChats) ? 1 : 0);
+    + ((liveRunId && aim === projectId && !liveChats) ? 1 : 0);
   const failed = list.filter((row) => cronIsFailed(row));
   const gateway = failed.filter((row) => cronIsGatewayFail(row));
   const freshFail = failed.filter((row) => !cronIsGatewayFail(row) && !cronIsStaleFail(row));
@@ -3372,7 +3394,7 @@ function workCounts() {
   const next = list.filter((row) => (
     row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && !cronIsFailed(row) && cronIsDueSoon(row)
   )).length;
-  if (!projectId) {
+  if (!aim) {
     const projects = ((cfg.org && cfg.org.projects) || []);
     const orgNext = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—").length;
     const jobs = (((cfg.activity || {}).jobs) || []);
@@ -3386,7 +3408,7 @@ function workCounts() {
     results,
     failed: freshFail.length + (gateway.length ? 1 : 0),
     // Ready only after a finished digest fetch — avoids 0→N flash on CEO switch.
-    ready: digestKnown.has(projectId)
+    ready: digestKnown.has(aim)
   };
 }
 
@@ -3886,6 +3908,7 @@ async function loadCeoDigest(refreshLive) {
       paintCeoLive(data);
       paintWorkTabs();
       paintEmbedLive();
+      if (org && org.projects) renderOrg(org);
       if (scheduleOpen) renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
     }
     return data;
@@ -5288,7 +5311,7 @@ function emptyStreamHtml() {
   const project = currentProject();
   const worker = currentWorker();
   const text = cleanBotText(selectedIndexText());
-  const now = indexNow(text);
+  const now = briefHonestyLine(text);
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
