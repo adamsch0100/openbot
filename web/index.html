@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=3" />
   <link rel="apple-touch-icon" href="/favicon.png?v=3" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=125" />
+  <link rel="stylesheet" href="/styles.css?v=127" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -151,6 +151,7 @@
     <div class="rail-scrim" id="railScrim"></div>
     <aside class="rail" id="rail">
       <nav class="org" id="orgTree" aria-label="Projects"></nav>
+      <div class="org-add-slot" id="orgAddCeoSlot"></div>
       <p class="sr-only" id="orgStatus" aria-live="polite"></p>
       <div class="profile-dock" id="profileDock">
         <button type="button" class="profile-card" id="openSettings" data-panel="you">
@@ -231,7 +232,7 @@
         <div class="composer-input-row">
           <button type="button" class="attach-btn" id="attachBtn" title="Attach files or images">📎</button>
           <textarea id="msg" rows="1" placeholder="Message Chief of Staff"></textarea>
-          <details class="route-hatch" id="routeHatch">
+          <details class="route-hatch" id="routeHatch" hidden>
             <summary id="routeHatchSummary">Auto</summary>
             <div class="route-menu" id="routeMenu" role="listbox" aria-label="Force send mode">
               <button type="button" role="option" data-route="cos">Auto</button>
@@ -360,6 +361,10 @@
               <input id="licenseKey" type="password" autocomplete="off" placeholder="stored on this machine" />
             </div>
             <p class="muted" id="licenseNote"></p>
+            <div class="actions" id="addCeoSettingsRow">
+              <button type="button" class="ghost-btn" id="settingsAddCeo">Add CEO</button>
+              <p class="muted">Opens the same Add CEO flow as the org rail.</p>
+            </div>
             <div class="actions">
               <button type="button" class="send" id="saveYou">Save</button>
               <button type="button" class="ghost-btn" id="clearPin">Clear PIN</button>
@@ -721,6 +726,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=125"></script>
+  <script src="/app.js?v=127"></script>
 </body>
 </html>

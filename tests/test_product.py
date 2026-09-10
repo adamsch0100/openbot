@@ -214,6 +214,7 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn("appearance: none", css)
         self.assertIn('id="routeHatch"', html)
         self.assertIn("function setRoute", js)
+        self.assertIn("hatch.hidden = !forced", js)
         self.assertIn("function paintLanes", js)
         self.assertIn("function applyLaneFilter", js)
         self.assertIn("function startReply", js)

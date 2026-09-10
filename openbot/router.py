@@ -981,6 +981,16 @@ def need_choices(row: dict) -> list[dict]:
             {"id": "reject", "label": "Reject"},
             {"id": "open", "label": "See diff"},
         ]
+    if kind == "cookie_export":
+        return [
+            {"id": "allow_cookie_export", "label": "Allow cookie export · Nadia vault only"},
+            {"id": "deny", "label": "Deny"},
+        ]
+    if kind == "facebook_approval":
+        return [
+            {"id": "allow_facebook", "label": "Approve Facebook · ListLogic vault only"},
+            {"id": "deny", "label": "Deny"},
+        ]
     if kind == "gate":
         return [
             {"id": "allow", "label": "Allow"},
