@@ -122,6 +122,7 @@ def _ingest_overlay_rows(project_id: str) -> list[dict]:
     rows = overlay_to_cron_rows(load_saa_overlay_cache())
     if not rows:
         return []
+    hermes_home = str(project_tools(project_id).get("hermes_home") or "").strip() or None
     seen = _load_seen()
     known = set(seen.get("lines") or [])
     now = datetime.now(timezone.utc)
