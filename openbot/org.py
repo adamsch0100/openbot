@@ -110,6 +110,7 @@ def _carry_tools(row: dict) -> dict:
         "hermes_home",
         "hermes_instance_id",
         "hermes_session_id",
+        "opencode_session_id",
         "account_id",
         "fallback",
         "site_url",

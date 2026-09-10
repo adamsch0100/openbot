@@ -1718,6 +1718,63 @@ class OrgTests(unittest.TestCase):
             org_mod.PROFILE_PATH = old_profile
             org_mod.HERMES_HOMES = old_homes
 
+    def test_opencode_session_survives_ensure_org(self):
+        """Regression test: opencode_session_id must survive ensure_org() rebuild."""
+        import openbot.org as org_mod
+
+        old_org = org_mod.ORG
+        old_profile = org_mod.PROFILE_PATH
+        old_homes = org_mod.HERMES_HOMES
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                work = root / "work"
+                work.mkdir()
+                org_mod.ORG = root / "org"
+                org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+                org_mod.HERMES_HOMES = root / "hermes-homes"
+                org_mod.ORG.mkdir()
+                org_mod.PROFILE_PATH.write_text(
+                    json.dumps(
+                        {
+                            "name": "OPENBOT",
+                            "role": "cos",
+                            "folder": str(work),
+                            "projects": [
+                                {
+                                    "id": "saa-homes",
+                                    "name": "SAA Homes",
+                                    "role": "ceo",
+                                    "folder": str(work),
+                                    "primary": False,
+                                    "workers": [],
+                                    "hermes_home": str(org_mod.HERMES_HOMES / "saa-homes"),
+                                    "opencode_session_id": "ses_f76aac189ffeDZM9fzq0xE51dQ",
+                                }
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                # First call to ensure_org should preserve opencode_session_id
+                data = org_mod.ensure_org()
+                ceo = next(row for row in data["projects"] if row["id"] == "saa-homes")
+                self.assertEqual(ceo["tools"]["opencode_session_id"], "ses_f76aac189ffeDZM9fzq0xE51dQ")
+                
+                # Second call simulates GET /api/org which calls ensure_org again
+                data2 = org_mod.ensure_org()
+                ceo2 = next(row for row in data2["projects"] if row["id"] == "saa-homes")
+                self.assertEqual(ceo2["tools"]["opencode_session_id"], "ses_f76aac189ffeDZM9fzq0xE51dQ")
+                
+                # Also verify it's in the raw saved data
+                saved = org_mod._load_saved()
+                raw_ceo = next(row for row in saved["projects"] if row["id"] == "saa-homes")
+                self.assertEqual(raw_ceo["opencode_session_id"], "ses_f76aac189ffeDZM9fzq0xE51dQ")
+        finally:
+            org_mod.ORG = old_org
+            org_mod.PROFILE_PATH = old_profile
+            org_mod.HERMES_HOMES = old_homes
+
 
 class StaffBusTests(unittest.TestCase):
     def test_cos_has_no_engine_home(self):
