@@ -1016,6 +1016,12 @@ def ensure_supervised_gateway(project_id: str) -> dict:
             "home": home,
             "reason": "gateway status timed out; not starting a second process",
         }
+    try:
+        from .keyring import preserve_merge_hermes_env
+
+        preserve_merge_hermes_env(home)
+    except Exception:
+        pass
     result = gateway_start(home, wait=False)
     result["project_id"] = project_id
     result["home"] = home
