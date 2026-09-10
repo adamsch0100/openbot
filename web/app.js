@@ -596,18 +596,14 @@ function paintWorkStatus() {
   const now = indexLineUseful(project && project.index_now) || indexLineUseful(indexField(text, "Now"));
   const next = indexLineUseful(project && project.index_next) || indexLineUseful(indexField(text, "Next"));
   const blocker = indexLineUseful(project && project.index_blocker) || indexLineUseful(indexField(text, "Blocker"));
+  const counts = workCounts();
   if (nowEl) {
-    nowEl.textContent = now || "—";
-    nowEl.classList.toggle("empty", !now);
+    const nowLine = honestWorkLine(now, counts) || now || "";
+    nowEl.textContent = nowLine || "—";
+    nowEl.classList.toggle("empty", !nowLine);
   }
   if (nextEl) {
-    let nextLine = next || "";
-    const counts = workCounts();
-    if (/^On schedule\b/i.test(nextLine) && ((counts.next || 0) > 0 || (counts.failed || 0) > 0)) {
-      nextLine = (counts.failed || 0) > 0
-        ? `${counts.failed} failed — open Results`
-        : `${counts.next} due · open Next`;
-    }
+    const nextLine = honestWorkLine(next, counts) || next || "";
     nextEl.textContent = nextLine || "—";
     nextEl.classList.toggle("empty", !nextLine);
   }
@@ -3202,15 +3198,9 @@ function renderBotMeta(opts) {
       const now = String(project.index_now || "").trim();
       const counts = workCounts();
       let ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
-      // Kill misleading INDEX "On schedule…" when Next/Results actually have work.
-      if (/^On schedule\b/i.test(ask) && ((counts.next || 0) > 0 || (counts.failed || 0) > 0)) {
-        if ((counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
-        else ask = `${counts.next} due · open Next`;
-      } else if (!ask && (counts.next || 0) > 0) {
-        ask = `${counts.next} due · open Next`;
-      } else if (!ask && (counts.failed || 0) > 0) {
-        ask = `${counts.failed} failed — open Results`;
-      }
+      ask = honestWorkLine(ask, counts) || ask;
+      if (!ask && (counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
+      else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Next`;
       $("chatFolder").textContent = ask || "This CEO is idle.";
     }
   }
@@ -3380,13 +3370,13 @@ function workCounts() {
   const done = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row));
   const results = Math.min(done.length, 8) + freshFail.length + (gateway.length ? 1 : 0);
   const next = list.filter((row) => (
-    row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && cronIsDueSoon(row)
+    row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && !cronIsFailed(row) && cronIsDueSoon(row)
   )).length;
   if (!projectId) {
     const projects = ((cfg.org && cfg.org.projects) || []);
     const orgNext = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—").length;
     const jobs = (((cfg.activity || {}).jobs) || []);
-    const orgFailed = jobs.filter((row) => /fail|error/i.test(String(row.status || ""))).length;
+    const orgFailed = jobs.filter((row) => jobIsFailed(row)).length;
     const orgLive = (((cfg.activity || {}).live_runs) || []).length + lives.size;
     return { doing: orgLive, next: orgNext, results: Math.min(jobs.length, 12), failed: orgFailed, ready: Boolean(cfg.activity) };
   }
@@ -3461,6 +3451,39 @@ function cronIsDueSoon(row) {
   if (Number.isNaN(stamp.getTime())) return false;
   const ms = stamp.getTime() - Date.now();
   return ms <= 24 * 36e5 && ms > -7 * 864e5;
+}
+
+function isScheduleFluff(line) {
+  const raw = String(line || "").trim();
+  if (!raw || raw === "—") return false;
+  if (/^On schedule\b/i.test(raw)) return true;
+  if (/attach a schedule/i.test(raw)) return true;
+  if (/Ops asked Hermes to attach/i.test(raw)) return true;
+  return false;
+}
+
+function honestWorkLine(line, counts) {
+  const failed = (counts && counts.failed) || 0;
+  const next = (counts && counts.next) || 0;
+  const raw = String(line || "").trim();
+  if (failed > 0 && (!raw || raw === "—" || isScheduleFluff(raw))) {
+    return `${failed} failed — open Results`;
+  }
+  if (next > 0 && isScheduleFluff(raw)) {
+    return `${next} due · open Next`;
+  }
+  return raw;
+}
+
+function jobIsFailed(row) {
+  if (!row) return false;
+  const status = String(row.status || row.last_status || "").trim();
+  if (/^(ok|success|done|running|live|progress)$/i.test(status)) return false;
+  if (/fail|error/i.test(status)) return true;
+  const blob = [
+    row.outcome, row.cron_outcome, row.text, row.summary, row.error, row.last_error
+  ].map((x) => String(x || "")).join(" ");
+  return /fail|error|traceback|exception/i.test(blob);
 }
 
 function cronIsFailed(row) {
@@ -3542,7 +3565,7 @@ function cronEngineName(row) {
 function jobStatusWord(row) {
   const raw = String((row && (row.status || row.last_status)) || "").toLowerCase();
   if (/run|live|progress|start|fir/.test(raw)) return "Running";
-  if (/fail|error/.test(raw)) return "Failed";
+  if (jobIsFailed(row) || /fail|error/.test(raw)) return "Failed";
   if (/schedul|queue|due|pending|wait/.test(raw)) return "Scheduled";
   if (/ok|done|success/.test(raw)) return "Done";
   return "Done";
@@ -4007,9 +4030,9 @@ function renderChatSchedule(rows, digest, focusId) {
         <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
       </details>`).join("") : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("next"))}</p>`);
     } else {
-      bits.push(jobs.length ? jobs.map((row) => `<details class="cron-card${/fail|error/i.test(String(row.status || "")) ? " failed" : ""}" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
+      bits.push(jobs.length ? jobs.map((row) => `<details class="cron-card${jobIsFailed(row) ? " failed" : ""}" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
         <summary class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></summary>
-        <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.text || row.summary || ""), 180) || (/fail|error/i.test(String(row.status || "")) ? "Failed." : "Done."))}</p>
+        <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.text || row.summary || row.outcome || ""), 180) || (jobIsFailed(row) ? "Failed." : "Done."))}</p>
         ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
       </details>`).join("") : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`);
     }
@@ -4045,7 +4068,7 @@ function renderChatSchedule(rows, digest, focusId) {
   const latestOk = latest.filter((row) => !failedIds.has(row.id)).slice(0, 8);
   const paused = list.filter((row) => row.enabled === false || /paused/i.test(String(row.state || "")));
   const scheduled = list
-    .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row))
+    .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && !cronIsFailed(row))
     .slice()
     .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")));
   const soon = scheduled.filter((row) => cronIsDueSoon(row));
@@ -5284,7 +5307,7 @@ function emptyStreamHtml() {
   const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
   return `
     <div class="empty-stream" id="streamEmpty">
-      <img class="empty-mark" src="/otto.png?v=4" alt="OttoBot" width="44" height="44" />
+      <img class="empty-mark" src="/otto.png?v=5" alt="OttoBot" width="44" height="44" />
       <p class="empty-kicker">${escapeHtml(whereLabel())}</p>
       <h1>${escapeHtml(title)}</h1>
       ${nowLine}

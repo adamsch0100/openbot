@@ -66,6 +66,8 @@ BOARD_PATHS = {
     "/styles.css",
     "/favicon.png",
     "/logo.png",
+    "/otto.png",
+    "/otto.svg",
     "/manifest.json",
     "/sw.js",
     "/NOTICE",
@@ -158,7 +160,8 @@ def _is_board_path(path: str) -> bool:
         return True
     if p in BOARD_PATHS:
         return True
-    if p.startswith("/favicon") or p.startswith("/logo"):
+    # Board brand assets — never fall through to OpenCode catch-all (# UX dogfood).
+    if p.startswith("/favicon") or p.startswith("/logo") or p.startswith("/otto"):
         return True
     return False
 
