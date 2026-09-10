@@ -521,6 +521,7 @@ function failOwnership(row) {
   const kind = failKindFromBlob(blob);
   const local = failHandlingStatus(id);
   const live = Boolean(row && typeof cronIsLive === "function" && cronIsLive(row));
+  // gatewayScar must NOT preempt 401/key (or script/wallet) — Fix key wins over Restart gateway.
   const gatewayScar = kind === "gateway" || (typeof cronIsGatewayFail === "function" && cronIsGatewayFail(row));
 
   if (local === "Waiting Cos") {
@@ -550,6 +551,48 @@ function failOwnership(row) {
     };
   }
 
+  // Honest ownership first — 401/key Fix key wins even when Hermes Off / gatewayScar also true.
+  if (kind === "key") {
+    // Never Auto-retry on 401/key — CEO Fix key / Settings.
+    return {
+      owner: "ceo",
+      rank: 1,
+      status: "CEO",
+      resultStatus: "Recovering",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Your move (CEO) · Fix key in Settings.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (kind === "script") {
+    return {
+      owner: "ceo",
+      rank: 1,
+      status: "CEO",
+      resultStatus: "Recovering",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Your move (CEO) · Restore script from bootstrap (Hermes scripts/).",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (kind === "wallet") {
+    return {
+      owner: "adam",
+      rank: 3,
+      status: "Needs Adam",
+      resultStatus: "Needs Adam",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Needs Adam · add credits / fix billing.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+
   if (gatewayScar) {
     if (!gatewayRunning) {
       return {
@@ -573,46 +616,6 @@ function failOwnership(row) {
       reason,
       why: failWhyLine("gateway", reason),
       next: "Auto-retry — gateway will pick this up. Do not mass-fire.",
-      outcome: `Failed · ${reason}`
-    };
-  }
-  if (kind === "script") {
-    return {
-      owner: "ceo",
-      rank: 1,
-      status: "CEO",
-      resultStatus: "Recovering",
-      kind,
-      reason,
-      why: failWhyLine(kind, reason),
-      next: "Your move (CEO) · Restore script from bootstrap (Hermes scripts/).",
-      outcome: `Failed · ${reason}`
-    };
-  }
-  if (kind === "key") {
-    // Never Auto-retry on 401/key — CEO Fix key / Settings.
-    return {
-      owner: "ceo",
-      rank: 1,
-      status: "CEO",
-      resultStatus: "Recovering",
-      kind,
-      reason,
-      why: failWhyLine(kind, reason),
-      next: "Your move (CEO) · Fix key in Settings.",
-      outcome: `Failed · ${reason}`
-    };
-  }
-  if (kind === "wallet") {
-    return {
-      owner: "adam",
-      rank: 3,
-      status: "Needs Adam",
-      resultStatus: "Needs Adam",
-      kind,
-      reason,
-      why: failWhyLine(kind, reason),
-      next: "Needs Adam · add credits / fix billing.",
       outcome: `Failed · ${reason}`
     };
   }
@@ -3957,12 +3960,17 @@ function scheduleRosterRowHtml(row, want) {
     : (row.last_run_at ? (cronFreshness(row) || cronWhen(row.last_run_at)) : "—");
   const own = status === "fail" ? failOwnership(row) : null;
   const headStatus = own ? own.status : status;
+  const failChoicesList = own ? failChoices(row) : [];
+  // Collapsed glance: Status + primary CTA inside <summary> (details UA hides non-summary kids).
+  const primaryCta = failChoicesList[0]
+    ? `<span class="cron-roster-cta need-actions">${choiceButtonsHtml([failChoicesList[0]], { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: "failed" })}</span>`
+    : "";
   const failBit = own
     ? `<p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(own.outcome)}</p>
        <p class="cron-why"><span class="cron-k">Why</span> ${escapeHtml(own.why)}</p>
        <p class="cron-next"><span class="cron-k">Next</span> ${escapeHtml(own.next)}</p>
        <p class="cron-status"><span class="cron-k">Status</span> ${escapeHtml(own.status)}</p>
-       <div class="need-actions">${choiceButtonsHtml(failChoices(row), { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: "failed" })}</div>`
+       <div class="need-actions">${choiceButtonsHtml(failChoicesList, { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: "failed" })}</div>`
     : "";
   const glance = own
     ? `<p class="cron-roster-glance"><span>${escapeHtml(own.status)}</span> · ${escapeHtml(own.next)}</p>`
@@ -3972,6 +3980,7 @@ function scheduleRosterRowHtml(row, want) {
     <summary class="cron-head">
       <b>${escapeHtml(title)}</b>
       <span>${escapeHtml(headStatus)}</span>
+      ${primaryCta}
     </summary>
     ${glance}
     <p class="cron-meta schedule-row"><span>enabled</span><b>${escapeHtml(enabled)}</b></p>
