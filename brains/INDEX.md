@@ -2,6 +2,7 @@
 
 
 ## Engine changelog (Steward propose)
+- 2026-09-10: P0 serve /otto.png before OpenCode catch-all; P1 rail/Next honesty for failed + Cos Results jobIsFailed (status often None).
 - 2026-09-10: Hotfix gateway/start UnboundLocalError project_tools (CEO Restart 502) — resolve hermes_home only, no shadowed import.
 - 2026-09-10: Gateway Restart force-clears stale state/sock (no SSH) + resolve CEO hermes_home; Restart never returns naked 502.
 - 2026-09-10: CEO Settings → Engines health chip (Hermes/OpenCode versions, dash home match, gateway, wire). Steward pins Accept-only — never silent upgrade.
