@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #62 open - Disable SAA overlay by default to stop zombie accumulation.
-Last: PR #59 killpg+single-flight+300s interval was not enough; overnight zombies climbed to ~540 again, threads~627. OPENBOT_SAA_OVERLAY_ENABLED now defaults OFF. Overlay thread does not start unless env=1/true/yes. Board engine.
-Next: Monitor PR #62 approval. No Hermes redeploy needed. SAA live overlay disabled until safe reaping verified.
-Blocker: None. Railway SSH child zombies still accumulate despite PR #59. Disable is the safe default.
+Now: OpenBot Chat stream is talk — cron landings stay in Results. Due list folds after six.
+Last: PR #60 Chat-first chrome on master.
+Next: Hard-refresh ?v=119. Leave PR #48 untouched. Leave SEO/Hermes alone.
+Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
 
