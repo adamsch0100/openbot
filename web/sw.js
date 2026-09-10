@@ -1,4 +1,4 @@
-const CACHE = "ottobot-board-v3";
+const CACHE = "ottobot-board-v4";
 const ASSETS = [
   "/",
   "/index.html",
@@ -6,6 +6,7 @@ const ASSETS = [
   "/app.js",
   "/favicon.png",
   "/logo.png",
+  "/otto.png",
   "/otto.svg",
   "/manifest.json"
 ];

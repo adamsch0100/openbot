@@ -46,10 +46,13 @@ body {
 .mark-gem {
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   object-fit: contain;
   display: block;
   flex: 0 0 auto;
   border-radius: 9px;
+  background: #000;
 }
 .mark-type {
   display: grid;
