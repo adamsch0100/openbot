@@ -171,18 +171,17 @@
     <div class="chat-col">
       <div class="chat-shell">
       <div class="chat-head">
-        <div class="chat-head-row">
-          <div>
-            <div class="chat-where" id="chatWhere">Chief of Staff</div>
-            <div class="chat-folder" id="chatFolder">You → Chief of Staff → CEOs</div>
-          </div>
-          <nav class="work-tabs" id="workTabs" aria-label="Work in motion">
-            <button type="button" class="work-tab" data-work="doing" id="workDoing">Doing</button>
-            <button type="button" class="work-tab" data-work="next" id="workNext">Next</button>
-            <button type="button" class="work-tab" data-work="results" id="workResults">Results</button>
-          </nav>
-          <button type="button" class="ghost-btn" id="openSchedule" hidden>Schedule</button>
+      <div class="chat-head-row">
+        <div>
+          <div class="chat-where" id="chatWhere">Chief of Staff</div>
+          <div class="chat-folder" id="chatFolder">You → Chief of Staff → CEOs</div>
         </div>
+        <nav class="work-tabs" id="workTabs" aria-label="Work in motion">
+          <button type="button" class="work-tab" data-work="doing" id="workDoing">Doing <span class="n" id="nDoing">0</span></button>
+          <button type="button" class="work-tab" data-work="next" id="workNext">Next <span class="n" id="nNext">0</span></button>
+          <button type="button" class="work-tab" data-work="results" id="workResults">Results <span class="n" id="nResults">0</span></button>
+        </nav>
+      </div>
         <aside id="ceoLive" class="ceo-live" hidden></aside>
         <aside id="ceoBrief" class="ceo-brief" hidden></aside>
         <aside id="chatSchedule" class="chat-schedule" hidden></aside>
@@ -246,9 +245,9 @@
         </div>
         <div class="embed-tools">
           <nav class="work-tabs" aria-label="Work in motion">
-            <button type="button" class="work-tab" data-work="doing">Doing</button>
-            <button type="button" class="work-tab" data-work="next">Next</button>
-            <button type="button" class="work-tab" data-work="results">Results</button>
+            <button type="button" class="work-tab" data-work="doing">Doing <span class="n">0</span></button>
+            <button type="button" class="work-tab" data-work="next">Next <span class="n">0</span></button>
+            <button type="button" class="work-tab" data-work="results">Results <span class="n">0</span></button>
           </nav>
           <a class="ghost-btn embed-open hidden" id="ocOpen" target="_blank" rel="noreferrer">Open raw</a>
         </div>
@@ -268,9 +267,9 @@
         </div>
         <div class="embed-tools">
           <nav class="work-tabs" aria-label="Work in motion">
-            <button type="button" class="work-tab" data-work="doing">Doing</button>
-            <button type="button" class="work-tab" data-work="next">Next</button>
-            <button type="button" class="work-tab" data-work="results">Results</button>
+            <button type="button" class="work-tab" data-work="doing">Doing <span class="n">0</span></button>
+            <button type="button" class="work-tab" data-work="next">Next <span class="n">0</span></button>
+            <button type="button" class="work-tab" data-work="results">Results <span class="n">0</span></button>
           </nav>
           <a class="ghost-btn embed-open hidden" id="hermesOpen" target="_blank" rel="noreferrer">Open raw</a>
         </div>
@@ -698,8 +697,8 @@
     </aside>
   </div>
 
-  <footer>
-    OPENBOT · LOCAL ORG.
+  <footer id="boardFooter">
+    <span id="footerContext">OPENBOT · LOCAL ORG.</span>
     · Engines: <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>
     · <a href="https://github.com/anomalyco/opencode">OpenCode</a>
     · OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).

@@ -2951,17 +2951,22 @@ function cronCardHtml(row, open, mark) {
   const live = mark === "live";
   const kind = cronKind(row, mark);
   const sched = String(row.schedule || "").trim();
+  
+  // DEDUPLICATE: Don't show error/outcome more than once. Outcome already has error text.
+  const showSnippet = err && !live && !outcome.includes(err.slice(0, 40));
+  
   return `<article class="cron-card${open ? " open" : ""}${live ? " live" : ""}${failed ? " failed" : ""}" id="cron-${escapeHtml(row.id || "")}">
     <div class="cron-head">
       <b>${escapeHtml(title)}</b>
       <span>${escapeHtml(kind)}</span>
     </div>
     <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${sched ? ` · Runs ${escapeHtml(sched)}` : ""} · ${escapeHtml(engine)}</p>
-    <p class="cron-outcome">${escapeHtml(live ? "Running now on this CEO's Hermes. Other jobs wait. The result lands here when it finishes." : `Result: ${outcome}`)}</p>
+    <p class="cron-outcome">${escapeHtml(live ? "Running now on this CEO's Hermes. Other jobs wait. The result lands here when it finishes." : outcome)}</p>
     ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
     ${changed && !live ? `<p class="cron-next">${escapeHtml(changed)}</p>` : ""}
     ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="ghost-btn cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry on live Hermes</button>` : ""}
-    ${report ? `<details class="cron-more"${open || mark === "result" || failed ? " open" : ""}><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : (err && !live ? `<p class="cron-snip">${escapeHtml(err)}</p>` : "")}
+    ${report && !failed ? `<details class="cron-more"${open || mark === "result" ? " open" : ""}><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
+    ${showSnippet ? `<p class="cron-snip">${escapeHtml(err)}</p>` : ""}
   </article>`;
 }
 
@@ -3686,6 +3691,24 @@ function applyConfig(data) {
   renderBotMeta();
   applyCollaboratorChrome();
   paintWorkTabs();
+  paintFooterContext(data);
+}
+
+function paintFooterContext(data) {
+  const el = $("footerContext");
+  if (!el) return;
+  // Detect if we're on Railway or hosted environment
+  const host = location.hostname;
+  const isLocal = host === "localhost" || host === "127.0.0.1" || host.startsWith("192.168.");
+  const isRailway = host.includes("railway.app") || host.includes("up.railway.app");
+  
+  if (isRailway) {
+    el.textContent = "OPENBOT · LIVE · Railway";
+  } else if (isLocal) {
+    el.textContent = "OPENBOT · LOCAL ORG.";
+  } else {
+    el.textContent = "OPENBOT · LIVE";
+  }
 }
 
 function applyCollaboratorChrome() {
