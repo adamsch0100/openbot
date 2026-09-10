@@ -817,6 +817,7 @@ body {
   text-overflow: ellipsis;
 }
 .work-status-live.on { color: #d8b36a; }
+.work-status-live.warn { color: var(--danger); }
 .work-status-live[hidden] { display: none !important; }
 .work-status-index {
   display: grid;
