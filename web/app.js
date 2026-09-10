@@ -3488,6 +3488,7 @@ function isScheduleFluff(line) {
   // Idle INDEX copy must not beat real failed/due counts in the rail (#96 soft note).
   if (/^Ready\b/i.test(raw)) return true;
   if (/^Ready when you are/i.test(raw)) return true;
+  if (/on this Railway board/i.test(raw)) return true;
   if (/^Idle\b/i.test(raw)) return true;
   return false;
 }
@@ -3661,14 +3662,19 @@ function paintCeoBrief(digest) {
     return;
   }
   const project = currentProject();
+  const counts = workCounts();
   const nxt = String((project && project.index_next) || "").trim();
   const now = String((project && project.index_now) || "").trim();
   const blocker = String((project && project.index_blocker) || "").trim();
   const bits = [];
   if (digest && digest.story) bits.push(digest.story);
   else if (blocker && blocker !== "—") bits.push(`Blocked: ${blocker}`);
-  else if (nxt && nxt !== "—") bits.push(nxt);
-  else if (now && now !== "—") bits.push(now);
+  else {
+    let line = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
+    line = honestWorkLine(line, counts) || line;
+    if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
+    if (line && !isScheduleFluff(line)) bits.push(line);
+  }
   if (!bits.length) {
     el.hidden = true;
     el.innerHTML = "";
@@ -5326,28 +5332,27 @@ function emptyStreamHtml() {
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
-  let lead = "Ready when you are. Ask what’s going on, or open a CEO.";
+  // Chat-as-home: no Ready fluff, no duplicate kicker chrome.
+  let lead = "Ask what’s going on, or open a CEO.";
   let showCTA = !project;
   if (worker && project) {
-    lead = `${worker.name} on ${project.name}. Say what you need — On it.`;
+    lead = `${worker.name} on ${project.name}. Say what you need.`;
     showCTA = false;
   } else if (project) {
-    lead = "Say what you need. OttoBot will route it.";
+    lead = "Say what you need.";
     showCTA = false;
   }
-  const nowLine = now && now !== "source of truth" && now !== "—"
-    ? `<p class="empty-now">${escapeHtml(now)}</p>`
-    : "";
+  const showNow = now && now !== "source of truth" && now !== "—" && !isScheduleFluff(now);
+  const nowLine = showNow ? `<p class="empty-now">${escapeHtml(now)}</p>` : "";
   const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
   return `
     <div class="empty-stream" id="streamEmpty">
       <img class="empty-mark" src="/otto.png?v=5" alt="OttoBot" width="44" height="44" />
-      <p class="empty-kicker">${escapeHtml(whereLabel())}</p>
       <h1>${escapeHtml(title)}</h1>
       ${nowLine}
       ${stuckLine}
       <p>${escapeHtml(lead)}</p>
-      ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">☰ Open a CEO</button>' : ""}
+      ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">Open a CEO</button>' : ""}
     </div>`;
 }
 

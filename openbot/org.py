@@ -1055,6 +1055,31 @@ def bootstrap_ceo_runtime(project_id: str, title: str | None = None, folder: str
     }
 
 
+
+def align_wire_auth_with_urls(project_id: str) -> dict:
+    """If a CEO already has site/repo/railway URLs, authorize those wires.
+
+    Soft repair for seating gaps: Engines Wire looked "off" for SAA even with
+    saahomes.com set. Opt-in stays for empty URLs; present URL ⇒ authorize on.
+    """
+    pid = _slug(project_id)
+    tools = project_tools(pid)
+    patch: dict = {}
+    site = str(tools.get("site_url") or "").strip() or SITE_BY_ID.get(pid, "")
+    repo = str(tools.get("github_repo") or "").strip()
+    rail = str(tools.get("railway") or "").strip()
+    if site and not tools.get("authorize_site"):
+        patch["authorize_site"] = True
+        if not str(tools.get("site_url") or "").strip() and site:
+            patch["site_url"] = site
+    if repo and not tools.get("mcp_github"):
+        patch["mcp_github"] = True
+    if rail and not tools.get("authorize_railway"):
+        patch["authorize_railway"] = True
+    if patch:
+        return patch_project_tools(pid, patch, create_if_missing=True)
+    return tools
+
 def stamp_ceo_wiring(project_id: str) -> None:
     """Write Folder / Git / Hermes onto INDEX so the board shows the real links."""
     pid = _slug(project_id)
@@ -1092,6 +1117,10 @@ def stamp_ceo_wiring(project_id: str) -> None:
     if sid:
         patch_project_tools(pid, {"hermes_session_id": sid})
         patch_scope(pid, None, "Telegram", "Railway still live · Think/Ops resume this session")
+    try:
+        align_wire_auth_with_urls(pid)
+    except Exception:
+        pass
 
 
 def project_ids() -> list[str]:
