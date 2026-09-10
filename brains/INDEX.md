@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: SAA Homes · Citation audit is done · Failed. RuntimeError: HTTP 400: Error from provider (Console Go): Request is missing x-opencode-session and cannot
-Last: SAA Homes · CEO: Citation audit is done · Failed. RuntimeError: HTTP 400: Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficientl
-Next: Open SAA Homes if you want the report, or keep going from Chief of Staff
-Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
+Now: Disable SAA overlay by default to stop zombie accumulation. PR open on adamsch0100/openbot master.
+Last: PR #59 killpg+single-flight+300s interval was not enough; overnight zombies climbed to ~540 again, threads~627. OPENBOT_SAA_OVERLAY_ENABLED now defaults OFF. Overlay thread does not start unless env=1/true/yes. Board engine.
+Next: Await merge approval. No Hermes redeploy needed. SAA live overlay disabled until safe reaping verified.
+Blocker: None. Railway SSH child zombies still accumulate despite PR #59. Disable is the safe default.
 
 ## Vault
 
