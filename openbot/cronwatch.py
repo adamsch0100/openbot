@@ -109,7 +109,7 @@ def _ingest_home_files(project_id: str | None, hermes_home: str | None) -> list[
         known.add(key)
         if _cron_is_noise(str(row.get("name") or "")):
             continue
-        posted.append(_post_cron_card(project_id, row))
+        posted.append(_post_cron_card(project_id, row, hermes_home))
     if posted:
         seen["lines"] = list(known)[-400:]
         _save_seen(seen)
@@ -141,14 +141,78 @@ def _ingest_overlay_rows(project_id: str) -> list[dict]:
         known.add(key)
         if _cron_is_noise(str(row.get("name") or "")):
             continue
-        posted.append(_post_cron_card(project_id, row))
+        posted.append(_post_cron_card(project_id, row, hermes_home))
     if posted:
         seen["lines"] = list(known)[-400:]
         _save_seen(seen)
     return posted
 
 
-def _post_cron_card(project_id: str | None, row: dict) -> dict:
+
+def _honest_next_line(project_id: str | None, hermes_home: str | None = None, finished: str = "") -> str:
+    """Never blanket 'On schedule' when dues or fails exist on this CEO."""
+    home = hermes_home
+    if not home and project_id:
+        home = str(project_tools(project_id).get("hermes_home") or "").strip() or None
+    rows: list[dict] = []
+    if home:
+        try:
+            rows = [
+                row
+                for row in read_home_crons(home, results=False)
+                if not _cron_is_noise(str(row.get("name") or ""))
+            ]
+        except Exception:
+            rows = []
+    now = datetime.now(timezone.utc)
+    fails: list[dict] = []
+    dues: list[tuple[datetime, dict]] = []
+    for row in rows:
+        if row.get("enabled") is False:
+            continue
+        status = str(row.get("last_status") or "").lower()
+        if re.search(r"error|fail", status):
+            blob = f"{row.get('last_error') or ''} {row.get('outcome') or ''} {row.get('last_result') or ''}"
+            if re.search(r"gateway shutdown|gateway stopped mid-run", blob, re.I):
+                continue
+            last = _parse_when(str(row.get("last_run_at") or ""))
+            if last is not None:
+                stamp = last if last.tzinfo else last.replace(tzinfo=timezone.utc)
+                if now - stamp.astimezone(timezone.utc) > timedelta(hours=48):
+                    continue
+            fails.append(row)
+            continue
+        nxt = _parse_when(str(row.get("next_run_at") or ""))
+        if nxt is None:
+            continue
+        stamp = nxt if nxt.tzinfo else nxt.replace(tzinfo=timezone.utc)
+        delta = stamp.astimezone(timezone.utc) - now
+        if timedelta(days=-7) < delta <= timedelta(hours=24):
+            dues.append((stamp, row))
+    dues.sort(key=lambda item: item[0])
+    if fails:
+        title = cron_title(str(fails[0].get("name") or fails[0].get("id") or "job"))
+        if len(fails) == 1:
+            return f"{title} needs a look · open Results."
+        return f"{len(fails)} jobs need a look · open Results."
+    if dues:
+        stamp, row = dues[0]
+        title = cron_title(str(row.get("name") or row.get("id") or "job"))
+        mins = int(max(0, (stamp.astimezone(timezone.utc) - now).total_seconds() // 60))
+        if mins <= 30:
+            when = "due now"
+        elif mins < 60:
+            when = f"in {mins} min"
+        else:
+            when = stamp.astimezone().strftime("%a %H:%M")
+        more = f" · +{len(dues) - 1} more" if len(dues) > 1 else ""
+        return f"Next: {title} {when}{more}."
+    if finished:
+        return f"{finished} done. Nothing else due in the next day."
+    return "Nothing due in the next day. Open Next for the full queue."
+
+
+def _post_cron_card(project_id: str | None, row: dict, hermes_home: str | None = None) -> dict:
     name = str(row.get("name") or row.get("id") or "cron")
     title = str(row.get("title") or cron_title(name))
     outcome = str(row.get("outcome") or cron_outcome(row.get("last_status") or "", row.get("last_result") or "")[0])
@@ -193,7 +257,12 @@ def _post_cron_card(project_id: str | None, row: dict) -> dict:
     else:
         patch_scope(project_id, None, "Now", f"{title} is done · {outcome[:80]}")
         patch_scope(project_id, None, "Last", f"{title} · {outcome[:80]}")
-        patch_scope(project_id, None, "Next", "On schedule. Open What’s happening for the next job.")
+        patch_scope(
+            project_id,
+            None,
+            "Next",
+            _honest_next_line(project_id, hermes_home=hermes_home, finished=title)[:160],
+        )
         patch_scope(project_id, None, "Blocker", "—")
     rollup_staff(project_id, None, f"{title} is done · {outcome}")
     append_turn(thread_key(project_id, None), {"role": "bot", "job": receipt})
