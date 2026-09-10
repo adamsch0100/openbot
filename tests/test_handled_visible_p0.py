@@ -33,6 +33,11 @@ class HandledVisibleUiTests(unittest.TestCase):
         self.assertIn('kind === "script"', own)
         self.assertIn("Needs Adam", own)
         self.assertIn("Waiting Cos", own)
+        # 401/key must precede gatewayScar so Fix key wins over Restart gateway
+        key_before_gw = own.index('if (kind === "key")')
+        gw_block = own.index("if (gatewayScar)")
+        self.assertLess(key_before_gw, gw_block, "key ownership must win over gatewayScar")
+        self.assertIn("Fix key wins even when Hermes Off", own)
 
     def test_next_is_action_queue_not_due_dump(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -77,13 +82,41 @@ class HandledVisibleUiTests(unittest.TestCase):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("cron-roster-glance", js)
         self.assertIn("own.status", js)
+        # Collapsed fail rows: Status + primary CTA in summary (not expand-only)
+        self.assertIn("cron-roster-cta", js)
+        self.assertIn("primaryCta", js)
+        roster = js[js.find("function scheduleRosterRowHtml") : js.find("function workCounts")]
+        self.assertIn("<summary class=\"cron-head\">", roster)
+        self.assertIn("${primaryCta}", roster)
+        self.assertIn('class="cron-roster-cta need-actions"', roster)
+        # CTA is inside summary, before closing </summary>
+        sum_i = roster.index("<summary class=\"cron-head\">")
+        end_sum = roster.index("</summary>", sum_i)
+        self.assertIn("${primaryCta}", roster[sum_i:end_sum])
         css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
         self.assertIn("schedule-roster.failed > .need-actions", css)
+        self.assertIn("cron-roster-cta", css)
+
+    def test_401_beats_gateway_scar_fix_key(self):
+        """401 Outcome must map to Fix key CTA even when gatewayScar/Hermes Off also true."""
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        own = js[js.find("function failOwnership") : js.find("function failOwnerRank")]
+        key_i = own.index('if (kind === "key")')
+        gw_i = own.index("if (gatewayScar)")
+        self.assertLess(key_i, gw_i)
+        key_block = own[key_i:gw_i]
+        self.assertIn("Fix key in Settings", key_block)
+        self.assertIn('status: "CEO"', key_block)
+        self.assertNotIn("Restart gateway", key_block)
+        # failChoices still offers Fix key for kind=key
+        choices = js[js.find("function failChoices") : js.find("function cronFailNext")]
+        self.assertIn('own.kind === "key"', choices)
+        self.assertIn('id: "fix_key", label: "Fix key"', choices)
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=143", html)
-        self.assertIn("styles.css?v=143", html)
+        self.assertIn("app.js?v=144", html)
+        self.assertIn("styles.css?v=144", html)
 
 
 class HandledVisibleBackendTests(unittest.TestCase):

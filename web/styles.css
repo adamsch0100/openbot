@@ -3936,6 +3936,28 @@ details.cron-card[open] > .cron-why,
 details.cron-card[open] > .cron-status {
   display: block;
 }
+
+/* Collapsed schedule fail: primary CTA lives in summary (UA hides non-summary kids) */
+.cron-card.schedule-roster.failed > .cron-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cron-card.schedule-roster.failed > .cron-head .cron-roster-cta {
+  display: inline-flex;
+  margin-left: auto;
+}
+.cron-card.schedule-roster.failed > .cron-head .cron-roster-cta .send,
+.cron-card.schedule-roster.failed > .cron-head .cron-roster-cta .ghost-btn {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.cron-card.schedule-roster.failed[open] > .cron-head .cron-roster-cta {
+  /* Expanded: full CTAs below; keep glance CTA but softer */
+  opacity: 0.85;
+}
 /* Schedule fail glance: Status + CTA visible without expand */
 details.cron-card.schedule-roster.failed > .cron-roster-glance {
   display: block;
