@@ -601,8 +601,15 @@ function paintWorkStatus() {
     nowEl.classList.toggle("empty", !now);
   }
   if (nextEl) {
-    nextEl.textContent = next || "—";
-    nextEl.classList.toggle("empty", !next);
+    let nextLine = next || "";
+    const counts = workCounts();
+    if (/^On schedule\b/i.test(nextLine) && ((counts.next || 0) > 0 || (counts.failed || 0) > 0)) {
+      nextLine = (counts.failed || 0) > 0
+        ? `${counts.failed} need a look · open Results`
+        : `${counts.next} due · open Next`;
+    }
+    nextEl.textContent = nextLine || "—";
+    nextEl.classList.toggle("empty", !nextLine);
   }
   if (blockEl) {
     blockEl.textContent = blocker || "—";
@@ -3076,7 +3083,17 @@ function renderBotMeta(opts) {
     } else {
       const nxt = String(project.index_next || "").trim();
       const now = String(project.index_now || "").trim();
-      const ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
+      const counts = workCounts();
+      let ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
+      // Kill misleading INDEX "On schedule…" when Next/Results actually have work.
+      if (/^On schedule\b/i.test(ask) && ((counts.next || 0) > 0 || (counts.failed || 0) > 0)) {
+        if ((counts.failed || 0) > 0) ask = `${counts.failed} need a look · open Results`;
+        else ask = `${counts.next} due · open Next`;
+      } else if (!ask && (counts.next || 0) > 0) {
+        ask = `${counts.next} due · open Next`;
+      } else if (!ask && (counts.failed || 0) > 0) {
+        ask = `${counts.failed} need a look · open Results`;
+      }
       $("chatFolder").textContent = ask || "This CEO is idle.";
     }
   }
@@ -3103,6 +3120,7 @@ function renderSchedules(project) {
 let scheduleOpen = false;
 let scheduleFocusId = "";
 let scheduleView = "doing";
+const digestKnown = new Set(); // projectIds whose cron digest finished loading
 
 function workStateKey() {
   return `ob-work:${projectId || "cos"}`;
@@ -3253,14 +3271,15 @@ function workCounts() {
     const jobs = (((cfg.activity || {}).jobs) || []);
     const orgFailed = jobs.filter((row) => /fail|error/i.test(String(row.status || ""))).length;
     const orgLive = (((cfg.activity || {}).live_runs) || []).length + lives.size;
-    return { doing: orgLive, next: orgNext, results: Math.min(jobs.length, 12), failed: orgFailed, ready: true };
+    return { doing: orgLive, next: orgNext, results: Math.min(jobs.length, 12), failed: orgFailed, ready: Boolean(cfg.activity) };
   }
   return {
     doing,
     next,
     results,
     failed: freshFail.length + (gateway.length ? 1 : 0),
-    ready: Boolean(pack.crons || pack.live_runs || digestCache.has(projectId))
+    // Ready only after a finished digest fetch — avoids 0→N flash on CEO switch.
+    ready: digestKnown.has(projectId)
   };
 }
 
@@ -3720,6 +3739,7 @@ async function loadCeoDigest(refreshLive) {
       gatewayRunning = true;
     }
     digestCache.set(pid, data);
+    digestKnown.add(pid);
     if (projectId === pid) {
       syncHermesHint();
       paintCeoBrief(data.digest);
@@ -3761,9 +3781,16 @@ function emptyWorkCopy(view) {
   const who = currentProject() ? (currentProject().name || "this CEO") : "Chief of Staff";
   const why = whyIdleLine();
   if (view === "doing") {
+    const counts = workCounts();
+    if ((counts.failed || 0) > 0) {
+      return `Nothing running on ${who}. ${counts.failed} need a look in Results.`;
+    }
+    if ((counts.next || 0) > 0) {
+      return `Nothing running on ${who}. ${counts.next} due in Next — open that tab.`;
+    }
     return why
       ? `Idle on ${who}. ${why}`
-      : `Nothing is running on ${who}. Send a message, or wait for the next scheduled check.`;
+      : `Nothing is running on ${who}. Send a message, or open Next for what’s queued.`;
   }
   if (view === "next") {
     return `Nothing queued for ${who}. When this brief has a Next, or a job is due in the next day, it shows up here.${why ? ` ${why}` : ""}`;
@@ -3775,7 +3802,16 @@ function whyIdleLine() {
   if (liveRunId || lives.size) return "";
   if (!gatewayRunning && projectId) return "Why idle: Hermes gateway is off — Restart it.";
   const pack = digestCache.get(projectId) || {};
-  if (projectId && !digestCache.has(projectId)) return "Why idle: still loading schedule…";
+  if (projectId && !digestKnown.has(projectId)) return "Why idle: still loading schedule…";
+  const counts = workCounts();
+  if ((counts.failed || 0) > 0) {
+    return `Why idle: ${counts.failed} need a look in Results — not clear.`;
+  }
+  if ((counts.next || 0) > 0) {
+    const due = (pack.crons || []).find((row) => row.enabled !== false && cronIsDueSoon(row) && !cronIsLive(row));
+    const when = due && due.next_run_at ? cronWhenClock(due.next_run_at) : "soon";
+    return `Why idle: ${counts.next} due in Next (${when}).`;
+  }
   const next = (pack.crons || []).find((row) => row.enabled !== false && cronIsDueSoon(row) && !cronIsLive(row));
   if (next && next.next_run_at) return `Why idle: next due ${cronWhenClock(next.next_run_at)}.`;
   return projectId ? "Why idle: nothing claimed on Hermes right now." : "";
