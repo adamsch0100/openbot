@@ -1003,6 +1003,13 @@ def need_choices(row: dict) -> list[dict]:
         return [{"id": "continue", "label": "Continue"}]
     if kind == "brief":
         return [{"id": "open", "label": "Open chat"}]
+    if kind == "failed":
+        cron_id = str(row.get("cron_id") or "")
+        return [
+            {"id": "fix_model", "label": "Fix model/key"},
+            {"id": "retry", "label": "Retry", "cron_id": cron_id},
+            {"id": "open_detail", "label": "Open detail", "cron_id": cron_id},
+        ]
     return [{"id": "open", "label": "Open"}]
 
 
@@ -1031,13 +1038,13 @@ def job_choices(job: dict) -> list[dict]:
         return [{"id": "continue", "label": label}]
     status = str(job.get("status") or job.get("last_status") or "").lower()
     cron_id = str(job.get("cron_id") or "")
+    failed = bool(job.get("blocker")) or ("error" in status or "fail" in status)
     if job.get("cron") or cron_id:
-        if "error" in status or "fail" in status:
-            return [
-                {"id": "retry", "label": "Retry on live Hermes", "cron_id": cron_id},
-                {"id": "schedule", "label": "Open schedule", "cron_id": cron_id},
-            ]
+        if failed:
+            return need_choices({"kind": "failed", "cron_id": cron_id})
         return [{"id": "schedule", "label": "Open schedule", "cron_id": cron_id}]
+    if failed and not job.get("talk") and str(job.get("preset") or "") not in {"cos", "ask"}:
+        return need_choices({"kind": "failed", "cron_id": cron_id})
     return []
 
 
@@ -1060,15 +1067,33 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         if pid in RETIRED_CEO_IDS or (pid and pid not in live_ids):
             continue
         who = names.get(pid) or "this CEO"
+        subject = ""
+        why = ""
         if job.get("login_wall"):
             kind = "login"
             label = f"{who}: a site asked for a login."
+            subject = f"{who} · login"
+            why = "Login wall"
         elif job.get("diff_pending"):
             kind = "diff"
             label = f"{who}: a code change is waiting."
+            subject = f"{who} · diff ready"
+            why = "Accept or Reject the diff"
+        elif job.get("blocker") and str(job.get("blocker") or "").strip() not in {"", "—", "ok"}:
+            from .hermes import human_fail_reason
+
+            kind = "failed"
+            reason = human_fail_reason(
+                f"{job.get('blocker') or ''} {job.get('text') or ''} {job.get('message') or ''}"
+            )
+            label = f"{who}: failed — {reason}"
+            subject = f"{who} · failed"
+            why = reason
         elif job.get("keep_going") and not job.get("stopped"):
             kind = "continue"
             label = f"{who}: ready for the next step."
+            subject = f"{who} · continue"
+            why = "Continue from Last / Next"
         else:
             continue
         item = {
@@ -1076,15 +1101,20 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             "kind": kind,
             "name": who,
             "label": label,
+            "subject": subject,
+            "why": why,
             "project_id": pid,
             "engine": str(job.get("engine") or "board"),
             "preset": str(job.get("preset") or ""),
             "url": str(job.get("url") or ""),
             "at": str(job.get("at") or ""),
+            "cron_id": str(job.get("cron_id") or ""),
         }
         if kind == "login":
             item["logins"] = public_logins(pid or None)
         item["choices"] = need_choices(item)
+        primary = (item["choices"] or [{}])[0]
+        item["primary_action"] = str(primary.get("label") or primary.get("id") or "Open")
         out.append(item)
         if len(out) >= limit:
             break
@@ -1109,11 +1139,14 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             if stuck
             else f"{who} needs you: {ask[:140]}"
         )
+        why = (blocker if stuck else ask)[:140]
         brief = {
             "id": f"brief-{pid}",
             "kind": "brief",
             "name": who,
             "label": label,
+            "subject": f"{who} · needs you",
+            "why": why,
             "project_id": pid,
             "engine": "board",
             "preset": "cos",
@@ -1121,6 +1154,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             "at": "",
         }
         brief["choices"] = need_choices(brief)
+        primary = (brief["choices"] or [{}])[0]
+        brief["primary_action"] = str(primary.get("label") or primary.get("id") or "Open")
         out.append(brief)
         have.add(pid)
     try:
@@ -1133,6 +1168,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 "id": str(row.get("id") or ""),
                 "kind": "gate",
                 "label": "Something is waiting for your yes before it can continue.",
+                "subject": "Needs your yes",
+                "why": "Parked until you allow or deny",
                 "project_id": str(row.get("project_id") or ""),
                 "engine": "board",
                 "preset": "ops",
@@ -1142,6 +1179,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 "job_id": str(row.get("job_id") or ""),
             }
             gate["choices"] = need_choices(gate)
+            primary = (gate["choices"] or [{}])[0]
+            gate["primary_action"] = str(primary.get("label") or primary.get("id") or "Open")
             out.append(gate)
         for row in list_approvals("expired")[:4]:
             if len(out) >= limit:
@@ -1150,6 +1189,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 "id": str(row.get("id") or ""),
                 "kind": "expired",
                 "label": "A yes/no window expired. It did not auto-approve. Dismiss it.",
+                "subject": "Approval expired",
+                "why": "Window closed — did not auto-approve",
                 "project_id": str(row.get("project_id") or ""),
                 "engine": "board",
                 "preset": "ops",
@@ -1158,6 +1199,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 "approval_id": str(row.get("id") or ""),
             }
             expired["choices"] = need_choices(expired)
+            primary = (expired["choices"] or [{}])[0]
+            expired["primary_action"] = str(primary.get("label") or primary.get("id") or "Open")
             out.append(expired)
     except Exception:
         pass

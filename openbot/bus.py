@@ -242,8 +242,10 @@ def classify_gate(
         action = "approval"
         label = "irreversible language — park send/publish/pay/delete"
     elif preset == "ops":
-        action = "approval"
-        label = "ops cron · silent on success, approval for external acts"
+        # Success is silent. Park only when irreversible (handled above).
+        # Do not stamp approval / draft spam on OPS_OK.
+        action = "allow"
+        label = "ops · silent on success"
     elif preset == "research":
         action = "allow"
         label = "reversible · read and file evidence"

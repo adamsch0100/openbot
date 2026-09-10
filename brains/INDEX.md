@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: P0 wire dogfood PR — CEO authorize GitHub/Railway/site, Doing honesty, Nadia/ListLogic consent, composer hatch off.
-Last: Branched from ceb63b6 (#75 can_add_ceo). Richer Add CEO + Pmill prefs kept.
-Next: Open MERGEABLE PR; do not merge. No Cloud Agents. DESKTOP off. No auto-seat.
+Now: Honest fail cards — no false draft footer; fingerprints +N; Inbox mirrors Needs-you; rail shows failed job.
+Last: P0 alive board on branch board-alive-doing-next-results — honest Doing, why-idle, no false On schedule.
+Next: Run tests; keep on branch — do not merge. No Cloud Agents. DESKTOP off.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault

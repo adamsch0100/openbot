@@ -40,9 +40,11 @@ class CeoWireP0Tests(unittest.TestCase):
         self.assertIn("Nadia vault only", router)
 
         self.assertIn("whyIdleLine", js)
+        self.assertIn("honestIndexNext", js)
         self.assertIn("cronFreshness", js)
         self.assertIn("counts.ready", js)
         self.assertIn('n > 0', js)
+        self.assertIn("digestKnown", js)
 
         self.assertIn('id="routeHatch" hidden', html)
         self.assertIn("hatch.hidden = !forced", js)
