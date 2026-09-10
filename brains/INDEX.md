@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: OpenBot cache-only SAA overlay on board load. PR open for VibeCoder review. Do not merge.
-Last: #62 disabled background overlay; board dogfood still left ~77 railway zombies via GET /api/crons?refresh=1. Soft-restart flushed.
-Next: VibeCoder review. Leave UX simplify PR on hold. Hard-refresh ?v=121 after merge.
+Now: #66 Chat-first + Round 4 leftovers (Tools hatch, CEO bind, gateway banner). Overlay cache-only on master.
+Last: #65 merged. #66 rebase onto d94b27d.
+Next: Vitzer review of #66. Do not merge. Leave #48, SEO, Hermes redeploy alone.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault

@@ -460,6 +460,12 @@ function formatBotHtml(text) {
 
 function paintBotText(el, text) {
   if (!el) return;
+  if (isStatusToken(text) || isStatusToken(cleanBotText(text))) {
+    el.innerHTML = "";
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
   const html = formatBotHtml(text);
   if (html) el.innerHTML = html;
   else el.textContent = "";
@@ -3201,11 +3207,11 @@ function paintEmbedLive() {
   const hermes = quietStory(engineStory("Hermes Agent"));
   [["ocLive", oc], ["hermesLive", hermes]].forEach(([id, story]) => {
     const el = $(id);
-    if (!el || !story || !story.line) return;
-    el.hidden = false;
-    el.classList.toggle("on", story.on);
-    el.classList.toggle("warn", Boolean(story.warn) && !story.on);
-    el.textContent = story.line;
+    if (!el) return;
+    el.classList.toggle("on", Boolean(story && story.on));
+    el.classList.remove("warn");
+    el.hidden = !(story && story.on);
+    el.textContent = (story && story.on) ? story.line : "Done";
   });
 }
 
@@ -3214,12 +3220,12 @@ function paintPulse() {
   if (!el) return;
   const story = quietStory(runningStory());
   el.classList.toggle("on", story.on);
-  el.classList.toggle("warn", Boolean(story.warn) && !story.on);
+  el.classList.remove("warn");
   el.hidden = !story.on;
   if (story.on) {
     el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
   } else {
-    el.innerHTML = `<i aria-hidden="true"></i><span>Done</span><small>${escapeHtml(engineFoundLine())}</small>`;
+    el.innerHTML = `<i aria-hidden="true"></i><span>Done</span>`;
   }
   paintEmbedLive();
   paintWorkTabs();
@@ -3311,7 +3317,7 @@ function paintWorkSurface() {
     shell.classList.toggle("activity-open", Boolean(scheduleOpen));
   }
   const lanes = $("laneStatus");
-  if (lanes && scheduleOpen) lanes.hidden = true;
+  if (lanes) lanes.hidden = true;
   paintActivityTitle();
 }
 
@@ -3359,7 +3365,7 @@ function renderChatSchedule(rows, digest, focusId) {
         ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
       </details>`).join("") : `<p class="cron-empty">No job cards yet.</p>`);
     }
-    el.innerHTML = bits.join("");
+    el.innerHTML = bits.join("") || `<p class="cron-empty">${view === "doing" ? "Nothing running." : (view === "next" ? "Nothing due." : "No results yet.")}</p>`;
     bindNeedActions(el);
     bindWorkFolds(el);
     paintWorkSurface();
@@ -3368,7 +3374,7 @@ function renderChatSchedule(rows, digest, focusId) {
   }
   const list = (rows || []).filter((row) => !cronIsNoise(row));
   if (rows && !list.length) {
-    el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live report.</p>`;
+    el.innerHTML = `<p class="cron-empty">Nothing on the schedule for this CEO yet.</p>`;
     return;
   }
   const cached = digestCache.get(projectId) || {};
@@ -3441,7 +3447,7 @@ function renderChatSchedule(rows, digest, focusId) {
     }
     sections.push(`<h3 class="cron-section">Done · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : (failed.length ? "" : `<p class="cron-empty">No result on this copy yet.</p>`)}`);
   }
-  el.innerHTML = sections.join("");
+  el.innerHTML = sections.join("") || `<p class="cron-empty">${view === "doing" ? "Nothing running." : (view === "next" ? "Nothing due." : "No results yet.")}</p>`;
   bindNeedActions(el);
   bindWorkFolds(el);
   paintWorkSurface();
@@ -3733,13 +3739,18 @@ function applyCollaboratorChrome() {
       btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
     }
   });
+  const hatch = $("toolsHatch");
+  if (hatch) hatch.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
 }
 
 function syncHermesHint() {
   const hint = $("hermesHint");
-  if (hint) hint.classList.toggle("hidden", stage !== "hermes" || !hermesFailed);
+  if (hint) {
+    hint.hidden = true;
+    hint.classList.add("hidden");
+  }
   const retry = $("retryHermes");
-  if (retry) retry.classList.toggle("hidden", stage !== "hermes" || !hermesFailed);
+  if (retry) retry.classList.add("hidden");
 }
 
 let applyingHash = false;
@@ -3777,11 +3788,23 @@ function applyHash() {
   }
 }
 
+function paintToolsHatch() {
+  const hatch = $("toolsHatch");
+  if (!hatch) return;
+  hatch.classList.toggle("on", stage === "opencode" || stage === "hermes");
+  const sum = hatch.querySelector("summary");
+  if (sum) {
+    sum.textContent = stage === "opencode" ? "Tools · Code" : (stage === "hermes" ? "Tools · Hermes" : "Tools");
+  }
+  if (stage === "chat") hatch.open = false;
+}
+
 function setStage(name) {
   stage = name;
   document.querySelectorAll(".stage-btn").forEach((btn) => {
     btn.classList.toggle("on", btn.dataset.stage === name);
   });
+  paintToolsHatch();
   document.querySelectorAll(".workspace").forEach((el) => {
     el.classList.toggle("on", el.id === `stage-${name}`);
   });
@@ -3824,6 +3847,8 @@ function setSettingsPanel(name) {
       btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
     }
   });
+  const hatch = $("toolsHatch");
+  if (hatch) hatch.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
   document.querySelectorAll(".drawer-panel").forEach((el) => {
     el.classList.toggle("on", el.id === `panel-${name}`);
   });
@@ -3860,6 +3885,7 @@ function openWorkspace(name) {
 async function setOrgNode(project, worker) {
   projectId = project || "";
   workerId = worker || "";
+  rememberAim();
   preset = "cos";
   focusedLane = "";
   unreadLanes = new Set();
@@ -3977,45 +4003,33 @@ function renderAttachments(el, attachments) {
   el.appendChild(attDiv);
 }
 
+function isStatusToken(text) {
+  return /^(THINK_OK|OPS_OK|RESEARCH_OK|OK|DONE|RESULT:?\s*ok\.?)$/i.test(String(text || "").trim());
+}
+
 function appendReceipt(el, job) {
-  if (!el || !job || el.querySelector(".receipt-line")) return;
+  if (!el || !job || el.querySelector(".done-chip")) return;
   const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board");
   const cost = Number(job.usd_estimate || 0);
   if ((engine === "board" || job.preset === "cos") && !cost && !job.cron) return;
   const line = receiptLine(job);
   if (!line) return;
+  const fold = document.createElement("details");
+  fold.className = "done-chip";
+  const sum = document.createElement("summary");
+  sum.textContent = /^Failed\b/.test(line) ? "Failed" : "Done";
   const rec = document.createElement("p");
   rec.className = "receipt receipt-line";
   if (/^Failed\b/.test(line)) rec.classList.add("warn");
-  if (/^Running\b/.test(line)) rec.classList.add("on");
   rec.textContent = line;
-  el.appendChild(rec);
+  fold.appendChild(sum);
+  fold.appendChild(rec);
+  el.appendChild(fold);
 }
 
 function appendWorkDetails(el, job) {
   if (!el || !job) return;
   appendReceipt(el, job);
-  const rec = el.querySelector(".receipt-line");
-  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "");
-  if (!rec) return;
-  if (engine === "Hermes Agent" && !el.querySelector("[data-open-hermes]")) {
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "ghost-btn receipt-go";
-    open.dataset.openHermes = "1";
-    open.textContent = "Open Hermes";
-    open.addEventListener("click", () => setStage("hermes"));
-    rec.after(open);
-  }
-  if (engine === "OpenCode" && !el.querySelector("[data-open-opencode]")) {
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "ghost-btn receipt-go";
-    open.dataset.openOpencode = "1";
-    open.textContent = "Open OpenCode";
-    open.addEventListener("click", () => setStage("opencode"));
-    rec.after(open);
-  }
 }
 
 function settleLive(live, job) {
@@ -5002,6 +5016,18 @@ async function refreshProviders() {
   fillSettings({ ...cfg, providers: data });
 }
 
+function rememberAim() {
+  sessionStorage.setItem("ob-aim", JSON.stringify({ projectId: projectId || "", workerId: workerId || "" }));
+}
+
+function restoreAim() {
+  try {
+    return JSON.parse(sessionStorage.getItem("ob-aim") || "{}") || {};
+  } catch (_err) {
+    return {};
+  }
+}
+
 function currentAim() {
   const project = currentProject();
   if (!project) {
@@ -5077,18 +5103,14 @@ function reloadEngineFrame(frameId, url, token) {
 
 async function startOpenCode() {
   const aim = currentAim();
-  const folder = aim.idle
-    ? (lastOcFolder || (($("folder") && $("folder").value.trim()) || null))
-    : (aim.folder || (($("folder") && $("folder").value.trim()) || null));
-  if ($("ocTitle")) $("ocTitle").textContent = aim.idle ? "OpenCode" : `OpenCode · ${aim.name}`;
   if (aim.idle) {
-    paintEmbedAim("ocStatus", lastOcFolder
-      ? `Last folder · ${shortLeaf(lastOcFolder)}. Pick a CEO so this matches Chat.`
-      : "Pick a CEO so OpenCode opens that folder.");
-    setEmbedOpen("ocOpen", "");
-  } else if (!ocStarted) {
-    paintEmbedAim("ocStatus", folder ? `Starting · ${shortLeaf(folder)}` : "Starting…");
+    if ($("ocTitle")) $("ocTitle").textContent = "OpenCode";
+    paintEmbedAim("ocStatus", "Chat is on Chief of Staff. OpenCode stays on the last CEO folder.");
+    return;
   }
+  const folder = aim.folder || (($("folder") && $("folder").value.trim()) || null);
+  if ($("ocTitle")) $("ocTitle").textContent = `OpenCode · ${aim.name}`;
+  paintEmbedAim("ocStatus", folder ? `Matches Chat · ${aim.name} · ${shortLeaf(folder)}` : `Matches Chat · ${aim.name}`);
   const res = await fetch("/api/engines/opencode/web", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -5104,11 +5126,11 @@ async function startOpenCode() {
   const url = data.url || "/engine/opencode/";
   const aimed = data.folder || folder || "";
   const sid = data.session_id || "";
-  if (!aim.idle) {
-    paintEmbedAim("ocStatus", aimed ? `Folder · ${shortLeaf(aimed)}` : "OpenCode is up.");
-    setEmbedOpen("ocOpen", url);
-  }
-  reloadEngineFrame("ocFrame", url, `${aimed}|${sid}`);
+  paintEmbedAim("ocStatus", aimed ? `Matches Chat · ${aim.name} · ${shortLeaf(aimed)}` : `Matches Chat · ${aim.name}`);
+  setEmbedOpen("ocOpen", url);
+  const frame = $("ocFrame");
+  if (frame) frame.removeAttribute("data-aim");
+  reloadEngineFrame("ocFrame", url, `${aim.projectId}|${aimed}|${sid}`);
   lastOcFolder = aimed;
   ocStarted = true;
   paintPulse();
@@ -5116,17 +5138,16 @@ async function startOpenCode() {
 
 async function startHermes() {
   const aim = currentAim();
-  const home = aim.idle ? (lastHermesHome || "") : (aim.hermesHome || "");
-  const sid = aim.idle ? "" : (aim.sessionId || "");
-  if ($("hermesTitle")) $("hermesTitle").textContent = aim.idle ? "Hermes" : `Hermes · ${aim.name}`;
   if (aim.idle) {
-    paintEmbedAim("hermesAim", lastHermesHome
-      ? `Last home · ${shortLeaf(lastHermesHome)}. Pick a CEO so this matches Chat.`
-      : "Pick a CEO so Hermes opens that home.");
-    setEmbedOpen("hermesOpen", "");
-  } else {
-    paintEmbedAim("hermesAim", "Starting…");
+    if ($("hermesTitle")) $("hermesTitle").textContent = "Hermes";
+    paintEmbedAim("hermesAim", "Chat is on Chief of Staff. Hermes stays on the last CEO home.");
+    paintGatewayBanner(false);
+    return;
   }
+  const home = aim.hermesHome || "";
+  const sid = aim.sessionId || "";
+  if ($("hermesTitle")) $("hermesTitle").textContent = `Hermes · ${aim.name}`;
+  paintEmbedAim("hermesAim", "Starting…");
   hermesFailed = false;
   syncHermesHint();
   const res = await fetch("/api/engines/hermes/dashboard", {
@@ -5142,6 +5163,7 @@ async function startHermes() {
     setEmbedOpen("hermesOpen", data.install || "");
     paintEmbedAim("hermesAim", "", `${escapeHtml(data.error || "Hermes Agent missing")}${docs}`);
     syncHermesHint();
+    paintGatewayBanner(true);
     paintEmbedLive();
     return;
   }
@@ -5152,38 +5174,81 @@ async function startHermes() {
   const url = resume ? `${prefix}/chat?resume=${encodeURIComponent(resume)}` : `${prefix}/`;
   hermesFailed = false;
   if ($("hermesStatus")) $("hermesStatus").textContent = "";
-  if (!aim.idle) {
-    const count = Number(data.session_count || 0);
-    const title = String(data.session_title || "").trim();
-    const bits = [aimed ? `Home · ${shortLeaf(aimed)}` : "Home attached"];
-    if (count) bits.push(`${count.toLocaleString()} sessions`);
-    if (title) bits.push(`Telegram · ${title}`);
-    paintEmbedAim("hermesAim", bits.join(" · "));
-    setEmbedOpen("hermesOpen", url);
-  }
+  const count = Number(data.session_count || 0);
+  const title = String(data.session_title || "").trim();
+  const bits = [`Matches Chat · ${aim.name}`];
+  if (aimed) bits.push(shortLeaf(aimed));
+  if (count) bits.push(`${count.toLocaleString()} sessions`);
+  if (title) bits.push(`Telegram · ${title}`);
+  paintEmbedAim("hermesAim", bits.join(" · "));
+  setEmbedOpen("hermesOpen", url);
   syncHermesHint();
-  reloadEngineFrame("hermesFrame", url, `${aimed}|${resume}`);
+  const frame = $("hermesFrame");
+  if (frame) frame.removeAttribute("data-aim");
+  reloadEngineFrame("hermesFrame", url, `${aim.projectId}|${aimed}|${resume}`);
+  refreshGatewayBanner();
   lastHermesHome = aimed;
   hermesStarted = true;
   paintPulse();
 }
 
+function paintGatewayBanner(off) {
+  const el = $("gatewayBanner");
+  if (!el) return;
+  el.hidden = !off;
+}
+
+async function refreshGatewayBanner() {
+  const banner = $("gatewayBanner");
+  if (!banner) return;
+  const pid = projectId || "";
+  if (!pid) {
+    paintGatewayBanner(false);
+    return;
+  }
+  try {
+    const res = await fetch(`/api/hermes/gateway/status?project_id=${encodeURIComponent(pid)}`);
+    const data = await res.json();
+    paintGatewayBanner(data.running === false);
+  } catch (_err) {
+    paintGatewayBanner(false);
+  }
+}
+
+async function restartGateway() {
+  const btn = $("restartGateway");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/hermes/gateway/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId || "" })
+    });
+    const data = await res.json().catch(() => ({}));
+    paintGatewayBanner(data.running === false);
+    if (data.running || data.ok) startHermes();
+  } catch (_err) {
+    paintGatewayBanner(true);
+  }
+  if (btn) btn.disabled = false;
+}
+
 function attachEngineFrames(data) {
+  if (projectId) {
+    startOpenCode();
+    startHermes();
+    paintEmbedLive();
+    return;
+  }
   const ocUrl = data.opencode_web && data.opencode_web.url;
   if (ocUrl) {
-    paintEmbedAim("ocStatus", "OpenCode is up.");
     setEmbedOpen("ocOpen", ocUrl);
-    if ($("ocFrame").src !== ocUrl) $("ocFrame").src = ocUrl;
     ocStarted = true;
   }
   const hermesUrl = data.hermes_dash && data.hermes_dash.url;
   if (hermesUrl) {
     hermesFailed = false;
-    if ($("hermesStatus")) $("hermesStatus").textContent = "";
-    paintEmbedAim("hermesAim", "Hermes is up.");
     setEmbedOpen("hermesOpen", hermesUrl);
-    syncHermesHint();
-    if ($("hermesFrame").src !== hermesUrl) $("hermesFrame").src = hermesUrl;
     hermesStarted = true;
   }
   paintEmbedLive();
@@ -5410,6 +5475,8 @@ async function boot() {
   if (data.needs_unlock) data = await waitForUnlock();
   applyConfig(data);
   showWizard(data);
+  const savedAim = restoreAim();
+  if (savedAim.projectId) await setOrgNode(savedAim.projectId, savedAim.workerId || "");
   await loadThread();
   pollActivity();
   loadSkillHints();
@@ -5493,6 +5560,17 @@ async function pollActivity() {
 document.querySelectorAll(".stage-btn").forEach((btn) => {
   btn.addEventListener("click", () => setStage(btn.dataset.stage));
 });
+if ($("toolsHatch")) {
+  $("toolsHatch").querySelectorAll("[data-stage]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      $("toolsHatch").open = false;
+      setStage(btn.dataset.stage);
+    });
+  });
+}
+if ($("restartGateway")) {
+  $("restartGateway").addEventListener("click", () => restartGateway());
+}
 if ($("routeMenu")) {
   $("routeMenu").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-route]");

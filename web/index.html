@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
   <link rel="apple-touch-icon" href="/favicon.png?v=2" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=121" />
+  <link rel="stylesheet" href="/styles.css?v=122" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -123,9 +123,14 @@
       </div>
     </div>
     <nav class="stages" aria-label="Workspace">
-      <button type="button" class="stage-btn on" data-stage="chat">Chat</button>
-      <button type="button" class="stage-btn" data-stage="opencode"><span class="stage-full">OpenCode</span><span class="stage-short">Code</span></button>
-      <button type="button" class="stage-btn" data-stage="hermes">Hermes</button>
+      <button type="button" class="stage-btn stage-chat on" data-stage="chat">Chat</button>
+      <details class="tools-hatch" id="toolsHatch">
+        <summary>Tools</summary>
+        <div class="tools-menu">
+          <button type="button" data-stage="opencode">OpenCode</button>
+          <button type="button" data-stage="hermes">Hermes</button>
+        </div>
+      </details>
     </nav>
     <div class="bar-right">
       <div class="pulse" id="pulse" title="What’s running, and which engines this board found">
@@ -280,6 +285,13 @@
       </div>
       <p class="embed-aim" id="hermesAim"></p>
       <p class="embed-live" id="hermesLive" hidden>Done</p>
+      <div id="gatewayBanner" class="gateway-banner" hidden>
+        <div>
+          <b>Gateway off</b>
+          <span>Hermes is not running for this CEO.</span>
+        </div>
+        <button type="button" class="send" id="restartGateway">Restart</button>
+      </div>
     </div>
     <iframe id="hermesFrame" class="embed" title="Hermes Agent"></iframe>
   </section>
@@ -681,11 +693,15 @@
             <form class="suggest-form" id="suggestForm">
               <input id="suggestTitle" type="text" placeholder="Support request" autocomplete="off" />
               <textarea id="suggestBody" rows="3" placeholder="What’s wrong, or what should OpenBot do?"></textarea>
-              <button type="submit" class="ghost-btn">Suggest</button>
+              <button type="submit" class="ghost-btn">Create support ticket</button>
               <p class="muted" id="suggestStatus"></p>
             </form>
           </section>
           <section class="drawer-panel" id="panel-about">
+            <p class="credit">
+              OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
+              Not affiliated with, sponsored by, or endorsed by those projects.
+            </p>
             <p class="muted" id="aboutMark">OPENBOT · LOCAL ORG. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.</p>
             <div class="actions">
               <button type="button" class="ghost-btn" id="aboutOpenCode">Open OpenCode</button>
@@ -703,6 +719,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=121"></script>
+  <script src="/app.js?v=122"></script>
 </body>
 </html>

@@ -233,15 +233,28 @@ class SimpleBoardUiTests(unittest.TestCase):
 
     def test_credit_stays_on_the_board(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertNotIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
-        self.assertNotIn("OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
+        self.assertIn("OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
+        self.assertIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
+        footer = html[html.find("<footer>"):html.find("</footer>")]
+        self.assertNotIn("affiliated", footer)
+        self.assertNotIn("uses Hermes Agent", footer)
         self.assertIn("Hermes Agent", html)
         self.assertIn("OpenCode", html)
         self.assertIn("activity-sheet", html)
+        self.assertIn("tools-hatch", html)
+        self.assertIn("id=\"gatewayBanner\"", html)
+        self.assertIn("Create support ticket", html)
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
         self.assertIn("function rememberWorkFolds", js)
         self.assertIn("data-fold=\"gateway-jobs\"", js)
         self.assertIn("function guessLane", js)
+        self.assertIn("function rememberAim", js)
+        self.assertIn("Matches Chat", js)
+        self.assertIn("done-chip", js)
+        self.assertIn("min-width: 1280px", css)
+        self.assertIn(".pulse[hidden]", css)
+        self.assertIn("gateway-banner", css)
 
 
 class SeamlessTogetherTests(unittest.TestCase):

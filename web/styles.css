@@ -159,6 +159,63 @@ body {
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
+.pulse[hidden] { display: none !important; }
+.tools-hatch {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.tools-hatch.hidden { display: none; }
+.tools-hatch summary {
+  list-style: none;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  color: var(--muted);
+  white-space: nowrap;
+  font: inherit;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+.tools-hatch summary::-webkit-details-marker { display: none; }
+.tools-hatch.on summary {
+  background: var(--bronze-soft);
+  color: var(--bronze);
+}
+.tools-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 8.5rem;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #161411;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+.tools-hatch[open] .tools-menu { display: grid; gap: 2px; }
+.tools-menu button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tools-menu button:hover {
+  color: var(--ink);
+  background: rgba(201, 166, 107, 0.08);
+}
 .engine-hint {
   display: flex; align-items: center; gap: 8px;
   min-width: 0; max-width: 220px;
@@ -1084,7 +1141,7 @@ details.cron-card[open] > .need-actions { display: flex; }
   white-space: nowrap;
 }
 .lanes {
-  display: none;
+  display: none !important;
 }
 .lane,
 .route-btn {
@@ -1867,6 +1924,48 @@ details.cron-card[open] > .need-actions { display: flex; }
   font-size: 12px;
   color: var(--ink);
 }
+.done-chip {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.done-chip summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+}
+.done-chip summary::-webkit-details-marker { display: none; }
+.done-chip .receipt,
+.done-chip .receipt-line { color: var(--muted); }
+.done-chip .receipt-line.warn { color: var(--danger); }
+.gateway-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #161411;
+}
+.gateway-banner[hidden] { display: none !important; }
+.gateway-banner b {
+  display: block;
+  color: var(--ink);
+  font-weight: 500;
+}
+.gateway-banner span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.gateway-banner .send {
+  min-height: 44px;
+  flex-shrink: 0;
+}
 .bubble.live .bubble-text { color: var(--muted); }
 .bubble.live .bubble-text:empty { display: none; }
 .thinking {
@@ -2480,7 +2579,8 @@ footer a { color: var(--bronze); }
     overflow: visible;
     grid-column: auto;
   }
-  .stage-btn { 
+  .stage-btn,
+  .tools-hatch summary {
     font-size: 12px;
     padding: 8px 12px;
     min-height: 44px;
@@ -3500,4 +3600,51 @@ footer a { color: var(--bronze); }
 
 .auth-status-card .ghost-btn {
   margin-top: 8px;
+}
+
+/* desktop 1280 split stream + context */
+@media (min-width: 1280px) {
+  .chat-shell {
+    width: 100%;
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 30rem);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    column-gap: 24px;
+    align-items: stretch;
+  }
+  .chat-head {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .stream {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+  }
+  .composer {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .index {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    display: block;
+    min-height: 0;
+    overflow: auto;
+  }
+  .index pre { max-height: none; }
+  .activity-sheet {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    min-height: 0;
+  }
+  .chat-shell.work-open .stream,
+  .chat-shell.activity-open .stream {
+    display: flex;
+  }
+  .chat-shell.work-open .index,
+  .chat-shell.activity-open .index {
+    display: none;
+  }
 }
