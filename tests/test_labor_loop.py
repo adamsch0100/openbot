@@ -114,25 +114,28 @@ class LaborLoopIsolation(unittest.TestCase):
 
 
 class RetiredOrgTests(LaborLoopIsolation):
-    def test_retire_drops_nadia_and_listlogic(self):
+    def test_retire_keeps_nadia_and_listlogic(self):
         saved = {
             "projects": [
                 {"id": "openbot", "name": "openbot", "primary": True},
                 {"id": "nadia", "name": "Nadia"},
                 {"id": "listlogic", "name": "ListLogic"},
                 {"id": "saa-homes", "name": "SAA Homes"},
+                {"id": "nadia-marketing", "name": "Nadia Marketing"},
             ]
         }
         out = retire_archived_ceos(saved)
         ids = {str(row.get("id")) for row in out.get("projects") or []}
-        self.assertEqual(ids, {"openbot", "saa-homes"})
-        self.assertIn("nadia", RETIRED_CEO_IDS)
-        self.assertIn("listlogic", RETIRED_CEO_IDS)
+        self.assertEqual(ids, {"openbot", "nadia", "listlogic", "saa-homes"})
+        self.assertNotIn("nadia", RETIRED_CEO_IDS)
+        self.assertNotIn("listlogic", RETIRED_CEO_IDS)
         self.assertIn("nadia-marketing", RETIRED_CEO_IDS)
         self.assertIn("app", RETIRED_CEO_IDS)
-        nadia_index = org_mod.ORG / "projects" / "nadia" / "INDEX.md"
-        self.assertTrue(nadia_index.is_file())
-        self.assertIn("Retired from this OpenBot board", nadia_index.read_text(encoding="utf-8"))
+        self.assertNotIn("nadia-marketing", ids)
+        from openbot.org import MANUAL_SEAT_CEO_IDS
+
+        self.assertIn("nadia", MANUAL_SEAT_CEO_IDS)
+        self.assertIn("listlogic", MANUAL_SEAT_CEO_IDS)
 
     def test_hosted_app_folder_is_not_a_ceo(self):
         from openbot.org import _host_identity, ensure_org
@@ -184,11 +187,15 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertIn(SUPPORT_CEO_ID, listed)
         self.assertIn(SUPPORT_CEO_ID, {row["id"] for row in org_mod.list_projects()})
 
-    def test_add_project_refuses_retired(self):
+    def test_add_project_allows_nadia_and_listlogic(self):
+        nadia = org_mod.add_project(str(self.home), "Nadia")
+        self.assertEqual(nadia.get("project_id"), "nadia")
+        listlogic = org_mod.add_project(str(self.home), "ListLogic")
+        self.assertEqual(listlogic.get("project_id"), "listlogic")
         with self.assertRaises(ValueError):
-            org_mod.add_project(str(self.home), "Nadia")
+            _refuse_retired("Nadia Marketing")
         with self.assertRaises(ValueError):
-            _refuse_retired("ListLogic")
+            org_mod.add_project(str(self.home), "Nadia Marketing")
 
     def test_clean_memory_strips_contributor_banner(self):
         raw = (

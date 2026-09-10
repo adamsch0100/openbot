@@ -1626,7 +1626,7 @@ class StreamAndErrorTests(unittest.TestCase):
 
 class ReattachCeoTests(unittest.TestCase):
     def test_reattach_imported_ceos_skips_retired_and_tests(self):
-        from openbot.org import reattach_imported_ceos
+        from openbot.org import MANUAL_SEAT_CEO_IDS, reattach_imported_ceos
 
         saved = {"projects": [{"id": "openbot", "name": "openbot", "primary": True}]}
         out = reattach_imported_ceos(saved)
@@ -1635,6 +1635,8 @@ class ReattachCeoTests(unittest.TestCase):
         self.assertIn("saa-homes", ids)
         self.assertNotIn("nadia", ids)
         self.assertNotIn("listlogic", ids)
+        self.assertIn("nadia", MANUAL_SEAT_CEO_IDS)
+        self.assertIn("listlogic", MANUAL_SEAT_CEO_IDS)
         self.assertNotIn("opencode-test", ids)
 
 
