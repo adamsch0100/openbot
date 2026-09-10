@@ -2246,6 +2246,13 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
 
     # Not running — drop dead-pid gateway_state/sock (canonical + legacy) before start.
     cleared = clear_stale_gateway_state(home)
+    # Redeploy can wipe TELEGRAM_* from .env while leaving .env*.bak*; restore first.
+    try:
+        from .keyring import preserve_merge_hermes_env
+
+        preserve_merge_hermes_env(home)
+    except Exception:
+        pass
 
     def _finish(result: dict) -> dict:
         if cleared.get("count"):

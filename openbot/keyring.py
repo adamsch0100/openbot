@@ -713,6 +713,108 @@ def prefer_account_ids(tools: dict | None = None) -> list[str]:
     return prefer
 
 
+
+# Channel / messaging secrets that must survive wallet rewrites and redeploys.
+_PRESERVE_ENV_EXACT = {
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_ALLOWED_USERS",
+    "TELEGRAM_CHAT_ID",
+    "TELEGRAM_WEBHOOK_SECRET",
+    "DISCORD_BOT_TOKEN",
+    "DISCORD_TOKEN",
+    "SLACK_BOT_TOKEN",
+    "SLACK_APP_TOKEN",
+}
+_PRESERVE_ENV_PREFIXES = ("TELEGRAM_", "DISCORD_", "SLACK_", "WHATSAPP_")
+
+
+def _is_preserve_env_key(name: str) -> bool:
+    key = str(name or "").strip()
+    if not key:
+        return False
+    if key in _PRESERVE_ENV_EXACT:
+        return True
+    return any(key.startswith(prefix) for prefix in _PRESERVE_ENV_PREFIXES)
+
+
+def _parse_env_lines(text: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, rest = line.partition("=")
+        name = name.strip()
+        value = rest.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        if name:
+            out[name] = value
+    return out
+
+
+def _env_backup_paths(env_path: Path) -> list[Path]:
+    """Sibling backups Hermes/OpenBot may leave (e.g. .env.env.bak-openrouter)."""
+    parent = env_path.parent
+    names = {
+        env_path.name + ".bak",
+        env_path.name + ".bak-openbot",
+        env_path.name + ".env.bak-openrouter",
+        ".env.bak",
+        ".env.bak-openbot",
+        ".env.env.bak-openrouter",
+    }
+    found: list[Path] = []
+    for name in names:
+        candidate = parent / name
+        if candidate.is_file():
+            found.append(candidate)
+    try:
+        for candidate in parent.iterdir():
+            if not candidate.is_file():
+                continue
+            low = candidate.name.lower()
+            if candidate.name.startswith(".env") and "bak" in low:
+                if candidate not in found:
+                    found.append(candidate)
+    except OSError:
+        pass
+    found.sort(key=lambda p: p.stat().st_mtime if p.is_file() else 0, reverse=True)
+    return found
+
+
+def preserve_merge_hermes_env(home: str | Path | None = None) -> dict:
+    """Restore missing channel secrets into HERMES_HOME/.env from sibling backups.
+
+    Post-redeploy / OpenRouter strip has wiped TELEGRAM_BOT_TOKEN while leaving
+    `.env.env.bak-openrouter`. Never overwrite a non-empty live value.
+    """
+    root = Path(home) if home else Path(hermes_home())
+    env_path = root / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    current = _parse_env_lines(env_path.read_text(encoding="utf-8") if env_path.is_file() else "")
+    restored: dict[str, str] = {}
+    for backup in _env_backup_paths(env_path):
+        try:
+            blob = _parse_env_lines(backup.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        for name, value in blob.items():
+            if not _is_preserve_env_key(name):
+                continue
+            if not str(value or "").strip():
+                continue
+            if str(current.get(name) or "").strip():
+                continue
+            if name in restored:
+                continue
+            restored[name] = value
+    if not restored:
+        return {"ok": True, "restored": [], "path": str(env_path)}
+    _write_hermes_env(restored, home=root)
+    return {"ok": True, "restored": sorted(restored.keys()), "path": str(env_path)}
+
+
 def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None = None) -> str | None:
     """Three OpenCode Go keys, then OpenRouter. Writes OpenCode auth.json and Hermes .env."""
     prefer = prefer_account_ids(tools)
@@ -735,6 +837,11 @@ def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None =
         activate_for_engine("Hermes Agent", prefer=prefer, provider="openrouter")
     
     if hermes_home_dir:
+        # Restore channel secrets from .env backups before wallet rewrite.
+        try:
+            preserve_merge_hermes_env(hermes_home_dir)
+        except Exception:
+            pass
         # Only write keys that are in the prefer/fallback chain
         # Never write ANTHROPIC keys
         allowed_keys = ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY", "OPENCODE_GO_API_KEY"]
@@ -748,6 +855,11 @@ def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None =
         }
         if updates:
             _write_hermes_env(updates, home=hermes_home_dir)
+        # Re-merge after write in case a backup held secrets the live file lost.
+        try:
+            preserve_merge_hermes_env(hermes_home_dir)
+        except Exception:
+            pass
     return chosen
 
 
@@ -756,19 +868,31 @@ def _write_hermes_env(updates: dict[str, str], home: str | Path | None = None) -
     path.parent.mkdir(parents=True, exist_ok=True)
     existing: list[str] = []
     if path.is_file():
+        # Snapshot before rewrite so redeploy/wallet push can restore channel secrets.
+        bak = path.with_name(path.name + ".bak-openbot")
+        try:
+            bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        except OSError:
+            pass
         existing = path.read_text(encoding="utf-8").splitlines()
+    # Never blank a preserve key via updates — drop empty preserve overwrites.
+    clean_updates = {
+        name: value
+        for name, value in (updates or {}).items()
+        if not (_is_preserve_env_key(name) and not str(value or "").strip())
+    }
     written: set[str] = set()
     out: list[str] = []
     for line in existing:
         stripped = line.strip()
         if stripped and not stripped.startswith("#") and "=" in stripped:
             name = stripped.partition("=")[0].strip()
-            if name in updates:
-                out.append(f"{name}={updates[name]}")
+            if name in clean_updates:
+                out.append(f"{name}={clean_updates[name]}")
                 written.add(name)
                 continue
         out.append(line)
-    for name, value in updates.items():
+    for name, value in clean_updates.items():
         if name not in written:
             out.append(f"{name}={value}")
     if out and out[-1] != "":
