@@ -3174,6 +3174,27 @@ function engineMatches(row, kind) {
   return rowEngineKind(row) === kind;
 }
 
+function hermesScheduleSummary(crons) {
+  const list = (crons || []).filter((row) => !cronIsNoise(row));
+  if (list.length < 2) return null;
+  const enabled = list.filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")));
+  if (!enabled.length) return null;
+  const ok = enabled.filter((row) => String(row.last_status || "").toLowerCase() === "ok");
+  const freshFail = enabled.filter((row) => cronIsFailed(row) && !cronIsGatewayFail(row) && !cronIsStaleFail(row));
+  const next = enabled
+    .filter((row) => row.next_run_at)
+    .slice()
+    .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")))[0];
+  const due = next ? cronWhenNext(next.next_run_at) : "";
+  const nextBit = next
+    ? ` · next ${cronTitle(next.name)}${due ? ` ${due}` : ""}`
+    : "";
+  if (freshFail.length) {
+    return { on: false, warn: true, line: `Schedule · ${freshFail.length} need a look${nextBit}` };
+  }
+  return { on: false, warn: false, line: `Schedule · ${ok.length}/${enabled.length} ok${nextBit}` };
+}
+
 function engineStory(kind) {
   const label = kind === "OpenCode" ? "OpenCode" : "Hermes";
   if (liveRunId) {
@@ -3194,12 +3215,23 @@ function engineStory(kind) {
   if (liveCron) {
     return { on: true, line: `Running · ${liveCron.title || cronTitle(liveCron.name) || "job"}` };
   }
+  if (kind === "Hermes Agent") {
+    const schedule = hermesScheduleSummary(crons);
+    if (schedule) return schedule;
+  }
   const latest = crons
     .filter((row) => row.last_run_at && !cronIsLive(row))
     .slice()
     .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")))[0];
   if (latest) {
-    return { on: false, warn: cronIsFailed(latest), line: `Done · ${latest.title || cronTitle(latest.name) || "job"}` };
+    const scar = cronIsGatewayFail(latest) && gatewayRunning;
+    return {
+      on: false,
+      warn: cronIsFailed(latest) && !scar,
+      line: scar
+        ? `Schedule · gateway up · last ${latest.title || cronTitle(latest.name) || "job"}`
+        : `Done · ${latest.title || cronTitle(latest.name) || "job"}`
+    };
   }
   if (!projectId) {
     const jobs = (((cfg.activity || {}).jobs) || []).filter((row) => engineMatches(row, kind));
@@ -3400,9 +3432,9 @@ function gatewayFailClusterHtml(rows, want) {
   const list = rows || [];
   if (list.length === 1) return cronCardHtml(list[0], list[0].id === want, "result");
   const inner = list.map((row) => cronCardHtml(row, row.id === want, "result")).join("");
-  return `<article class="cron-card failed cron-cluster">
-    <div class="cron-head"><b>Hermes gateway stopped</b><span>Failed</span></div>
-    <p class="cron-outcome">Same stop hit ${list.length} jobs. Retry one job — do not fire the whole set.</p>
+  return `<article class="cron-card cron-cluster">
+    <div class="cron-head"><b>Old gateway stop scars</b><span>Stale</span></div>
+    <p class="cron-outcome">A past cleanup hit ${list.length} jobs. Live gateway is up — do not mass-retry. Open one job only if live Hermes still shows it red.</p>
     <details class="cron-stale" data-fold="gateway-jobs"><summary>Show ${list.length} jobs</summary>${inner}</details>
   </article>`;
 }
@@ -3559,6 +3591,7 @@ function renderChatSchedule(rows, digest, focusId) {
 }
 
 async function openWork(view, focusId) {
+  // Chat is the schedule surface (Doing/Next/Results). Tools → Hermes stays the raw engine.
   const next = view || "doing";
   if (stage !== "chat") setStage("chat");
   scheduleView = next;

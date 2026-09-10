@@ -2,11 +2,19 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: OpenBot saa-homes gateway is up. lead-attribution-brief succeeded (5024ba46).
-Last: local-events-monthly succeeded. Live SAA gateway is up, not a system service.
-Next: One more gateway-shutdown later. Do not stampede. Do not hermes cron run on this imported home. Do not Accept parked restore cards.
-Blocker: digest 401 = saahomes CRON_SECRET mismatch. Skip conversion-surge.
+Now: Live SAA schedule green (operator check ~8:50am MT): ~48 jobs, 42 enabled, 41 last_status=ok.
+Last: local-events-quarterly null until Oct 1 — expected. Paused skips OK (conversion-surge, competitor-content-watch, city-audit-batch-4, etc.).
+Next: Keep gateway healthy. One-at-a-time retry only if a *new* fail appears. Board shows schedule via Chat Doing/Next/Results + Hermes live line.
+Blocker: GBP login = skip + note. Do not mass-retry old gateway-shutdown scars. Do not hermes cron run on imported home. Do not kill/redeploy live Hermes. No stampede.
 Goals: —
+
+## Residual risks (honest)
+
+- Board `saa-live-overlay.json` can lag live Railway — trust live Hermes for green/red, not a stale cache alone.
+- Old `Gateway shutdown (final-cleanup)` last_status rows may still show in Results as scars while gateway is up — fold them; do not stampede retries.
+- Paused jobs stay paused on purpose (conversion-surge, competitor-content-watch, city-audit-batch-4, …).
+- GBP / login walls: skip + note; never auto-fill secrets.
+- digest 401 / CRON_SECRET mismatch remains a known watch item if digest cards go blank.
 
 Folder: C:\Users\adamm\Projects\saahomes
 Source: C:\Users\adamm\AppData\Local\Temp\openbot-hermes-import\saa-homes.zip
