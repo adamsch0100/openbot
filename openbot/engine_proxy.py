@@ -403,9 +403,9 @@ def _ensure_engine(prefix: str, request_path: str, referer: str = "") -> None:
 
     port = ENGINES[prefix]
     try:
-        if launch._port_open("127.0.0.1", port):
-            return
         if prefix == OPENCODE_PREFIX:
+            if launch._port_open("127.0.0.1", port):
+                return
             folder = _opencode_folder_from_request(request_path, referer)
             if not folder:
                 folder = launch._opencode_cwd or ""
@@ -413,11 +413,14 @@ def _ensure_engine(prefix: str, request_path: str, referer: str = "") -> None:
                 return
             launch.start_opencode_web(folder)
             return
+        # Hermes: always call start so target-home ≠ live (Cos orphan) recycles.
         home = (
             _query_value(request_path, "home")
             or _query_value(referer, "home")
             or (launch._hermes_dash_home or "")
         )
+        if launch._port_open("127.0.0.1", port) and not home:
+            return
         launch.start_hermes_dashboard(home or None)
     except Exception:
         return

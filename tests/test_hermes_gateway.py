@@ -375,17 +375,52 @@ class TestGatewaySupervise(unittest.TestCase):
         self.assertIn("while True", body)
         self.assertNotIn("gateway_start", body)
 
+    @patch("openbot.launch.time.sleep")
+    @patch("openbot.launch.prepare_hermes", return_value={"ok": True})
+    @patch("openbot.launch._wait_port", return_value=True)
     @patch("openbot.launch._kill_port")
-    @patch("openbot.launch._port_open", return_value=True)
+    @patch("openbot.launch._kill")
+    @patch("openbot.launch._port_open", side_effect=lambda *a, **k: True)
     @patch("openbot.launch.detect")
-    def test_dashboard_reuses_running_port(self, mock_detect, _port, mock_kill):
+    @patch("openbot.launch.resolve_ceo_hermes_home", side_effect=lambda pid, stored: stored or "/tmp/saa-homes")
+    @patch("openbot.launch._push_wallets")
+    @patch("openbot.launch.subprocess.Popen")
+    def test_dashboard_recycles_orphan_when_home_unknown(
+        self, mock_popen, _push, _resolve, mock_detect, _port, mock_kill, mock_kill_port, _wait, _prep, _sleep
+    ):
+        """Cos orphan: port up, _hermes_dash_home unset → must kill+restart, never adopt."""
         import openbot.launch as launch
 
         mock_detect.return_value = {
             "hermes": {"present": True, "path": "hermes", "install": "", "install_cmd": ""}
         }
+        proc = mock_popen.return_value
+        proc.poll.return_value = None
+        proc.pid = 4242
         launch._hermes_dash_home = None
-        result = launch.start_hermes_dashboard("/tmp/saa-homes")
+        launch._hermes_dash_proc = None
+        with tempfile.TemporaryDirectory() as raw:
+            home = str(Path(raw) / "saa-homes")
+            Path(home).mkdir()
+            result = launch.start_hermes_dashboard(home)
+        mock_kill_port.assert_called()
+        mock_popen.assert_called()
+        self.assertTrue(result.get("ok"))
+
+    @patch("openbot.launch._kill_port")
+    @patch("openbot.launch._port_open", return_value=True)
+    @patch("openbot.launch.detect")
+    def test_dashboard_reuses_when_home_matches(self, mock_detect, _port, mock_kill):
+        import openbot.launch as launch
+
+        mock_detect.return_value = {
+            "hermes": {"present": True, "path": "hermes", "install": "", "install_cmd": ""}
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            home = str(Path(raw) / "saa-homes")
+            Path(home).mkdir()
+            launch._hermes_dash_home = home
+            result = launch.start_hermes_dashboard(home)
         mock_kill.assert_not_called()
         self.assertTrue(result.get("ok"))
 
