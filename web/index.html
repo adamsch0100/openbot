@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
   <link rel="apple-touch-icon" href="/favicon.png?v=2" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=121" />
+  <link rel="stylesheet" href="/styles.css?v=123" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -124,8 +124,7 @@
     </div>
     <nav class="stages" aria-label="Workspace">
       <button type="button" class="stage-btn on" data-stage="chat">Chat</button>
-      <button type="button" class="stage-btn" data-stage="opencode"><span class="stage-full">OpenCode</span><span class="stage-short">Code</span></button>
-      <button type="button" class="stage-btn" data-stage="hermes">Hermes</button>
+      <button type="button" class="stage-btn" data-stage="tools">Tools</button>
     </nav>
     <div class="bar-right">
       <div class="pulse" id="pulse" title="What’s running, and which engines this board found">
@@ -135,7 +134,7 @@
       </div>
       <div class="engine-hint hidden" id="hermesHint">
         <p class="muted" id="hermesStatus"></p>
-        <button type="button" class="ghost-btn hidden" id="retryHermes">Retry</button>
+        <button type="button" class="ghost-btn hidden" id="retryHermes">Restart</button>
       </div>
       <button type="button" class="meter" id="openSpend" data-panel="usage" title="Spend this period">
         <span class="meter-total" id="spend">$0.00 / $5 week</span>
@@ -179,8 +178,6 @@
           </nav>
           <button type="button" class="ghost-btn" id="openSchedule" hidden>Schedule</button>
         </div>
-        <aside id="ceoLive" class="ceo-live" hidden></aside>
-        <aside id="ceoBrief" class="ceo-brief" hidden></aside>
         <nav class="lanes" id="laneStatus" hidden aria-label="Work in this chat">
           <button type="button" class="lane on" data-lane="all" title="Show every turn in this chat">All</button>
           <button type="button" class="lane" data-lane="builder" title="Show only Code jobs in this chat">Code</button>
@@ -196,12 +193,16 @@
         </div>
         <div id="activityBody" class="activity-body"></div>
       </aside>
-      <details class="index" id="indexWrap">
-        <summary id="indexSummary">Brief</summary>
-        <pre id="indexCard"></pre>
-        <div id="scheduleList" class="schedule" hidden></div>
-      </details>
       <section class="stream" id="stream"></section>
+      <aside class="chat-context" id="chatContext">
+        <aside id="ceoLive" class="ceo-live" hidden></aside>
+        <aside id="ceoBrief" class="ceo-brief" hidden></aside>
+        <details class="index" id="indexWrap">
+          <summary id="indexSummary">Brief</summary>
+          <pre id="indexCard"></pre>
+          <div id="scheduleList" class="schedule" hidden></div>
+        </details>
+      </aside>
       <form class="composer" id="form">
         <input id="folder" type="hidden" />
         <input id="attachInput" type="file" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.cpp,.c,.h,.go,.rs,.rb,.php,.swift,.kt,.sql,.yaml,.yml,.toml" />
@@ -248,6 +249,10 @@
           <h1 id="ocTitle">OpenCode</h1>
         </div>
         <div class="embed-tools">
+          <nav class="tool-tabs" aria-label="Engines">
+            <button type="button" class="tool-tab on" data-stage="opencode"><span class="stage-full">OpenCode</span><span class="stage-short">Code</span></button>
+            <button type="button" class="tool-tab" data-stage="hermes">Hermes</button>
+          </nav>
           <nav class="work-tabs" aria-label="Work in motion">
             <button type="button" class="work-tab" data-work="doing">Doing</button>
             <button type="button" class="work-tab" data-work="next">Next</button>
@@ -270,6 +275,10 @@
           <h1 id="hermesTitle">Hermes</h1>
         </div>
         <div class="embed-tools">
+          <nav class="tool-tabs" aria-label="Engines">
+            <button type="button" class="tool-tab" data-stage="opencode"><span class="stage-full">OpenCode</span><span class="stage-short">Code</span></button>
+            <button type="button" class="tool-tab on" data-stage="hermes">Hermes</button>
+          </nav>
           <nav class="work-tabs" aria-label="Work in motion">
             <button type="button" class="work-tab" data-work="doing">Doing</button>
             <button type="button" class="work-tab" data-work="next">Next</button>
@@ -681,12 +690,13 @@
             <form class="suggest-form" id="suggestForm">
               <input id="suggestTitle" type="text" placeholder="Support request" autocomplete="off" />
               <textarea id="suggestBody" rows="3" placeholder="What’s wrong, or what should OpenBot do?"></textarea>
-              <button type="submit" class="ghost-btn">Suggest</button>
+              <button type="submit" class="ghost-btn">Create support ticket</button>
               <p class="muted" id="suggestStatus"></p>
             </form>
           </section>
           <section class="drawer-panel" id="panel-about">
             <p class="muted" id="aboutMark">OPENBOT · LOCAL ORG. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.</p>
+            <p class="muted" id="aboutCredit">OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly). Not affiliated with, sponsored by, or endorsed by those projects.</p>
             <div class="actions">
               <button type="button" class="ghost-btn" id="aboutOpenCode">Open OpenCode</button>
               <button type="button" class="ghost-btn" id="gotoHermes">Open Hermes</button>
@@ -703,6 +713,6 @@
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=121"></script>
+  <script src="/app.js?v=123"></script>
 </body>
 </html>
