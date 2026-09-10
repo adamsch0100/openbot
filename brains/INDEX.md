@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes; receipts name the engine
-Last: Per-engine heads. Receipts are a visible line. Cron cards say Hermes Agent, not the Go wallet. No third agent.
-Next: Hard-refresh ?v=111. Open SAA Homes if you want the report, or keep going from Chief of Staff
+Now: Fixed OpenCode session wipe in ensure_org loop. PR #52 open, ready to merge.
+Last: Visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes; receipts name the engine
+Next: Merge PR #52 when green. Then SAA Homes folder+session should stick on every org refresh.
 Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes. GBP login: skip. Do not stampede.
 
 ## Vault
