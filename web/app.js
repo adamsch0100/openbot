@@ -393,6 +393,9 @@ function humanFailReason(blob) {
   if (/gateway shutdown|gateway stopped mid-run/.test(low)) {
     return "Hermes gateway stopped mid-run";
   }
+  if (/script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\//.test(low)) {
+    return "Script not found";
+  }
   if (/insufficient balance|wallet.?empty|out of (?:quota|credit)|billing/.test(low)) {
     return "Wallet empty";
   }
@@ -453,6 +456,17 @@ function failClustersHtml(rows, want) {
     const open = list.some((row) => row.id === want);
     return cronCardHtml(primary, open, "result", extra);
   }).join("");
+}
+
+function cronFailNext(row) {
+  if (cronIsGatewayFail(row)) {
+    return "Auto-retry — gateway will pick this up. Do not mass-fire.";
+  }
+  const blob = cronFailBlob(row);
+  if (/script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\//i.test(blob)) {
+    return "Your move · restore from bootstrap (Hermes scripts/).";
+  }
+  return "Fix model/key · Retry · Open detail.";
 }
 
 function opaqueLaneOk(text, preset) {
@@ -661,6 +675,8 @@ function renderEngines(engines, targetId) {
 function briefHonestyLine(cleaned) {
   const counts = workCounts();
   const project = currentProject();
+  const trust = scheduleTrustNowLine(counts, project);
+  if (trust) return trust;
   const fromNow = indexLineUseful(project && project.index_now)
     || indexLineUseful(indexField(cleaned, "Now"));
   const fromNext = indexLineUseful(project && project.index_next)
@@ -702,6 +718,8 @@ function honestIndexNext(next) {
   if (!raw || !/^on schedule\b/i.test(raw)) return raw;
   const counts = workCounts();
   if (!counts.ready) return raw;
+  const trust = scheduleTrustNowLine(counts, currentProject());
+  if (trust) return trust;
   if ((counts.failed || 0) > 0) {
     return counts.failed === 1 ? "1 failed · open Results" : `${counts.failed} failed · open Results`;
   }
@@ -2758,6 +2776,9 @@ function jobStoryTitle(job) {
 
 function ceoWire(project) {
   const pack = digestCache.get(project.id) || {};
+  const counts = workCounts(project.id);
+  const trust = scheduleTrustNowLine(counts, project);
+  if (trust) return clipWire(trust, 64);
   const failed = (pack.crons || []).filter((row) => (
     cronIsFailed(row) && !cronIsGatewayFail(row) && !cronIsStaleFail(row)
   ));
@@ -2772,7 +2793,6 @@ function ceoWire(project) {
   const nxt = cleanBotText(project.index_next || "").trim();
   const blocker = cleanBotText(project.index_blocker || "").trim();
   const busy = lives.has(aimKey(project.id, ""));
-  const counts = workCounts(project.id);
   if (blocker && blocker !== "—") return `Blocked · ${clipWire(blocker, 42)}`;
   if (busy) {
     const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
@@ -3392,6 +3412,8 @@ function renderBotMeta(opts) {
       const counts = workCounts();
       let ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
       ask = honestWorkLine(ask, counts) || ask;
+      const trustAsk = scheduleTrustNowLine(counts, project);
+      if (!ask && trustAsk) ask = trustAsk;
       if (!ask && (counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
       else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Next`;
       $("chatFolder").textContent = ask || "This CEO is idle.";
@@ -3475,7 +3497,9 @@ function activityBody() {
 function paintActivityTitle() {
   const el = $("activityTitle");
   if (!el) return;
-  el.textContent = scheduleView === "next" ? "Next" : (scheduleView === "results" ? "Results" : "Doing");
+  el.textContent = scheduleView === "next" ? "Next"
+    : (scheduleView === "results" ? "Results"
+      : (scheduleView === "schedule" ? "Schedule" : "Doing"));
 }
 
 function applySavedWork() {
@@ -3543,10 +3567,114 @@ function paintScheduleButton() {
   if (btn) btn.hidden = true;
 }
 
+function ceoShortName(project) {
+  const raw = String((project && (project.name || project.id)) || "").trim();
+  if (!raw) return "CEO";
+  if (/^saa(\b|$|[\s-])/i.test(raw) || /saa.?homes/i.test(raw)) return "SAA";
+  const words = raw.split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].slice(0, 12);
+  return words.map((w) => w[0]).join("").slice(0, 6).toUpperCase() || "CEO";
+}
+
+function cronIsPaused(row) {
+  return !row || row.enabled === false || /paused/i.test(String(row.state || ""));
+}
+
+function cronIsNeverRun(row) {
+  if (!row || cronIsPaused(row) || cronIsLive(row)) return false;
+  return !String(row.last_run_at || "").trim();
+}
+
+function cronIsOverdue(row) {
+  if (!row || cronIsPaused(row) || cronIsLive(row)) return false;
+  const raw = String(row.next_run_at || "").trim();
+  if (!raw) return false;
+  const stamp = new Date(raw);
+  if (Number.isNaN(stamp.getTime())) return false;
+  return stamp.getTime() < Date.now() - 5 * 60 * 1000;
+}
+
+function cronRosterStatus(row) {
+  if (cronIsPaused(row)) return "off";
+  if (cronIsLive(row)) return "run";
+  if (cronIsFailed(row) || /error|fail/i.test(String(row.last_status || ""))) return "fail";
+  if (cronIsNeverRun(row)) return "never";
+  if (cronIsOverdue(row)) return "late";
+  if (String(row.last_status || "").toLowerCase() === "ok") return "ok";
+  return String(row.last_status || "").trim() ? String(row.last_status || "").toLowerCase().slice(0, 8) : "ok";
+}
+
+function prefersScheduleTrust(counts) {
+  if (!counts || !counts.ready) return false;
+  const trust = (counts.trustFailed || 0) + (counts.never || 0);
+  if (trust > 0) return true;
+  const overdue = counts.overdue || 0;
+  if (overdue >= 3 && overdue >= (counts.next || 0)) return true;
+  return false;
+}
+
+function scheduleTrustNowLine(counts, project) {
+  if (!counts || !counts.ready) return "";
+  if (!prefersScheduleTrust(counts)) return "";
+  const who = ceoShortName(project || currentProject());
+  const failed = counts.trustFailed || 0;
+  const never = counts.never || 0;
+  if (failed > 0 || never > 0) {
+    return `${who} · ${failed} failed · ${never} never · Open Schedule`;
+  }
+  if ((counts.overdue || 0) > 0) {
+    return `${who} · ${counts.overdue} overdue · Open Schedule`;
+  }
+  return "";
+}
+
+function scheduleRosterSort(a, b) {
+  const rank = (row) => {
+    const st = cronRosterStatus(row);
+    if (st === "fail") return 0;
+    if (st === "late") return 1;
+    if (st === "never") return 2;
+    if (st === "run") return 3;
+    return 4;
+  };
+  const d = rank(a) - rank(b);
+  if (d) return d;
+  return String(a.next_run_at || "").localeCompare(String(b.next_run_at || ""));
+}
+
+function scheduleRosterRowHtml(row, want) {
+  const title = row.title || cronTitle(row.name || row.id);
+  const status = cronRosterStatus(row);
+  const enabled = cronIsPaused(row) ? "off" : "on";
+  const next = cronIsNeverRun(row) && !row.next_run_at
+    ? "—"
+    : (cronWhenClock(row.next_run_at) || "—");
+  const last = cronIsNeverRun(row)
+    ? "never"
+    : (row.last_run_at ? (cronFreshness(row) || cronWhen(row.last_run_at)) : "—");
+  const failBit = status === "fail"
+    ? `<p class="cron-outcome">Failed · ${escapeHtml(humanFailReason(cronFailBlob(row)))}</p>
+       <p class="cron-next">Next: ${escapeHtml(cronFailNext(row))}</p>`
+    : "";
+  const open = String(row.id || "") === String(want || "");
+  return `<details class="cron-card schedule-roster${status === "fail" ? " failed" : ""}${status === "late" ? " late" : ""}" id="cron-${escapeHtml(row.id || "")}" data-fold="sched-${escapeHtml(row.id || row.name || "job")}"${open ? " open" : ""}>
+    <summary class="cron-head">
+      <b>${escapeHtml(title)}</b>
+      <span>${escapeHtml(status)}</span>
+    </summary>
+    <p class="cron-meta schedule-row"><span>enabled</span><b>${escapeHtml(enabled)}</b></p>
+    <p class="cron-meta schedule-row"><span>Next</span><b>${escapeHtml(next)}</b></p>
+    <p class="cron-meta schedule-row"><span>Last</span><b>${escapeHtml(last)}</b></p>
+    <p class="cron-meta schedule-row"><span>Status</span><b>${escapeHtml(status)}</b></p>
+    ${failBit}
+  </details>`;
+}
+
 function workCounts(forProjectId) {
   const aim = (forProjectId === undefined) ? projectId : forProjectId;
   const pack = digestCache.get(aim) || {};
-  const list = (pack.crons || []).filter((row) => !cronIsNoise(row));
+  const all = pack.crons || [];
+  const list = all.filter((row) => !cronIsNoise(row));
   const boardRuns = ((pack.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => (
     !aim || String(row.project_id || "") === String(aim)
   ));
@@ -3566,19 +3694,45 @@ function workCounts(forProjectId) {
   const next = list.filter((row) => (
     row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && !cronIsFailed(row) && cronIsDueSoon(row)
   )).length;
+  // Live schedule trust — compute from cron rows (never hardcode snapshot counts).
+  const enabledRows = all.filter((row) => !cronIsPaused(row));
+  const disabledRows = all.filter((row) => cronIsPaused(row));
+  const trustFailed = all.filter((row) => /error|fail/i.test(String(row.last_status || "")));
+  const never = enabledRows.filter((row) => cronIsNeverRun(row));
+  const overdue = enabledRows.filter((row) => cronIsOverdue(row));
   if (!aim) {
     const projects = ((cfg.org && cfg.org.projects) || []);
     const orgNext = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—").length;
     const jobs = (((cfg.activity || {}).jobs) || []);
     const orgFailed = jobs.filter((row) => jobIsFailed(row)).length;
     const orgLive = (((cfg.activity || {}).live_runs) || []).length + lives.size;
-    return { doing: orgLive, next: orgNext, results: Math.min(jobs.length, 12), failed: orgFailed, ready: Boolean(cfg.activity) };
+    return {
+      doing: orgLive,
+      next: orgNext,
+      results: Math.min(jobs.length, 12),
+      failed: orgFailed,
+      trustFailed: orgFailed,
+      never: 0,
+      overdue: 0,
+      enabled: 0,
+      disabled: 0,
+      total: 0,
+      schedule: 0,
+      ready: Boolean(cfg.activity)
+    };
   }
   return {
     doing,
     next,
     results,
     failed: freshFail.length + (gateway.length ? 1 : 0),
+    trustFailed: trustFailed.length,
+    never: never.length,
+    overdue: overdue.length,
+    enabled: enabledRows.length,
+    disabled: disabledRows.length,
+    total: all.length,
+    schedule: enabledRows.length,
     // Ready only after a finished digest fetch — avoids 0→N flash on CEO switch.
     ready: digestKnown.has(aim)
   };
@@ -3591,10 +3745,14 @@ function paintWorkTabs() {
     tabs.querySelectorAll(".work-tab").forEach((btn) => {
       const view = btn.getAttribute("data-work") || "";
       const n = counts[view] || 0;
-      const label = view === "doing" ? "Doing" : (view === "next" ? "Next" : "Results");
+      const label = view === "doing" ? "Doing"
+        : (view === "next" ? "Next"
+          : (view === "schedule" ? "Schedule" : "Results"));
       btn.classList.toggle("on", scheduleOpen && scheduleView === view);
       btn.classList.toggle("hot", view === "doing" && n > 0);
-      btn.classList.toggle("need", view === "results" && (counts.failed || 0) > 0);
+      const scheduleNeed = prefersScheduleTrust(counts);
+      btn.classList.toggle("need", (view === "results" && (counts.failed || 0) > 0)
+        || (view === "schedule" && scheduleNeed));
       // Never flash a hollow "0" as if work is counted — blank until known, digit only when > 0.
       const badge = n > 0
         ? `<span class="n">${n}</span>`
@@ -3666,8 +3824,14 @@ function honestWorkLine(line, counts) {
   const failed = (counts && counts.failed) || 0;
   const next = (counts && counts.next) || 0;
   const raw = String(line || "").trim();
+  const trust = scheduleTrustNowLine(counts, currentProject());
+  if (trust && (!raw || raw === "—" || isScheduleFluff(raw) || /open Results/i.test(raw))) {
+    return trust;
+  }
   if (failed > 0 && (!raw || raw === "—" || isScheduleFluff(raw))) {
-    return `${failed} failed — open Results`;
+    return prefersScheduleTrust(counts)
+      ? (trust || `${failed} failed — open Schedule`)
+      : `${failed} failed — open Results`;
   }
   if (next > 0 && isScheduleFluff(raw)) {
     return `${next} due · open Next`;
@@ -3792,7 +3956,7 @@ function cronCardHtml(row, open, mark, extraCount) {
   }
   outcome = String(outcome).replace(/#\s*Cron Job:\s*[\w.-]+/gi, "").trim() || (failed ? "Failed." : outcome);
   const reason = failed ? humanFailReason(`${err} ${outcome} ${cronFailBlob(row)}`) : "";
-  const next = failed ? "Fix model/key · Retry · Open detail." : (row.next_action || "");
+  const next = failed ? cronFailNext(row) : (row.next_action || "");
   const showNext = failed || cronNextUseful(next);
   const report = cronReportText(row);
   const rawDetail = failed
@@ -3856,6 +4020,8 @@ function paintCeoBrief(digest) {
   else {
     let line = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
     line = honestWorkLine(line, counts) || line;
+    const trust = scheduleTrustNowLine(counts, project);
+    if (!line && trust) line = trust;
     if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
     if (line && !isScheduleFluff(line)) bits.push(line);
   }
@@ -4143,6 +4309,12 @@ function emptyWorkCopy(view) {
   const why = whyIdleLine();
   if (view === "doing") {
     const counts = workCounts();
+    if (prefersScheduleTrust(counts)) {
+      const trust = scheduleTrustNowLine(counts, currentProject());
+      return trust
+        ? `Nothing running on ${who}. ${trust}.`
+        : `Nothing running on ${who}. Open Schedule.`;
+    }
     if ((counts.failed || 0) > 0) {
       return `Nothing running on ${who}. ${counts.failed} failed — open Results.`;
     }
@@ -4165,6 +4337,12 @@ function whyIdleLine() {
   const pack = digestCache.get(projectId) || {};
   if (projectId && !digestKnown.has(projectId)) return "Why idle: still loading schedule…";
   const counts = workCounts();
+  if (prefersScheduleTrust(counts)) {
+    const trust = scheduleTrustNowLine(counts, currentProject());
+    return trust
+      ? `Why idle: ${trust}`
+      : `Why idle: schedule needs a look — open Schedule.`;
+  }
   if ((counts.failed || 0) > 0) {
     return `Why idle: ${counts.failed} failed in Results — clear those to move.`;
   }
@@ -4250,6 +4428,8 @@ function renderChatSchedule(rows, digest, focusId) {
         <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.index_next), 180))}</p>
         <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
       </details>`).join("") : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("next"))}</p>`);
+    } else if (view === "schedule") {
+      bits.push(`<p class="cron-empty">Pick a CEO to see the full enabled schedule roster.</p>`);
     } else {
       bits.push(jobs.length ? jobs.map((row) => `<details class="cron-card${jobIsFailed(row) ? " failed" : ""}" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
         <summary class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></summary>
@@ -4315,6 +4495,27 @@ function renderChatSchedule(rows, digest, focusId) {
     }
     if (paused.length) {
       sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+    }
+  } else if (view === "schedule") {
+    const counts = workCounts();
+    // Full inventory (incl. script/noise jobs) — Adam ~enabled is schedule truth.
+    const inventory = rows || list;
+    const enabledRoster = inventory
+      .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")))
+      .slice()
+      .sort(scheduleRosterSort);
+    const disabledRoster = inventory
+      .filter((row) => row.enabled === false || /paused/i.test(String(row.state || "")))
+      .slice()
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    sections.push(`<h3 class="cron-section">Enabled · ${enabledRoster.length}${counts.ready ? ` · ${counts.trustFailed || 0} failed · ${counts.never || 0} never · ${counts.overdue || 0} overdue` : ""}</h3>`);
+    if (!enabledRoster.length) {
+      sections.push(`<p class="cron-empty">No enabled jobs on this CEO yet.</p>`);
+    } else {
+      sections.push(enabledRoster.map((row) => scheduleRosterRowHtml(row, want)).join(""));
+    }
+    if (disabledRoster.length) {
+      sections.push(`<details class="cron-stale" data-fold="disabled-roster"><summary>Disabled · ${disabledRoster.length}</summary>${disabledRoster.map((row) => scheduleRosterRowHtml(row, want)).join("")}</details>`);
     }
   } else {
     const waits = visibleNeedsYou().filter((row) => String(row.project_id || "") === String(projectId || ""));
@@ -6506,7 +6707,10 @@ if ($("ceoLive") && !$("ceoLive").dataset.workBound) {
   $("ceoLive").addEventListener("click", () => {
     const pack = digestCache.get(projectId) || {};
     const live = (pack.crons || []).some((row) => cronIsLive(row)) || (pack.live_runs || []).length || liveRunId;
-    openWork(live ? "doing" : "results");
+    const counts = workCounts();
+    if (live) openWork("doing");
+    else if (prefersScheduleTrust(counts)) openWork("schedule");
+    else openWork("results");
   });
 }
 if ($("chatSchedule") && !$("chatSchedule").dataset.retryBound) {

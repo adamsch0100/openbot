@@ -58,11 +58,10 @@ def honest_next_line(peers: list[dict] | None) -> str:
     ]
     enabled = [row for row in rows if _cron_enabled(row)]
     failed = [row for row in enabled if _cron_failed(row)]
+    never = [row for row in enabled if not str(row.get("last_run_at") or "").strip()]
     if failed:
-        title = cron_title(str(failed[0].get("name") or failed[0].get("title") or "job"))
-        if len(failed) == 1:
-            return f"{title} failed · open Results"[:160]
-        return f"{len(failed)} failed · open Results · start with {title}"[:160]
+        # Schedule trust — prefer Open Schedule over hollow Open Results.
+        return f"{len(failed)} failed · {len(never)} never · Open Schedule"[:160]
     due = [row for row in enabled if _cron_due_soon(row)]
     if due:
         due.sort(key=lambda row: str(row.get("next_run_at") or ""))
@@ -239,11 +238,21 @@ def _honest_next_line(project_id: str | None, hermes_home: str | None = None, fi
         if timedelta(days=-7) < delta <= timedelta(hours=24):
             dues.append((stamp, row))
     dues.sort(key=lambda item: item[0])
-    if fails:
-        title = cron_title(str(fails[0].get("name") or fails[0].get("id") or "job"))
-        if len(fails) == 1:
-            return f"{title} failed — open Results."
-        return f"{len(fails)} jobs failed — open Results."
+    never_n = sum(
+        1
+        for row in rows
+        if row.get("enabled") is not False and not str(row.get("last_run_at") or "").strip()
+    )
+    # Include gateway scars in schedule-trust NOW (UI Schedule tab owns them).
+    fail_n = sum(
+        1
+        for row in rows
+        if row.get("enabled") is not False
+        and re.search(r"error|fail", str(row.get("last_status") or ""), re.I)
+    )
+    if fail_n:
+        who = "SAA" if "saa" in str(project_id or "").lower() else "CEO"
+        return f"{who} · {fail_n} failed · {never_n} never · Open Schedule."
     if dues:
         stamp, row = dues[0]
         title = cron_title(str(row.get("name") or row.get("id") or "job"))

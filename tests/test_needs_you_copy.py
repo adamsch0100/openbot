@@ -14,6 +14,7 @@ class NeedsYouCopyTests(unittest.TestCase):
         self.assertIn("Your move", js)
         self.assertIn("Blocked ·", js)
         self.assertIn("failed — open Results", js)
+        self.assertIn("Open Schedule", js)
         self.assertIn("failed in Results — clear those to move", js)
         self.assertIn('row.label || "Decide"', js)
         self.assertNotIn("need a look", js)
@@ -21,7 +22,7 @@ class NeedsYouCopyTests(unittest.TestCase):
 
     def test_cronwatch(self):
         src = (ROOT / "openbot" / "cronwatch.py").read_text(encoding="utf-8")
-        self.assertIn("jobs failed — open Results", src)
+        self.assertIn("Open Schedule", src)
         self.assertIn("failed · {outcome", src)
         self.assertNotIn("need a look", src)
         self.assertNotIn("needs you ·", src)
