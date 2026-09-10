@@ -2842,25 +2842,51 @@ async function refreshGatewayStatus() {
 async function restartGateway() {
   const aim = currentAim();
   const retry = $("retryHermes");
+  const healthBtn = $("ceoHealthRestartGw");
   if (retry) retry.textContent = "Restarting…";
+  if (healthBtn) healthBtn.textContent = "Restarting…";
+  let data = {};
   try {
+    // force=true → stop + clear stale sock/state even when pid looks alive (post-redeploy 502).
     const res = await fetch("/api/hermes/gateway/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project_id: aim.projectId || projectId || "", wait: false })
+      body: JSON.stringify({
+        project_id: aim.projectId || projectId || "",
+        wait: false,
+        force: true
+      })
     });
-    const data = await res.json().catch(() => ({}));
+    data = await res.json().catch(() => ({}));
+    // Proxy HTML 502 should never be the Restart response — treat non-JSON as soft fail.
+    if (!res.ok && !data.error) {
+      data.error = res.status === 502
+        ? "Gateway restart hit a proxy blip — cleared stale state; try Restart once more."
+        : (data.text || data.error || `Restart failed (${res.status})`);
+    }
     gatewayRunning = Boolean(data.running || data.ok);
     hermesFailed = !gatewayRunning;
-    if ($("hermesStatus")) $("hermesStatus").textContent = gatewayRunning ? "" : (data.error || "Gateway still off");
+    const note = gatewayRunning
+      ? (data.cleared_stale_forced || (data.cleared_stale || []).length
+        ? "Gateway up (stale state cleared)."
+        : "")
+      : (data.error || data.text || "Gateway still off — Next: Restart again or check Hermes home.");
+    if ($("hermesStatus")) $("hermesStatus").textContent = note;
   } catch (_err) {
     gatewayRunning = false;
     hermesFailed = true;
+    if ($("hermesStatus")) $("hermesStatus").textContent = "Restart failed — Next: try again in a few seconds.";
   }
   if (retry) retry.textContent = "Restart";
+  if (healthBtn) healthBtn.textContent = "Restart Hermes gateway";
   syncHermesHint();
   hermesStarted = false;
+  // Brief pad so dash proxy is not slammed while gateway is still binding.
+  await new Promise((r) => setTimeout(r, gatewayRunning ? 400 : 900));
   startHermes();
+  if (typeof loadCeoEngineHealth === "function" && aim.projectId) {
+    loadCeoEngineHealth({ id: aim.projectId, name: aim.name || "" });
+  }
   if (scheduleOpen) openSchedule(scheduleFocusId);
 }
 

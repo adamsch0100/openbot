@@ -2,6 +2,7 @@
 
 
 ## Engine changelog (Steward propose)
+- 2026-09-10: Gateway Restart force-clears stale state/sock (no SSH) + resolve CEO hermes_home; Restart never returns naked 502.
 - 2026-09-10: CEO Settings → Engines health chip (Hermes/OpenCode versions, dash home match, gateway, wire). Steward pins Accept-only — never silent upgrade.
 - 2026-09-10: Engines health next-steps — honest red + Next: line + Restart gateway when dash/gateway wrong (no fake green, no chat spam).
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.

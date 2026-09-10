@@ -2002,15 +2002,24 @@ class Handler(SimpleHTTPRequestHandler):
             if self._require_owner():
                 return None
             wait = bool(data.get("wait", False))
+            force = bool(data.get("force", False))
             timeout = int(data.get("timeout", 30))
             
             from .hermes import gateway_start
+            from .launch import resolve_ceo_hermes_home
             
             tools = project_tools(project_id) if project_id else {}
-            hermes_home = str(tools.get("hermes_home") or "").strip() or None
+            hermes_home = resolve_ceo_hermes_home(
+                project_id or "",
+                str(tools.get("hermes_home") or ""),
+            ) or None
             
-            result = gateway_start(hermes_home, wait=wait, timeout=timeout)
+            result = gateway_start(
+                hermes_home, wait=wait, timeout=timeout, force=force
+            )
             result["project_id"] = project_id
+            result["hermes_home"] = hermes_home or ""
+            # Never 502 the Restart button — return JSON so UI can show Next.
             return self._json(200 if result.get("ok") else 400, result)
         
         if path == "/api/hermes/gateway/stop":
@@ -2243,17 +2252,6 @@ class Handler(SimpleHTTPRequestHandler):
                 )
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
-        if path == "/api/hermes/gateway/start":
-            project_id = data.get("project_id") or None
-            wait = data.get("wait", False)
-            home = None
-            if project_id:
-                org = ensure_org()
-                match = next((row for row in org["projects"] if row.get("id") == project_id), None)
-                if match:
-                    home = (match.get("tools") or {}).get("hermes_home")
-            result = gateway_start(home, wait=bool(wait))
-            return self._json(200 if result.get("ok") else 500, result)
         if path == "/api/hermes/gateway/stop":
             project_id = data.get("project_id") or None
             home = None
