@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: OpenBot Chat stream is talk — cron landings stay in Results. Due list folds after six.
-Last: PR #60 Chat-first chrome on master.
-Next: Hard-refresh ?v=119. Leave PR #48 untouched. Leave SEO/Hermes alone.
+Now: OpenBot Chat folds diffs behind See change. Cron stays in Results. Due folds after six.
+Last: PR #63 Chat-as-talk. Live still on #60 until merge.
+Next: Hard-refresh ?v=120 after merge. Leave PR #48 untouched. Leave SEO/Hermes alone.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
