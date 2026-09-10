@@ -1073,6 +1073,111 @@ class KeyringTests(unittest.TestCase):
         finally:
             keyring_mod.SECRETS_PATH = old
 
+    def test_push_engine_wallets_go_only_no_openrouter_env(self):
+        """Go-only prefer chain should NOT write OPENROUTER_API_KEY to Hermes .env"""
+        import openbot.keyring as keyring_mod
+
+        old_secrets = keyring_mod.SECRETS_PATH
+        old_env = os.environ.copy()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                # Setup keyring with Go-only accounts
+                secrets_path = Path(tmp) / "secrets.local.json"
+                keyring_mod.SECRETS_PATH = secrets_path
+                secrets_path.write_text(
+                    json.dumps(
+                        {
+                            "accounts": [
+                                {"id": "go1", "provider": "opencode", "label": "Go 1", "key": "sk-go-1"},
+                                {"id": "go2", "provider": "opencode", "label": "Go 2", "key": "sk-go-2"},
+                                # OpenRouter exists but NOT in prefer/fallback chain
+                                {"id": "or1", "provider": "openrouter", "label": "OR", "key": "sk-or-1"},
+                            ],
+                            "fallback": ["go1", "go2"],  # No openrouter
+                            "active": {},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                
+                # Setup Hermes home
+                hermes_home = Path(tmp) / "hermes-home"
+                hermes_home.mkdir()
+                
+                # Call push_engine_wallets with Go-only prefer chain
+                tools = {"account_id": "go1", "fallback": ["go2"]}  # No openrouter
+                keyring_mod.push_engine_wallets(tools=tools, hermes_home_dir=str(hermes_home))
+                
+                # Check .env file
+                env_file = hermes_home / ".env"
+                self.assertTrue(env_file.is_file(), ".env should be created")
+                env_content = env_file.read_text(encoding="utf-8")
+                
+                # Should have OpenCode keys
+                self.assertIn("OPENCODE_API_KEY=", env_content)
+                self.assertIn("OPENCODE_GO_API_KEY=", env_content)
+                
+                # Should NOT have OpenRouter key (not in prefer chain)
+                self.assertNotIn("OPENROUTER_API_KEY", env_content)
+                
+                # Should NEVER have Anthropic keys
+                self.assertNotIn("ANTHROPIC_API_KEY", env_content)
+                self.assertNotIn("ANTHROPIC_TOKEN", env_content)
+        finally:
+            keyring_mod.SECRETS_PATH = old_secrets
+            os.environ.clear()
+            os.environ.update(old_env)
+
+    def test_push_engine_wallets_with_openrouter_writes_key(self):
+        """Prefer chain WITH openrouter should write OPENROUTER_API_KEY"""
+        import openbot.keyring as keyring_mod
+
+        old_secrets = keyring_mod.SECRETS_PATH
+        old_env = os.environ.copy()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                # Setup keyring with Go + OpenRouter in chain
+                secrets_path = Path(tmp) / "secrets.local.json"
+                keyring_mod.SECRETS_PATH = secrets_path
+                secrets_path.write_text(
+                    json.dumps(
+                        {
+                            "accounts": [
+                                {"id": "go1", "provider": "opencode", "label": "Go 1", "key": "sk-go-1"},
+                                {"id": "or1", "provider": "openrouter", "label": "OR", "key": "sk-or-1"},
+                            ],
+                            "fallback": ["go1", "or1"],  # OpenRouter IS in chain
+                            "active": {},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                
+                # Setup Hermes home
+                hermes_home = Path(tmp) / "hermes-home"
+                hermes_home.mkdir()
+                
+                # Call push_engine_wallets with Go + OpenRouter chain
+                tools = {"account_id": "go1", "fallback": ["or1"]}  # OpenRouter included
+                keyring_mod.push_engine_wallets(tools=tools, hermes_home_dir=str(hermes_home))
+                
+                # Check .env file
+                env_file = hermes_home / ".env"
+                self.assertTrue(env_file.is_file(), ".env should be created")
+                env_content = env_file.read_text(encoding="utf-8")
+                
+                # Should have both OpenCode and OpenRouter keys
+                self.assertIn("OPENCODE_API_KEY=", env_content)
+                self.assertIn("OPENROUTER_API_KEY=", env_content)
+                
+                # Should NEVER have Anthropic keys
+                self.assertNotIn("ANTHROPIC_API_KEY", env_content)
+                self.assertNotIn("ANTHROPIC_TOKEN", env_content)
+        finally:
+            keyring_mod.SECRETS_PATH = old_secrets
+            os.environ.clear()
+            os.environ.update(old_env)
+
     def test_empty_opencode_wallet_is_skipped_for_next_key(self):
         import openbot.keyring as keyring_mod
         from openbot import router as router_mod
