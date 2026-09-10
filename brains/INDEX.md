@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Fixed railway SSH PID leak. PR #59 open on adamsch0100/openbot master.
-Last: Stopped unbounded railway-ssh accumulation in overlay_saa_live_background() loop — hard-reap on timeout (killpg), single-flight lock, coalesced SSH (2 not 3), interval 12s→120s. 8 new regression tests. Board engine.
-Next: Await merge approval. No Hermes redeploy needed. Overlay still works from cache when SSH fails.
-Blocker: None. Phone board (#55) shipped. Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
+Now: Mobile UX overhaul. PR #61 open on adamsch0100/openbot master.
+Last: Comprehensive phone UX fixes: removed status chip waste, deduplicated Results error spam (Gateway shutdown repeated 3x → shown once), work tab counts (Doing N / Next N / Results N), Chat-primary Grok-like design (15px readable bubbles, 44-48px thumb buttons, calm composer), honest footer (LIVE·Railway vs LOCAL ORG). Retry already works with session affinity via OPENCODE_SESSION_ID. Board engine.
+Next: Await merge + phone smoke test (~390×844). Hard-refresh to verify: no "Scheduled·Saved sear…" chip, Results deduplicated, footer honest, Chat calm.
+Blocker: None. SSH leak (#59) landed. Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes.
 
 ## Vault
 
