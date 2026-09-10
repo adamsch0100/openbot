@@ -605,7 +605,7 @@ function paintWorkStatus() {
     const counts = workCounts();
     if (/^On schedule\b/i.test(nextLine) && ((counts.next || 0) > 0 || (counts.failed || 0) > 0)) {
       nextLine = (counts.failed || 0) > 0
-        ? `${counts.failed} need a look · open Results`
+        ? `${counts.failed} failed — open Results`
         : `${counts.next} due · open Next`;
     }
     nextEl.textContent = nextLine || "—";
@@ -2539,7 +2539,7 @@ function ceoWire(project) {
   const now = cleanBotText(project.index_now || "").trim();
   const blocker = cleanBotText(project.index_blocker || "").trim();
   const busy = lives.has(aimKey(project.id, ""));
-  if (blocker && blocker !== "—") return `Needs you · ${clipWire(blocker, 42)}`;
+  if (blocker && blocker !== "—") return `Blocked · ${clipWire(blocker, 42)}`;
   if (busy) {
     const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
     return `Running · ${clipWire(line, 42)}`;
@@ -2794,14 +2794,14 @@ function inboxHtml() {
     const ping = row.kind === "brief" ? "" : " ping";
     return `<div class="org-inbox-item${ping}" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
       <b>${escapeHtml(row.name || "CEO")}</b>
-      <span>${escapeHtml(row.label || "Needs you")}</span>
+      <span>${escapeHtml(row.label || "Decide")}</span>
       <div class="org-inbox-actions need-actions">
         ${choiceButtonsHtml(needChoices(row), row)}
       </div>
     </div>`;
   }).join("");
   return `<div class="org-inbox">
-    <div class="org-inbox-head">Needs you</div>
+    <div class="org-inbox-head">Your move</div>
     ${items}
   </div>`;
 }
@@ -3094,12 +3094,12 @@ function renderBotMeta(opts) {
       let ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
       // Kill misleading INDEX "On schedule…" when Next/Results actually have work.
       if (/^On schedule\b/i.test(ask) && ((counts.next || 0) > 0 || (counts.failed || 0) > 0)) {
-        if ((counts.failed || 0) > 0) ask = `${counts.failed} need a look · open Results`;
+        if ((counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
         else ask = `${counts.next} due · open Next`;
       } else if (!ask && (counts.next || 0) > 0) {
         ask = `${counts.next} due · open Next`;
       } else if (!ask && (counts.failed || 0) > 0) {
-        ask = `${counts.failed} need a look · open Results`;
+        ask = `${counts.failed} failed — open Results`;
       }
       $("chatFolder").textContent = ask || "This CEO is idle.";
     }
@@ -3551,7 +3551,7 @@ function hermesScheduleSummary(crons) {
     ? ` · next ${cronTitle(next.name)}${due ? ` ${due}` : ""}`
     : "";
   if (freshFail.length) {
-    return { on: false, warn: true, line: `Schedule · ${freshFail.length} need a look${nextBit}` };
+    return { on: false, warn: true, line: `Schedule · ${freshFail.length} failed${nextBit}` };
   }
   return { on: false, warn: false, line: `Schedule · ${ok.length}/${enabled.length} ok${nextBit}` };
 }
@@ -3790,7 +3790,7 @@ function emptyWorkCopy(view) {
   if (view === "doing") {
     const counts = workCounts();
     if ((counts.failed || 0) > 0) {
-      return `Nothing running on ${who}. ${counts.failed} need a look in Results.`;
+      return `Nothing running on ${who}. ${counts.failed} failed — open Results.`;
     }
     if ((counts.next || 0) > 0) {
       return `Nothing running on ${who}. ${counts.next} due in Next — open that tab.`;
@@ -3812,7 +3812,7 @@ function whyIdleLine() {
   if (projectId && !digestKnown.has(projectId)) return "Why idle: still loading schedule…";
   const counts = workCounts();
   if ((counts.failed || 0) > 0) {
-    return `Why idle: ${counts.failed} need a look in Results — not clear.`;
+    return `Why idle: ${counts.failed} failed in Results — clear those to move.`;
   }
   if ((counts.next || 0) > 0) {
     const due = (pack.crons || []).find((row) => row.enabled !== false && cronIsDueSoon(row) && !cronIsLive(row));
@@ -3965,7 +3965,7 @@ function renderChatSchedule(rows, digest, focusId) {
   } else {
     const waits = visibleNeedsYou().filter((row) => String(row.project_id || "") === String(projectId || ""));
     if (waits.length) {
-      sections.push(`<h3 class="cron-section">Needs you · ${waits.length}</h3>`);
+      sections.push(`<h3 class="cron-section">Your move · ${waits.length}</h3>`);
       sections.push(waits.map((row) => `<article class="cron-card">
         <div class="cron-head"><b>${escapeHtml(row.name || "CEO")}</b><span>${escapeHtml(row.kind || "")}</span></div>
         <p class="cron-outcome">${escapeHtml(row.label || "")}</p>

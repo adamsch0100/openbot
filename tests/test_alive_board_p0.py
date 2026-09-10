@@ -14,7 +14,7 @@ class AliveBoardP0Tests(unittest.TestCase):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("digestKnown", js)
         self.assertIn("digestKnown.has(projectId)", js)
-        self.assertIn("need a look in Results", js)
+        self.assertIn("failed in Results — clear those to move", js)
         self.assertIn("due in Next", js)
         self.assertIn("/^On schedule\\b/i", js)
 
