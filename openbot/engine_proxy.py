@@ -280,11 +280,12 @@ def _insert_head(body: bytes, snippet: bytes) -> bytes:
 
 def _inject_embed_guard(body: bytes, prefix: str) -> bytes:
     marker = json.dumps(prefix)
+    api_roots = list(OPENCODE_ROOTS) if prefix == OPENCODE_PREFIX else (list(HERMES_ROOTS) + ["/api"])
     script = (
         "<script>(function(){var p="
         + marker
         + ";var api="
-        + json.dumps(list(OPENCODE_ROOTS))
+        + json.dumps(api_roots)
         + ";"
         + "function isApi(n){return api.some(function(r){return n===r||n.indexOf(r+'/')===0;});}"
         + "function prefixed(u){if(typeof u!=='string'||!u)return u;if(u.charAt(0)==='#')return u;"
@@ -447,6 +448,8 @@ def _proxy_websocket(handler, prefix: str, port: int) -> None:
         if key.lower() == "host":
             value = f"127.0.0.1:{port}"
         lines.append(f"{key}: {value}")
+    if prefix in {HERMES_PREFIX, "/hermes"}:
+        lines.append(f"X-Forwarded-Prefix: {HERMES_PREFIX}")
     payload = ("\r\n".join(lines) + "\r\n\r\n").encode("latin-1")
     backend.sendall(payload)
     handler.close_connection = True
@@ -472,6 +475,8 @@ def _proxy_http(handler, prefix: str, port: int) -> None:
             headers["Host"] = f"127.0.0.1:{port}"
         else:
             headers[key] = value
+    if prefix in {HERMES_PREFIX, "/hermes"}:
+        headers["X-Forwarded-Prefix"] = HERMES_PREFIX
     last_err: Exception | None = None
     resp = None
     payload = b""
