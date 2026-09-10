@@ -163,7 +163,7 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("function paintBoardMark", js)
         self.assertIn("function quietStory", js)
         self.assertIn("function gatewayFailClusterHtml", js)
-        self.assertIn("Hermes gateway stopped", js)
+        self.assertIn("Old gateway stop scars", js)
         self.assertIn("Older fails", js)
         self.assertIn(">Retry<", js)
         self.assertIn("RAILWAY_ENVIRONMENT", server)
