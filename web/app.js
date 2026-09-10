@@ -729,57 +729,42 @@ function honestIndexNext(next) {
   return raw;
 }
 
+function composerAliveLine() {
+  // One short chrome line only — NOW/NEXT/BLOCKER lives in Doing/Next/Results/Schedule.
+  const counts = workCounts();
+  const story = quietStory(runningStory());
+  if (story && story.on && story.line) {
+    return { line: story.line, on: true, warn: false };
+  }
+  const trust = scheduleTrustNowLine(counts, currentProject());
+  if (trust) {
+    return { line: trust, on: false, warn: true };
+  }
+  if ((counts.failed || 0) > 0) {
+    const n = counts.failed;
+    return {
+      line: n === 1 ? "1 failed · Open Schedule" : `${n} failed · Open Schedule`,
+      on: false,
+      warn: true
+    };
+  }
+  // Quiet idle — no bare Done spam in composer chrome.
+  return { line: "", on: false, warn: false };
+}
+
 function paintWorkStatus() {
   const el = $("workStatus");
   const liveEl = $("workStatusLive");
-  const nowEl = $("workNow");
-  const nextEl = $("workNextLine");
-  const blockEl = $("workBlocker");
   if (!el) return;
-  const project = currentProject();
-  const text = cleanBotText(selectedIndexText());
-  const now = indexLineUseful(project && project.index_now) || indexLineUseful(indexField(text, "Now"));
-  const next = honestIndexNext(
-    indexLineUseful(project && project.index_next) || indexLineUseful(indexField(text, "Next"))
-  );
-  const blocker = indexLineUseful(project && project.index_blocker) || indexLineUseful(indexField(text, "Blocker"));
-  const counts = workCounts();
-  if (nowEl) {
-    const nowLine = honestWorkLine(now, counts) || now || "";
-    nowEl.textContent = nowLine || "—";
-    nowEl.classList.toggle("empty", !nowLine);
-  }
-  if (nextEl) {
-    const nextLine = honestWorkLine(next, counts) || next || "";
-    nextEl.textContent = nextLine || "—";
-    nextEl.classList.toggle("empty", !nextLine);
-  }
-  if (blockEl) {
-    blockEl.textContent = blocker || "—";
-    blockEl.classList.toggle("empty", !blocker);
-    blockEl.classList.toggle("blocker", Boolean(blocker));
-  }
-  el.hidden = false;
-  if (liveEl) {
-    const counts = workCounts();
-    const story = quietStory(runningStory());
-    let line = "";
-    let on = false;
-    let warn = false;
-    if (scheduleOpen && story && story.line) {
-      line = story.line;
-      on = Boolean(story.on);
-      warn = Boolean(story.warn && !story.on);
-    } else if (scheduleOpen && scheduleView === "doing" && counts.ready && (counts.doing || 0) === 0) {
-      line = whyIdleLine();
-      warn = /gateway is off|failed/i.test(line);
-    }
-    const showLive = Boolean(line);
-    liveEl.hidden = !showLive;
-    liveEl.classList.toggle("on", Boolean(showLive && on));
-    liveEl.classList.toggle("warn", Boolean(showLive && warn));
-    liveEl.textContent = showLive ? line : "";
-  }
+  const alive = composerAliveLine();
+  const line = String(alive.line || "").trim();
+  const show = Boolean(line) && !/^Done\b/i.test(line);
+  el.hidden = !show;
+  if (!liveEl) return;
+  liveEl.hidden = !show;
+  liveEl.classList.toggle("on", Boolean(show && alive.on));
+  liveEl.classList.toggle("warn", Boolean(show && alive.warn));
+  liveEl.textContent = show ? line : "";
 }
 
 function moneyPair(input, output) {
@@ -3407,7 +3392,7 @@ function renderBotMeta(opts) {
     if (!project) {
       $("chatFolder").textContent = "One chat. Cos routes. Open a CEO in the rail for that desk.";
     } else {
-      const nxt = String(project.index_next || "").trim();
+      const nxt = honestIndexNext(String(project.index_next || "").trim());
       const now = String(project.index_now || "").trim();
       const counts = workCounts();
       let ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
