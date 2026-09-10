@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OpenBot Chat stream is talk — cron landings stay in Results. Due list folds after six.
-Last: PR #60 Chat-first chrome on master.
-Next: Hard-refresh ?v=119. Leave PR #48 untouched. Leave SEO/Hermes alone.
+Now: OpenBot Chat folds diffs behind See change. Cron stays in Results. Due folds after six.
+Last: PR #63 Chat-as-talk. Live still on #60 until merge.
+Next: Hard-refresh ?v=120 after merge. Leave PR #48 untouched. Leave SEO/Hermes alone.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

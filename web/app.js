@@ -4407,7 +4407,7 @@ function renderJob(job) {
   if (!hasDiff) return;
   const diffBlock = document.createElement("div");
   diffBlock.className = "diff-wrap";
-  diffBlock.innerHTML = `<div class="meta">action gate · Accept keeps the local diff · Reject restores</div><pre class="diff">${escapeHtml(job.diff || "(untracked files only)")}</pre>`;
+  diffBlock.innerHTML = `<div class="meta">action gate · Accept keeps the local diff · Reject restores</div><details class="diff-fold"><summary>See change</summary><pre class="diff">${escapeHtml(job.diff || "(untracked files only)")}</pre></details>`;
   if (job.diff_pending) {
     const diffActions = document.createElement("div");
     diffActions.className = "diff-actions";

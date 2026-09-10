@@ -689,6 +689,14 @@ body {
 .chat-shell.work-open .stream,
 .chat-shell.work-open .index,
 .chat-shell.work-open .lanes { display: none; }
+.diff-fold summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
 .chat-head {
   display: grid;
   gap: 2px;
@@ -2437,6 +2445,10 @@ footer a { color: var(--bronze); }
   }
   .pulse:not(.on) { display: none; }
   .ceo-next { display: none; }
+  .receipt-go { display: none; }
+  .index { display: none; }
+  .ceo-brief { display: none; }
+  .composer-who { display: none; }
   .chat-shell.work-open .stream,
   .chat-shell.work-open .index,
   .chat-shell.work-open .lanes { display: none; }
