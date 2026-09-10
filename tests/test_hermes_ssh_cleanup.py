@@ -26,22 +26,51 @@ class TestSaaLiveSshCleanup(unittest.TestCase):
         # Mock process that times out
         mock_proc = MagicMock()
         mock_proc.pid = 12345
+        mock_proc.poll.return_value = 0
         mock_proc.communicate.side_effect = subprocess.TimeoutExpired(cmd=[], timeout=5)
         mock_proc.wait.return_value = None
         mock_popen.return_value = mock_proc
         
-        with patch("os.killpg") as mock_killpg, \
-             patch("os.getpgid", return_value=12345) as mock_getpgid:
+        with patch("openbot.hermes.os.name", "posix"), \
+             patch("os.killpg", create=True) as mock_killpg, \
+             patch("os.getpgid", return_value=12345, create=True) as mock_getpgid:
             
             result = saa_live_ssh(["echo", "test"], timeout=1)
             
             # Verify process group kill was called
             mock_getpgid.assert_called_once_with(12345)
             mock_killpg.assert_called_once_with(12345, 9)
-            mock_proc.wait.assert_called_once()
+            mock_proc.wait.assert_called()
             
             # Verify timeout exit code returned
             self.assertEqual(result.returncode, 124)
+    
+    @patch("openbot.hermes.railway_cmd")
+    @patch("openbot.hermes.railway_ssh_identity")
+    @patch("subprocess.Popen")
+    def test_saa_live_ssh_timeout_taskkill_tree_on_windows(self, mock_popen, mock_identity, mock_railway):
+        """On Windows timeout, saa_live_ssh reaps the process tree with taskkill /T."""
+        from openbot.hermes import saa_live_ssh
+
+        mock_railway.return_value = ["railway"]
+        mock_identity.return_value = "/tmp/id_ed25519"
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+        mock_proc.poll.return_value = 0
+        mock_proc.communicate.side_effect = subprocess.TimeoutExpired(cmd=[], timeout=5)
+        mock_proc.wait.return_value = None
+        mock_popen.return_value = mock_proc
+
+        with patch("openbot.hermes.os.name", "nt"), \
+             patch("openbot.hermes.subprocess.run") as mock_run:
+            result = saa_live_ssh(["echo", "test"], timeout=1)
+
+        self.assertEqual(result.returncode, 124)
+        mock_run.assert_called()
+        args = mock_run.call_args[0][0]
+        self.assertEqual(args[:4], ["taskkill", "/F", "/T", "/PID"])
+        self.assertEqual(args[4], "12345")
     
     @patch("openbot.hermes.railway_cmd")
     @patch("openbot.hermes.railway_ssh_identity")
@@ -167,7 +196,7 @@ class TestOverlayCoalescedSSH(unittest.TestCase):
     def test_dump_overlay_single_ssh_for_dump_and_live_check(
         self, mock_save, mock_load, mock_ssh, mock_railway
     ):
-        """dump_saa_live_cron_overlay makes 2 SSH calls total (tee script + combined run)."""
+        """dump_saa_live_cron_overlay(live=True) makes 2 SSH calls total (tee script + combined run)."""
         from openbot.hermes import dump_saa_live_cron_overlay
         
         # Mock SSH responses
@@ -195,7 +224,7 @@ class TestOverlayCoalescedSSH(unittest.TestCase):
         
         mock_ssh.side_effect = ssh_side_effect
         
-        overlay = dump_saa_live_cron_overlay()
+        overlay = dump_saa_live_cron_overlay(live=True)
         
         # Should have made exactly 2 SSH calls (not 3)
         self.assertEqual(mock_ssh.call_count, 2)
@@ -219,7 +248,7 @@ class TestOverlayCoalescedSSH(unittest.TestCase):
     def test_dump_overlay_falls_back_to_cache_on_ssh_timeout(
         self, mock_load, mock_ssh, mock_railway
     ):
-        """dump_saa_live_cron_overlay uses cache when SSH times out."""
+        """dump_saa_live_cron_overlay(live=True) uses cache when SSH times out."""
         from openbot.hermes import dump_saa_live_cron_overlay
         
         cached = [{"id": "cached123", "name": "cached-job"}]
@@ -228,11 +257,49 @@ class TestOverlayCoalescedSSH(unittest.TestCase):
         # Simulate SSH timeout
         mock_ssh.side_effect = subprocess.TimeoutExpired(cmd=[], timeout=20)
         
-        overlay = dump_saa_live_cron_overlay()
+        overlay = dump_saa_live_cron_overlay(live=True)
         
         # Should return cached data
         self.assertEqual(overlay, cached)
         self.assertEqual(overlay[0]["id"], "cached123")
+
+
+class TestOverlayCacheOnlyBoardLoad(unittest.TestCase):
+    """Board load must not SSH. dump/sync are cache-only unless live=True."""
+
+    @patch("openbot.hermes.saa_live_ssh")
+    @patch("openbot.hermes.railway_cmd", return_value=["railway"])
+    @patch("openbot.hermes.load_saa_overlay_cache", return_value=[{"id": "cached1", "name": "cached-job"}])
+    def test_dump_default_does_not_ssh(self, mock_load, mock_railway, mock_ssh):
+        from openbot.hermes import dump_saa_live_cron_overlay
+
+        rows = dump_saa_live_cron_overlay()
+        mock_ssh.assert_not_called()
+        self.assertEqual(rows[0]["id"], "cached1")
+
+    @patch("openbot.hermes.dump_saa_live_cron_overlay", return_value=[{"id": "cached1"}])
+    def test_sync_default_is_cache_only(self, mock_dump):
+        from openbot.hermes import sync_saa_live_crons
+
+        result = sync_saa_live_crons(None)
+        mock_dump.assert_called_once_with(live=False)
+        self.assertFalse(result.get("live"))
+
+    @patch("openbot.hermes.dump_saa_live_cron_overlay", return_value=[{"id": "live1"}])
+    def test_sync_explicit_live_passes_flag(self, mock_dump):
+        from openbot.hermes import sync_saa_live_crons
+
+        result = sync_saa_live_crons(None, live=True)
+        mock_dump.assert_called_once_with(live=True)
+        self.assertTrue(result.get("live"))
+
+    @patch("openbot.hermes.saa_live_ssh")
+    def test_mark_overlay_live_does_not_ssh(self, mock_ssh):
+        from openbot.hermes import _mark_overlay_live
+
+        marked = _mark_overlay_live([{"id": "abc", "name": "job"}])
+        mock_ssh.assert_not_called()
+        self.assertFalse(marked[0]["live"])
 
 
 class TestOverlayDefaultDisabled(unittest.TestCase):
@@ -294,12 +361,14 @@ class TestProcessGroupCleanup(unittest.TestCase):
         self.assertIn("communicate", source)
         self.assertIn("start_new_session=True", source)
         
-        # Verify on timeout we kill process group
         self.assertIn("TimeoutExpired", source)
-        self.assertIn("killpg", source)
-        
-        # Verify old pattern is NOT present
-        self.assertNotIn("subprocess.run(", source)
+        self.assertIn("_reap_ssh_process_group", source)
+
+        from openbot.hermes import _reap_ssh_process_group
+
+        reap = inspect.getsource(_reap_ssh_process_group)
+        self.assertIn("killpg", reap)
+        self.assertIn("taskkill", reap)
 
 
 if __name__ == "__main__":

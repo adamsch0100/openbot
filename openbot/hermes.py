@@ -1076,14 +1076,55 @@ def saa_ssh_payload(remote: list[str]) -> str:
     return " ".join(shlex.quote(part) for part in remote)
 
 
+def _reap_ssh_process_group(proc: subprocess.Popen, pgid: int | None = None) -> None:
+    """Kill railway SSH and its children. Unix uses the session pgid; Windows uses taskkill /T."""
+    try:
+        if os.name == "nt":
+            pid = getattr(proc, "pid", None)
+            if pid:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5,
+                    check=False,
+                )
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        else:
+            target = pgid
+            if target is None:
+                try:
+                    target = os.getpgid(proc.pid)
+                except (ProcessLookupError, OSError):
+                    target = None
+            if target is not None:
+                try:
+                    os.killpg(target, 9)
+                except (ProcessLookupError, OSError):
+                    pass
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=2)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    except (ProcessLookupError, OSError):
+        pass
+
+
 def saa_live_ssh(
     remote: list[str],
     timeout: int = 30,
     stdin: str | None = None,
 ) -> subprocess.CompletedProcess:
-    """SSH to Railway with hard process cleanup on timeout/completion.
-    
-    Creates new process group to ensure all children are killed on timeout.
+    """SSH to Railway with hard process-group cleanup on timeout and if the child hangs.
+
+    Board load must not call this. Explicit Retry / cron run may.
     """
     binary = railway_cmd()
     if not binary:
@@ -1106,8 +1147,7 @@ def saa_live_ssh(
     payload = stdin
     if payload is not None:
         payload = payload.replace("\r\n", "\n").replace("\r", "\n")
-    
-    # Start new session to isolate process group for cleanup
+
     proc = subprocess.Popen(
         cmd,
         stdin=subprocess.PIPE if payload is not None else subprocess.DEVNULL,
@@ -1115,38 +1155,36 @@ def saa_live_ssh(
         stderr=subprocess.PIPE,
         start_new_session=True,
     )
-    
-    try:
-        stdout_data, stderr_data = proc.communicate(
-            input=payload.encode("utf-8") if payload is not None else None,
-            timeout=timeout,
-        )
-        returncode = proc.returncode
-    except subprocess.TimeoutExpired:
-        # Hard kill the entire process group on timeout
+    pgid = None
+    if os.name != "nt":
         try:
-            if os.name != "nt":
-                # Unix: kill the entire process group
-                os.killpg(os.getpgid(proc.pid), 9)
-            else:
-                # Windows: terminate the process tree
-                proc.kill()
-            proc.wait(timeout=2)
+            pgid = os.getpgid(proc.pid)
         except (ProcessLookupError, OSError):
-            pass
-        # Collect any partial output
+            pgid = None
+
+    try:
         try:
-            stdout_data, stderr_data = proc.communicate(timeout=1)
-        except (subprocess.TimeoutExpired, ValueError):
-            stdout_data, stderr_data = b"", b""
-        returncode = 124  # timeout exit code
-    
-    return subprocess.CompletedProcess(
-        cmd,
-        returncode,
-        (stdout_data or b"").decode("utf-8", "replace"),
-        (stderr_data or b"").decode("utf-8", "replace"),
-    )
+            stdout_data, stderr_data = proc.communicate(
+                input=payload.encode("utf-8") if payload is not None else None,
+                timeout=timeout,
+            )
+            returncode = proc.returncode
+        except subprocess.TimeoutExpired:
+            _reap_ssh_process_group(proc, pgid)
+            try:
+                stdout_data, stderr_data = proc.communicate(timeout=1)
+            except (subprocess.TimeoutExpired, ValueError):
+                stdout_data, stderr_data = b"", b""
+            returncode = 124
+        return subprocess.CompletedProcess(
+            cmd,
+            returncode,
+            (stdout_data or b"").decode("utf-8", "replace"),
+            (stderr_data or b"").decode("utf-8", "replace"),
+        )
+    finally:
+        if proc.poll() is None:
+            _reap_ssh_process_group(proc, pgid)
 
 
 def saa_overlay_cache_path() -> Path:
@@ -1207,12 +1245,6 @@ def _overlay_jobs_from_text(text: str) -> list[dict]:
 
 def _mark_overlay_live(overlay: list[dict], live_ids: set[str] | None = None) -> list[dict]:
     ids = live_ids if live_ids is not None else set()
-    if live_ids is None and overlay and railway_cmd():
-        try:
-            ran = saa_live_ssh(["hermes", "cron", "runs", "--limit", "25"], timeout=40)
-            ids = set(parse_hermes_running_job_ids((ran.stdout or "") + "\n" + (ran.stderr or "")))
-        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-            ids = set()
     out = []
     for row in overlay or []:
         if not isinstance(row, dict):
@@ -1223,12 +1255,15 @@ def _mark_overlay_live(overlay: list[dict], live_ids: set[str] | None = None) ->
     return out
 
 
-def dump_saa_live_cron_overlay() -> list[dict]:
-    """Fetch live cron status from Railway, coalescing dump+live-check into one SSH.
-    
-    Falls back to cache if SSH unavailable. Uses cache on timeout or error.
+def dump_saa_live_cron_overlay(*, live: bool = False) -> list[dict]:
+    """Return cached SAA live cron overlay.
+
+    Cache-only by default. Railway SSH only when live=True (explicit Retry / cron run
+    or the opt-in overlay thread). Board load must never pass live=True.
     """
     cached = load_saa_overlay_cache()
+    if not live:
+        return cached
     overlay = cached
     if railway_cmd():
         try:
@@ -1308,12 +1343,13 @@ def merge_saa_cron_rows(local: list[dict], overlay: list[dict]) -> list[dict]:
     return out
 
 
-def sync_saa_live_crons(home: str | Path | None) -> dict:
-    overlay = dump_saa_live_cron_overlay()
+def sync_saa_live_crons(home: str | Path | None, *, live: bool = False) -> dict:
+    """Apply overlay onto a board home. SSH only when live=True."""
+    overlay = dump_saa_live_cron_overlay(live=live)
     if not overlay:
-        return {"ok": False, "updated": 0, "error": "live overlay empty"}
+        return {"ok": False, "updated": 0, "error": "live overlay empty", "live": False}
     updated = apply_cron_status_overlay(home, overlay) if home else 0
-    return {"ok": True, "updated": updated, "live": True, "jobs": len(overlay)}
+    return {"ok": True, "updated": updated, "live": bool(live), "jobs": len(overlay)}
 
 
 # Single-flight lock to prevent overlapping SSH overlay refreshes
@@ -1342,7 +1378,7 @@ def overlay_saa_live_background(interval: int | None = None) -> None:
             from .org import project_tools
 
             home = str((project_tools("saa-homes") or {}).get("hermes_home") or "").strip()
-            sync_saa_live_crons(home)
+            sync_saa_live_crons(home, live=True)
         except FileNotFoundError:
             if not _overlay_miss_logged:
                 print("[openbot] saa live overlay: railway CLI missing; using cached live jobs", flush=True)

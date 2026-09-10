@@ -1202,13 +1202,8 @@ class Handler(SimpleHTTPRequestHandler):
             member = self._actor_row()
             if member and not allows_project(member, pid):
                 return self._forbid("not on this CEO")
-            refresh = (qs.get("refresh") or [""])[0].strip() in {"1", "true", "yes"}
-            if pid == "saa-homes" and refresh:
-                from .hermes import sync_saa_live_crons
-
-                home = str((project_tools(pid) or {}).get("hermes_home") or "").strip()
-                if home:
-                    sync_saa_live_crons(home)
+            # Cache-only. GET never SSHs. #62 stopped the overlay thread; request-path
+            # refresh=1 still left railway zombies. Explicit Retry uses POST /api/crons/run.
             return self._json(200, project_cron_bundle(pid))
         if path == "/api/spend/dashboard":
             if self._require_owner():
@@ -1985,7 +1980,7 @@ class Handler(SimpleHTTPRequestHandler):
             if project_id == "saa-homes":
                 result = saa_live_nudge_due(job_id)
                 if home:
-                    sync_saa_live_crons(home)
+                    sync_saa_live_crons(home, live=True)
             else:
                 result = cron_run(job_id, home=home)
             result["project_id"] = project_id
@@ -2543,8 +2538,7 @@ def main() -> None:
     ).start()
     
     # SAA live overlay: disabled by default due to railway SSH zombie accumulation.
-    # Even with PR #59 (killpg, single-flight, 300s interval), zombies still climb to ~540.
-    # Enable only if you have verified railway CLI version and zombie reaping work in your env.
+    # GET /api/crons is cache-only. Explicit Retry / cron run may SSH and must reap the process group.
     if os.environ.get("OPENBOT_SAA_OVERLAY_ENABLED", "").lower() in ("1", "true", "yes"):
         from .hermes import overlay_saa_live_background
         threading.Thread(

@@ -3213,8 +3213,7 @@ async function loadCeoDigest(refreshLive) {
   }
   try {
     const pid = projectId;
-    const live = pid === "saa-homes" && (refreshLive || scheduleOpen) ? "&refresh=1" : "";
-    const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}${live}`);
+    const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`);
     const data = await res.json();
     digestCache.set(pid, data);
     if (projectId === pid) {
