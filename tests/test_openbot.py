@@ -1971,12 +1971,27 @@ class ResearchTests(unittest.TestCase):
 class HermesGlueTests(unittest.TestCase):
     def test_parse_schedule_and_split_model(self):
         from openbot.hermes import chat_packet, job_packet, parse_schedule, split_model
+        from openbot import models
 
         self.assertEqual(parse_schedule("Every morning ping the board"), "0 9 * * *")
         self.assertEqual(parse_schedule("every 2 hours check the site"), "every 2h")
         self.assertEqual(parse_schedule("every 30 minutes"), "every 30m")
         self.assertIsNone(parse_schedule("remind me sometime"))
-        self.assertEqual(split_model("opencode/gpt-5.4-mini"), ("opencode-zen", "gpt-5.4-mini"))
+        
+        # Mock model catalog for OpenCode Go models
+        with unittest.mock.patch("openbot.models.all_models") as mock_all_models:
+            mock_all_models.return_value = [
+                {"id": "opencode/deepseek-v4-flash", "provider": "opencode", "family": "go"},
+                {"id": "opencode/gemini-3.8-flash", "provider": "opencode", "family": "go"},
+                {"id": "opencode/gpt-5.4-mini", "provider": "opencode", "family": "zen"},
+            ]
+            # OpenCode Go models should map to opencode-go
+            self.assertEqual(split_model("opencode/deepseek-v4-flash"), ("opencode-go", "deepseek-v4-flash"))
+            self.assertEqual(split_model("opencode/gemini-3.8-flash"), ("opencode-go", "gemini-3.8-flash"))
+            # OpenCode Zen models should map to opencode-zen
+            self.assertEqual(split_model("opencode/gpt-5.4-mini"), ("opencode-zen", "gpt-5.4-mini"))
+        
+        # Other providers
         self.assertEqual(split_model("openrouter/anthropic/claude-sonnet-4.6"), ("openrouter", "anthropic/claude-sonnet-4.6"))
         self.assertEqual(split_model("nous/hermes-3"), ("nous", "hermes-3"))
         self.assertEqual(split_model("local-model"), (None, "local-model"))
