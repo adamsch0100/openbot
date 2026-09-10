@@ -9,13 +9,13 @@ Grok-in-X chats do not persist project files to your machine. This file *is* the
 
 ## One sentence
 
-OpenBot is a control plane: one board that routes work to Hermes Agent
+OttoBot is a control plane: one board that routes work to Hermes Agent
 (ops, memory, schedules) and OpenCode (repos, LSP, MCP).
 We do not fork or rewrite those engines.
 
 ## What we are doing
 
-- OpenBot: first-run, board UI, INDEX, tickets, allowlists, job log, spend cap, snapshot browser policy
+- OttoBot: first-run, board UI, INDEX, tickets, allowlists, job log, spend cap, snapshot browser policy
 - Hermes Agent: long jobs, skills, cron, persistent memory when we opt in
 - OpenCode: code edits, diffs, MCP, `opencode web` / `opencode run`
 
@@ -38,18 +38,18 @@ Phase 2: other people clone the repo and spin **their own** instance. No multi-t
 ## Legal + credit (keep this in README, footer, About)
 
 Both engines are MIT. Wrapping is allowed if copyright and license notices stay.
-Trademarks are **not** in the MIT grant. OpenBot is not “a Hermes/OpenCode product.”
+Trademarks are **not** in the MIT grant. OttoBot is not “a Hermes/OpenCode product.”
 It is a board that **uses** those products.
 
 - Hermes Agent, Nous Research: https://github.com/NousResearch/hermes-agent
 - OpenCode, Anomaly: https://github.com/anomalyco/opencode
 
 Do not name the product Hermes, OpenCode, or Grok Bot. Do not use their logos.
-Do not put engine names inside the OPENBOT mark. Credit lives in text under/ beside it.
+Do not put engine names inside the OTTOBOT mark. Credit lives in text under/ beside it.
 
 Required three lines (README, NOTICE, board footer, first-run):
 
-> OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
+> OttoBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
 > Not affiliated with, sponsored by, or endorsed by those projects.
 
 Ship `NOTICE` or `THIRD-PARTY.md` with both MIT texts.

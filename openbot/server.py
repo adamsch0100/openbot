@@ -170,7 +170,7 @@ PRESET_ENGINE = {
 }
 
 CREDIT = (
-    "OpenBot uses Hermes Agent (MIT, Nous Research) "
+    "OttoBot uses Hermes Agent (MIT, Nous Research) "
     "and OpenCode (MIT, Anomaly). "
     "Not affiliated with, sponsored by, or endorsed by those projects."
 )

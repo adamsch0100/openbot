@@ -1,0 +1,52 @@
+---
+description: CEO INDEX build law — Grok-simple chat, INDEX memory, engine routing, Accept gates.
+alwaysApply: true
+---
+
+# CEO INDEX build law
+
+OttoBot feels like a simple always-on chat. Underneath, CEOs and jobs are files.
+
+## Chat surface
+
+- Grok-simple chat: one composer, named bots, cards in the stream.
+- Chat is UI only. Never send the full thread as the model prompt.
+- Status / “what’s going on” reads INDEX (instance + aimed CEO). Tools off for Cos status.
+
+## CEO from INDEX
+
+- Each CEO owns `org/projects/<ceo>/INDEX.md` (Now / Last / Next / Blocker + law).
+- Aiming a CEO loads that CEO’s INDEX / BRAIN / inbox — not another CEO’s.
+- Host product CEO may still use id `openbot` on disk; user-facing name is OttoBot.
+
+## Job packets
+
+- Doing work builds a **job packet**: agent law + INDEX + BRAIN + ticket + this message + short RESULT hints.
+- Thread JSON stays on disk for the human. Models get packets, not archives.
+
+## Engines
+
+- **OpenCode** — build / code / diffs (Builder, SupportBuilder).
+- **Hermes Agent** — schedule, ops, research, long jobs, cron.
+- **Board** — Cos status, routing, Accept UI. No third agent runtime.
+
+## SupportBuilder
+
+- Support is a CEO. Builder/SupportBuilder implements tickets as diffs.
+- Support never Accepts, pushes, or posts live. Owner gates those.
+
+## Multi-CEO isolation
+
+- Separate work folders, Hermes homes, brains, and bus paths per CEO.
+- Do not write one CEO’s job into another CEO’s tree.
+- Shared keys/vault are instance-level; project state is not.
+
+## Accept gates (human only)
+
+- **Accept** required before: public post / publish, pay, delete (destructive), sign, merge/push when policy says so.
+- Park send / publish / pay / delete on Needs-you cards. Never auto-approve those.
+- Diff cards: Accept / Reject. Reject restores. No silent apply to production.
+
+## Done
+
+End jobs by updating the relevant INDEX (or BRAIN): Now / Last / Next / Blocker. Name the engine on the job card.

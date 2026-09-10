@@ -480,8 +480,8 @@ class BrandMarkTests(unittest.TestCase):
     def test_lockup_is_on_the_board(self):
         root = Path(__file__).resolve().parent.parent
         html = (root / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("OPENBOT", html)
-        self.assertIn("LOCAL ORG.", html)
+        self.assertIn("OTTOBOT", html)
+        self.assertIn("On it.", html)
         self.assertIn('data-stage="chat"', html)
         self.assertIn('data-stage="tools"', html)
         self.assertIn('data-stage="opencode"', html)

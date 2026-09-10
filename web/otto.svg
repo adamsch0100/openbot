@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="OttoBot">
+  <rect width="128" height="128" fill="#000"/>
+  <!-- antenna -->
+  <line x1="64" y1="18" x2="64" y2="28" stroke="#8a8f9a" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="64" cy="14" r="7" fill="#b7a2e8"/>
+  <!-- ears -->
+  <circle cx="28" cy="64" r="10" fill="#9aa0ab"/>
+  <circle cx="100" cy="64" r="10" fill="#9aa0ab"/>
+  <!-- head -->
+  <rect x="34" y="30" width="60" height="58" rx="14" fill="#a8adb8"/>
+  <!-- face -->
+  <rect x="42" y="40" width="44" height="36" rx="10" fill="#f4f5f7"/>
+  <!-- eyes (separate for future look-at) -->
+  <g id="otto-eyes">
+    <circle id="otto-eye-l" cx="54" cy="54" r="7" fill="#1a1f2e"/>
+    <circle id="otto-eye-r" cx="74" cy="54" r="7" fill="#1a1f2e"/>
+    <circle cx="56.5" cy="51.5" r="1.8" fill="#fff"/>
+    <circle cx="76.5" cy="51.5" r="1.8" fill="#fff"/>
+  </g>
+  <!-- smile -->
+  <path d="M54 66c4 5 16 5 20 0" fill="none" stroke="#1a1f2e" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- base -->
+  <path d="M48 88h32l4 10H44z" fill="#8b909c"/>
+</svg>
