@@ -1102,6 +1102,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {"member": public_member(member), "ok": True})
         if path == "/api/engines":
             return self._json(200, detect())
+        if path == "/api/engines/health":
+            from .engine_health import engine_health
+
+            qs = parse_qs(urlparse(self.path).query)
+            pid = (qs.get("project_id") or [""])[0].strip() or None
+            member = self._actor_row()
+            if member:
+                pid = member_project_id(member)
+            return self._json(200, engine_health(pid))
         if path == "/api/spend":
             cfg = load_config()
             qs = parse_qs(urlparse(self.path).query)

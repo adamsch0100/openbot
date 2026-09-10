@@ -2013,6 +2013,72 @@ function accountBackupChecks(primary, fallback) {
   )).join("") || "<p class=\"muted\">Add keys in Settings → Keys.</p>";
 }
 
+
+
+
+
+
+function shortHomeLeaf(home) {
+  const raw = String(home || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!raw) return "—";
+  const parts = raw.split("/").filter(Boolean);
+  return parts[parts.length - 1] || raw;
+}
+
+function paintEngineHealthCard(data) {
+  const host = $("ceoEngineHealth");
+  if (!host) return;
+  if (!data || typeof data !== "object") {
+    host.innerHTML = `<p class="muted">Engine health unavailable.</p>`;
+    return;
+  }
+  const h = data.hermes || {};
+  const o = data.opencode || {};
+  const w = data.wire || {};
+  const s = data.steward || {};
+  const warns = Array.isArray(data.warn) ? data.warn : [];
+  const hermesLine = [
+    h.present ? (h.version || "found") : "missing",
+    h.dash_running ? (h.dash_home_ok ? `dash · ${shortHomeLeaf(h.home || h.dash_home)}` : "dash · wrong home") : "dash off",
+    h.home ? (h.gateway_running ? "gateway up" : "gateway off") : null
+  ].filter(Boolean).join(" · ");
+  const ocLine = [
+    o.present ? (o.version || "found") : "missing",
+    o.web_running ? "web up" : "web off"
+  ].join(" · ");
+  const wireLine = [
+    `GitHub ${w.github ? "on" : "off"}`,
+    `Railway ${w.railway ? "on" : "off"}`,
+    `Site ${w.site ? "on" : "off"}`
+  ].join(" · ");
+  const pinLine = [
+    s.hermes_pin ? `Hermes ${s.hermes_pin}` : null,
+    s.opencode_pin ? `OpenCode ${s.opencode_pin}` : null
+  ].filter(Boolean).join(" · ") || "pins unset";
+  host.innerHTML = `
+    <div class="kv">
+      <div><dt>Hermes</dt><dd class="${h.dash_home_ok || !h.dash_running ? "" : "wire-bad"}">${escapeHtml(hermesLine)}</dd></div>
+      <div><dt>OpenCode</dt><dd>${escapeHtml(ocLine)}</dd></div>
+      <div><dt>Wire</dt><dd>${escapeHtml(wireLine)}</dd></div>
+      <div><dt>Steward</dt><dd>${escapeHtml(pinLine)} · Accept only</dd></div>
+    </div>
+    ${warns.length ? `<p class="wire-error">${escapeHtml(warns[0])}</p>` : `<p class="muted">Honest engine status for this CEO — not a live spam chip.</p>`}
+  `;
+}
+
+async function loadCeoEngineHealth(project) {
+  const host = $("ceoEngineHealth");
+  if (!host || !project || !project.id) return;
+  host.innerHTML = `<p class="muted">Checking engines…</p>`;
+  try {
+    const res = await fetch(`/api/engines/health?project_id=${encodeURIComponent(project.id)}`);
+    const data = await res.json().catch(() => ({}));
+    paintEngineHealthCard(data);
+  } catch (err) {
+    host.innerHTML = `<p class="wire-error">Engine health failed.</p>`;
+  }
+}
+
 function fillCeoPanel() {
   const hint = $("ceoPanelHint");
   const body = $("ceoPanelBody");
@@ -2153,6 +2219,7 @@ function fillCeoPanel() {
     return;
   }
   body.innerHTML = `
+    <div class="usage-card" id="ceoEngineHealthCard"><h4>Engines</h4><div id="ceoEngineHealth"><p class="muted">Checking engines…</p></div></div>
     ${toolsStrip}
     ${gitCard}
     ${hermesCard}
@@ -2216,6 +2283,7 @@ function fillCeoPanel() {
   `;
   
   paintCeoConnectorsMatrix(connectors);
+  loadCeoEngineHealth(project);
   
   // Set up event listeners
   const save = $("saveCeoTools");

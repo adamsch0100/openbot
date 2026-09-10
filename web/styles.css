@@ -3893,3 +3893,6 @@ footer a { color: var(--bronze); }
 
 .provider.blocked-provider { opacity: 0.55; }
 .provider .pill.warn { border-color: #a85; color: #c96; }
+
+.usage-card .wire-bad { color: var(--danger, #c66); }
+#ceoEngineHealthCard .kv dd { overflow-wrap: anywhere; }
