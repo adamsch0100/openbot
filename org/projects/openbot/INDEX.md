@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OpenBot visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes. Receipts name the engine.
-Last: Per-engine heads. Receipts are a visible line. Doing / Next / Results stay the wait story. No third agent.
-Next: Hard-refresh ?v=111. Skip conversion-surge, Competition watch, city-audit-batch-4. Leave PR #48 untouched.
+Now: Phone-first board — Doing / Next / Results as a full-width 44px lane. Engine visibility stays.
+Last: Visibility UX on Chat + OpenCode + Hermes. Results hide auth dumps and retry boilerplate.
+Next: Hard-refresh ?v=116. Skip conversion-surge, Competition watch, city-audit-batch-4. Leave PR #48 untouched.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes; receipts name the engine
-Last: Per-engine heads. Receipts are a visible line. Cron cards say Hermes Agent, not the Go wallet. No third agent.
-Next: Hard-refresh ?v=111. Open SAA Homes if you want the report, or keep going from Chief of Staff
-Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes. GBP login: skip. Do not stampede.
+Now: Phone-first board — Doing / Next / Results as a full-width 44px lane. Chat / Code / Hermes stay in the header.
+Last: Visibility UX on Chat + OpenCode + Hermes. Results hide auth dumps.
+Next: Hard-refresh ?v=116. Leave PR #48 untouched.
+Blocker: Do not Accept parked restore cards. saahomes production is deploying — do not kill/redeploy. No stampede.
 
 ## Vault
 

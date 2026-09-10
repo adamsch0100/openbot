@@ -296,9 +296,26 @@ function splitHandoff(text) {
   return { answer: raw.slice(0, at).trim(), handoff: raw.slice(at).trim() };
 }
 
+function redactSecrets(text) {
+  let cleaned = String(text || "");
+  cleaned = cleaned.replace(/\bsk-[A-Za-z0-9_-]{6,}/g, "key");
+  cleaned = cleaned.replace(/Token prefix:\s*\S+/gi, "");
+  cleaned = cleaned.replace(/Auth method:\s*[^\n.]+/gi, "");
+  cleaned = cleaned.replace(/\bANTHROPIC_[A-Z0-9_]+\b/g, "provider auth");
+  cleaned = cleaned.replace(/x-api-key[^\n]*/gi, "");
+  cleaned = cleaned.replace(/Bearer\s+[A-Za-z0-9._\-]+/g, "Bearer");
+  cleaned = cleaned.replace(/🔐\s*/g, "");
+  cleaned = cleaned.replace(/\bTroubleshooting:\s*[\s\S]*/gi, "");
+  cleaned = cleaned.replace(/Check provider auth in\s+\S+/gi, "Check provider auth.");
+  cleaned = cleaned.replace(/(?:~|\/|[A-Za-z]:[\\/])[^\s]*hermes-homes[^\s]*/gi, "Hermes home");
+  cleaned = cleaned.replace(/\bWhat to do:\s*[^\n]*/gi, "");
+  cleaned = cleaned.replace(/\bRan:\s*\d{4}-\d{2}-\d{2}T[^\s]*/gi, "");
+  return cleaned.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function cleanBotText(text) {
   if (!text) return "";
-  let cleaned = String(text);
+  let cleaned = redactSecrets(text);
 
   cleaned = cleaned.replace(/!!!?\s*CONTRIBUTOR\s+TIER[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
   cleaned = cleaned.replace(/This\s+is\s+Meta'?s?\s+contributor\s+tier[\s\S]*?(?:standard\s+v\d+[\s\S]*?(?=\n\n|Now:|Last:|Next:)|$)/gi, "");
@@ -2190,9 +2207,19 @@ function bindNodeMenu(el, kind, pid, wid) {
 }
 
 function clipWire(text, max) {
-  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  const raw = redactSecrets(String(text || "")).replace(/\s+/g, " ").trim();
   if (raw.length <= max) return raw;
   return `${raw.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function jobStoryTitle(job) {
+  const title = String((job && job.title) || "").trim();
+  if (title && !/^(auto|ops|cos|chat|code|think|research|builder)$/i.test(title)) return title;
+  const engine = String((job && job.engine) || PRESET_ENGINE[(job && job.preset) || ""] || "").trim();
+  if (engine && engine !== "board") return engine;
+  const lane = jobLabel((job && job.preset) || "");
+  if (lane && !/^(auto|ops|cos|chat)$/i.test(lane)) return lane;
+  return "last job";
 }
 
 function ceoWire(project) {
@@ -2773,19 +2800,20 @@ function workCounts() {
 }
 
 function paintWorkTabs() {
-  const tabs = $("workTabs");
-  if (!tabs) return;
   const counts = workCounts();
-  tabs.hidden = false;
-  tabs.querySelectorAll(".work-tab").forEach((btn) => {
-    const view = btn.getAttribute("data-work") || "";
-    const n = counts[view] || 0;
-    const label = view === "doing" ? "Doing" : (view === "next" ? "Next" : "Results");
-    btn.classList.toggle("on", scheduleOpen && scheduleView === view);
-    btn.classList.toggle("hot", view === "doing" && n > 0);
-    btn.classList.toggle("need", view === "results" && (counts.failed || 0) > 0);
-    btn.innerHTML = `${label}<span class="n">${n}</span>`;
+  document.querySelectorAll(".work-tabs").forEach((tabs) => {
+    tabs.hidden = false;
+    tabs.querySelectorAll(".work-tab").forEach((btn) => {
+      const view = btn.getAttribute("data-work") || "";
+      const n = counts[view] || 0;
+      const label = view === "doing" ? "Doing" : (view === "next" ? "Next" : "Results");
+      btn.classList.toggle("on", scheduleOpen && scheduleView === view);
+      btn.classList.toggle("hot", view === "doing" && n > 0);
+      btn.classList.toggle("need", view === "results" && (counts.failed || 0) > 0);
+      btn.innerHTML = `${label}<span class="n">${n}</span>`;
+    });
   });
+  paintEmbedLive();
 }
 
 function cronClaimAt(row) {
@@ -2797,6 +2825,16 @@ function cronClaimAt(row) {
 
 function cronIsNoise(row) {
   return /^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$/i.test(String(row.name || ""));
+}
+
+function cronNextUseful(next) {
+  const raw = String(next || "").trim();
+  if (!raw) return false;
+  if (/no action/i.test(raw)) return false;
+  if (/read the note below/i.test(raw)) return false;
+  if (/retry this job on the live box/i.test(raw)) return false;
+  if (/do not fire the whole set/i.test(raw)) return false;
+  return true;
 }
 
 function cronSkipRetry(row) {
@@ -2897,8 +2935,8 @@ function cronCardHtml(row, open, mark) {
   const nextAt = cronWhenClock(row.next_run_at);
   const status = String(row.last_status || "").toLowerCase();
   const failed = /error|fail/.test(status);
-  const err = String(row.last_error || "").trim();
-  let outcome = row.outcome || (failed ? "Failed." : "No result on this copy yet.");
+  const err = cleanBotText(String(row.last_error || "").trim());
+  let outcome = cleanBotText(row.outcome || (failed ? "Failed." : "No result on this copy yet."));
   if (/^#\s*Cron Job:/i.test(outcome) || cronIsPromptDump(row.last_result || "")) {
     outcome = failed
       ? (err ? `Failed. ${err.slice(0, 160)}` : "Failed. The last run did not finish.")
@@ -2906,7 +2944,7 @@ function cronCardHtml(row, open, mark) {
   }
   outcome = String(outcome).replace(/#\s*Cron Job:\s*[\w.-]+/gi, "").trim() || (failed ? "Failed." : outcome);
   const next = row.next_action || "";
-  const showNext = next && !/no action/i.test(next) && !/read the note below/i.test(next);
+  const showNext = cronNextUseful(next);
   const engine = cronEngineName(row);
   const report = cronReportText(row);
   const changed = cronChangedLine(report);
@@ -3015,10 +3053,10 @@ function engineStory(kind) {
   if (!projectId) {
     const jobs = (((cfg.activity || {}).jobs) || []).filter((row) => engineMatches(row, kind));
     const liveJob = jobs.find((row) => /run|live/i.test(String(row.status || "")));
-    if (liveJob) return { on: true, line: `Running · ${liveJob.title || jobLabel(liveJob.preset) || label}` };
+    if (liveJob) return { on: true, line: `Running · ${jobStoryTitle(liveJob)}` };
     const last = jobs[0];
     if (last) {
-      return { on: false, warn: /fail|error/i.test(String(last.status || "")), line: `Done · ${last.title || jobLabel(last.preset) || label}` };
+      return { on: false, warn: /fail|error/i.test(String(last.status || "")), line: `Done · ${jobStoryTitle(last)}` };
     }
   }
   return { on: false, line: `Done · ${label}` };
@@ -3051,10 +3089,10 @@ function runningStory() {
   if (!projectId) {
     const jobs = (((cfg.activity || {}).jobs) || []);
     const liveJob = jobs.find((row) => /run|live/i.test(String(row.status || "")));
-    if (liveJob) return { on: true, line: `Running · ${liveJob.title || jobLabel(liveJob.preset) || "job"}` };
+    if (liveJob) return { on: true, line: `Running · ${jobStoryTitle(liveJob)}` };
     const last = jobs[0];
     if (last) {
-      return { on: false, warn: /fail|error/i.test(String(last.status || "")), line: `Done · ${last.title || jobLabel(last.preset) || "job"}` };
+      return { on: false, warn: /fail|error/i.test(String(last.status || "")), line: `Done · ${jobStoryTitle(last)}` };
     }
     return { on: false, line: "Done" };
   }
@@ -3166,9 +3204,9 @@ function paintCeoLive(pack) {
   }
   const reportRow = failed[0] || latest;
   const report = reportRow ? cronReportText(reportRow) : "";
-  let snippet = clipWire(report || (reportRow && reportRow.outcome) || "", 160);
+  let snippet = clipWire(cleanBotText(report || (reportRow && reportRow.outcome) || ""), 160);
   if (reportRow && cronIsFailed(reportRow)) {
-    snippet = clipWire(String(reportRow.last_error || report || reportRow.outcome || "Failed."), 160);
+    snippet = clipWire(cleanBotText(String(reportRow.last_error || report || reportRow.outcome || "Failed.")), 160) || "Failed.";
   }
   snippet = String(snippet).replace(/#\s*Cron Job:\s*[\w.-]+/gi, "").trim();
   const next = upcoming[0];
@@ -3218,6 +3256,7 @@ async function loadCeoDigest(refreshLive) {
       paintCeoBrief(data.digest);
       paintCeoLive(data);
       paintWorkTabs();
+      paintEmbedLive();
       if (scheduleOpen) renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
     }
     return data;
@@ -3278,7 +3317,7 @@ function renderChatSchedule(rows, digest, focusId) {
       bits.push(`<h3 class="cron-section">Next · ${next.length}</h3>`);
       bits.push(next.length ? next.map((row) => `<article class="cron-card">
         <div class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></div>
-        <p class="cron-outcome">${escapeHtml(row.index_next)}</p>
+        <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.index_next), 180))}</p>
         <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
       </article>`).join("") : `<p class="cron-empty">No next step on the briefs.</p>`);
     } else {
@@ -3287,7 +3326,7 @@ function renderChatSchedule(rows, digest, focusId) {
       bits.push(jobs.length ? jobs.map((row) => `<article class="cron-card${/fail|error/i.test(String(row.status || "")) ? " failed" : ""}">
         <div class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></div>
         <p class="cron-meta">${escapeHtml(row.engine || PRESET_ENGINE[row.preset] || "board")} · ${escapeHtml(cronWhen(row.at))}</p>
-        <p class="cron-outcome">${escapeHtml(clipWire(String(row.text || row.summary || "").replace(/#\s*Cron Job:\s*[\w.-]+/gi, ""), 180))}</p>
+        <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.text || row.summary || ""), 180) || (/fail|error/i.test(String(row.status || "")) ? "Failed." : "Done."))}</p>
         ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
       </article>`).join("") : `<p class="cron-empty">No job cards yet.</p>`);
     }
@@ -3373,6 +3412,12 @@ function renderChatSchedule(rows, digest, focusId) {
 
 async function openWork(view, focusId) {
   const next = view || "doing";
+  if (stage !== "chat") {
+    setStage("chat");
+    scheduleView = next;
+    await openSchedule(focusId || "");
+    return;
+  }
   if (scheduleOpen && scheduleView === next && !focusId) {
     closeSchedule();
     return;
@@ -5434,14 +5479,15 @@ if ($("modelSearch")) {
 if ($("openSpend")) {
   $("openSpend").addEventListener("click", () => setSettings(true, "usage"));
 }
-if ($("workTabs") && !$("workTabs").dataset.workBound) {
-  $("workTabs").dataset.workBound = "1";
-  $("workTabs").addEventListener("click", (event) => {
+document.querySelectorAll(".work-tabs").forEach((tabs) => {
+  if (tabs.dataset.workBound) return;
+  tabs.dataset.workBound = "1";
+  tabs.addEventListener("click", (event) => {
     const btn = event.target.closest(".work-tab");
     if (!btn) return;
     openWork(btn.getAttribute("data-work") || "doing");
   });
-}
+});
 if ($("ceoLive") && !$("ceoLive").dataset.workBound) {
   $("ceoLive").dataset.workBound = "1";
   $("ceoLive").addEventListener("click", () => {

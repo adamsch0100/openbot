@@ -1877,7 +1877,16 @@ input, textarea, select {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
+  flex-wrap: wrap;
 }
+.embed-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.embed-head .work-tabs { justify-content: flex-end; }
 .embed-kicker {
   font-size: 10px;
   letter-spacing: 0.12em;
@@ -2324,7 +2333,8 @@ footer a { color: var(--bronze); }
   }
   .stage-btn { 
     font-size: 12px;
-    padding: 6px 12px;
+    padding: 8px 12px;
+    min-height: 44px;
     white-space: nowrap;
   }
   
@@ -2333,8 +2343,8 @@ footer a { color: var(--bronze); }
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     background: transparent;
     border: 0;
     border-radius: 8px;
@@ -2396,8 +2406,62 @@ footer a { color: var(--bronze); }
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
-  .work-tab { padding: 4px 8px; font-size: 11px; }
-  .chat-head-row { gap: 8px; }
+  /* calm phone work lane */
+  .chat-head-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .chat-folder { display: none; }
+  .work-tabs,
+  .embed-head .work-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    width: 100%;
+    gap: 0;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #161411;
+    justify-content: stretch;
+    flex-wrap: nowrap;
+  }
+  .work-tab,
+  .stage-btn,
+  .mobile-org-toggle {
+    touch-action: manipulation;
+  }
+  .work-tab {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 5px;
+    padding: 10px 8px;
+    min-height: 44px;
+    font-size: 13px;
+    border-radius: 999px;
+  }
+  .mobile-org-toggle {
+    width: 44px;
+    height: 44px;
+  }
+  .work-tab .n {
+    margin-left: 0;
+    font-size: 11px;
+    opacity: 0.55;
+    font-variant-numeric: tabular-nums;
+  }
+  .embed-head-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .embed-tools {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+  .embed-open { align-self: flex-start; }
   
   /* Rail becomes overlay drawer */
   .rail {
@@ -2432,16 +2496,75 @@ footer a { color: var(--bronze); }
   
   /* Tighter chat head */
   .chat-head {
-    padding: 10px 4px 6px;
-    gap: 2px;
+    padding: 12px 2px 8px;
+    gap: 8px;
   }
-  .chat-where { 
-    font-size: 11px; 
-    letter-spacing: 0.12em; 
+  .chat-where {
+    font-size: 12px;
+    letter-spacing: 0.14em;
   }
-  .chat-folder { 
+  .ceo-live {
+    margin: 2px 0 0;
+    padding: 4px 0 0;
+  }
+  .ceo-pulse-copy span { display: none; }
+  .chat-schedule {
+    margin: 8px 0 0;
+    padding: 8px 0 4px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    max-height: min(58vh, 520px);
+    gap: 10px;
+  }
+  .cron-story {
+    font-size: 13px;
+    color: var(--muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .cron-section {
+    margin: 10px 0 0;
     font-size: 10px;
-    line-height: 1.3;
+  }
+  .cron-card {
+    padding: 10px 0 12px;
+    gap: 6px;
+  }
+  .cron-head {
+    font-size: 13px;
+    align-items: baseline;
+  }
+  .cron-head b {
+    font-weight: 500;
+    font-size: 15px;
+    font-family: var(--display);
+  }
+  .cron-head span {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .chat-schedule .cron-meta { display: none; }
+  .cron-outcome {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .chat-schedule .ghost-btn,
+  .chat-schedule .cron-retry,
+  .chat-schedule .need-actions button {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 13px;
   }
   
   /* Tighter stream spacing with composer clearance */
@@ -2764,27 +2887,31 @@ footer a { color: var(--bronze); }
   .stage-short { display: inline; }
   
   .mobile-org-toggle {
-    width: 32px;
-    height: 32px;
-    font-size: 16px;
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
   }
   
   .stages { 
-    font-size: 10px;
-    padding: 2px;
+    font-size: 12px;
+    padding: 3px;
   }
   .stage-btn { 
-    font-size: 10px;
-    padding: 4px 9px;
-    min-height: 32px;
+    font-size: 12px;
+    padding: 8px 12px;
+    min-height: 44px;
   }
   
   .rail { width: min(260px, 85vw); }
   
-  .chat-shell { padding: 0 10px 10px; }
-  .chat-head { padding: 10px 4px 6px; gap: 1px; }
-  .chat-where { font-size: 11px; letter-spacing: 0.12em; }
-  .chat-folder { font-size: 10px; }
+  .chat-shell { padding: 0 12px 10px; }
+  .chat-head { padding: 12px 0 8px; gap: 8px; }
+  .chat-where { font-size: 12px; letter-spacing: 0.14em; }
+  .work-tab {
+    padding: 10px 6px;
+    min-height: 44px;
+    font-size: 13px;
+  }
   
   /* Tighter lane pills */
   .lane, .route-btn { 
