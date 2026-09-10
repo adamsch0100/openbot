@@ -1665,12 +1665,40 @@ def cron_title(name: str) -> str:
     return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
 
 
-_FAIL_NEXT = "Your move (CEO) · Decide · Retry or Ask Cos."
+_FAIL_NEXT = "Your move · Retry or Ask Cos."
 _GATEWAY_FAIL_NEXT = "Auto-retry — gateway will pick this up. Do not mass-fire."
-_SCRIPT_FAIL_NEXT = "Your move (CEO) · Restore script from bootstrap (Hermes scripts/)."
-_KEY_FAIL_NEXT = "Your move (CEO) · Fix key in Settings."
+_SCRIPT_FAIL_NEXT = "Your move · Restore script from bootstrap (Hermes scripts/)."
+_KEY_FAIL_NEXT = "Your move · Fix key in Settings."
 _WALLET_FAIL_NEXT = "Needs Adam · add credits / fix billing."
 _TRANSIENT_FAIL_NEXT = "Auto-retry — transient. Retry once if it stays red."
+_HERMES_FAIL_NEXT = "Your move · Retry — Hermes exited. Not a key."
+
+
+def fail_kind_from_blob(blob: str) -> str:
+    """Ownership kind for a fail blob. Key/script beat Hermes-exit gore."""
+    low = str(blob or "").lower()
+    if re.search(
+        r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key",
+        low,
+    ):
+        return "key"
+    if re.search(
+        r"script[- ]?not[- ]?found|script[- ]?missing|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts/|missing.*scripts/",
+        low,
+    ):
+        return "script"
+    if re.search(r"gateway shutdown|gateway stopped mid-run", low):
+        return "gateway"
+    if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
+        return "wallet"
+    if re.search(r"busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout", low):
+        return "transient"
+    if re.search(
+        r"(?:hermes\s+)?(?:chat\s+|think\s+)?exit(?:ed)?\s*\d+|traceback|file \".*hermes",
+        low,
+    ):
+        return "hermes"
+    return "unknown"
 
 
 def human_fail_reason(blob: str) -> str:
@@ -1711,18 +1739,19 @@ def cron_outcome(status: str, result: str, error: str = "") -> tuple[str, str]:
         return "Healthy. Nothing new to report.", "No action. It will run again on schedule."
     if re.search(r"error|fail", st):
         reason = human_fail_reason(blob)
-        low = blob.lower()
-        if re.search(r"gateway shutdown|gateway stopped mid-run", low):
+        kind = fail_kind_from_blob(blob)
+        if kind == "gateway":
             return f"Failed. {reason}", _GATEWAY_FAIL_NEXT
-        if re.search(r"script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts/", low):
+        if kind == "script":
             return f"Failed. {reason}", _SCRIPT_FAIL_NEXT
-        # Never Auto-retry on 401/key — CEO Fix key / Settings.
-        if re.search(r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key", low):
+        if kind == "key":
             return f"Failed. {reason}", _KEY_FAIL_NEXT
-        if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
+        if kind == "wallet":
             return f"Failed. {reason}", _WALLET_FAIL_NEXT
-        if re.search(r"busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout", low):
+        if kind == "transient":
             return f"Failed. {reason}", _TRANSIENT_FAIL_NEXT
+        if kind == "hermes":
+            return f"Failed. {reason}", _HERMES_FAIL_NEXT
         return f"Failed. {reason}", _FAIL_NEXT
     if not body:
         if st in {"ok", "success", "completed", "succeeded"}:

@@ -494,7 +494,7 @@ function failKindFromBlob(blob) {
   if (/\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key/.test(low)) {
     return "key";
   }
-  if (/script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\//.test(low)) {
+  if (/script[- ]?not[- ]?found|script[- ]?missing|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\/|missing.*scripts\//.test(low)) {
     return "script";
   }
   if (/gateway shutdown|gateway stopped mid-run/.test(low)) return "gateway";
@@ -502,12 +502,32 @@ function failKindFromBlob(blob) {
   if (/busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout/.test(low)) {
     return "transient";
   }
+  if (/(?:hermes\s+)?(?:chat\s+|think\s+)?exit(?:ed)?\s*\d+|traceback|file ["'].*hermes/.test(low)) {
+    return "hermes";
+  }
   return "unknown";
+}
+
+function ceoMoveName(pidOrProject) {
+  if (pidOrProject && typeof pidOrProject === "object") {
+    return String(pidOrProject.name || pidOrProject.id || "").trim() || talkName();
+  }
+  const pid = String(pidOrProject || "");
+  if (!pid) return "Chief of Staff";
+  const project = ((cfg.org && cfg.org.projects) || []).find((row) => String(row.id) === pid);
+  return (project && project.name) || pid;
+}
+
+function failMoveWho(row) {
+  const pid = row && (row.project_id || projectId);
+  if (pid) return ceoMoveName(pid);
+  return talkName();
 }
 
 function failWhyLine(kind, reason) {
   if (kind === "gateway") return "Schedule stalled until the gateway recovers.";
   if (kind === "script") return "Job cannot run without its script on Hermes.";
+  if (kind === "hermes") return "Hermes exited — Retry once. This is not a missing API key.";
   if (kind === "key") return "Auth rejected — retries will keep failing until the key is fixed.";
   if (kind === "wallet") return "Spend/credits blocked — only Adam can top up.";
   if (kind === "transient") return "Transient stall — auto-retry should clear it.";
@@ -562,7 +582,7 @@ function failOwnership(row) {
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: "Your move (CEO) · Fix key in Settings.",
+      next: `Your move · ${failMoveWho(row)} · Fix key in Settings.`,
       outcome: `Failed · ${reason}`
     };
   }
@@ -575,7 +595,7 @@ function failOwnership(row) {
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: "Your move (CEO) · Restore script from bootstrap (Hermes scripts/).",
+      next: `Your move · ${failMoveWho(row)} · Restore script from bootstrap (Hermes scripts/).`,
       outcome: `Failed · ${reason}`
     };
   }
@@ -632,6 +652,19 @@ function failOwnership(row) {
       outcome: `Failed · ${reason}`
     };
   }
+  if (kind === "hermes") {
+    return {
+      owner: "ceo",
+      rank: 1,
+      status: "CEO",
+      resultStatus: "Recovering",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: `Your move · ${failMoveWho(row)} · Retry — Hermes exited. Not a key.`,
+      outcome: `Failed · ${reason}`
+    };
+  }
   return {
     owner: "ceo",
     rank: 1,
@@ -640,7 +673,7 @@ function failOwnership(row) {
     kind,
     reason,
     why: failWhyLine(kind, reason),
-    next: "Your move (CEO) · Decide · Retry or Ask Cos.",
+    next: `Your move · ${failMoveWho(row)} · Retry or Ask Cos.`,
     outcome: `Failed · ${reason}`
   };
 }
@@ -662,24 +695,23 @@ function failChoices(row) {
   if (own.kind === "gateway" && !gatewayRunning) {
     out.push({ id: "restart_gateway", label: "Restart gateway" });
   } else if (own.kind === "script") {
-    out.push({ id: "restore_script", label: "Restore script", cron_id: cronId });
+    out.push({ id: "restore_script", label: "Restore", cron_id: cronId });
     out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
   } else if (own.kind === "key") {
     out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
-    // Companion while Hermes Off — Fix key stays primary; Restart does not mass-fire.
     if (!gatewayRunning) out.push({ id: "restart_gateway", label: "Restart gateway" });
-    out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+    else out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
   } else if (own.kind === "wallet") {
     out.push({ id: "fix_key", label: "Open Settings", cron_id: cronId });
   } else if (own.owner === "auto") {
     out.push({ id: "open_detail", label: "Open detail", cron_id: cronId });
-    if (!cronSkipRetry(row)) out.push({ id: "retry", label: "Retry once", cron_id: cronId });
   } else {
+    // unknown / hermes-exit — Retry. Never Fix key on script-missing or crash gore.
     if (!cronSkipRetry(row)) out.push({ id: "retry", label: "Retry", cron_id: cronId });
+    else out.push({ id: "open_detail", label: "Open detail", cron_id: cronId });
     out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
-    out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
   }
-  return out;
+  return out.slice(0, 2);
 }
 
 function cronFailNext(row) {
@@ -3125,24 +3157,23 @@ function needChoices(row) {
 
 function jobChoices(job) {
   if (!job) return [];
-  if (Array.isArray(job.choices) && job.choices.length) return job.choices;
   if (job.login_wall) {
     const row = { kind: "login", url: job.url, logins: job.logins || [] };
     return needChoices(row);
   }
   if (job.diff_pending) return needChoices({ kind: "diff" });
-  if (job.keep_going && !job.stopped) {
-    const n = job.step_count && job.total_steps ? `Keep going (${job.step_count}/${job.total_steps})` : "Keep going";
+  if (job.keep_going && !job.stopped && !job.cron && !jobIsFailed(job)) {
+    const n = job.step_count && job.total_steps ? `Keep going (${job.step_count}/${job.total_steps})` : "Continue";
     return [{ id: "continue", label: n }];
   }
   const status = String(job.status || job.last_status || "").toLowerCase();
   const cronId = job.cron_id || "";
   const failed = jobIsFailed(job) || /error|fail/.test(status);
   if (job.cron || cronId) {
-    if (failed) return needChoices({ kind: "failed", cron_id: cronId });
+    if (failed) return failChoices(job);
     return [{ id: "schedule", label: "Open schedule", cron_id: cronId }];
   }
-  if (failed && !isTalk(job)) return needChoices({ kind: "failed", cron_id: cronId });
+  if (failed && !isTalk(job)) return failChoices(job);
   return [];
 }
 
@@ -3393,23 +3424,52 @@ function visibleNeedsYou() {
   });
 }
 
+function ceoHasFailedWork(pid) {
+  if (!pid) return false;
+  const counts = workCounts(pid);
+  return (Number(counts.failed || 0) + Number(counts.trustFailed || 0)) > 0;
+}
+
+function operatorMoveRows() {
+  return visibleNeedsYou()
+    .filter((row) => {
+      if (row.kind === "continue" || row.kind === "brief") {
+        if (row.project_id && ceoHasFailedWork(row.project_id)) return false;
+      }
+      return true;
+    })
+    .map((row) => {
+      const who = (row.name && row.name !== "this CEO") ? row.name : ceoMoveName(row.project_id);
+      const subject = String(row.subject || "").replace(/^this CEO\b/i, who) || `${who} · ${row.why || row.kind || "Decide"}`;
+      return Object.assign({}, row, { name: who, subject });
+    });
+}
+
+function moveHeadLabel(rows) {
+  const names = [...new Set((rows || []).map((row) => row.name || ceoMoveName(row.project_id)))].filter(Boolean);
+  if (names.length === 1) return `Your move · ${names[0]}`;
+  if (names.length > 1) return `Your move · ${names.length} CEOs`;
+  return "Your move";
+}
+
 function inboxHtml() {
-  const rows = visibleNeedsYou();
+  const rows = operatorMoveRows();
   if (!rows.length) return "";
   const items = rows.map((row) => {
     const ping = row.kind === "brief" ? "" : " ping";
     const subject = row.subject || row.name || "CEO";
     const why = row.why || row.label || "Decide";
+    const choices = needChoices(row).slice(0, 2);
     return `<div class="org-inbox-item${ping}" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
       <b>${escapeHtml(subject)}</b>
       <span>${escapeHtml(why)}</span>
       <div class="org-inbox-actions need-actions">
-        ${choiceButtonsHtml(needChoices(row), row)}
+        ${choiceButtonsHtml(choices, row)}
       </div>
     </div>`;
   }).join("");
   return `<div class="org-inbox">
-    <div class="org-inbox-head">Your move (CEO) · ${rows.length}</div>
+    <div class="org-inbox-head">${escapeHtml(moveHeadLabel(rows))} · ${rows.length}</div>
     ${items}
   </div>`;
 }
@@ -3421,7 +3481,7 @@ function paintHelpPanel() {
   const open = work.open || [];
   const chip = (cfg.activity || {}).eval || {};
   const expired = Number(chip.expired_approvals || 0);
-  const needs = visibleNeedsYou();
+  const needs = operatorMoveRows();
   const ticketItems = open.map((row) => {
     const phase = escapeHtml(row.phase || "received");
     return `<div class="org-inbox-item">
@@ -3437,7 +3497,7 @@ function paintHelpPanel() {
       <b>${escapeHtml(subject)}</b>
       <span>${escapeHtml(why)}</span>
       <div class="org-inbox-actions need-actions">
-        ${choiceButtonsHtml(needChoices(row), row)}
+        ${choiceButtonsHtml(needChoices(row).slice(0, 2), row)}
       </div>
     </div>`;
   }).join("");
@@ -3448,7 +3508,7 @@ function paintHelpPanel() {
   const headCount = needs.length || open.length;
   host.innerHTML = `
     <div class="org-inbox working-on">
-      <div class="org-inbox-head">${needs.length ? `Your move (CEO) · ${needs.length}` : `Working on · ${open.length}`}</div>
+      <div class="org-inbox-head">${needs.length ? `${escapeHtml(moveHeadLabel(needs))} · ${needs.length}` : `Working on · ${open.length}`}</div>
       ${body}
       ${warn}
     </div>`;
@@ -4960,13 +5020,13 @@ function renderChatSchedule(rows, digest, focusId) {
       sections.push(`<details class="cron-stale" data-fold="disabled-roster"><summary>Disabled · ${disabledRoster.length}</summary>${disabledRoster.map((row) => scheduleRosterRowHtml(row, want)).join("")}</details>`);
     }
   } else {
-    const waits = visibleNeedsYou().filter((row) => String(row.project_id || "") === String(projectId || ""));
+    const waits = operatorMoveRows().filter((row) => String(row.project_id || "") === String(projectId || ""));
     if (waits.length) {
-      sections.push(`<h3 class="cron-section">Your move (CEO) · ${waits.length}</h3>`);
+      sections.push(`<h3 class="cron-section">${escapeHtml(moveHeadLabel(waits))} · ${waits.length}</h3>`);
       sections.push(waits.map((row) => `<article class="cron-card">
         <div class="cron-head"><b>${escapeHtml(row.subject || row.name || "CEO")}</b><span>${escapeHtml(row.kind || "")}</span></div>
         <p class="cron-outcome">${escapeHtml(row.why || row.label || "")}</p>
-        <div class="need-actions">${choiceButtonsHtml(needChoices(row), row)}</div>
+        <div class="need-actions">${choiceButtonsHtml(needChoices(row).slice(0, 2), row)}</div>
       </article>`).join(""));
     }
     if (!gatewayRunning) sections.push(gatewayOffHtml());
@@ -5961,6 +6021,7 @@ function renderJob(job) {
     seenCron.add(job.id);
     seenJobIds.add(job.id);
   }
+  if (chatLaneNoise(job)) return;
   if (isTalk(job)) {
     renderTalk(job);
     return;
@@ -6152,6 +6213,15 @@ function renderJob(job) {
   el.appendChild(diffBlock);
 }
 
+function chatLaneNoise(job) {
+  if (!job) return false;
+  if (job.cron || cronJobIsNoise(job)) return true;
+  if (job.login_wall || job.diff_pending) return false;
+  if (jobIsFailed(job)) return false;
+  if ((job.preset === "ops" || job.preset === "think") && opaqueLaneOk(job.text, job.preset)) return true;
+  return false;
+}
+
 function cronJobIsNoise(job) {
   const name = String((job && (job.cron_name || job.name)) || "").trim();
   const slug = name.replace(/\s+/g, "-").toLowerCase();
@@ -6184,7 +6254,7 @@ function isNoiseTurn(turn) {
   if (!turn) return true;
   if (turn.role === "user") return !String(turn.text || "").trim();
   const job = turn.job || {};
-  if (job.cron || cronJobIsNoise(job)) return true;
+  if (job.cron || cronJobIsNoise(job) || chatLaneNoise(job)) return true;
   if (projectId && job.project_id && String(job.project_id) !== String(projectId)) return true;
   const text = job.text || turn.text || "";
   const message = job.message || "";

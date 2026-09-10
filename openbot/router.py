@@ -1004,11 +1004,29 @@ def need_choices(row: dict) -> list[dict]:
     if kind == "brief":
         return [{"id": "open", "label": "Open chat"}]
     if kind == "failed":
+        from .hermes import fail_kind_from_blob
+
         cron_id = str(row.get("cron_id") or "")
+        blob = " ".join(
+            str(row.get(key) or "")
+            for key in ("last_error", "why", "label", "blocker", "text")
+        )
+        fail_kind = fail_kind_from_blob(blob)
+        if fail_kind == "key":
+            return [
+                {"id": "fix_key", "label": "Fix key", "cron_id": cron_id},
+                {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
+            ]
+        if fail_kind == "script":
+            return [
+                {"id": "restore_script", "label": "Restore", "cron_id": cron_id},
+                {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
+            ]
+        if fail_kind == "wallet":
+            return [{"id": "fix_key", "label": "Open Settings", "cron_id": cron_id}]
         return [
-            {"id": "fix_model", "label": "Fix model/key"},
             {"id": "retry", "label": "Retry", "cron_id": cron_id},
-            {"id": "open_detail", "label": "Open detail", "cron_id": cron_id},
+            {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
         ]
     return [{"id": "open", "label": "Open"}]
 
@@ -1029,13 +1047,16 @@ def job_choices(job: dict) -> list[dict]:
         )
     if job.get("diff_pending"):
         return need_choices({"kind": "diff"})
-    if job.get("keep_going") and not job.get("stopped"):
-        label = "Continue"
-        step = job.get("step_count")
-        total = job.get("total_steps")
-        if step and total:
-            label = f"Continue ({step}/{total})"
-        return [{"id": "continue", "label": label}]
+    if job.get("keep_going") and not job.get("stopped") and not job.get("cron"):
+        status = str(job.get("status") or job.get("last_status") or "").lower()
+        failed = bool(job.get("blocker")) or ("error" in status or "fail" in status)
+        if not failed:
+            label = "Continue"
+            step = job.get("step_count")
+            total = job.get("total_steps")
+            if step and total:
+                label = f"Continue ({step}/{total})"
+            return [{"id": "continue", "label": label}]
     status = str(job.get("status") or job.get("last_status") or "").lower()
     cron_id = str(job.get("cron_id") or "")
     failed = bool(job.get("blocker")) or ("error" in status or "fail" in status)
@@ -1059,16 +1080,20 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             continue
         latest[key] = job
     projects = list_projects()
-    names = {str(row.get("id") or ""): str(row.get("name") or row.get("id") or "this CEO") for row in projects}
+    names = {str(row.get("id") or ""): str(row.get("name") or row.get("id") or "Chief of Staff") for row in projects}
     out: list[dict] = []
     live_ids = {str(row.get("id") or "") for row in projects}
     for job in latest.values():
         pid = str(job.get("project_id") or "")
         if pid in RETIRED_CEO_IDS or (pid and pid not in live_ids):
             continue
-        who = names.get(pid) or "this CEO"
+        who = names.get(pid) or ("Chief of Staff" if not pid else pid)
         subject = ""
         why = ""
+        status = str(job.get("status") or job.get("last_status") or "").lower()
+        failed = bool(job.get("blocker") and str(job.get("blocker") or "").strip() not in {"", "—", "ok"}) or (
+            "error" in status or "fail" in status
+        )
         if job.get("login_wall"):
             kind = "login"
             label = f"{who}: a site asked for a login."
@@ -1079,17 +1104,17 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             label = f"{who}: a code change is waiting."
             subject = f"{who} · diff ready"
             why = "Accept or Reject the diff"
-        elif job.get("blocker") and str(job.get("blocker") or "").strip() not in {"", "—", "ok"}:
+        elif failed:
             from .hermes import human_fail_reason
 
             kind = "failed"
             reason = human_fail_reason(
-                f"{job.get('blocker') or ''} {job.get('text') or ''} {job.get('message') or ''}"
+                f"{job.get('blocker') or ''} {job.get('text') or ''} {job.get('message') or ''} {job.get('cron_outcome') or ''}"
             )
             label = f"{who}: failed — {reason}"
             subject = f"{who} · failed"
             why = reason
-        elif job.get("keep_going") and not job.get("stopped"):
+        elif job.get("keep_going") and not job.get("stopped") and not job.get("cron"):
             kind = "continue"
             label = f"{who}: ready for the next step."
             subject = f"{who} · continue"

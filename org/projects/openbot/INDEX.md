@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OttoBot rename PR — chrome, logo, CEO INDEX build law (not UX Round 4).
-Last: Brand branch from master. OTTOBOT · On it. mark + Otto assets.
-Next: Open rename PR; do not merge. Leave board-vitzer-ux-round4 alone.
+Now: OttoBot operator surface — YOUR MOVE names SAA Homes, Restore vs Fix key, Chat is talk.
+Last: Live dogfood — button dump + Continue hid Citation audit 401.
+Next: Open PR. Do not merge. SAA jobs recover via one named CTA, not stampede.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

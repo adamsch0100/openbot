@@ -303,7 +303,8 @@ def _post_cron_card(project_id: str | None, row: dict, hermes_home: str | None =
         "cron_report": report[:4000] or body[:4000],
         "cron_result": report[:4000] or body[:4000],
         "cron_when": when,
-        "keep_going": bool(re.search(r"fail|error", f"{row.get('last_status') or ''} {outcome}", re.I)),
+        # Cron fails belong in Results / YOUR MOVE as failed — not a Continue loop.
+        "keep_going": False,
         "next": nxt,
     }
     write_job(receipt)

@@ -26,7 +26,8 @@ class HandledVisibleUiTests(unittest.TestCase):
         key_block = own[key_i : key_i + 450]
         self.assertIn('status: "CEO"', key_block)
         self.assertIn("Fix key in Settings", key_block)
-        self.assertIn('next: "Your move (CEO) · Fix key in Settings."', key_block)
+        self.assertIn('next: `Your move · ${failMoveWho(row)} · Fix key in Settings.`', key_block)
+        self.assertIn("Fix key in Settings", key_block)
         self.assertNotIn('status: "Auto-retry"', key_block)
         self.assertIn("Never Auto-retry on 401", own)
         self.assertIn("gatewayScar", own)
@@ -76,7 +77,10 @@ class HandledVisibleUiTests(unittest.TestCase):
         self.assertIn('id: "restart_gateway"', js)
         self.assertIn('act === "ask_cos"', js)
         self.assertIn('act === "restore_script"', js)
-        self.assertIn("Your move (CEO)", js)
+        self.assertIn("Your move ·", js)
+        self.assertIn("function ceoMoveName", js)
+        self.assertIn("function operatorMoveRows", js)
+        self.assertIn("function chatLaneNoise", js)
 
     def test_schedule_roster_status_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -115,8 +119,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=145", html)
-        self.assertIn("styles.css?v=145", html)
+        self.assertIn("app.js?v=146", html)
+        self.assertIn("styles.css?v=146", html)
 
 
 
@@ -200,7 +204,8 @@ class HandledVisibleBackendTests(unittest.TestCase):
 
         _, nxt = cron_outcome("error", "", "Script-not-found: scripts/citation_submit.py")
         self.assertIn("Restore script", nxt)
-        self.assertIn("Your move (CEO)", nxt)
+        self.assertIn("Your move ·", nxt)
+        self.assertNotIn("Fix key", nxt)
         self.assertNotIn("Auto-retry", nxt)
 
 
