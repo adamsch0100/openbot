@@ -2148,12 +2148,15 @@ def _gateway_state_roots(home: str | Path | None = None) -> list[Path]:
 _GATEWAY_STALE_NAMES = ("gateway_state.json", "gateway.sock", "gateway.pid")
 
 
-def clear_stale_gateway_state(home: str | Path | None = None) -> dict:
+def clear_stale_gateway_state(
+    home: str | Path | None = None, *, force: bool = False
+) -> dict:
     """Drop gateway_state/sock/pid when the recorded process is gone.
 
     Post-redeploy Hermes often leaves gateway_state.json + gateway.sock claiming
     a dead pid; start then 502s. Also clears legacy /data/hermes/homes/<ceo>.
-    Never clears when the recorded pid is still alive.
+    Never clears when the recorded pid is still alive — unless force=True
+    (Restart UI / hermes status says not running but files remain).
     """
     cleared: list[str] = []
     for root in _gateway_state_roots(home):
@@ -2161,7 +2164,7 @@ def clear_stale_gateway_state(home: str | Path | None = None) -> dict:
             continue
         state_path = root / "gateway_state.json"
         stale = True
-        if state_path.is_file():
+        if not force and state_path.is_file():
             try:
                 import json
 
@@ -2186,7 +2189,26 @@ def clear_stale_gateway_state(home: str | Path | None = None) -> dict:
                     cleared.append(str(path))
             except OSError:
                 pass
-    return {"ok": True, "cleared": cleared, "count": len(cleared)}
+    return {
+        "ok": True,
+        "cleared": cleared,
+        "count": len(cleared),
+        "forced": bool(force),
+    }
+
+
+def _gateway_files_present(home: str | Path | None = None) -> bool:
+    for root in _gateway_state_roots(home):
+        if not root.is_dir():
+            continue
+        for name in _GATEWAY_STALE_NAMES:
+            path = root / name
+            try:
+                if path.exists() or path.is_symlink():
+                    return True
+            except OSError:
+                continue
+    return False
 
 
 def gateway_process_running(text: str) -> bool:
@@ -2231,8 +2253,17 @@ def gateway_status(home: str | Path | None = None, timeout: int = 5) -> dict:
         }
 
 
-def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: int = 30) -> dict:
-    """Start Hermes gateway daemon. Returns immediately if wait=False (lazy start)."""
+def gateway_start(
+    home: str | Path | None = None,
+    wait: bool = False,
+    timeout: int = 30,
+    force: bool = False,
+) -> dict:
+    """Start Hermes gateway daemon. Returns immediately if wait=False (lazy start).
+
+    force=True (Restart UI): stop + force-clear state/sock/pid even when a pid
+    looks alive, then start. Fixes post-redeploy 502s that needed SSH stale clear.
+    """
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
@@ -2247,9 +2278,9 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
     except Exception:
         pass
 
-    # Check if already running
+    # Check if already running (skip when Restart forced a full cycle).
     status = gateway_status(home, timeout=5)
-    if status.get("running"):
+    if status.get("running") and not force:
         return {
             "ok": True,
             "code": 0,
@@ -2259,13 +2290,27 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
             "go_pool_synced": True,
         }
 
+    if force:
+        try:
+            gateway_stop(home, timeout=8)
+        except Exception:
+            pass
+
     # Not running — drop dead-pid gateway_state/sock (canonical + legacy) before start.
-    cleared = clear_stale_gateway_state(home)
+    # If Hermes says down but files remain (false-alive pid / PermissionError), force-clear.
+    cleared = clear_stale_gateway_state(home, force=force)
+    if (not force) and (not cleared.get("count")) and _gateway_files_present(home):
+        cleared = clear_stale_gateway_state(home, force=True)
 
     def _finish(result: dict) -> dict:
         if cleared.get("count"):
             result = dict(result)
             result["cleared_stale"] = cleared.get("cleared") or []
+            if cleared.get("forced"):
+                result["cleared_stale_forced"] = True
+        if force:
+            result = dict(result)
+            result["forced"] = True
         return result
 
     def _attempt() -> dict:
@@ -2339,14 +2384,17 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
         or "502" in err_blob
     )
     if needs_retry:
-        cleared2 = clear_stale_gateway_state(home)
-        if cleared2.get("count") or cleared.get("count"):
+        cleared2 = clear_stale_gateway_state(home, force=True)
+        if cleared2.get("count") or cleared.get("count") or force:
             result = _attempt()
             result = dict(result)
             result["retried_after_stale_clear"] = True
             merged = list(cleared.get("cleared") or []) + list(cleared2.get("cleared") or [])
             if merged:
                 result["cleared_stale"] = merged
+                result["cleared_stale_forced"] = True
+            if force:
+                result["forced"] = True
             return result
     return _finish(result)
 
