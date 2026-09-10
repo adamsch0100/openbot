@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Fixed OpenCode session wipe in ensure_org loop. PR #52 open, ready to merge.
-Last: Visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes; receipts name the engine
-Next: Merge PR #52 when green. Then SAA Homes folder+session should stick on every org refresh.
+Now: PR #52 complete: session carry fix + Anthropic failover (Vitzer law). MERGE-READY when green.
+Last: Fixed OpenCode session wipe in ensure_org loop. Added provider error failover (401/auth → retry next model).
+Next: Merge #52. SAA Homes Ops jobs will fail over to Go/OpenRouter instead of hard-failing on stale Anthropic keys.
 Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes. GBP login: skip. Do not stampede.
 
 ## Vault
