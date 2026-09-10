@@ -42,14 +42,20 @@ body {
   gap: 8px;
   min-width: 0;
 }
-.mark-row { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.mark-row { display: flex; gap: 12px; align-items: center; min-width: 0; }
 .mark-gem {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
   display: block;
   flex: 0 0 auto;
-  filter: drop-shadow(0 0 10px rgba(201, 166, 107, 0.35));
+  border-radius: 9px;
+}
+.mark-type {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.05;
 }
 .mark-lockup {
   display: block;
@@ -59,11 +65,17 @@ body {
 }
 .word {
   font-family: var(--display);
-  letter-spacing: 0.22em;
-  font-size: 12px;
-  color: var(--bronze);
+  letter-spacing: 0.06em;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  text-transform: lowercase;
 }
-.sub { letter-spacing: 0.32em; font-size: 9px; color: var(--muted); }
+.sub {
+  letter-spacing: 0.02em;
+  font-size: 11px;
+  color: var(--muted);
+}
 .stages {
   display: flex;
   justify-content: center;
@@ -703,14 +715,78 @@ body {
   min-height: 0;
   min-width: 0;
 }
-.chat-shell.work-open .stream,
-.chat-shell.activity-open .stream,
+/* Activity open: keep stream + composer; sheet is a split drawer above chat */
 .chat-shell.work-open .index,
 .chat-shell.activity-open .index,
 .chat-shell.work-open .chat-context,
 .chat-shell.activity-open .chat-context,
 .chat-shell.work-open .lanes,
 .chat-shell.activity-open .lanes { display: none; }
+.chat-shell.work-open .stream,
+.chat-shell.activity-open .stream {
+  display: flex;
+  flex: 1 1 38%;
+  min-height: 7rem;
+}
+.chat-shell.work-open .activity-sheet:not([hidden]),
+.chat-shell.activity-open .activity-sheet:not([hidden]) {
+  display: flex;
+  flex: 0 1 44%;
+  max-height: min(44%, 22rem);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2px;
+  background: var(--bg);
+}
+.work-status {
+  display: grid;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 6px 2px 8px;
+  border-top: 1px solid var(--line);
+}
+.work-status[hidden] { display: none !important; }
+.work-status-live {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.work-status-live.on { color: #d8b36a; }
+.work-status-live[hidden] { display: none !important; }
+.work-status-index {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.work-status-index > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.work-status-index dt {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.work-status-index dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.work-status-index dd.blocker { color: var(--danger); }
+.work-status-index dd.empty { color: var(--muted); }
 .diff-fold summary {
   min-height: 44px;
   display: flex;
@@ -1747,9 +1823,15 @@ details.cron-card[open] > .need-actions { display: flex; }
   max-width: 28rem;
   min-width: 0;
 }
+.empty-stream .empty-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  display: block;
+}
 .empty-kicker {
   margin: 0;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   font-size: 10px;
   color: var(--bronze);
@@ -2531,10 +2613,11 @@ footer a { color: var(--bronze); }
   .bar-left { flex: 0 0 auto; }
   .bar-right { flex: 1 1 0; min-width: 0; margin-left: auto; }
   
-  /* Compact header: hide "On it." sub, keep gem + OTTOBOT */
+  /* Compact header: hide "On it." sub, keep Otto + ottobot */
   .sub { display: none; }
-  .word { font-size: 11px; letter-spacing: 0.18em; }
-  .mark-gem { width: 24px; height: 24px; }
+  .word { font-size: 13px; letter-spacing: 0.05em; }
+  .mark-gem { width: 28px; height: 28px; border-radius: 7px; }
+  .mark-row { gap: 10px; }
   
   /* MOBILE COMPOSER FIX: Compact "Talking to" label */
   .composer-who {
@@ -2637,17 +2720,73 @@ footer a { color: var(--bronze); }
   .receipt-go { display: none; }
   .index { display: none; }
   .ceo-brief { display: none; }
-  .ceo-live { display: none; }
-  .chat-context { display: none; }
+  /* Phone: keep ceo-live as one line; hide the rest of chat-context */
+  .chat-context {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+  }
+  .chat-context .index,
+  .chat-context .ceo-brief { display: none !important; }
+  .ceo-live:not([hidden]) {
+    display: flex;
+    margin: 0;
+    padding: 2px 0 4px;
+    max-width: 100%;
+  }
+  .ceo-live[hidden] { display: none !important; }
+  .ceo-pulse {
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+  }
+  .ceo-pulse-copy {
+    min-width: 0;
+    flex: 1;
+  }
+  .ceo-pulse-copy b {
+    display: block;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ceo-pulse-copy span,
+  .ceo-pulse-result,
+  .ceo-next { display: none; }
   .composer-who { display: none; }
   .chat-shell.work-open .stream,
-  .chat-shell.activity-open .stream,
+  .chat-shell.activity-open .stream {
+    display: flex;
+    flex: 1 1 36%;
+    min-height: 6rem;
+  }
   .chat-shell.work-open .index,
   .chat-shell.activity-open .index,
   .chat-shell.work-open .chat-context,
   .chat-shell.activity-open .chat-context,
   .chat-shell.work-open .lanes,
   .chat-shell.activity-open .lanes { display: none; }
+  .chat-shell.work-open .activity-sheet:not([hidden]),
+  .chat-shell.activity-open .activity-sheet:not([hidden]) {
+    display: flex;
+    flex: 0 1 42%;
+    max-height: min(42%, 40vh);
+  }
+  .work-status-index {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .work-status-index > div {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 8px;
+  }
+  .work-status-index dd {
+    -webkit-line-clamp: 1;
+  }
   /* calm phone work lane */
   .chat-head-row {
     flex-direction: column;
@@ -3124,7 +3263,7 @@ footer a { color: var(--bronze); }
     max-width: 100%;
     overflow: hidden;
   }
-  .mark-gem { width: 24px; height: 24px; }
+  .mark-gem { width: 26px; height: 26px; border-radius: 7px; }
   .word { display: none; }
   .meter { display: none; }
   .stage-full { display: none; }
@@ -3325,14 +3464,20 @@ footer a { color: var(--bronze); }
   
   /* Empty state on phone */
   .empty-stream {
-    padding: 20px 8px 30px;
+    padding: 28px 8px 36px;
+    gap: 10px;
+  }
+  .empty-stream .empty-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
   }
   .empty-stream h1 {
-    font-size: 20px;
-    line-height: 1.3;
+    font-size: 22px;
+    line-height: 1.25;
   }
   .empty-stream p {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
   }
   .mobile-cta {
@@ -3605,12 +3750,15 @@ footer a { color: var(--bronze); }
     width: min(86rem, 100%);
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     column-gap: 20px;
     align-content: stretch;
   }
-  .chat-head,
+  .chat-head { grid-column: 1 / -1; grid-row: 1; }
+  .work-status,
   .composer { grid-column: 1 / -1; }
+  .work-status { grid-row: 3; }
+  .composer { grid-row: 4; }
   .stream {
     grid-column: 1;
     grid-row: 2;
@@ -3629,6 +3777,8 @@ footer a { color: var(--bronze); }
     display: flex;
     grid-column: 1;
     grid-row: 2;
+    flex: unset;
+    min-height: 0;
   }
   .chat-shell.work-open .chat-context,
   .chat-shell.activity-open .chat-context { display: none; }
@@ -3638,7 +3788,11 @@ footer a { color: var(--bronze); }
     grid-column: 2;
     grid-row: 2;
     min-height: 0;
+    flex: unset;
+    max-height: none;
+    border-bottom: 0;
     border-left: 1px solid var(--line);
+    margin-bottom: 0;
     padding-left: 16px;
   }
 }

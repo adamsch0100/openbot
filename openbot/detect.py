@@ -113,7 +113,7 @@ def detect() -> dict:
         install=OPENCODE_INSTALL,
     )
     return {
-        "board": {"name": "OpenBot board", "present": True},
+        "board": {"name": "OttoBot board", "present": True},
         "hermes": {
             **asdict(hermes),
             "install_cmd": HERMES_INSTALL_CMD_WIN if os.name == "nt" else HERMES_INSTALL_CMD_UNIX,

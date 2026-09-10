@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=3" />
   <link rel="apple-touch-icon" href="/favicon.png?v=3" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=124" />
+  <link rel="stylesheet" href="/styles.css?v=125" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -115,9 +115,9 @@
     <div class="bar-left">
       <button type="button" class="mobile-org-toggle" id="mobileOrgToggle" aria-label="Open menu">☰</button>
       <div class="mark-row">
-        <img class="mark-gem" src="/favicon.png?v=3" alt="" width="36" height="36" />
-        <div>
-          <div class="word">OTTOBOT</div>
+        <img class="mark-gem" src="/otto.svg" alt="" width="36" height="36" />
+        <div class="mark-type">
+          <div class="word">ottobot</div>
           <div class="sub">On it.</div>
         </div>
       </div>
@@ -203,6 +203,14 @@
           <div id="scheduleList" class="schedule" hidden></div>
         </details>
       </aside>
+      <div class="work-status" id="workStatus" hidden>
+        <p class="work-status-live" id="workStatusLive" hidden></p>
+        <dl class="work-status-index">
+          <div><dt>Now</dt><dd id="workNow">—</dd></div>
+          <div><dt>Next</dt><dd id="workNextLine">—</dd></div>
+          <div><dt>Blocker</dt><dd id="workBlocker">—</dd></div>
+        </dl>
+      </div>
       <form class="composer" id="form">
         <input id="folder" type="hidden" />
         <input id="attachInput" type="file" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.cpp,.c,.h,.go,.rs,.rb,.php,.swift,.kt,.sql,.yaml,.yml,.toml" />
@@ -441,7 +449,7 @@
             <div id="ceoPanelBody"></div>
           </section>
           <section class="drawer-panel" id="panel-import">
-            <p class="lede">On the old Hermes, run <code>hermes backup</code>. Paste the zip here. OpenBot runs official <code>hermes import</code> into a private home for that CEO. It does not overwrite this machine’s default Hermes.</p>
+            <p class="lede">On the old Hermes, run <code>hermes backup</code>. Paste the zip here. OttoBot runs official <code>hermes import</code> into a private home for that CEO. It does not overwrite this machine’s default Hermes.</p>
             <div class="field">
               <label for="hermesZip">Backup zip</label>
               <input id="hermesZip" type="text" autocomplete="off" placeholder="C:\path\hermes-backup-2026-08-31.zip" />
@@ -486,7 +494,7 @@
           </section>
           <section class="drawer-panel" id="panel-channels">
             <p class="lede">One brain per CEO. Two doors into it.</p>
-            <p class="muted">OpenBot Chat is the operator surface. Think, Research, and Ops resume the imported Hermes Telegram session. CEO Chat gets a short Telegram slice for context (fresh oneshot — does not --resume). Telegram is live on this instance. Replies here do not post into Telegram.</p>
+            <p class="muted">OttoBot Chat is the operator surface. Think, Research, and Ops resume the imported Hermes Telegram session. CEO Chat gets a short Telegram slice for context (fresh oneshot — does not --resume). Telegram is live on this instance. Replies here do not post into Telegram.</p>
             <p class="muted" id="channelStatus">Select a CEO to see its Telegram session.</p>
             <div id="channelCard" class="usage-card hidden"></div>
           </section>
@@ -657,8 +665,8 @@
             <p class="lede">Advanced features and experimental settings. Handle with care.</p>
             <h4>Self-Build Loop</h4>
             <p class="muted">
-              OpenBot dogfoods itself: weekly routine implements the next ROADMAP item and opens a PR. 
-              Uses cheap OpenCode Go seats (not PAYG). Default OFF — enable to let OpenBot improve itself.
+              OttoBot dogfoods itself: weekly routine implements the next ROADMAP item and opens a PR.
+              Uses cheap OpenCode Go seats (not PAYG). Default OFF — enable to let OttoBot improve itself.
             </p>
             <label class="check">
               <input id="enableSelfBuild" type="checkbox" />
@@ -695,7 +703,7 @@
             </form>
           </section>
           <section class="drawer-panel" id="panel-about">
-            <p class="muted" id="aboutMark">OTTOBOT · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.</p>
+            <p class="muted" id="aboutMark">ottobot · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.</p>
             <p class="muted" id="aboutCredit">OttoBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly). Not affiliated with, sponsored by, or endorsed by those projects.</p>
             <div class="actions">
               <button type="button" class="ghost-btn" id="aboutOpenCode">Open OpenCode</button>
@@ -708,7 +716,7 @@
   </div>
 
   <footer>
-    <span id="boardMark">OTTOBOT · On it.</span>
+    <span id="boardMark">ottobot · On it.</span>
   </footer>
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>

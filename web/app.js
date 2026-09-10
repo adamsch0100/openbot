@@ -62,14 +62,14 @@ function isLiveBoard() {
 
 function paintBoardMark() {
   const live = isLiveBoard();
-  const mark = live ? "OTTOBOT" : "OTTOBOT · On it.";
+  const mark = live ? "ottobot" : "ottobot · On it.";
   const el = $("boardMark");
   if (el) el.textContent = mark;
   const about = $("aboutMark");
   if (about) {
     about.textContent = live
-      ? "OTTOBOT. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
-      : "OTTOBOT · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
+      ? "ottobot. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
+      : "ottobot · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
   }
   const credit = $("aboutCredit");
   if (credit && cfg && cfg.credit) credit.textContent = cfg.credit;
@@ -278,7 +278,7 @@ function escapeHtml(s) {
   }[c]));
 }
 
-const PACKET_LINE = /^(You are the |You are Chief of Staff|You report to Chief of Staff|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in OpenBot Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |.+ CEO — reports to Chief of Staff)/i;
+const PACKET_LINE = /^(You are the |You are Chief of Staff|You report to Chief of Staff|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in (OpenBot|OttoBot) Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |.+ CEO — reports to Chief of Staff)/i;
 
 function statusOnly(text) {
   const rows = String(text || "").split("\n").map((line) => line.trim()).filter(Boolean);
@@ -574,6 +574,49 @@ function renderIndex(text) {
   const cleaned = cleanBotText(text);
   if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty brief)";
   if ($("indexSummary")) $("indexSummary").textContent = `Brief · ${indexNow(cleaned)}`;
+  paintWorkStatus();
+}
+
+function indexLineUseful(value) {
+  const raw = cleanBotText(String(value || "")).trim();
+  if (!raw || raw === "—" || /^source of truth$/i.test(raw)) return "";
+  return raw;
+}
+
+function paintWorkStatus() {
+  const el = $("workStatus");
+  const liveEl = $("workStatusLive");
+  const nowEl = $("workNow");
+  const nextEl = $("workNextLine");
+  const blockEl = $("workBlocker");
+  if (!el) return;
+  const project = currentProject();
+  const text = cleanBotText(selectedIndexText());
+  const now = indexLineUseful(project && project.index_now) || indexLineUseful(indexField(text, "Now"));
+  const next = indexLineUseful(project && project.index_next) || indexLineUseful(indexField(text, "Next"));
+  const blocker = indexLineUseful(project && project.index_blocker) || indexLineUseful(indexField(text, "Blocker"));
+  if (nowEl) {
+    nowEl.textContent = now || "—";
+    nowEl.classList.toggle("empty", !now);
+  }
+  if (nextEl) {
+    nextEl.textContent = next || "—";
+    nextEl.classList.toggle("empty", !next);
+  }
+  if (blockEl) {
+    blockEl.textContent = blocker || "—";
+    blockEl.classList.toggle("empty", !blocker);
+    blockEl.classList.toggle("blocker", Boolean(blocker));
+  }
+  el.hidden = false;
+  if (liveEl) {
+    const story = quietStory(runningStory());
+    const showLive = Boolean(scheduleOpen && story && story.line);
+    liveEl.hidden = !showLive;
+    liveEl.classList.toggle("on", Boolean(showLive && story.on));
+    liveEl.classList.toggle("warn", Boolean(showLive && story.warn && !story.on));
+    liveEl.textContent = showLive ? story.line : "";
+  }
 }
 
 function moneyPair(input, output) {
@@ -2232,7 +2275,7 @@ function fillChannels() {
   card.innerHTML = `
     <div><dt>Hermes home</dt><dd>${escapeHtml(tools.hermes_home || "—")}</dd></div>
     <div><dt>Session</dt><dd>${escapeHtml(sid || "—")}</dd></div>
-    <div><dt>Live Telegram</dt><dd>This OpenBot instance owns the bots. Reply in Telegram for that thread.</dd></div>
+    <div><dt>Live Telegram</dt><dd>This OttoBot instance owns the bots. Reply in Telegram for that thread.</dd></div>
   `;
 }
 
@@ -2786,6 +2829,7 @@ function renderBotMeta(opts) {
   paintScheduleButton();
   const cachedPack = digestCache.get(projectId) || {};
   paintCeoBrief(cachedPack.digest || cachedPack);
+  paintWorkStatus();
   paintCeoLive(cachedPack);
   if (!opts || !opts.skipSpend) loadSpend();
 }
@@ -3337,6 +3381,7 @@ function paintPulse() {
   }
   paintEmbedLive();
   paintWorkTabs();
+  paintWorkStatus();
 }
 
 function paintCeoLive(pack) {
@@ -3462,6 +3507,7 @@ function paintWorkSurface() {
   const lanes = $("laneStatus");
   if (lanes) lanes.hidden = true;
   paintActivityTitle();
+  paintWorkStatus();
 }
 
 function closeSchedule() {
@@ -4744,17 +4790,16 @@ function emptyStreamHtml() {
   const worker = currentWorker();
   const text = cleanBotText(selectedIndexText());
   const now = indexNow(text);
-  const nxt = (text.match(/^Next:\s*(.*)$/m) || [])[1] || "";
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? project.name : "Chief of Staff";
-  let lead = "Type here.";
+  let lead = "Ready when you are. Ask what’s going on, or open a CEO.";
   let showCTA = !project;
   if (worker && project) {
-    lead = `${worker.name} on ${project.name}. Type here.`;
+    lead = `${worker.name} on ${project.name}. Say what you need — On it.`;
     showCTA = false;
   } else if (project) {
-    lead = "Type here.";
+    lead = "Say what you need. OttoBot will route it.";
     showCTA = false;
   }
   const nowLine = now && now !== "source of truth" && now !== "—"
@@ -4763,6 +4808,7 @@ function emptyStreamHtml() {
   const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
   return `
     <div class="empty-stream" id="streamEmpty">
+      <img class="empty-mark" src="/otto.svg" alt="" width="44" height="44" />
       <p class="empty-kicker">${escapeHtml(whereLabel())}</p>
       <h1>${escapeHtml(title)}</h1>
       ${nowLine}
