@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Phone-first board — Doing / Next / Results as a full-width 44px lane. Engine visibility stays.
-Last: Visibility UX on Chat + OpenCode + Hermes. Results hide auth dumps and retry boilerplate.
-Next: Hard-refresh ?v=116. Skip conversion-surge, Competition watch, city-audit-batch-4. Leave PR #48 untouched.
+Now: OpenBot phone board — no page-wide horizontal scroll at ~390px. Doing / Next / Results stay the 44px lane.
+Last: PR #55 phone-first lane is on master. Header fits; overflow-x hidden (not 100vw).
+Next: Hard-refresh ?v=117. Close CA #57 without merging. Skip conversion-surge, Competition watch, city-audit-batch-4. Leave PR #48 untouched.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
