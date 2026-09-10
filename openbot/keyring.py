@@ -719,20 +719,31 @@ def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None =
     chosen = activate_for_engine("OpenCode", prefer=prefer, provider="opencode")
     if not chosen:
         chosen = activate_for_engine("OpenCode", prefer=prefer)
-    activate_for_engine("OpenCode", prefer=prefer, provider="openrouter")
+    
+    # Only activate OpenRouter if it's in the prefer/fallback chain
+    has_openrouter = bool(ordered_account_ids(prefer=prefer, provider="openrouter", engine="OpenCode"))
+    if has_openrouter:
+        activate_for_engine("OpenCode", prefer=prefer, provider="openrouter")
+    
     activate_for_engine("Hermes Agent", prefer=prefer, provider="opencode") or activate_for_engine(
         "Hermes Agent", prefer=prefer
     )
-    activate_for_engine("Hermes Agent", prefer=prefer, provider="openrouter")
+    
+    # Only activate OpenRouter for Hermes if it's in the prefer/fallback chain
+    has_openrouter_hermes = bool(ordered_account_ids(prefer=prefer, provider="openrouter", engine="Hermes Agent"))
+    if has_openrouter_hermes:
+        activate_for_engine("Hermes Agent", prefer=prefer, provider="openrouter")
+    
     if hermes_home_dir:
+        # Only write keys that are in the prefer/fallback chain
+        # Never write ANTHROPIC keys
+        allowed_keys = ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY", "OPENCODE_GO_API_KEY"]
+        if has_openrouter_hermes:
+            allowed_keys.append("OPENROUTER_API_KEY")
+        
         updates = {
             name: os.environ[name]
-            for name in (
-                "OPENCODE_API_KEY",
-                "OPENCODE_ZEN_API_KEY",
-                "OPENCODE_GO_API_KEY",
-                "OPENROUTER_API_KEY",
-            )
+            for name in allowed_keys
             if os.environ.get(name)
         }
         if updates:
