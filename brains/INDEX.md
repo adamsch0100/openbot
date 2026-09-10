@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #53 (OpenCode Go provider fix on top of #52) ready for merge — tested and verified
-Last: Fixed split_model to map OpenCode Go models to opencode-go provider (after #52 session carry + Anthropic failover)
-Next: Merge PR #53, then continue from Chief of Staff — no infrastructure changes needed
+Now: PR #53 merged (OpenCode Go provider fix). OpenCode/deepseek-v4-flash now calls opencode-go, not Anthropic.
+Last: Rebased #53 onto #52. Both session carry + Anthropic failover AND split_model Go mapping are in master.
+Next: Continue from Chief of Staff — no infrastructure changes needed
 Blocker: —
 
 ## Vault
