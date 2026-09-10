@@ -203,22 +203,29 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
     return env
 
 
-def _opencode_env() -> dict[str, str]:
+def _opencode_env(folder: str | None = None) -> dict[str, str]:
     env = os.environ.copy()
     # `opencode web` always calls npm `open`. A non-browser BROWSER value
     # makes that fail silently so the UI stays in the OpenBot iframe.
     env["BROWSER"] = os.environ.get("OPENBOT_ENGINE_BROWSER", ":")
     data = os.environ.get("OPENBOT_DATA_DIR", "").strip()
-    if data:
-        root = Path(data)
-        for key, name in (
-            ("XDG_DATA_HOME", "xdg"),
-            ("XDG_STATE_HOME", "xdg-state"),
-            ("XDG_CACHE_HOME", "xdg-cache"),
-        ):
-            path = root / name
-            path.mkdir(parents=True, exist_ok=True)
-            env.setdefault(key, str(path))
+    root = Path(data) if data else Path("/data")
+    # Per-CEO XDG so Cos /app worktrees don't pollute secondary CEO project switchers.
+    ceo = ""
+    try:
+        p = Path(folder).resolve() if folder else None
+        if p and p.is_dir() and "workspaces" in p.parts:
+            ceo = p.name
+    except OSError:
+        ceo = ""
+    for key, name in (
+        ("XDG_DATA_HOME", "xdg"),
+        ("XDG_STATE_HOME", "xdg-state"),
+        ("XDG_CACHE_HOME", "xdg-cache"),
+    ):
+        path = (root / "opencode-xdg" / ceo / name) if ceo else (root / name)
+        path.mkdir(parents=True, exist_ok=True)
+        env[key] = str(path)
     return env
 
 
@@ -630,16 +637,27 @@ def _start_opencode_web(folder: str | None = None, project_id: str | None = None
         pass
     _push_wallets(folder=target)
     if _port_open("127.0.0.1", OPENCODE_WEB_PORT):
-        # Official OpenCode web can reuse OpenCode web across CEO folders.
-        _opencode_cwd = target
-        sid = _open_opencode_session(target, Path(target).name) or _opencode_session_id
-        _aim_opencode_go_model(sid or "", target)
-        status = opencode_web_status()
-        status["ok"] = True
-        status["folder"] = target
-        status["session_id"] = sid or ""
-        status["url"] = opencode_embed_url(target, sid)
-        return status
+        prev = str(_opencode_cwd or "").rstrip("/\\")
+        want = str(target or "").rstrip("/\\")
+        # Retarget process when CEO folder changes so Cos /app tabs don't stick.
+        if prev and want and prev != want:
+            _kill(_opencode_proc)
+            _opencode_proc = None
+            _kill_port(OPENCODE_WEB_PORT)
+            for _ in range(20):
+                if not _port_open("127.0.0.1", OPENCODE_WEB_PORT):
+                    break
+                time.sleep(0.2)
+        else:
+            _opencode_cwd = target
+            sid = _open_opencode_session(target, Path(target).name) or _opencode_session_id
+            _aim_opencode_go_model(sid or "", target)
+            status = opencode_web_status()
+            status["ok"] = True
+            status["folder"] = target
+            status["session_id"] = sid or ""
+            status["url"] = opencode_embed_url(target, sid)
+            return status
     board = os.environ.get("OPENBOT_HOST", "127.0.0.1")
     board_port = os.environ.get("OPENBOT_PORT", "8787")
     origin = f"http://{board}:{board_port}"
@@ -663,7 +681,7 @@ def _start_opencode_web(folder: str | None = None, project_id: str | None = None
         "cwd": target if Path(target).is_dir() else _work_dir(),
         "stdout": log_handle,
         "stderr": log_handle,
-        "env": _opencode_env(),
+        "env": _opencode_env(target),
         **_hidden_kwargs(),
     }
     try:

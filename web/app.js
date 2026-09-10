@@ -3629,8 +3629,14 @@ function paintEmbedLive() {
   const hermes = quietStory(engineStory("Hermes Agent"));
   [["ocLive", oc], ["hermesLive", hermes]].forEach(([id, story]) => {
     const el = $(id);
-    if (!el || !story || !story.line) return;
-    el.hidden = false;
+    if (!el) return;
+    if (!story || !story.line) {
+      el.hidden = true;
+      return;
+    }
+    const idleNoise = !story.on && /^Done · (OpenCode|Hermes(?: Agent)?)\s*$/i.test(String(story.line || ""));
+    el.hidden = idleNoise;
+    if (el.hidden) return;
     el.classList.toggle("on", story.on);
     el.classList.toggle("warn", Boolean(story.warn) && !story.on);
     el.textContent = story.line;
@@ -5117,7 +5123,7 @@ function emptyStreamHtml() {
   const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
   return `
     <div class="empty-stream" id="streamEmpty">
-      <img class="empty-mark" src="/otto.svg" alt="" width="44" height="44" />
+      <img class="empty-mark" src="/otto.png?v=4" alt="OttoBot" width="44" height="44" />
       <p class="empty-kicker">${escapeHtml(whereLabel())}</p>
       <h1>${escapeHtml(title)}</h1>
       ${nowLine}
@@ -5617,12 +5623,23 @@ function reloadEngineFrame(frameId, url, token) {
   frame.src = url;
 }
 
+function calmAimLine(name, folder) {
+  const pretty = String(name || "").trim();
+  const leaf = shortLeaf(folder);
+  if (!leaf) return pretty || "Ready";
+  if (!pretty) return leaf;
+  if (pretty.toLowerCase() === leaf.toLowerCase()) return pretty;
+  const slug = pretty.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (slug && (slug === leaf.toLowerCase() || leaf.toLowerCase() === slug)) return pretty;
+  return pretty;
+}
+
 async function startOpenCode() {
   const aim = currentAim();
   const folder = aim.folder || (($("folder") && $("folder").value.trim()) || lastOcFolder || null);
-  if ($("ocTitle")) $("ocTitle").textContent = `OpenCode · ${aim.name}`;
+  if ($("ocTitle")) $("ocTitle").textContent = "OpenCode";
   if (!ocStarted) {
-    paintEmbedAim("ocStatus", folder ? `Starting · ${shortLeaf(folder)}` : `Starting · ${aim.name}`);
+    paintEmbedAim("ocStatus", folder ? `Starting · ${calmAimLine(aim.name, folder)}` : "Starting…");
   }
   const res = await fetch("/api/engines/opencode/web", {
     method: "POST",
@@ -5639,7 +5656,7 @@ async function startOpenCode() {
   const url = data.url || "/engine/opencode/";
   const aimed = data.folder || folder || "";
   const sid = data.session_id || "";
-  paintEmbedAim("ocStatus", aimed ? `${aim.name} · ${shortLeaf(aimed)}` : `${aim.name} · OpenCode is up.`);
+  paintEmbedAim("ocStatus", aimed ? calmAimLine(aim.name, aimed) : "OpenCode is up.");
   setEmbedOpen("ocOpen", url);
   reloadEngineFrame("ocFrame", url, `${aimed}|${sid}`);
   lastOcFolder = aimed;
@@ -5651,7 +5668,7 @@ async function startHermes() {
   const aim = currentAim();
   const home = aim.hermesHome || "";
   const sid = aim.sessionId || "";
-  if ($("hermesTitle")) $("hermesTitle").textContent = `Hermes · ${aim.name}`;
+  if ($("hermesTitle")) $("hermesTitle").textContent = "Hermes";
   paintEmbedAim("hermesAim", "Starting…");
   hermesFailed = false;
   syncHermesHint();
@@ -5680,7 +5697,7 @@ async function startHermes() {
   if ($("hermesStatus")) $("hermesStatus").textContent = "";
   const count = Number(data.session_count || 0);
   const title = String(data.session_title || "").trim();
-  const bits = [aim.name, aimed ? shortLeaf(aimed) : "Home attached"];
+  const bits = [aimed ? calmAimLine(aim.name, aimed) : (aim.name || "Home attached")];
   if (count) bits.push(`${count.toLocaleString()} sessions`);
   if (title) bits.push(`Telegram · ${title}`);
   paintEmbedAim("hermesAim", bits.join(" · "));

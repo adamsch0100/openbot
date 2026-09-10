@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="OttoBot">
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="OttoBot">
   <rect width="128" height="128" fill="#000"/>
   <!-- antenna -->
   <line x1="64" y1="18" x2="64" y2="28" stroke="#8a8f9a" stroke-width="4" stroke-linecap="round"/>
