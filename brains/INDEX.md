@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Phone board — no page-wide horizontal scroll at ~390px. Doing / Next / Results stay the 44px lane.
-Last: PR #55 phone-first lane is on master. Header fits Chat / Code / Hermes; overflow-x hidden (not 100vw).
-Next: Hard-refresh ?v=117. Close CA #57 without merging (pre-#55 + 100vw). Leave PR #48 untouched.
-Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
+Now: Fixed railway SSH PID leak. PR #59 open on adamsch0100/openbot master.
+Last: Stopped unbounded railway-ssh accumulation in overlay_saa_live_background() loop — hard-reap on timeout (killpg), single-flight lock, coalesced SSH (2 not 3), interval 12s→120s. 8 new regression tests. Board engine.
+Next: Await merge approval. No Hermes redeploy needed. Overlay still works from cache when SSH fails.
+Blocker: None. Phone board (#55) shipped. Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
 
