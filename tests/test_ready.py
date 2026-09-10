@@ -42,7 +42,7 @@ class ReadyTests(unittest.TestCase):
         self.assertEqual(job.get("preset"), "cos")
         text = job.get("text") or ""
         self.assertTrue(text)
-        self.assertIn("OpenBot", text)
+        self.assertIn("OttoBot", text)
         self.assertNotIn("secrets.local.json", text)
 
     def test_board_swallows_client_abort(self):
@@ -56,10 +56,10 @@ class ReadyTests(unittest.TestCase):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         server = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
         self.assertIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
-        self.assertIn("OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
+        self.assertIn("OttoBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
         self.assertIn("id=\"aboutCredit\"", html)
-        self.assertIn("app.js?v=123", html)
-        self.assertIn("styles.css?v=123", html)
+        self.assertIn("app.js?v=124", html)
+        self.assertIn("styles.css?v=124", html)
         self.assertIn("activity-sheet", html)
         self.assertIn("route-hatch", html)
         self.assertIn("id=\"closeActivity\"", html)

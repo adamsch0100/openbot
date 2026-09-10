@@ -2523,7 +2523,7 @@ def main() -> None:
     
     httpd = BoardServer((host, port), Handler)
     url = f"http://{host}:{port}"
-    print(f"OpenBot board {url}", flush=True)
+    print(f"OttoBot board {url}", flush=True)
     print(CREDIT, flush=True)
     print("Engines:", json.dumps(detect()), flush=True)
     threading.Thread(

@@ -234,8 +234,7 @@ class SimpleBoardUiTests(unittest.TestCase):
     def test_credit_stays_on_the_board(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         self.assertIn("id=\"aboutCredit\"", html)
-        self.assertIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
-        self.assertIn("Hermes Agent", html)
+        self.assertIn("OttoBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
         self.assertIn("OpenCode", html)
         self.assertIn("activity-sheet", html)
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

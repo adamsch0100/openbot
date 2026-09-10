@@ -1,10 +1,10 @@
 # INDEX
 
-Source of truth for this OpenBot instance. Status questions read this file only.
+Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: OpenBot Round 4 UX PR — Chat+Tools nav, engines bind Chat CEO, credit in About.
-Last: #66 Activity sheet is on master. BrandMark Keep going restored.
-Next: Review the Round 4 UX PR. Leave PR #48 untouched. Leave SEO/Hermes alone.
+Now: OttoBot rename PR — product chrome + logo + CEO INDEX build law (separate from UX Round 4).
+Last: Branched brand-ottobot-rename from master. OTTOBOT · On it. mark, Otto assets, `.cursor/rules/ceo-index-build.mdc`.
+Next: Open rename PR; do not merge. Leave board-vitzer-ux-round4 alone.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
