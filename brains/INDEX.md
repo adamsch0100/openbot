@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #52 complete: session carry fix + Anthropic failover (Vitzer law). MERGE-READY when green.
-Last: Fixed OpenCode session wipe in ensure_org loop. Added provider error failover (401/auth → retry next model).
-Next: Merge #52. SAA Homes Ops jobs will fail over to Go/OpenRouter instead of hard-failing on stale Anthropic keys.
-Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes. GBP login: skip. Do not stampede.
+Now: PR #53 (OpenCode Go provider fix on top of #52) ready for merge — tested and verified
+Last: Fixed split_model to map OpenCode Go models to opencode-go provider (after #52 session carry + Anthropic failover)
+Next: Merge PR #53, then continue from Chief of Staff — no infrastructure changes needed
+Blocker: —
 
 ## Vault
 

@@ -118,7 +118,16 @@ def split_model(spec: str | None) -> tuple[str | None, str | None]:
     if "/" not in raw:
         return None, raw
     prefix, _, model = raw.partition("/")
-    mapped = PROVIDER_MAP.get(prefix.lower())
+    prefix_lower = prefix.lower()
+    
+    # OpenCode Go models need opencode-go for Hermes
+    if prefix_lower == "opencode":
+        from .models import by_id
+        row = by_id(raw)
+        if row and str(row.get("family") or "") == "go":
+            return "opencode-go", (model.strip() or None)
+    
+    mapped = PROVIDER_MAP.get(prefix_lower)
     if not mapped:
         return None, None
     return mapped, (model.strip() or None)
