@@ -2007,12 +2007,10 @@ class Handler(SimpleHTTPRequestHandler):
             
             from .hermes import gateway_start
             from .launch import resolve_ceo_hermes_home
-            
-            tools = project_tools(project_id) if project_id else {}
-            hermes_home = resolve_ceo_hermes_home(
-                project_id or "",
-                str(tools.get("hermes_home") or ""),
-            ) or None
+
+            # Resolve via launch helper only — avoid project_tools name in this branch
+            # (a later local import in do_POST made it UnboundLocalError on CEO Restart).
+            hermes_home = resolve_ceo_hermes_home(project_id or "", "") or None
             
             result = gateway_start(
                 hermes_home, wait=wait, timeout=timeout, force=force
@@ -2059,7 +2057,6 @@ class Handler(SimpleHTTPRequestHandler):
             if not project_id or not job_id:
                 return self._json(400, {"error": "project_id and job_id required"})
             from .hermes import SAA_CRON_SKIP, cron_run, saa_live_nudge_due, sync_saa_live_crons
-            from .org import project_tools
 
             if job_id in SAA_CRON_SKIP:
                 return self._json(400, {"ok": False, "error": "skipped", "id": job_id})
