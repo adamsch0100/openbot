@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Round 4 UX PR open — Chat+Tools, engines bind Chat CEO, credit in About.
-Last: #66 Activity sheet is on master.
-Next: Vitzer review of this Round 4 UX PR. Leave PR #48 untouched. Leave SEO/Hermes alone.
+Now: OttoBot rename PR — chrome, logo, CEO INDEX build law (not UX Round 4).
+Last: Brand branch from master. OTTOBOT · On it. mark + Otto assets.
+Next: Open rename PR; do not merge. Leave board-vitzer-ux-round4 alone.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
@@ -12,7 +12,7 @@ Folder: /tmp/tmp3cu0ad7k
 
 ## Law (every job)
 
-- Sell OpenBot help, not OpenCode or Hermes.
+- Sell OttoBot help, not OpenCode or Hermes.
 - The repo stays runnable without a payment. Monthly is optional supporter, not an access gate.
 - Keep the three-line credit. Not affiliated, not sponsored, not endorsed.
 - Call official binaries. Do not vendor those trees.
