@@ -480,7 +480,10 @@ class BrandMarkTests(unittest.TestCase):
     def test_lockup_is_on_the_board(self):
         root = Path(__file__).resolve().parent.parent
         html = (root / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("OTTOBOT", html)
+        js = (root / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("ottobot", html)
+        self.assertIn("id=\"workStatus\"", html)
+        self.assertIn("function paintWorkStatus", js)
         self.assertIn("On it.", html)
         self.assertIn('data-stage="chat"', html)
         self.assertIn('data-stage="tools"', html)

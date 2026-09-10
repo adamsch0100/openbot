@@ -59,7 +59,7 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("OttoBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
         self.assertIn("id=\"aboutCredit\"", html)
         self.assertIn("app.js?v=125", html)
-        self.assertIn("styles.css?v=124", html)
+        self.assertIn("styles.css?v=125", html)
         self.assertIn("activity-sheet", html)
         self.assertIn("route-hatch", html)
         self.assertIn("id=\"closeActivity\"", html)

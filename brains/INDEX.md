@@ -2,9 +2,9 @@
 
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Un-retire Nadia/ListLogic + show Add CEO for unlocked owner (hosted too).
-Last: Master tip 05f11e26 (post-#72). No auto-seat; seat via Add CEO after unlock.
-Next: Open MERGEABLE PR; do not merge. No Cloud Agents. Laptop only.
+Now: OttoBot chrome dogfood P0 PR — mark spacing, empties, work-status strip, Activity keeps chat.
+Last: Master tip 7a32402 (post-#70 rename, #72 schedule, #73 un-retire). Chat+Tools and Activity sheet stay.
+Next: Open MERGEABLE chrome PR; do not merge. No Cloud Agents. Do not touch DESKTOP.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
