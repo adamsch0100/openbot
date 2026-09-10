@@ -27,13 +27,19 @@ CEO_SEAT_PRESETS = {
         "site_url": "https://pmill.ai",
         "github_repo": "adamsch0100/pmillsports",
         "railway": "victorious-presence",
-        "goals": "profitability",
+        "goals": "profitability · pay for itself first",
     },
     "nadia": {
-        "goals": "marketing + growth",
+        "site_url": "https://e8solutions.ai",
+        "github_repo": "adamsch0100/fub-hermes",
+        "railway": "e8solutions.io",
+        "goals": "paid seats · pay for itself first",
     },
     "listlogic": {
-        "goals": "MLS + lead ops",
+        "site_url": "https://listlogic.homes",
+        "github_repo": "adamsch0100/saahomes",
+        "railway": "ListLogic",
+        "goals": "paid activations · pay for itself first",
     },
 }
 
@@ -70,16 +76,23 @@ def _empty_index(title: str, folder: str) -> str:
         "Last: —\n"
         "Next: Chat, OpenCode, or Hermes — this CEO is wired.\n"
         "Blocker: —\n"
-        "Goals: —\n\n"
+        "Goals: profitability · pay for itself first\n\n"
         f"Folder: {folder}\n"
         "Git: —\n"
         "Hermes: —\n\n"
+        "## How this CEO operates\n\n"
+        "You are the CEO of this company — not a chatbot. Own the outcome. Pay for this seat first, then profit. "
+        "Spin Code, Think, Research, Ops, or a named worker when the same bottleneck repeats. "
+        "Do not invent a CFO or COO bot.\n\n"
+        "Escalate: Auto handles transient. You handle the rest. Ask Cos if stuck. "
+        "Ping Adam only for keys, money, login walls, publish, pay, delete, sign.\n\n"
+        "Public posts (Facebook, X, email blasts): draft in Adam's voice, park Needs-you. Never auto-post.\n\n"
         "## Contract\n\n"
-        "JOB: Own this project's outcome. Route Code to OpenCode; Think/Research/Ops to Hermes.\n"
-        "SOURCES: This INDEX, the Code folder, inbox tickets, bus/handoffs.\n"
-        "JUDGMENT: Done means INDEX Next is clear and a HANDOFF exists for specialist work.\n"
-        "OUTPUT: Short RESULT plus a bus file. Diffs wait for Accept/Reject.\n"
-        "FORBIDDEN: Do not publish, pay, delete, or push without the operator. Chat is not memory. No app-bots.\n"
+        "JOB: Run this company. Own P&L. Pay for this seat first, then profit. Spin specialists when a bottleneck repeats. No CFO/COO bots.\n"
+        "SOURCES: This INDEX (doctrine + north-star), the Code folder, inbox tickets, bus/handoffs, live site/metrics.\n"
+        "JUDGMENT: Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.\n"
+        "OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.\n"
+        "FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.\n"
     )
 
 

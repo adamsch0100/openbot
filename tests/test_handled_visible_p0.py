@@ -17,17 +17,18 @@ class HandledVisibleUiTests(unittest.TestCase):
         self.assertIn("function failChoices", js)
         self.assertIn("function ownershipSort", js)
         self.assertIn("function handlingAliveLine", js)
+        self.assertIn("function ceoHandlingStoryHtml", js)
+        self.assertIn("Needs Adam · ${title}", js)
         self.assertIn("function markFailHandling", js)
         # Honest map — never Auto-retry on 401/key
         own = js[js.find("function failOwnership") : js.find("function failOwnerRank")]
         key_i = own.index('if (kind === "key")')
         auto_gate = own.index('status: "Auto-retry"')
         # key branch must not return Auto-retry
-        key_block = own[key_i : key_i + 450]
-        self.assertIn('status: "CEO"', key_block)
+        key_block = own[key_i : key_i + 550]
+        self.assertIn('status: "Needs Adam"', key_block)
         self.assertIn("Fix key in Settings", key_block)
-        self.assertIn('next: `Your move · ${failMoveWho(row)} · Fix key in Settings.`', key_block)
-        self.assertIn("Fix key in Settings", key_block)
+        self.assertIn("CEO cannot retry this", key_block)
         self.assertNotIn('status: "Auto-retry"', key_block)
         self.assertIn("Never Auto-retry on 401", own)
         self.assertIn("gatewayScar", own)
@@ -114,7 +115,7 @@ class HandledVisibleUiTests(unittest.TestCase):
         self.assertLess(key_i, gw_i)
         key_block = own[key_i:gw_i]
         self.assertIn("Fix key in Settings", key_block)
-        self.assertIn('status: "CEO"', key_block)
+        self.assertIn('status: "Needs Adam"', key_block)
         self.assertNotIn("Restart gateway", key_block)
         # failChoices still offers Fix key for kind=key
         choices = js[js.find("function failChoices") : js.find("function cronFailNext")]
@@ -123,8 +124,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=149", html)
-        self.assertIn("styles.css?v=149", html)
+        self.assertIn("app.js?v=150", html)
+        self.assertIn("styles.css?v=150", html)
 
 
 

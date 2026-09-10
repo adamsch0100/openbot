@@ -18,6 +18,8 @@ OttoBot feels like a simple always-on chat. Underneath, CEOs and jobs are files.
 - Each CEO owns `org/projects/<ceo>/INDEX.md` (Now / Last / Next / Blocker + law).
 - Aiming a CEO loads that CEO’s INDEX / BRAIN / inbox — not another CEO’s.
 - Host product CEO may still use id `openbot` on disk; user-facing name is OttoBot.
+- A CEO is an actual CEO: runs the company, owns P&L, pays for the seat first, spins Code/Think/Research/Ops or named workers. No default CFO/COO bots. Cos is board chair, not a second CEO.
+- Escalate Auto → this CEO → Cos if stuck → Adam only for keys, money, login, publish, pay, delete, sign.
 
 ## Job packets
 

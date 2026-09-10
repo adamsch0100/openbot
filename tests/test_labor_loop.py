@@ -187,6 +187,23 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertIn(SUPPORT_CEO_ID, listed)
         self.assertIn(SUPPORT_CEO_ID, {row["id"] for row in org_mod.list_projects()})
 
+    def test_add_project_nadia_listlogic_seat_prefs(self):
+        nadia = org_mod.seat_preset_for_name("Nadia")
+        self.assertEqual(nadia.get("site_url"), "https://e8solutions.ai")
+        self.assertEqual(nadia.get("github_repo"), "adamsch0100/fub-hermes")
+        self.assertEqual(nadia.get("goals"), "paid seats · pay for itself first")
+        listlogic = org_mod.seat_preset_for_name("ListLogic")
+        self.assertEqual(listlogic.get("site_url"), "https://listlogic.homes")
+        self.assertEqual(listlogic.get("github_repo"), "adamsch0100/saahomes")
+        self.assertEqual(listlogic.get("goals"), "paid activations · pay for itself first")
+
+    def test_empty_ceo_index_is_p_and_l(self):
+        text = org_mod._empty_index("Acme", "/tmp/acme")
+        self.assertIn("How this CEO operates", text)
+        self.assertIn("No CFO/COO bots", text)
+        self.assertIn("Never auto-post", text)
+        self.assertIn("Run this company", text)
+
     def test_add_project_allows_nadia_and_listlogic(self):
         nadia = org_mod.add_project(str(self.home), "Nadia")
         self.assertEqual(nadia.get("project_id"), "nadia")
@@ -202,7 +219,7 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertEqual(prefs.get("site_url"), "https://pmill.ai")
         self.assertEqual(prefs.get("github_repo"), "adamsch0100/pmillsports")
         self.assertEqual(prefs.get("railway"), "victorious-presence")
-        self.assertEqual(prefs.get("goals"), "profitability")
+        self.assertEqual(prefs.get("goals"), "profitability · pay for itself first")
         data = org_mod.add_project(str(self.home), "Pmill")
         self.assertEqual(data.get("project_id"), "pmill")
         ceo = next(row for row in data["projects"] if row["id"] == "pmill")
@@ -214,7 +231,7 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertTrue(tools.get("authorize_site"))
         self.assertTrue(tools.get("authorize_railway"))
         index = (ceo.get("index") or "")
-        self.assertIn("Goals: profitability", index)
+        self.assertIn("Goals: profitability · pay for itself first", index)
         self.assertIn("Site: https://pmill.ai", index)
         self.assertIn("Railway: victorious-presence", index)
 

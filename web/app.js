@@ -624,16 +624,16 @@ function failOwnership(row) {
 
   // Honest ownership first — 401/key Fix key wins even when Hermes Off / gatewayScar also true.
   if (kind === "key") {
-    // Never Auto-retry on 401/key — CEO Fix key / Settings.
+    // Never Auto-retry on 401/key — only Adam has the vault.
     return {
-      owner: "ceo",
-      rank: 1,
-      status: "CEO",
-      resultStatus: "Recovering",
+      owner: "adam",
+      rank: 3,
+      status: "Needs Adam",
+      resultStatus: "Needs Adam",
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: `Your move · ${failMoveWho(row)} · Fix key in Settings.`,
+      next: "Needs Adam · Fix key in Settings. CEO cannot retry this.",
       outcome: `Failed · ${reason}`
     };
   }
@@ -646,7 +646,7 @@ function failOwnership(row) {
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: `Your move · ${failMoveWho(row)} · Restore script from bootstrap (Hermes scripts/).`,
+      next: "CEO handling · Restore script from bootstrap. Ask Cos if stuck.",
       outcome: `Failed · ${reason}`
     };
   }
@@ -725,7 +725,7 @@ function failOwnership(row) {
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: `Your move · ${failMoveWho(row)} · Retry — Hermes exited. Not a key.`,
+      next: "CEO handling · Retry once. Ask Cos if it stays red.",
       outcome: `Failed · ${reason}`
     };
   }
@@ -737,7 +737,7 @@ function failOwnership(row) {
     kind,
     reason,
     why: failWhyLine(kind, reason),
-    next: `Your move · ${failMoveWho(row)} · Retry or Ask Cos.`,
+    next: "CEO handling · Retry once. Ask Cos if stuck.",
     outcome: `Failed · ${reason}`
   };
 }
@@ -1106,21 +1106,46 @@ function handlingAliveLine(counts) {
   // Movement only — idle Auto-retry ownership stays on cards, not composer.
   const pack = digestCache.get(projectId) || {};
   const list = (pack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row));
+  const adam = list.filter((row) => failOwnership(row).owner === "adam");
+  if (adam.length) {
+    const own = failOwnership(adam[0]);
+    const title = failJobTitle(adam[0]) || "job";
+    const bit = own.kind === "key" ? "Fix key" : "Open Settings";
+    return `Needs Adam · ${title} · ${bit}`;
+  }
   const moving = list.filter((row) => {
     const st = failOwnership(row).status;
-    return st === "Handling" || st === "Waiting Cos";
+    return st === "Handling" || st === "Waiting Cos" || st === "CEO";
   });
   const n = moving.length || (counts && counts.handling) || 0;
   if (!n) return "";
-  const top = moving[0] ? failOwnership(moving[0]) : null;
+  const topRow = moving[0];
+  const top = topRow ? failOwnership(topRow) : null;
+  const title = failJobTitle(topRow);
   const fails = (counts && counts.failed) || list.length || n;
   if (top && top.status === "Waiting Cos") {
-    return `Waiting Cos · ${fails} fail${fails === 1 ? "" : "s"} · next: Cos judgment`;
+    return `Waiting Cos · ${title || "fail"} · next: Cos judgment`;
   }
   const bit = top
-    ? (top.kind === "key" ? "fix key" : (top.kind === "script" ? "restore script" : (top.kind === "gateway" ? "retry gateway" : "retry")))
+    ? (top.kind === "script" ? "restore script" : (top.kind === "gateway" ? "retry gateway" : "retry"))
     : "Open Next";
-  return `Handling · ${fails} fail${fails === 1 ? "" : "s"} · next: ${bit}`;
+  return `Handling · ${title || (fails + " fail" + (fails === 1 ? "" : "s"))} · next: ${bit}`;
+}
+
+function ceoHandlingStoryHtml() {
+  const who = currentProject() ? (currentProject().name || "this CEO") : "Chief of Staff";
+  const pack = digestCache.get(projectId) || {};
+  const failed = ((pack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row))).slice().sort(ownershipSort);
+  const top = failed[0];
+  if (!top) {
+    const next = String((currentProject() && currentProject().index_next) || "").trim();
+    if (next && next !== "—") return `<p class="cron-story">${escapeHtml(who)} next: ${escapeHtml(clipWire(cleanBotText(next), 160))}</p>`;
+    return "";
+  }
+  const own = failOwnership(top);
+  const title = failJobTitle(top) || "a failed job";
+  const because = own.reason || own.why || "last run failed";
+  return `<p class="cron-story">${escapeHtml(who)} is handling ${escapeHtml(title)} because ${escapeHtml(because)}. Next: ${escapeHtml(own.next)}</p>`;
 }
 
 function paintWorkStatus() {
@@ -2049,10 +2074,20 @@ const CEO_SEAT_PRESETS = {
     site_url: "https://pmill.ai",
     github_repo: "adamsch0100/pmillsports",
     railway: "victorious-presence",
-    goals: "profitability"
+    goals: "profitability · pay for itself first"
   },
-  nadia: { goals: "marketing + growth" },
-  listlogic: { goals: "MLS + lead ops" }
+  nadia: {
+    site_url: "https://e8solutions.ai",
+    github_repo: "adamsch0100/fub-hermes",
+    railway: "e8solutions.io",
+    goals: "paid seats · pay for itself first"
+  },
+  listlogic: {
+    site_url: "https://listlogic.homes",
+    github_repo: "adamsch0100/saahomes",
+    railway: "ListLogic",
+    goals: "paid activations · pay for itself first"
+  }
 };
 
 function ceoSeatPreset(name) {
@@ -3526,15 +3561,24 @@ function topDigestFailNeed(pid) {
   };
 }
 
+function adamMustSee(row) {
+  const k = String((row && row.kind) || "");
+  if (k === "login" || k === "cookie_export" || k === "facebook_approval" || k === "diff" || k === "gate") return true;
+  if (k === "failed") {
+    const blob = String((row && (row.last_error || row.why || row.last_result || "")) || "");
+    const kind = typeof failKindFromBlob === "function" ? failKindFromBlob(blob) : "";
+    return kind === "key" || kind === "wallet";
+  }
+  return false;
+}
+
 function operatorMoveRows() {
   const filtered = visibleNeedsYou()
     .filter((row) => {
-      if (row.kind === "continue" || row.kind === "brief") {
-        if (row.project_id && ceoHasFailedWork(row.project_id)) return false;
-      }
+      if (row.kind === "continue" || row.kind === "brief") return false;
       // Cos staff crash is not the operator move when a CEO has real fails.
       if (!row.project_id && row.kind === "failed" && anyCeoHasFailedWork()) return false;
-      return true;
+      return adamMustSee(row);
     })
     .map((row) => {
       const who = (row.name && row.name !== "this CEO") ? row.name : ceoMoveName(row.project_id);
@@ -3552,7 +3596,7 @@ function operatorMoveRows() {
     if (haveFail.has(String(pid))) return;
     if (!ceoHasFailedWork(pid)) return;
     const need = topDigestFailNeed(pid);
-    if (need) extra.push(need);
+    if (need && adamMustSee(need)) extra.push(need);
   });
   return filtered.concat(extra);
 }
@@ -4996,6 +5040,8 @@ function renderChatSchedule(rows, digest, focusId) {
         bits.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`);
       }
     } else if (view === "next") {
+      const story = ceoHandlingStoryHtml();
+      if (story) bits.push(story);
       const failJobs = allJobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
       if (failJobs.length) {
         bits.push(`<h3 class="cron-section">Action queue · ${failJobs.length}</h3>`);
@@ -5095,6 +5141,8 @@ function renderChatSchedule(rows, digest, focusId) {
       sections.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`);
     }
   } else if (view === "next") {
+    const story = ceoHandlingStoryHtml();
+    if (story) sections.push(story);
     if (waitName) {
       sections.push(`<p class="cron-empty">Waiting · ${escapeHtml(waitName)} is on this CEO's Hermes. Due jobs stay queued.</p>`);
     }

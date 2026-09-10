@@ -99,11 +99,11 @@ CONTRACTS = {
         "forbidden": "No Accept, no push, no live X post, no CRM/FUB, no unsupervised send.",
     },
     "ceo": {
-        "job": "Own this project's outcome. Route Code to OpenCode; Think/Research/Ops to Hermes.",
-        "sources": "This INDEX, the Code folder, inbox, bus/handoffs.",
-        "judgment": "Done means INDEX Next is clear and a HANDOFF exists for specialist work.",
-        "output": "Short RESULT plus a bus file. Diffs wait for Accept/Reject.",
-        "forbidden": "Do not publish, pay, delete, or push without the operator. Chat is not memory. No app-bots.",
+        "job": "Run this company. Own P&L. Pay for this seat first, then profit. Spin Code/Think/Research/Ops or a named worker when a bottleneck repeats. No CFO/COO bots — you are the C-suite.",
+        "sources": "This INDEX (doctrine + north-star), the Code folder, inbox, bus/handoffs, live site/metrics.",
+        "judgment": "Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.",
+        "output": "Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.",
+        "forbidden": "Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.",
     },
     "worker": {
         "job": "Help this CEO using the lane the board routed.",

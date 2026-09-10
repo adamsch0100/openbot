@@ -11,10 +11,16 @@ ROOT = Path(__file__).resolve().parent.parent
 class OperatorSurfaceUiTests(unittest.TestCase):
     def test_your_move_names_ceo(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("function ceoMoveName", js)
-        self.assertIn("function failMoveWho", js)
-        self.assertIn("function operatorMoveRows", js)
-        self.assertIn("function moveHeadLabel", js)
+        self.assertIn("function adamMustSee", js)
+        self.assertIn("function ceoHandlingStoryHtml", js)
+        self.assertIn("is handling", js)
+        adam = js[js.find("function adamMustSee") : js.find("function operatorMoveRows")]
+        self.assertIn('kind === "key"', adam)
+        self.assertIn('kind === "wallet"', adam)
+        self.assertIn("facebook_approval", adam)
+        move = js[js.find("function operatorMoveRows") : js.find("function moveHeadLabel")]
+        self.assertIn("adamMustSee(row)", move)
+        self.assertIn("adamMustSee(need)", move)
         self.assertIn("Your move · ${names[0]}", js)
         self.assertNotIn("Your move (CEO)", js)
 
@@ -57,8 +63,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=149", html)
-        self.assertIn("styles.css?v=149", html)
+        self.assertIn("app.js?v=150", html)
+        self.assertIn("styles.css?v=150", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

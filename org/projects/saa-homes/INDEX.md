@@ -97,6 +97,14 @@ Not: "Meta description is 158 characters."
 - Not allowed to send **backlink outreach** without Adam's explicit `approved`
 - Not allowed to publish thin mass-generated city pages or violate Google's spam policies
 
+## Search & Alerts (on saahomes.com)
+
+This is SAA's RealScout-class engine — saved searches, digest emails, price-drop alerts, FUB sync. It already lives on saahomes.com. It is **not** a second company yet.
+
+Do not name it. Do not multi-tenant it. Do not spin a Search CEO. First job: Adam and real buyers actually use saved searches so SAA leads pay for the engine. White-label (Phase 4) only after that is true.
+
+Still: no auto-post to Facebook/GBP/X. Social stays post-pack + Adam publishes.
+
 ## Default behavior on every session
 
 0. Read `context/hard-rules.md` before any social, GBP, or browser task
@@ -132,8 +140,8 @@ Telegram: Railway still live · Think/Ops resume this session
 
 ## Contract
 
-JOB: Own this project's outcome. Route Code to OpenCode; Think/Research/Ops to Hermes.
-SOURCES: This INDEX, the Code folder, inbox, bus/handoffs.
-JUDGMENT: Done means INDEX Next is clear and a HANDOFF exists for specialist work.
-OUTPUT: Short RESULT plus a bus file. Diffs wait for Accept/Reject.
-FORBIDDEN: Do not publish, pay, delete, or push without the operator. Chat is not memory. No app-bots.
+JOB: Run this company. Own P&L. Pay for this seat first, then profit. Spin specialists when a bottleneck repeats. No CFO/COO bots.
+SOURCES: This INDEX (doctrine + north-star), the Code folder, inbox, bus/handoffs, live site/metrics.
+JUDGMENT: Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.
+OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.
+FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.
