@@ -3885,6 +3885,7 @@ async function loadCeoDigest(refreshLive) {
     if (typeof cached.gateway_running === "boolean") gatewayRunning = cached.gateway_running;
     paintCeoBrief(cached.digest || cached);
     paintCeoLive(cached);
+    renderBotMeta({ skipSpend: true });
   }
   try {
     const pid = projectId;
@@ -3909,6 +3910,8 @@ async function loadCeoDigest(refreshLive) {
       paintWorkTabs();
       paintEmbedLive();
       if (org && org.projects) renderOrg(org);
+      // Refresh indexSummary / chatFolder honesty now that digest failed counts are known.
+      renderBotMeta({ skipSpend: true });
       if (scheduleOpen) renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
     }
     return data;
