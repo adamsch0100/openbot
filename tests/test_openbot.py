@@ -3339,6 +3339,113 @@ class EngineProxyTests(unittest.TestCase):
 class OpenCodeSessionTests(unittest.TestCase):
     """Tests for OpenCode session creation, persistence, and job binding."""
     
+    def test_hermes_env_injects_opencode_session(self):
+        """_hermes_env injects OPENCODE_SESSION_ID for Hermes OpenCode Go provider."""
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        
+        import openbot.org as org_mod
+        import openbot.store as store_mod
+        from openbot.hermes import _hermes_env
+        
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            hermes_home_path = Path(tmp) / "hermes-home"
+            hermes_home_path.mkdir(parents=True)
+            
+            try:
+                # Set up CEO with opencode_session_id
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                org_mod.PROFILE_PATH.write_text(
+                    json.dumps({
+                        "projects": [{
+                            "id": "test-ceo",
+                            "name": "Test CEO",
+                            "role": "ceo",
+                            "folder": tmp,
+                            "primary": False,
+                            "workers": [],
+                            "hermes_home": str(hermes_home_path),
+                            "opencode_session_id": "ses_test_hermes_xyz",
+                        }]
+                    }),
+                    encoding="utf-8"
+                )
+                
+                # Get Hermes env for this home
+                env = _hermes_env(home=hermes_home_path)
+                
+                # Verify OPENCODE_SESSION_ID is injected
+                self.assertEqual(env.get("OPENCODE_SESSION_ID"), "ses_test_hermes_xyz")
+            
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+    
+    def test_hermes_env_without_session_omits_var(self):
+        """_hermes_env without opencode_session_id does not inject empty OPENCODE_SESSION_ID."""
+        import json
+        import tempfile
+        from pathlib import Path
+        
+        import openbot.org as org_mod
+        import openbot.store as store_mod
+        from openbot.hermes import _hermes_env
+        
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            hermes_home_path = Path(tmp) / "hermes-home"
+            hermes_home_path.mkdir(parents=True)
+            
+            try:
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                org_mod.PROFILE_PATH.write_text(
+                    json.dumps({
+                        "projects": [{
+                            "id": "test-ceo",
+                            "name": "Test CEO",
+                            "role": "ceo",
+                            "folder": tmp,
+                            "primary": False,
+                            "workers": [],
+                            "hermes_home": str(hermes_home_path),
+                            # No opencode_session_id
+                        }]
+                    }),
+                    encoding="utf-8"
+                )
+                
+                env = _hermes_env(home=hermes_home_path)
+                
+                # Should not have OPENCODE_SESSION_ID
+                self.assertNotIn("OPENCODE_SESSION_ID", env)
+            
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+    
     def test_run_opencode_attaches_session_header(self):
         """run_opencode injects x-opencode-session header for OpenCode Go models."""
         import json

@@ -339,6 +339,22 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
     # Strip Anthropic keys to prevent provider init failures with stale keys
     env.pop("ANTHROPIC_API_KEY", None)
     env.pop("ANTHROPIC_TOKEN", None)
+    
+    # Attach OpenCode session ID for Hermes OpenCode Go provider affinity headers
+    # Hermes agent/opencode_affinity.py uses this for x-opencode-session binding
+    if not env.get("OPENCODE_SESSION_ID"):
+        try:
+            from .org import project_id_for_hermes_home, project_tools
+            
+            pid = project_id_for_hermes_home(str(root))
+            if pid:
+                tools = project_tools(pid)
+                session_id = str(tools.get("opencode_session_id") or "").strip()
+                if session_id:
+                    env["OPENCODE_SESSION_ID"] = session_id
+        except Exception:
+            pass
+    
     return env
 
 

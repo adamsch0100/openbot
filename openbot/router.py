@@ -2089,6 +2089,17 @@ def _handle_preset(
             schedule = parse_schedule(message)
             if schedule:
                 _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
+                
+                # Ensure OpenCode session exists for Hermes cron jobs that use OpenCode Go
+                # Hermes agent/opencode_affinity.py needs OPENCODE_SESSION_ID env var
+                if project_id and not tools.get("opencode_session_id"):
+                    from .launch import _open_opencode_session
+                    
+                    opencode_session = _open_opencode_session(work, Path(work).name)
+                    if opencode_session:
+                        patch_project_tools(project_id, {"opencode_session_id": opencode_session})
+                        tools = project_tools(project_id)  # Reload
+                
                 created = cron_create(
                     schedule,
                     message,
