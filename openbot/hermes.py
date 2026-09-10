@@ -337,6 +337,10 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
         env.setdefault("OPENCODE_ZEN_API_KEY", zen)
         env.setdefault("OPENCODE_API_KEY", zen)
         env.setdefault("OPENCODE_GO_API_KEY", zen)
+    # Preserve comma pool for multi-Go failover inside Hermes/OpenCode.
+    pool = str(env.get("OPENCODE_GO_API_KEYS") or "").strip()
+    if not pool and zen:
+        env["OPENCODE_GO_API_KEYS"] = zen
     # Strip Anthropic keys to prevent provider init failures with stale keys
     env.pop("ANTHROPIC_API_KEY", None)
     env.pop("ANTHROPIC_TOKEN", None)

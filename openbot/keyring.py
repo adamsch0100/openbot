@@ -18,6 +18,8 @@ SECRETS_PATH = ROOT / "secrets.local.json"
 LOGIN_FILE = ".openbot-logins.json"
 _EMPTY_UNTIL: dict[str, float] = {}
 _EMPTY_TTL = 6 * 3600.0
+# Vitzer law: never walk Anthropic in board/Hermes/OpenCode failover.
+NEVER_PROVIDERS = frozenset({"anthropic"})
 PASTEABLE = (
     {
         "id": "nous",
@@ -50,7 +52,7 @@ PASTEABLE = (
         "engines": ["OpenCode", "Hermes Agent"],
         "auth_id": "anthropic",
         "env": ("ANTHROPIC_API_KEY",),
-        "note": "Claude via API key.",
+        "note": "Blocked on this board — never used for failover (Vitzer law). Prefer OpenCode Go + OpenRouter.",
     },
     {
         "id": "openai",
@@ -345,6 +347,7 @@ def public_keyring() -> dict:
         "active": data.get("active") or {},
         "catalog": list(PASTEABLE),
         "blocked": list(BLOCKED),
+        "never_providers": sorted(NEVER_PROVIDERS),
         "seats": list(SEATS),
         "path": str(SECRETS_PATH.name),
         "nous_portal": nous_portal_connected(),
@@ -518,9 +521,22 @@ def add_account(provider: str, key: str, label: str | None = None) -> dict:
 
 def set_fallback(order: list[str]) -> dict:
     data = _load()
-    known = {row["id"] for row in data["accounts"]}
-    data["fallback"] = [item for item in order if item in known]
+    by_id = {row["id"]: row for row in data["accounts"]}
+    known = set(by_id)
+    cleaned: list[str] = []
+    for item in order:
+        if item not in known:
+            continue
+        if str(by_id[item].get("provider") or "") in NEVER_PROVIDERS:
+            continue
+        cleaned.append(item)
+    data["fallback"] = cleaned
     _save(data)
+    # Refresh Go pool so Hermes sees the new order immediately.
+    try:
+        sync_opencode_go_pool_env()
+    except Exception:
+        pass
     return public_keyring()
 
 
@@ -560,6 +576,8 @@ def activate_account(account_id: str) -> dict:
     row = next((item for item in data["accounts"] if item["id"] == account_id), None)
     if not row or not row.get("key"):
         raise ValueError("account not found")
+    if str(row.get("provider") or "") in NEVER_PROVIDERS:
+        raise ValueError("Anthropic is blocked on this board — use OpenCode Go + OpenRouter order")
     spec = next((item for item in PASTEABLE if item["id"] == row["provider"]), None)
     if spec is None:
         raise ValueError("unknown provider")
@@ -569,9 +587,17 @@ def activate_account(account_id: str) -> dict:
     if row["provider"] == "opencode":
         env_updates.setdefault("OPENCODE_ZEN_API_KEY", row["key"])
         env_updates.setdefault("OPENCODE_GO_API_KEY", row["key"])
+        pool = [str(row["key"])]
+        for other in ordered_accounts(provider="opencode", engine="Hermes Agent"):
+            secret = str(other.get("key") or "").strip()
+            if secret and secret not in pool and not wallet_marked_empty(str(other.get("id") or "")):
+                pool.append(secret)
+        env_updates["OPENCODE_GO_API_KEYS"] = ",".join(pool)
     if env_updates:
         _write_hermes_env(env_updates)
         upsert_env(env_updates)
+    for dead in ("ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN"):
+        os.environ.pop(dead, None)
     data["active"][row["provider"]] = account_id
     _save(data)
     return public_keyring()
@@ -601,6 +627,8 @@ def ordered_account_ids(
         if engine and engine not in spec["engines"] and engine != "both":
             continue
         if provider and row["provider"] != provider:
+            continue
+        if str(row.get("provider") or "") in NEVER_PROVIDERS:
             continue
         out.append(account_id)
     return out
@@ -653,6 +681,43 @@ def wallet_marked_empty(account_id: str) -> bool:
 
 def clear_marked_empty() -> None:
     _EMPTY_UNTIL.clear()
+
+
+
+def opencode_go_pool(*, prefer: list[str] | None = None) -> list[str]:
+    """Ordered live OpenCode Go keys for Hermes/OpenCode failover (comma pool)."""
+    keys: list[str] = []
+    for row in ordered_accounts(prefer=prefer, provider="opencode", engine="Hermes Agent"):
+        if wallet_marked_empty(str(row.get("id") or "")):
+            continue
+        secret = str(row.get("key") or "").strip()
+        if secret and secret not in keys:
+            keys.append(secret)
+    if not keys:
+        for row in ordered_accounts(prefer=prefer, provider="opencode", engine="OpenCode"):
+            secret = str(row.get("key") or "").strip()
+            if secret and secret not in keys:
+                keys.append(secret)
+    return keys
+
+
+def sync_opencode_go_pool_env(prefer: list[str] | None = None, home: str | Path | None = None) -> list[str]:
+    """Write OPENCODE_GO_API_KEY + OPENCODE_GO_API_KEYS (ordered) into Hermes .env and process."""
+    pool = opencode_go_pool(prefer=prefer)
+    if not pool:
+        return []
+    updates = {
+        "OPENCODE_GO_API_KEY": pool[0],
+        "OPENCODE_API_KEY": pool[0],
+        "OPENCODE_ZEN_API_KEY": pool[0],
+        "OPENCODE_GO_API_KEYS": ",".join(pool),
+    }
+    # Never leave Anthropic in the process when syncing Go pool.
+    for dead in ("ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN"):
+        os.environ.pop(dead, None)
+    _write_hermes_env(updates, home=home)
+    upsert_env(updates)
+    return pool
 
 
 def activate_for_engine(
@@ -855,6 +920,11 @@ def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None =
         }
         if updates:
             _write_hermes_env(updates, home=hermes_home_dir)
+        # Ordered OpenCode Go pool for Hermes/OpenCode failover (3 keys + …).
+        try:
+            sync_opencode_go_pool_env(prefer=prefer, home=hermes_home_dir)
+        except Exception:
+            pass
         # Re-merge after write in case a backup held secrets the live file lost.
         try:
             preserve_merge_hermes_env(hermes_home_dir)

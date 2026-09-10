@@ -343,7 +343,8 @@ def _activate(engine: str, tools: dict | None, model: str | None = None, force_g
         accounts = keyring().get("accounts") or []
         go_accounts = [
             acc for acc in accounts
-            if acc.get("provider") == "opencode" and "go" in str(acc.get("label") or "").lower()
+            if acc.get("provider") == "opencode"
+            and not re.search(r"\b(zen|payg|pay-as-you-go)\b", str(acc.get("label") or "").lower())
         ]
         if go_accounts:
             # Activate first available Go wallet
@@ -373,8 +374,8 @@ def _go_eligible_model(account: dict, seated_model: str | None) -> str | None:
     provider = str(account.get("provider") or "")
     label = str(account.get("label") or "").lower()
     
-    # OpenCode Go wallet: prefer Go-family models (deepseek, not claude-fable/gpt-5.6 Zen)
-    if provider == "opencode" and "go" in label:
+    # OpenCode wallet = Go subscription pool (label may omit "go"). Zen/PAYG labels stay Zen path.
+    if provider == "opencode" and not re.search(r"\b(zen|payg|pay-as-you-go)\b", label):
         from .models import all_models
         go_models = [
             row for row in all_models()
