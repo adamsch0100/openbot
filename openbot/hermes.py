@@ -327,6 +327,9 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
         env.setdefault("OPENCODE_ZEN_API_KEY", zen)
         env.setdefault("OPENCODE_API_KEY", zen)
         env.setdefault("OPENCODE_GO_API_KEY", zen)
+    # Strip Anthropic keys to prevent provider init failures with stale keys
+    env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("ANTHROPIC_TOKEN", None)
     return env
 
 

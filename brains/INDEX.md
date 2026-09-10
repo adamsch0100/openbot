@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Visibility UX — Running / Scheduled / Done on Chat + OpenCode + Hermes; receipts name the engine
-Last: Per-engine heads. Receipts are a visible line. Cron cards say Hermes Agent, not the Go wallet. No third agent.
-Next: Hard-refresh ?v=111. Open SAA Homes if you want the report, or keep going from Chief of Staff
+Now: PR #52 complete: session carry fix + Anthropic failover (Vitzer law). MERGE-READY when green.
+Last: Fixed OpenCode session wipe in ensure_org loop. Added provider error failover (401/auth → retry next model).
+Next: Merge #52. SAA Homes Ops jobs will fail over to Go/OpenRouter instead of hard-failing on stale Anthropic keys.
 Blocker: Do not Accept parked restore cards. Do not redeploy SAA Homes Hermes. GBP login: skip. Do not stampede.
 
 ## Vault
