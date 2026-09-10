@@ -49,11 +49,10 @@ function isCollaborator() {
 }
 
 function canAddCeo() {
-  // Unlocked owners/operators only. Locked + collaborators never.
-  if (cfg && cfg.needs_unlock) return false;
+  // Collaborators never Add CEO. Owner/operator can on laptop and hosted.
   if (isCollaborator()) return false;
   if (cfg && typeof cfg.can_add_ceo === "boolean") return cfg.can_add_ceo;
-  return cfg && cfg.actor === "owner";
+  return true;
 }
 
 function isLiveBoard() {
@@ -936,13 +935,13 @@ function syncComposerWho() {
   const project = currentProject();
   const worker = currentWorker();
   const pin = preset && preset !== "cos";
-  const engine = pin ? (PRESET_ENGINE[preset] || "board") : "OpenCode or Hermes";
+  const engine = pin ? (PRESET_ENGINE[preset] || "board") : "";
   let desk = "Chief of Staff";
   if (worker && project) desk = `${worker.name} · ${project.name}`;
   else if (project) desk = project.name;
   const line = pin
-    ? `${desk} · ${jobLabel(preset)} · ${engine}`
-    : `${desk} · Auto · ${engine}`;
+    ? `${desk} · ${jobLabel(preset)}${engine ? ` · ${engine}` : ""}`
+    : desk;
   if ($("composerWho")) $("composerWho").textContent = line;
   if ($("msg")) {
     const prefix = pin ? `${jobLabel(preset)} · ` : "";
@@ -1407,7 +1406,11 @@ let menuJustOpened = false;
 
 function hideNodeMenu() {
   const menu = $("nodeMenu");
-  if (menu) menu.classList.add("hidden");
+  if (menu) {
+    menu.classList.add("hidden");
+    menu.classList.remove("ceo-add");
+    menu.style.transform = "";
+  }
   hideMsgMenu();
 }
 
@@ -1504,11 +1507,15 @@ async function applyOrg(next) {
   paintWorkTabs();
 }
 
-async function postProject(folder, name) {
+async function postProject(folder, name, extras) {
+  const body = Object.assign(
+    { folder: folder || "", name: name || "" },
+    extras && typeof extras === "object" ? extras : {}
+  );
   const res = await fetch("/api/org/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder: folder || "", name: name || "" })
+    body: JSON.stringify(body)
   });
   const data = await res.json();
   $("orgStatus").textContent = res.ok ? "" : (data.error || "add failed");
@@ -1517,6 +1524,100 @@ async function postProject(folder, name) {
     await applyOrg(data);
     if (data.project_id) await setOrgNode(data.project_id, "");
   }
+}
+
+const CEO_SEAT_PRESETS = {
+  pmill: {
+    site_url: "https://pmill.ai",
+    github_repo: "adamsch0100/pmillsports",
+    railway: "victorious-presence",
+    goals: "profitability"
+  }
+};
+
+function ceoSeatPreset(name) {
+  const slug = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (!slug) return null;
+  if (CEO_SEAT_PRESETS[slug]) return Object.assign({}, CEO_SEAT_PRESETS[slug]);
+  for (const key of Object.keys(CEO_SEAT_PRESETS)) {
+    if (slug.startsWith(`${key}-`)) return Object.assign({}, CEO_SEAT_PRESETS[key]);
+  }
+  return null;
+}
+
+function readAddCeoForm() {
+  const name = ($("menuCeoAddName") && $("menuCeoAddName").value.trim()) || "";
+  const folder = ($("menuProjectFolder") && $("menuProjectFolder").value.trim()) || "";
+  const site = ($("menuCeoSite") && $("menuCeoSite").value.trim()) || "";
+  const repo = ($("menuCeoRepo") && $("menuCeoRepo").value.trim()) || "";
+  const railway = ($("menuCeoRailway") && $("menuCeoRailway").value.trim()) || "";
+  const goals = ($("menuCeoGoals") && $("menuCeoGoals").value.trim()) || "";
+  const mcp = Boolean($("menuCeoAuthGithub") && $("menuCeoAuthGithub").checked);
+  const authSite = Boolean($("menuCeoAuthSite") && $("menuCeoAuthSite").checked);
+  const authRail = Boolean($("menuCeoAuthRailway") && $("menuCeoAuthRailway").checked);
+  return {
+    name,
+    folder,
+    extras: {
+      site_url: site,
+      github_repo: repo,
+      railway,
+      goals,
+      mcp_github: mcp,
+      authorize_site: authSite,
+      authorize_railway: authRail
+    }
+  };
+}
+
+function applyCeoSeatPresetToForm(name) {
+  const prefs = ceoSeatPreset(name);
+  if (!prefs) return;
+  if ($("menuCeoSite") && !$("menuCeoSite").value.trim()) $("menuCeoSite").value = prefs.site_url || "";
+  if ($("menuCeoRepo") && !$("menuCeoRepo").value.trim()) $("menuCeoRepo").value = prefs.github_repo || "";
+  if ($("menuCeoRailway") && !$("menuCeoRailway").value.trim()) $("menuCeoRailway").value = prefs.railway || "";
+  if ($("menuCeoGoals") && !$("menuCeoGoals").value.trim()) $("menuCeoGoals").value = prefs.goals || "";
+  if ($("menuCeoAuthGithub") && prefs.github_repo) $("menuCeoAuthGithub").checked = true;
+  if ($("menuCeoAuthSite") && prefs.site_url) $("menuCeoAuthSite").checked = true;
+  if ($("menuCeoAuthRailway") && prefs.railway) $("menuCeoAuthRailway").checked = true;
+}
+
+function addCeoFormHtml() {
+  const folderHint = escapeHtml((org && org.folder) || "default OpenCode folder");
+  return `
+      <div class="menu-field">
+        <label for="menuCeoAddName">Name</label>
+        <input id="menuCeoAddName" type="text" placeholder="Pmill" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuProjectFolder">Folder (optional)</label>
+        <input id="menuProjectFolder" type="text" placeholder="${folderHint}" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoSite">Site</label>
+        <input id="menuCeoSite" type="url" placeholder="https://pmill.ai" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoRepo">GitHub repo</label>
+        <input id="menuCeoRepo" type="text" placeholder="owner/repo" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoRailway">Railway</label>
+        <input id="menuCeoRailway" type="text" placeholder="project or service name" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoGoals">Goal</label>
+        <input id="menuCeoGoals" type="text" placeholder="profitability" autocomplete="off" />
+      </div>
+      <fieldset class="menu-field menu-auth">
+        <legend>Authorize tools</legend>
+        <label class="check-line"><input id="menuCeoAuthGithub" type="checkbox" /> GitHub MCP (Code)</label>
+        <label class="check-line"><input id="menuCeoAuthSite" type="checkbox" /> Site research</label>
+        <label class="check-line"><input id="menuCeoAuthRailway" type="checkbox" /> Railway</label>
+      </fieldset>
+      <div class="menu-field menu-actions">
+        <button type="button" class="send" data-menu="add-project">Add CEO</button>
+      </div>`;
 }
 
 async function saveProjectFolder(id, folder) {
@@ -1624,18 +1725,19 @@ function showNodeMenu(x, y, kind, pid, wid) {
   const project = pid ? projectById(pid) : null;
   const folder = (project && project.folder) || "";
   let html = "";
-  if (kind === "staff") {
+  menu.classList.remove("ceo-add");
+  if (kind === "add-ceo") {
+    menu.classList.add("ceo-add");
+    html = `
+      <div class="menu-head">Add CEO</div>
+      <p class="muted menu-note">Name the desk. Site, repo, Railway, and tool auth seat with it. Pmill prefills known prefs.</p>
+      ${addCeoFormHtml()}`;
+  } else if (kind === "staff") {
+    if (canAddCeo()) menu.classList.add("ceo-add");
     html = canAddCeo()
       ? `
-      <div class="menu-field">
-        <label for="menuCeoAddName">Add CEO</label>
-        <input id="menuCeoAddName" type="text" placeholder="Name" autocomplete="off" />
-      </div>
-      <div class="menu-field">
-        <label for="menuProjectFolder">Folder (optional)</label>
-        <input id="menuProjectFolder" type="text" placeholder="${escapeHtml((org && org.folder) || "default OpenCode folder")}" autocomplete="off" />
-        <button type="button" class="ghost-btn" data-menu="add-project">Add</button>
-      </div>
+      <div class="menu-head">Chief of Staff</div>
+      ${addCeoFormHtml()}
       <div class="menu-field">
         <label for="menuIndexEdit">Staff brief</label>
         <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
@@ -1690,23 +1792,37 @@ function showNodeMenu(x, y, kind, pid, wid) {
   }
   menu.innerHTML = html;
   menu.classList.remove("hidden");
-  const left = Math.min(x, window.innerWidth - 340);
-  const top = Math.min(y, window.innerHeight - 80);
-  menu.style.left = `${Math.max(8, left)}px`;
-  menu.style.top = `${Math.max(8, top)}px`;
+  if (kind === "add-ceo") {
+    menu.style.left = "50%";
+    menu.style.top = "50%";
+    menu.style.right = "auto";
+    menu.style.transform = "translate(-50%, -50%)";
+  } else {
+    menu.style.transform = "";
+    const left = Math.min(x, window.innerWidth - (kind === "staff" ? 420 : 340));
+    const top = Math.min(y, window.innerHeight - 80);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+    menu.style.right = "auto";
+  }
   menuJustOpened = true;
   setTimeout(() => { menuJustOpened = false; }, 0);
+  const nameInput = $("menuCeoAddName");
+  if (nameInput) {
+    nameInput.addEventListener("input", () => applyCeoSeatPresetToForm(nameInput.value));
+    nameInput.addEventListener("change", () => applyCeoSeatPresetToForm(nameInput.value));
+    nameInput.focus();
+  }
   menu.querySelectorAll("[data-menu]").forEach((btn) => {
     btn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const action = btn.dataset.menu;
       if (action === "add-project") {
-        const folderInput = $("menuProjectFolder");
-        const nameInput = $("menuCeoAddName");
-        const folderValue = folderInput ? folderInput.value.trim() : "";
-        const name = nameInput ? nameInput.value.trim() : "";
-        if (name || folderValue) await postProject(folderValue, name);
+        const form = readAddCeoForm();
+        if (form.name || form.folder || form.extras.site_url || form.extras.github_repo) {
+          await postProject(form.folder, form.name, form.extras);
+        }
       } else if (action === "save-index") {
         const input = $("menuIndexEdit");
         await saveStaffIndex(input ? input.value : "");
@@ -1722,7 +1838,7 @@ function showNodeMenu(x, y, kind, pid, wid) {
         await renameNode("worker", btn.dataset.project, btn.dataset.worker, input ? input.value : "");
       } else if (action === "configure") {
         hideNodeMenu();
-        setSettings(true, kind === "staff" ? "you" : "ceo");
+        setSettings(true, kind === "staff" || kind === "add-ceo" ? "you" : "ceo");
       } else if (action === "opencode") {
         hideNodeMenu();
         openWorkspace("opencode");
@@ -1758,14 +1874,14 @@ async function saveStaffIndex(text) {
 
 async function saveCeoTools(pid) {
   if (!pid) return;
-  
-  // Collect seats
+  const status = $("ceoToolsStatus");
+  if (status) status.textContent = "Saving…";
+
   const seats = {};
   document.querySelectorAll("[data-ceo-seat]").forEach((input) => {
     seats[input.dataset.ceoSeat] = { model: input.value };
   });
-  
-  // Collect connectors
+
   const connectors = { skills: {}, mcp: {} };
   document.querySelectorAll("[data-ceo-skill][data-seat]").forEach((input) => {
     const skill = input.dataset.ceoSkill;
@@ -1779,34 +1895,68 @@ async function saveCeoTools(pid) {
     if (!connectors.mcp[mcpId]) connectors.mcp[mcpId] = {};
     connectors.mcp[mcpId][seat] = input.checked;
   });
-  
+
+  const project = projectById(pid) || currentProject() || {};
   const capInput = $("ceoSpendCap");
   const capRaw = capInput ? capInput.value.trim() : "";
   const account = $("ceoAccountId");
   const site = $("ceoSiteUrl");
   const folder = $("ceoFolder");
+  const repo = $("ceoGithubRepo");
+  const railway = $("ceoRailway");
   const fallbackInput = $("ceoFallback");
   const fallback = fallbackInput ? fallbackInput.value.split(",").map(s => s.trim()).filter(Boolean) : [];
-  
-  const res = await fetch(`/api/org/projects/${pid}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      folder: folder ? folder.value.trim() : undefined,
-      spend_cap_usd: capRaw === "" ? "" : Number(capRaw),
-      account_id: account ? account.value : "",
-      fallback,
-      site_url: site ? site.value.trim() : "",
-      connectors,
-      seats
-    })
-  });
-  const data = await res.json();
-  if ($("ceoToolsStatus")) $("ceoToolsStatus").textContent = res.ok ? "CEO saved" : (data.error || "save failed");
-  if (res.ok) {
-    applyOrg(data);
-    loadSpend();
+  const folderValue = folder ? folder.value.trim() : "";
+  const currentFolder = String(project.folder || "").trim();
+
+  const body = {
+    spend_cap_usd: capRaw === "" ? "" : Number(capRaw),
+    account_id: account ? account.value : "",
+    fallback,
+    site_url: site ? site.value.trim() : "",
+    github_repo: repo ? repo.value.trim() : "",
+    railway: railway ? railway.value.trim() : "",
+    mcp_github: Boolean($("ceoAuthGithub") && $("ceoAuthGithub").checked),
+    authorize_site: Boolean($("ceoAuthSite") && $("ceoAuthSite").checked),
+    authorize_railway: Boolean($("ceoAuthRailway") && $("ceoAuthRailway").checked),
+    authorize_cookie_export: Boolean($("ceoAuthCookieExport") && $("ceoAuthCookieExport").checked),
+    authorize_facebook: Boolean($("ceoAuthFacebook") && $("ceoAuthFacebook").checked),
+    connectors,
+    seats
+  };
+  // Only PATCH folder when it actually changed — re-posting a laptop path fails Save.
+  if (folderValue && folderValue !== currentFolder) body.folder = folderValue;
+
+  try {
+    const res = await fetch(`/api/org/projects/${pid}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (status) {
+      status.textContent = res.ok ? "Saved" : (data.error || "Save failed");
+      status.classList.toggle("error", !res.ok);
+    }
+    if (res.ok) {
+      applyOrg(data);
+      loadSpend();
+      window.setTimeout(() => {
+        if (status && status.textContent === "Saved") status.textContent = "";
+      }, 2200);
+    }
+  } catch (err) {
+    if (status) {
+      status.textContent = "Save failed — board unreachable";
+      status.classList.add("error");
+    }
   }
+}
+
+function wireState(on, labelOn, labelOff) {
+  return on
+    ? `<span class="wire-on">${escapeHtml(labelOn || "Authorized")}</span>`
+    : `<span class="wire-off">${escapeHtml(labelOff || "Off")}</span>`;
 }
 
 function accountSelectOptions(selected, blank) {
@@ -1863,7 +2013,6 @@ function fillCeoPanel() {
   const git = project.git || {};
   const remote = git.remote || (git.is_repo ? "local git, no origin" : "not a git folder");
   const folder = project.folder || "";
-  const mcp = tools.mcp_github;
   const spend = tools.spend_cap_usd;
   const hermesHome = tools.hermes_home || "";
   const hermesSessionId = tools.hermes_session_id || "";
@@ -1872,8 +2021,18 @@ function fillCeoPanel() {
   const accountId = tools.account_id || "";
   const fallback = (tools.fallback || []).join(", ") || "—";
   const siteUrl = tools.site_url || "";
+  const githubRepo = tools.github_repo || "";
+  const railway = tools.railway || "";
+  const authGithub = Boolean(tools.mcp_github);
+  const authSite = Boolean(tools.authorize_site);
+  const authRailway = Boolean(tools.authorize_railway);
+  const authCookie = Boolean(tools.authorize_cookie_export);
+  const authFacebook = Boolean(tools.authorize_facebook);
   const seats = tools.seats || {};
   const connectors = tools.connectors || { skills: {}, mcp: {} };
+  const noOrigin = Boolean(git.is_repo) && !git.remote;
+  const isNadia = project.id === "nadia" || /nadia/i.test(String(project.name || ""));
+  const isListLogic = project.id === "listlogic" || /listlogic/i.test(String(project.name || ""));
   
   // Compute Available tools strip
   const globalConnectors = cfg.connectors || { skills: {}, mcp: {} };
@@ -1913,13 +2072,64 @@ function fillCeoPanel() {
       <div class="kv">
         <div><dt>Chat</dt><dd>Tools off (explains + routes only)</dd></div>
         <div><dt>Think</dt><dd>Skills: ${availableSkills.think.join(", ") || "none"}</dd></div>
-        <div><dt>Research</dt><dd>Skills: ${availableSkills.research.join(", ") || "none"}</dd></div>
-        <div><dt>Ops</dt><dd>Skills: ${availableSkills.ops.join(", ") || "none"}</dd></div>
-        <div><dt>Code</dt><dd>MCP: ${availableMcp.code.join(", ") || "none"}</dd></div>
+        <div><dt>Research</dt><dd>Skills: ${availableSkills.research.join(", ") || "none"} · site ${authSite ? "authorized" : "off"}</dd></div>
+        <div><dt>Ops</dt><dd>Skills: ${availableSkills.ops.join(", ") || "none"} · Railway ${authRailway ? "authorized" : "off"}</dd></div>
+        <div><dt>Code</dt><dd>MCP: ${availableMcp.code.join(", ") || "none"} · GitHub ${authGithub ? "authorized" : "off"}</dd></div>
       </div>
-      <p class="muted">Configure in Settings → Connectors (global) or below (CEO overrides)</p>
+      <p class="muted">Chat never gets tools. Authorize below for Code / Research / Ops on this CEO.</p>
     </div>
   `;
+
+  const gitCard = noOrigin
+    ? `<div class="usage-card">
+      <h4>Git · no origin</h4>
+      <p class="lede">Local repo only. Connect GitHub — Save cannot invent a remote.</p>
+      <div class="field">
+        <label for="ceoGithubRepo">GitHub repo</label>
+        <input id="ceoGithubRepo" type="text" value="${escapeHtml(githubRepo)}" placeholder="adamsch0100/pmillsports" />
+      </div>
+      <div class="actions">
+        <a class="send" id="ceoConnectGithub" href="https://github.com/login" target="_blank" rel="noreferrer">Connect GitHub</a>
+        <button type="button" class="ghost-btn" id="ceoOpenGitPanel">Open Git panel</button>
+      </div>
+      <p class="muted">After OAuth / <code>gh auth login</code>, paste owner/repo and authorize GitHub MCP.</p>
+    </div>`
+    : `<div class="usage-card">
+      <h4>Code</h4>
+      <div class="kv">
+        <div><dt>Folder</dt><dd>${escapeHtml(folder)}</dd></div>
+        <div><dt>Git</dt><dd>${escapeHtml(remote)}</dd></div>
+        <div><dt>GitHub MCP</dt><dd>${wireState(authGithub)}</dd></div>
+      </div>
+      <div class="field">
+        <label for="ceoGithubRepo">GitHub repo</label>
+        <input id="ceoGithubRepo" type="text" value="${escapeHtml(githubRepo)}" placeholder="adamsch0100/pmillsports" />
+      </div>
+    </div>`;
+
+  const hermesFail = String((cfg.engines && cfg.engines.hermes && cfg.engines.hermes.error) || "").trim();
+  const hermesCard = `<div class="usage-card">
+      <h4>Hermes</h4>
+      <div class="kv">
+        <div><dt>Home</dt><dd>${escapeHtml(hermesHome || "not attached")}</dd></div>
+        <div><dt>Telegram ID</dt><dd>${escapeHtml(hermesSessionId || "—")}</dd></div>
+        <div><dt>Sessions</dt><dd>${sessionCount}</dd></div>
+        ${sessionTitle ? `<div><dt>Last</dt><dd>${escapeHtml(sessionTitle)}</dd></div>` : ""}
+      </div>
+      ${hermesFail || (!hermesHome)
+        ? `<p class="wire-error">${escapeHtml(hermesFail || "No Hermes home on this CEO. Re-seat or open Tools → Hermes and Restart gateway.")}</p>
+           <div class="actions"><button type="button" class="ghost-btn" id="ceoRetryHermes">Restart Hermes gateway</button></div>`
+        : ""}
+    </div>`;
+
+  const riskCard = (isNadia || isListLogic)
+    ? `<div class="usage-card">
+      <h4>Risk · scoped consent</h4>
+      <p class="muted">Secrets stay in the vault. Chat never receives cookies or Facebook tokens.</p>
+      ${isNadia ? `<label class="check-line"><input id="ceoAuthCookieExport" type="checkbox"${authCookie ? " checked" : ""} /> Authorize Nadia cookie export (vault only)</label>` : `<input id="ceoAuthCookieExport" type="checkbox" hidden ${authCookie ? "checked" : ""} />`}
+      ${isListLogic ? `<label class="check-line"><input id="ceoAuthFacebook" type="checkbox"${authFacebook ? " checked" : ""} /> Authorize ListLogic Facebook (vault login approve)</label>` : `<input id="ceoAuthFacebook" type="checkbox" hidden ${authFacebook ? "checked" : ""} />`}
+    </div>`
+    : `<input id="ceoAuthCookieExport" type="checkbox" hidden ${authCookie ? "checked" : ""} /><input id="ceoAuthFacebook" type="checkbox" hidden ${authFacebook ? "checked" : ""} />`;
   
   if (hint) hint.textContent = `${project.name} — Keys, spend, seats, connectors, and Hermes home`;
   if (isCollaborator()) {
@@ -1930,31 +2140,28 @@ function fillCeoPanel() {
   }
   body.innerHTML = `
     ${toolsStrip}
-    <div class="usage-card">
-      <h4>Code</h4>
-      <div class="kv">
-        <div><dt>Folder</dt><dd>${escapeHtml(folder)}</dd></div>
-        <div><dt>Git</dt><dd>${escapeHtml(remote)}</dd></div>
-      </div>
-    </div>
-    <div class="usage-card">
-      <h4>Hermes</h4>
-      <div class="kv">
-        <div><dt>Home</dt><dd>${escapeHtml(hermesHome)}</dd></div>
-        <div><dt>Telegram ID</dt><dd>${escapeHtml(hermesSessionId)}</dd></div>
-        <div><dt>Sessions</dt><dd>${sessionCount}</dd></div>
-        ${sessionTitle ? `<div><dt>Last</dt><dd>${escapeHtml(sessionTitle)}</dd></div>` : ""}
-      </div>
-    </div>
+    ${gitCard}
+    ${hermesCard}
     <div class="field">
       <label for="ceoFolder">Code folder</label>
       <input id="ceoFolder" type="text" value="${escapeHtml(folder)}" placeholder="C:\\path\\to\\repo" />
     </div>
     <div class="field">
       <label for="ceoSiteUrl">Site URL</label>
-      <input id="ceoSiteUrl" type="text" value="${escapeHtml(siteUrl)}" placeholder="https://example.com" />
-      <p class="muted">For Research snapshot jobs</p>
+      <input id="ceoSiteUrl" type="text" value="${escapeHtml(siteUrl)}" placeholder="https://pmill.ai" />
+      <p class="muted">Research snapshots use this URL when Site research is authorized.</p>
     </div>
+    <div class="field">
+      <label for="ceoRailway">Railway</label>
+      <input id="ceoRailway" type="text" value="${escapeHtml(railway)}" placeholder="victorious-presence" />
+    </div>
+    <fieldset class="usage-card ceo-auth-wire">
+      <h4>Authorize tools</h4>
+      <label class="check-line"><input id="ceoAuthGithub" type="checkbox"${authGithub ? " checked" : ""} /> GitHub MCP (Code) ${wireState(authGithub)}</label>
+      <label class="check-line"><input id="ceoAuthSite" type="checkbox"${authSite ? " checked" : ""} /> Site research ${wireState(authSite)}</label>
+      <label class="check-line"><input id="ceoAuthRailway" type="checkbox"${authRailway ? " checked" : ""} /> Railway ${wireState(authRailway)}</label>
+    </fieldset>
+    ${riskCard}
     <div class="field">
       <label for="ceoSpendCap">Spend cap USD (per ${cfg.spend_cap_period || "week"})</label>
       <input id="ceoSpendCap" type="number" min="0" step="0.5" value="${spend || ""}" placeholder="empty = use instance cap" />
@@ -1999,6 +2206,13 @@ function fillCeoPanel() {
   // Set up event listeners
   const save = $("saveCeoTools");
   if (save) save.addEventListener("click", () => saveCeoTools(project.id));
+  const openGit = $("ceoOpenGitPanel");
+  if (openGit) openGit.addEventListener("click", () => setSettings(true, "git"));
+  const retryH = $("ceoRetryHermes");
+  if (retryH) retryH.addEventListener("click", () => {
+    if ($("retryHermes")) $("retryHermes").click();
+    else setStage("hermes");
+  });
   fillOwnerSharePanel(project);
 }
 
@@ -2344,6 +2558,18 @@ function needChoices(row) {
     out.push({ id: "open", label: "Type a login" });
     return out;
   }
+  if (kind === "cookie_export") {
+    return [
+      { id: "allow_cookie_export", label: "Allow cookie export · Nadia vault only" },
+      { id: "deny", label: "Deny" }
+    ];
+  }
+  if (kind === "facebook_approval") {
+    return [
+      { id: "allow_facebook", label: "Approve Facebook · ListLogic vault only" },
+      { id: "deny", label: "Deny" }
+    ];
+  }
   if (kind === "diff") return [{ id: "accept", label: "Accept" }, { id: "reject", label: "Reject" }, { id: "open", label: "See diff" }];
   if (kind === "gate") return [{ id: "allow", label: "Allow" }, { id: "deny", label: "Deny" }];
   if (kind === "expired") return [{ id: "dismiss", label: "Dismiss" }];
@@ -2380,7 +2606,7 @@ function jobChoices(job) {
 
 function choiceButtonsHtml(choices, row) {
   return (choices || []).map((choice) => {
-    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue";
+    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue" || choice.id === "allow_cookie_export" || choice.id === "allow_facebook";
     const danger = choice.id === "reject" || choice.id === "deny";
     return `<button type="button" class="${primary ? "send" : "ghost-btn"}${danger ? " danger" : ""}" data-need-act="${escapeHtml(choice.id)}" data-need-id="${escapeHtml(row.id || "")}" data-need-project="${escapeHtml(row.project_id || "")}" data-need-preset="${escapeHtml(row.preset || "")}" data-need-approval="${escapeHtml(row.approval_id || row.id || "")}" data-need-login="${escapeHtml(choice.login_id || "")}" data-need-url="${escapeHtml(choice.url || row.url || "")}" data-need-cron="${escapeHtml(choice.cron_id || row.cron_id || "")}">${escapeHtml(choice.label || choice.id)}</button>`;
   }).join("");
@@ -2410,12 +2636,27 @@ async function runNeedChoice(btn) {
     renderOrg(org);
     return;
   }
-  if (act === "allow" || act === "deny") {
+  if (act === "allow" || act === "deny" || act === "allow_cookie_export" || act === "allow_facebook") {
+    const scoped = act === "allow_cookie_export" || act === "allow_facebook";
+    if (scoped && act === "allow_cookie_export" && pid && pid !== "nadia") {
+      if ($("orgStatus")) $("orgStatus").textContent = "Cookie export is Nadia-scoped only.";
+      return;
+    }
+    if (scoped && act === "allow_facebook" && pid && pid !== "listlogic") {
+      if ($("orgStatus")) $("orgStatus").textContent = "Facebook approval is ListLogic-scoped only.";
+      return;
+    }
     await fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accept: act === "allow" })
+      body: JSON.stringify({
+        accept: act !== "deny",
+        scope: act === "allow_cookie_export" ? "cookie_export" : (act === "allow_facebook" ? "facebook" : ""),
+        project_id: pid || ""
+      })
     });
+    // Never surface vault secrets into chat — consent stays on the card + vault.
+    if (pid) await setOrgNode(pid, "");
     const data = await (await fetch("/api/config")).json();
     applyConfig(data);
     return;
@@ -2742,21 +2983,13 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     ${inboxHtml()}
     ${capNoticesHtml()}
     ${projectBits}
-    ${canAddCeo() ? `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>` : ""}
   `;
   tree.querySelectorAll(".org-btn").forEach((btn) => {
     btn.addEventListener("click", () => setOrgNode(btn.dataset.project || "", btn.dataset.worker || ""));
     bindNodeMenu(btn, btn.dataset.kind, btn.dataset.project || "", btn.dataset.worker || "");
   });
   bindNeedActions(tree);
-  const addCeo = $("addCeoBtn");
-  if (addCeo) {
-    addCeo.addEventListener("click", (event) => {
-      event.preventDefault();
-      setOrgNode("", "");
-      showNodeMenu(event.clientX, event.clientY, "staff", "", "");
-    });
-  }
+  paintAddCeoControls();
   tree.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -2766,6 +2999,30 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
       renderOrg(org);
     });
   });
+}
+
+function openAddCeoMenu(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  setOrgNode("", "");
+  showNodeMenu(0, 0, "add-ceo", "", "");
+}
+
+function paintAddCeoControls() {
+  const slot = $("orgAddCeoSlot");
+  if (slot) {
+    if (canAddCeo()) {
+      slot.innerHTML = `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>`;
+      const addCeo = $("addCeoBtn");
+      if (addCeo) addCeo.addEventListener("click", openAddCeoMenu);
+    } else {
+      slot.innerHTML = "";
+    }
+  }
+  const settingsRow = $("addCeoSettingsRow");
+  if (settingsRow) settingsRow.classList.toggle("hidden", !canAddCeo());
 }
 
 function currentProject() {
@@ -2974,7 +3231,14 @@ function workCounts() {
   const boardRuns = ((pack.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => (
     !projectId || String(row.project_id || "") === String(projectId)
   ));
-  const doing = list.filter((row) => cronIsLive(row)).length + boardRuns.length + (liveRunId ? 1 : 0);
+  const liveChats = [...lives.keys()].filter((key) => {
+    if (!projectId) return true;
+    return String(key || "").startsWith(`${projectId}::`);
+  }).length;
+  const doing = list.filter((row) => cronIsLive(row)).length
+    + boardRuns.length
+    + liveChats
+    + ((liveRunId && !liveChats) ? 1 : 0);
   const failed = list.filter((row) => cronIsFailed(row));
   const gateway = failed.filter((row) => cronIsGatewayFail(row));
   const freshFail = failed.filter((row) => !cronIsGatewayFail(row) && !cronIsStaleFail(row));
@@ -2988,10 +3252,16 @@ function workCounts() {
     const orgNext = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—").length;
     const jobs = (((cfg.activity || {}).jobs) || []);
     const orgFailed = jobs.filter((row) => /fail|error/i.test(String(row.status || ""))).length;
-    const orgLive = (((cfg.activity || {}).live_runs) || []).length + (liveRunId ? 1 : 0);
-    return { doing: orgLive, next: orgNext, results: Math.min(jobs.length, 12), failed: orgFailed };
+    const orgLive = (((cfg.activity || {}).live_runs) || []).length + lives.size;
+    return { doing: orgLive, next: orgNext, results: Math.min(jobs.length, 12), failed: orgFailed, ready: true };
   }
-  return { doing, next, results, failed: freshFail.length + (gateway.length ? 1 : 0) };
+  return {
+    doing,
+    next,
+    results,
+    failed: freshFail.length + (gateway.length ? 1 : 0),
+    ready: Boolean(pack.crons || pack.live_runs || digestCache.has(projectId))
+  };
 }
 
 function paintWorkTabs() {
@@ -3005,7 +3275,11 @@ function paintWorkTabs() {
       btn.classList.toggle("on", scheduleOpen && scheduleView === view);
       btn.classList.toggle("hot", view === "doing" && n > 0);
       btn.classList.toggle("need", view === "results" && (counts.failed || 0) > 0);
-      btn.innerHTML = `${label}<span class="n">${n}</span>`;
+      // Never flash a hollow "0" as if work is counted — blank until known, digit only when > 0.
+      const badge = n > 0
+        ? `<span class="n">${n}</span>`
+        : (counts.ready ? "" : `<span class="n muted" title="Checking…">·</span>`);
+      btn.innerHTML = `${label}${badge}`;
     });
   });
   paintEmbedLive();
@@ -3167,13 +3441,14 @@ function cronCardHtml(row, open, mark) {
   const fold = String(row.id || title || "job");
   const savedOpen = Boolean((readWorkState().folds || {})[fold]);
   const startOpen = Boolean(open || live || savedOpen || (failed && mark === "result"));
+  const fresh = cronFreshness(row);
   const line = live
     ? "Running now on this CEO's Hermes."
     : (failed ? (err ? `Failed. ${err.slice(0, 120)}` : "Failed.") : outcome);
   return `<details class="cron-card${live ? " live" : ""}${failed ? " failed" : ""}" id="cron-${escapeHtml(row.id || "")}" data-fold="${escapeHtml(fold)}"${startOpen ? " open" : ""}>
     <summary class="cron-head">
       <b>${escapeHtml(title)}</b>
-      <span>${escapeHtml(kind)}</span>
+      <span>${escapeHtml(kind)}${fresh ? ` · ${escapeHtml(fresh)}` : ""}</span>
     </summary>
     <p class="cron-outcome">${escapeHtml(line)}</p>
     ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="send cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry</button>` : ""}
@@ -3373,7 +3648,8 @@ function paintPulse() {
   el.classList.toggle("warn", false);
   if (running) {
     el.hidden = false;
-    el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+    // Engine names only while work is live — skip idle OpenCode/Hermes noise.
+    el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span>`;
   } else if (done) {
     el.hidden = false;
     el.innerHTML = `<i aria-hidden="true"></i><span>Done</span>`;
@@ -3477,15 +3753,37 @@ function gatewayOffHtml() {
 
 function emptyWorkCopy(view) {
   const who = currentProject() ? (currentProject().name || "this CEO") : "Chief of Staff";
+  const why = whyIdleLine();
   if (view === "doing") {
-    return gatewayRunning
-      ? `Nothing is running on ${who}. Send a message, or wait for the next scheduled check.`
-      : `Nothing is running on ${who}. Hermes gateway is off — Restart it to resume scheduled work.`;
+    return why
+      ? `Idle on ${who}. ${why}`
+      : `Nothing is running on ${who}. Send a message, or wait for the next scheduled check.`;
   }
   if (view === "next") {
-    return `Nothing queued for ${who}. When this brief has a Next, or a job is due in the next day, it shows up here.`;
+    return `Nothing queued for ${who}. When this brief has a Next, or a job is due in the next day, it shows up here.${why ? ` ${why}` : ""}`;
   }
-  return `No finished jobs for ${who} yet. Results land here when work completes.`;
+  return `No finished jobs for ${who} yet. Results land here when work completes.${why ? ` ${why}` : ""}`;
+}
+
+function whyIdleLine() {
+  if (liveRunId || lives.size) return "";
+  if (!gatewayRunning && projectId) return "Why idle: Hermes gateway is off — Restart it.";
+  const pack = digestCache.get(projectId) || {};
+  if (projectId && !digestCache.has(projectId)) return "Why idle: still loading schedule…";
+  const next = (pack.crons || []).find((row) => row.enabled !== false && cronIsDueSoon(row) && !cronIsLive(row));
+  if (next && next.next_run_at) return `Why idle: next due ${cronWhenClock(next.next_run_at)}.`;
+  return projectId ? "Why idle: nothing claimed on Hermes right now." : "";
+}
+
+function cronFreshness(row) {
+  const at = Date.parse(String((row && (row.last_run_at || row.next_run_at)) || ""));
+  if (!Number.isFinite(at)) return "";
+  const mins = Math.round((Date.now() - at) / 60000);
+  if (mins < 0) return `due in ${Math.abs(mins)}m`;
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
 }
 
 function gatewayFailClusterHtml(rows, want) {
@@ -3935,6 +4233,7 @@ function applyCollaboratorChrome() {
       btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
     }
   });
+  paintAddCeoControls();
 }
 
 function syncHermesHint() {
@@ -4119,18 +4418,26 @@ function guessLane(text) {
 function paintRouteHatch() {
   const sum = $("routeHatchSummary");
   const menu = $("routeMenu");
+  const hatch = $("routeHatch");
+  const forced = Boolean(preset && preset !== "cos");
   if (menu) {
     menu.querySelectorAll("[data-route]").forEach((btn) => {
       btn.classList.toggle("on", (btn.getAttribute("data-route") || "cos") === (preset || "cos"));
     });
   }
+  // Cos routes from the message. Hatch is only for an explicit force (@mention / reply lane).
+  if (hatch) {
+    hatch.hidden = !forced;
+    if (!forced) hatch.open = false;
+  }
   if (!sum) return;
-  const forced = Boolean(preset && preset !== "cos");
-  const guess = guessLane(($("msg") || {}).value || "");
-  if (forced) sum.textContent = jobLabel(preset);
-  else if (guess !== "cos") sum.textContent = `Auto · ${jobLabel(guess)}`;
-  else sum.textContent = "Auto";
-  sum.classList.toggle("forced", forced);
+  if (forced) {
+    sum.textContent = jobLabel(preset);
+    sum.classList.add("forced");
+  } else {
+    sum.textContent = "Auto";
+    sum.classList.remove("forced");
+  }
 }
 
 function setRoute(name) {
@@ -4839,8 +5146,7 @@ function renderTurns(turns, extras) {
         const rail = $("rail");
         const scrim = $("railScrim");
         if (rail && scrim) {
-          rail.classList.add("open");
-          scrim.classList.add("open");
+          openOrgRail();
         }
       });
     }
@@ -5424,6 +5730,7 @@ async function waitForUnlock() {
       });
       const data = await res.json();
       if (res.ok && !data.needs_unlock) {
+        try { localStorage.removeItem("openbot_share_member"); } catch (_err) { /* ignore */ }
         gate.classList.add("hidden");
         resolve(data);
         return;
@@ -5790,6 +6097,14 @@ $("openSettings").addEventListener("click", (event) => {
   event.stopPropagation();
   setSettings(true, "you");
 });
+if ($("settingsAddCeo")) {
+  $("settingsAddCeo").addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSettings(false);
+    openAddCeoMenu(event);
+  });
+}
 if ($("openHelp")) {
   $("openHelp").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -7682,32 +7997,51 @@ if ($("saveMemory")) {
 }
 
 // Mobile menu toggle
+function closeOrgRail() {
+  const rail = $("rail");
+  const scrim = $("railScrim");
+  if (rail) rail.classList.remove("open");
+  if (scrim) {
+    scrim.classList.remove("open");
+    scrim.setAttribute("aria-hidden", "true");
+  }
+}
+
+function openOrgRail() {
+  const rail = $("rail");
+  const scrim = $("railScrim");
+  if (rail) rail.classList.add("open");
+  if (scrim) {
+    scrim.classList.add("open");
+    scrim.setAttribute("aria-hidden", "false");
+  }
+}
+
 function initMobileMenu() {
   const toggle = $("mobileOrgToggle");
   const rail = $("rail");
   const scrim = $("railScrim");
   
-  if (!toggle || !rail || !scrim) return;
+  if (!rail || !scrim) return;
+  closeOrgRail();
   
-  // Close rail when resizing to desktop
+  // Close rail when resizing to desktop — never leave scrim trapping clicks
   function updateMobileUI() {
-    const isMobile = window.innerWidth <= 860;
-    if (!isMobile) {
-      rail.classList.remove("open");
-      scrim.classList.remove("open");
-    }
+    if (window.innerWidth > 860) closeOrgRail();
   }
   
-  // Toggle rail
-  toggle.addEventListener("click", () => {
-    rail.classList.toggle("open");
-    scrim.classList.toggle("open");
-  });
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      if (rail.classList.contains("open")) closeOrgRail();
+      else openOrgRail();
+    });
+  }
   
-  // Close on scrim click
-  scrim.addEventListener("click", () => {
-    rail.classList.remove("open");
-    scrim.classList.remove("open");
+  // Close on scrim click (immediate — no timeout trap)
+  scrim.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeOrgRail();
   });
   
   // Close on CEO selection (so user sees chat immediately)
@@ -7715,12 +8049,7 @@ function initMobileMenu() {
   if (orgTree) {
     orgTree.addEventListener("click", (event) => {
       const btn = event.target.closest(".org-btn");
-      if (btn && window.innerWidth <= 860) {
-        window.setTimeout(() => {
-          rail.classList.remove("open");
-          scrim.classList.remove("open");
-        }, 200);
-      }
+      if (btn && window.innerWidth <= 860) closeOrgRail();
     });
   }
   

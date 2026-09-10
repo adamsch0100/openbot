@@ -2,9 +2,9 @@
 
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: OttoBot chrome dogfood P0 PR — mark spacing, empties, work-status strip, Activity keeps chat.
-Last: Master tip 7a32402 (post-#70 rename, #72 schedule, #73 un-retire). Chat+Tools and Activity sheet stay.
-Next: Open MERGEABLE chrome PR; do not merge. No Cloud Agents. Do not touch DESKTOP.
+Now: P0 wire dogfood PR — CEO authorize GitHub/Railway/site, Doing honesty, Nadia/ListLogic consent, composer hatch off.
+Last: Branched from ceb63b6 (#75 can_add_ceo). Richer Add CEO + Pmill prefs kept.
+Next: Open MERGEABLE PR; do not merge. No Cloud Agents. DESKTOP off. No auto-seat.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
