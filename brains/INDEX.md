@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Fixed railway SSH PID leak. PR #59 open on adamsch0100/openbot master.
-Last: Stopped unbounded railway-ssh accumulation in overlay_saa_live_background() loop — hard-reap on timeout (killpg), single-flight lock, coalesced SSH (2 not 3), interval 12s→120s. 8 new regression tests. Board engine.
-Next: Await merge approval. No Hermes redeploy needed. Overlay still works from cache when SSH fails.
-Blocker: None. Phone board (#55) shipped. Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
+Now: SAA Homes · Citation audit is done · Failed. RuntimeError: HTTP 400: Error from provider (Console Go): Request is missing x-opencode-session and cannot
+Last: SAA Homes · CEO: Citation audit is done · Failed. RuntimeError: HTTP 400: Error from provider (Console Go): Request is missing x-opencode-session and cannot be routed efficientl
+Next: Open SAA Homes if you want the report, or keep going from Chief of Staff
+Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
 
