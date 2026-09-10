@@ -13,17 +13,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install OpenCode binary
-# The install script detects platform and downloads the appropriate binary to ~/.opencode/bin
-RUN curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path \
+# Install OpenCode binary (Accept-gated pin — Steward propose)
+ENV OPENCODE_VERSION=1.18.30
+RUN curl -fsSL https://opencode.ai/install | bash -s -- --version ${OPENCODE_VERSION} --no-modify-path \
     && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode \
     && opencode --version
 
-# Install Hermes Agent using official installer
-# Running as root in Docker triggers FHS layout: code at /usr/local/lib/hermes-agent,
-# binary at /usr/local/bin/hermes (created by installer), data at /root/.hermes
+# Install Hermes Agent (Accept-gated pin — Steward propose: v2026.9.7 / v0.21.1)
+ENV HERMES_VERSION=v2026.9.7
 RUN curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | \
-    bash -s -- --skip-setup --skip-browser --non-interactive \
+    bash -s -- --skip-setup --skip-browser --non-interactive --branch ${HERMES_VERSION} \
     && hermes --version
 
 # Railway CLI: this board overlays SAA Homes Hermes over SSH. Do not start a second SAA gateway.

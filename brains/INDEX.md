@@ -1,5 +1,8 @@
 # INDEX
 
+
+## Engine changelog (Steward propose)
+- 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
 Now: OttoBot chrome dogfood P0 PR — mark spacing, empties, work-status strip, Activity keeps chat.
