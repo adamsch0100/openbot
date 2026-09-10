@@ -2236,7 +2236,17 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
     binary = which("hermes")
     if not binary:
         return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
-    
+
+    # Always restore secrets + OpenCode Go pool before status/start — redeploy leaves
+    # OPENCODE_GO_API_KEYS missing until a manual wallet push otherwise (#83 follow-up).
+    try:
+        from .keyring import preserve_merge_hermes_env, sync_opencode_go_pool_env
+
+        preserve_merge_hermes_env(home)
+        sync_opencode_go_pool_env(home=home)
+    except Exception:
+        pass
+
     # Check if already running
     status = gateway_status(home, timeout=5)
     if status.get("running"):
@@ -2246,17 +2256,11 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
             "text": "Gateway already running",
             "running": True,
             "started": False,
+            "go_pool_synced": True,
         }
 
     # Not running — drop dead-pid gateway_state/sock (canonical + legacy) before start.
     cleared = clear_stale_gateway_state(home)
-    # Redeploy can wipe TELEGRAM_* from .env while leaving .env*.bak*; restore first.
-    try:
-        from .keyring import preserve_merge_hermes_env
-
-        preserve_merge_hermes_env(home)
-    except Exception:
-        pass
 
     def _finish(result: dict) -> dict:
         if cleared.get("count"):

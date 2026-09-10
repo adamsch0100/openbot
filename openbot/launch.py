@@ -928,10 +928,16 @@ def warm_engines() -> dict:
                 "hermes": hermes_dash_status() | {"ok": True},
             }
         try:
-            from .keyring import activate_for_engine
+            from .keyring import activate_for_engine, sync_opencode_go_pool_env
 
             activate_for_engine("OpenCode")
             activate_for_engine("Hermes Agent")
+            # Board boot: write OPENCODE_GO_API_KEYS into process + default Hermes home.
+            sync_opencode_go_pool_env()
+            for pid in supervised_project_ids():
+                ceo_home = _ceo_hermes_home(pid)
+                if ceo_home:
+                    sync_opencode_go_pool_env(home=ceo_home)
         except Exception as err:
             print(f"[openbot] key push skipped: {err}", flush=True)
         opencode = start_opencode_web(_opencode_cwd)
@@ -995,6 +1001,15 @@ def ensure_supervised_gateway(project_id: str) -> dict:
             "project_id": project_id,
             "reason": "no hermes home",
         }
+    # Auto-sync Go pool into this CEO home even when gateway is already up
+    # (no manual activate / Tools wallet push after deploy).
+    try:
+        from .keyring import preserve_merge_hermes_env, sync_opencode_go_pool_env
+
+        preserve_merge_hermes_env(home)
+        sync_opencode_go_pool_env(home=home)
+    except Exception:
+        pass
     status = gateway_status(home, timeout=5)
     if status.get("running"):
         return {
@@ -1003,6 +1018,7 @@ def ensure_supervised_gateway(project_id: str) -> dict:
             "started": False,
             "project_id": project_id,
             "home": home,
+            "go_pool_synced": True,
         }
     code = int(status.get("code") or 0)
     err = str(status.get("error") or status.get("text") or "").lower()
@@ -1016,12 +1032,6 @@ def ensure_supervised_gateway(project_id: str) -> dict:
             "home": home,
             "reason": "gateway status timed out; not starting a second process",
         }
-    try:
-        from .keyring import preserve_merge_hermes_env
-
-        preserve_merge_hermes_env(home)
-    except Exception:
-        pass
     result = gateway_start(home, wait=False)
     result["project_id"] = project_id
     result["home"] = home
