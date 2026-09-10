@@ -239,11 +239,56 @@ def _cookie_value(header: str | None, name: str) -> str:
     return morsel.value if morsel else ""
 
 
+def _unlock_tokens_path() -> Path:
+    from .store import ROOT
+    return ROOT / "unlock_tokens.json"
+
+
+def _read_unlock_tokens() -> set[str]:
+    path = _unlock_tokens_path()
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    if isinstance(data, list):
+        return {str(x) for x in data if str(x or "").strip()}
+    if isinstance(data, dict):
+        rows = data.get("tokens")
+        if isinstance(rows, list):
+            return {str(x) for x in rows if str(x or "").strip()}
+    return set()
+
+
+def _write_unlock_tokens(tokens: set[str]) -> None:
+    path = _unlock_tokens_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"tokens": sorted(tokens)}, indent=2), encoding="utf-8")
+
+
 def _mint_unlock() -> str:
     token = secrets.token_hex(16)
     with _UNLOCK_LOCK:
-        _UNLOCK_TOKENS.add(token)
+        tokens = _read_unlock_tokens() | _UNLOCK_TOKENS
+        tokens.add(token)
+        _UNLOCK_TOKENS.clear()
+        _UNLOCK_TOKENS.update(tokens)
+        _write_unlock_tokens(tokens)
     return token
+
+
+def _token_unlocked(token: str) -> bool:
+    if not token:
+        return False
+    with _UNLOCK_LOCK:
+        if token in _UNLOCK_TOKENS:
+            return True
+        tokens = _read_unlock_tokens()
+        if token in tokens:
+            _UNLOCK_TOKENS.update(tokens)
+            return True
+    return False
 
 
 def _has_key(keyring: dict | None = None) -> bool:
@@ -586,6 +631,7 @@ def _member_config(member: dict) -> dict:
             "work_dir": "",
             "spend": spend_summary(float(cap), cfg["spend_cap_period"], project_id=pid),
             "setup_needed": False,
+            # Collaborators never Add CEO; owners use _public_config (True).
             "can_add_ceo": False,
         }
     )
@@ -606,6 +652,8 @@ def _locked_payload() -> dict:
         "first_run_done": True,
         "has_key": True,
         "setup_needed": False,
+        "can_add_ceo": False,
+        "actor": "locked",
     }
 
 
@@ -639,9 +687,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _owner_unlocked(self) -> bool:
         settings = load_settings()
         if settings.get("pin_hash"):
-            token = self._owner_token()
-            with _UNLOCK_LOCK:
-                return bool(token) and token in _UNLOCK_TOKENS
+            return _token_unlocked(self._owner_token())
         return self._member() is None
 
     def _actor_row(self) -> dict | None:
@@ -1762,6 +1808,8 @@ class Handler(SimpleHTTPRequestHandler):
             token = _mint_unlock()
             payload = _public_config()
             payload["token"] = token
+            payload["can_add_ceo"] = True
+            payload["needs_unlock"] = False
             return self._json(200, payload, set_cookie=self._unlock_cookie(token))
 
         if path == "/api/config":

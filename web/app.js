@@ -49,9 +49,11 @@ function isCollaborator() {
 }
 
 function canAddCeo() {
-  // Unlocked owners can Add CEO on laptop and hosted. Collaborators cannot.
+  // Unlocked owners/operators only. Locked + collaborators never.
+  if (cfg && cfg.needs_unlock) return false;
+  if (isCollaborator()) return false;
   if (cfg && typeof cfg.can_add_ceo === "boolean") return cfg.can_add_ceo;
-  return !isCollaborator();
+  return cfg && cfg.actor === "owner";
 }
 
 function isLiveBoard() {
