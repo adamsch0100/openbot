@@ -2055,15 +2055,31 @@ function paintEngineHealthCard(data) {
     s.hermes_pin ? `Hermes ${s.hermes_pin}` : null,
     s.opencode_pin ? `OpenCode ${s.opencode_pin}` : null
   ].filter(Boolean).join(" · ") || "pins unset";
+  const nexts = Array.isArray(data.next) ? data.next : [];
+  const action = data.action || "";
+  const hermesBad = Boolean(warns.length) || (h.dash_running && !h.dash_home_ok) || (h.home && !h.gateway_running);
+  const footer = warns.length
+    ? `<p class="wire-error">${escapeHtml(warns[0])}</p>
+       ${nexts[0] ? `<p class="muted">Next: ${escapeHtml(nexts[0])}</p>` : ""}
+       ${action === "restart_gateway" ? `<div class="actions"><button type="button" class="ghost-btn" id="ceoHealthRestartGw">Restart Hermes gateway</button></div>` : ""}`
+    : `<p class="muted">Engines look aligned for this CEO.</p>`;
   host.innerHTML = `
     <div class="kv">
-      <div><dt>Hermes</dt><dd class="${h.dash_home_ok || !h.dash_running ? "" : "wire-bad"}">${escapeHtml(hermesLine)}</dd></div>
-      <div><dt>OpenCode</dt><dd>${escapeHtml(ocLine)}</dd></div>
+      <div><dt>Hermes</dt><dd class="${hermesBad ? "wire-bad" : ""}">${escapeHtml(hermesLine)}</dd></div>
+      <div><dt>OpenCode</dt><dd class="${o.present ? "" : "wire-bad"}">${escapeHtml(ocLine)}</dd></div>
       <div><dt>Wire</dt><dd>${escapeHtml(wireLine)}</dd></div>
       <div><dt>Steward</dt><dd>${escapeHtml(pinLine)} · Accept only</dd></div>
     </div>
-    ${warns.length ? `<p class="wire-error">${escapeHtml(warns[0])}</p>` : `<p class="muted">Honest engine status for this CEO — not a live spam chip.</p>`}
+    ${footer}
   `;
+  const restart = $("ceoHealthRestartGw");
+  if (restart) {
+    restart.addEventListener("click", () => {
+      if ($("ceoRetryHermes")) $("ceoRetryHermes").click();
+      else if ($("retryHermes")) $("retryHermes").click();
+      else setStage("hermes");
+    });
+  }
 }
 
 async function loadCeoEngineHealth(project) {

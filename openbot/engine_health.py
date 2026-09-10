@@ -122,14 +122,19 @@ def engine_health(project_id: str | None = None) -> dict:
     }
 
     warn = []
+    next_steps = []
     if aimed and dash.get("running") and not dash_ok:
         warn.append("Hermes dash home mismatch (possible Cos /root/.hermes orphan)")
+        next_steps.append("Open Tools → Hermes and Restart gateway for this CEO (kills stale Cos /root/.hermes dash).")
     if aimed and not gateway.get("running"):
         warn.append("Hermes gateway not running for this CEO")
+        next_steps.append("Tap Restart Hermes gateway below, or Tools → Hermes → Restart.")
     if not engines["hermes"]["present"]:
         warn.append("Hermes binary missing")
+        next_steps.append("Install Hermes on the board host, then Restart gateway.")
     if not engines["opencode"]["present"]:
         warn.append("OpenCode binary missing")
+        next_steps.append("Install OpenCode on the board host (Steward Accept bump if pin changed).")
 
     return {
         "ok": not warn,
@@ -158,4 +163,6 @@ def engine_health(project_id: str | None = None) -> dict:
             "policy": "Accept-gated bumps only — never silent prod upgrade",
         },
         "warn": warn,
+        "next": next_steps,
+        "action": "restart_gateway" if (aimed and not gateway.get("running")) or (aimed and dash.get("running") and not dash_ok) else None,
     }
