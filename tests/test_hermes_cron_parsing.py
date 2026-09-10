@@ -7,7 +7,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from openbot.hermes import _parse_cron_table, cron_digest, cron_outcome, cron_title, is_valid_job_id, parse_skill_list, read_home_crons
+from openbot.hermes import (
+    _parse_cron_table,
+    cron_digest,
+    cron_outcome,
+    cron_title,
+    human_fail_reason,
+    is_valid_job_id,
+    parse_skill_list,
+    read_home_crons,
+)
 from openbot.live import finish, snapshot, start
 
 
@@ -166,16 +175,22 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertFalse(is_valid_job_id("abc"))  # Too short
         self.assertFalse(is_valid_job_id("form-pipeline-health"))  # Name, not ID
 
+    def test_human_fail_reason_strips_gore(self):
+        self.assertEqual(human_fail_reason("Anthropic API 401 Unauthorized"), "API key rejected (401)")
+        self.assertEqual(human_fail_reason("hermes think exited 1"), "Hermes exited 1")
+        self.assertEqual(human_fail_reason("session busy — try again"), "Session busy")
+        self.assertNotIn("OPS_OK", human_fail_reason("OPS_OK"))
+
     def test_cron_outcome_silent_and_fail(self):
         healthy, nxt = cron_outcome("ok", "## Response\n[SILENT] nothing new")
         self.assertIn("Healthy", healthy)
         self.assertIn("No action", nxt)
         failed, fix = cron_outcome("error", "## Response\nGateway shutdown")
         self.assertTrue(failed.startswith("Failed"))
-        self.assertIn("Retry", fix)
+        self.assertIn("Fix model/key", fix)
         gated, cred = cron_outcome("error", "", "cron endpoint returned 401")
         self.assertIn("401", gated)
-        self.assertIn("credential", cred)
+        self.assertIn("Fix model/key", cred)
         ok_copy, nxt2 = cron_outcome("ok", "")
         self.assertIn("Healthy on the live box", ok_copy)
 

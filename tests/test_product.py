@@ -230,6 +230,8 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn("overflow-wrap: anywhere", css)
         self.assertIn("gate-line", css)
         self.assertIn("action gate", js)
+        self.assertIn("gateLineKind", js)
+        self.assertIn("A draft is ready in files. Nothing public yet.", js)
         self.assertIn("handoff_to", js)
 
     def test_credit_stays_on_the_board(self):

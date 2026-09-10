@@ -1665,6 +1665,35 @@ def cron_title(name: str) -> str:
     return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
 
 
+_FAIL_NEXT = "Fix model/key · Retry · Open detail."
+
+
+def human_fail_reason(blob: str) -> str:
+    """One short human reason for a failed job. Engine gore stays out."""
+    text = re.sub(r"\s+", " ", str(blob or "")).strip()
+    text = re.sub(r"\b(?:THINK_OK|OPS_OK)\b", "", text).strip()
+    low = text.lower()
+    if re.search(r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key", low):
+        return "API key rejected (401)"
+    if re.search(r"busy.?session|session.?busy|already running|locked by another", low):
+        return "Session busy"
+    if re.search(r"gateway shutdown|gateway stopped mid-run", low):
+        return "Hermes gateway stopped mid-run"
+    if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
+        return "Wallet empty"
+    if re.search(r"timed? ?out|timeout", low):
+        return "Timed out"
+    exit_m = re.search(r"(?:hermes\s+)?(?:chat\s+|think\s+)?exit(?:ed)?\s*(\d+)", low)
+    if exit_m or re.search(r"hermes.*(exit|fail)|exit code", low):
+        code = exit_m.group(1) if exit_m else ""
+        return f"Hermes exited{(' ' + code) if code else ''}".strip()
+    cleaned = re.sub(r"(?:~|/|[A-Za-z]:[\\/])[^\s]{16,}", "…", text)
+    cleaned = re.sub(r"^Failed\.?\s*", "", cleaned, flags=re.I).strip()
+    if not cleaned or cleaned in {"(no output)", "Failed", "Failed."}:
+        return "The last run did not finish"
+    return cleaned[:120]
+
+
 def cron_outcome(status: str, result: str, error: str = "") -> tuple[str, str]:
     """Plain outcome + next action from a cron status and report body."""
     body = _cron_report_body(result)
@@ -1674,23 +1703,14 @@ def cron_outcome(status: str, result: str, error: str = "") -> tuple[str, str]:
     if re.search(r"\[silent\]", body, re.I):
         return "Healthy. Nothing new to report.", "No action. It will run again on schedule."
     if re.search(r"error|fail", st):
-        if re.search(r"gateway shutdown", blob, re.I):
-            return (
-                "Failed. The Hermes gateway stopped mid-run.",
-                "Retry this job on the live box. Do not fire the whole set.",
-            )
-        if re.search(r"\b401\b", blob):
-            return (
-                "Failed. A live endpoint returned 401.",
-                "Fix the credential for that job, then retry it alone.",
-            )
-        hint = err[:160] or "The last run did not finish."
-        return f"Failed. {hint}", "Open this job, then retry or fix the cause."
+        reason = human_fail_reason(blob)
+        return f"Failed. {reason}", _FAIL_NEXT
     if not body:
         if st in {"ok", "success", "completed", "succeeded"}:
             return "Healthy on the live box.", "No action. It will run again on schedule."
         return "Ran, but this board does not have the full report yet.", "Wait for the next copy, or check Telegram."
     first = re.sub(r"\s+", " ", body.splitlines()[0])[:140]
+    first = re.sub(r"\b(?:THINK_OK|OPS_OK)\b", "", first).strip() or first
     return first, "Read the note below, then do the next step it names."
 
 
