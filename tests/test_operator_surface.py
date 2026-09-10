@@ -11,7 +11,11 @@ ROOT = Path(__file__).resolve().parent.parent
 class OperatorSurfaceUiTests(unittest.TestCase):
     def test_your_move_names_ceo(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("function adamMustSee", js)
+        self.assertIn("function failCardTitle", js)
+        self.assertIn("function clusterFailRows", js)
+        self.assertIn("function handlingInboxHtml", js)
+        self.assertIn("cron-card failed handled compact", js)
+        self.assertIn("class=\"org-inbox handling\"", js)
         self.assertIn("function ceoHandlingStoryHtml", js)
         self.assertIn("is handling", js)
         adam = js[js.find("function adamMustSee") : js.find("function operatorMoveRows")]
@@ -63,8 +67,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=150", html)
-        self.assertIn("styles.css?v=150", html)
+        self.assertIn("app.js?v=151", html)
+        self.assertIn("styles.css?v=151", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

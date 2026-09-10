@@ -407,6 +407,12 @@ function humanFailReason(blob) {
   }
   if (/timed? ?out|timeout/.test(low)) return "Timed out";
   if (/exited 130\b|\bsigint\b|cancelled by (the )?operator/.test(low)) return "Cancelled";
+  if (/#\s*cron job:|\*\*job id:\*\*|\*\*run time:\*\*|##\s*prompt/i.test(String(blob || ""))) {
+    if (/\b401\b|unauthorized|invalid.?api.?key/.test(low)) return "API key rejected (401)";
+    const cronM = String(blob || "").match(/Cron Job:\s*([a-z0-9._-]+)/i);
+    const title = cronM && typeof cronTitle === "function" ? cronTitle(cronM[1]) : (cronM ? cronM[1] : "Scheduled job");
+    return `${title} failed`;
+  }
   const exitM = low.match(/(?:hermes\s+)?(?:chat\s+|think\s+)?exit(?:ed)?\s*(\d+)/);
   if (exitM || /hermes.*(exit|fail)|exit code/.test(low)) {
     return exitM ? `Hermes exited ${exitM[1]}` : "Hermes exited";
@@ -784,16 +790,36 @@ function cronFailNext(row) {
   return failOwnership(row).next;
 }
 
+function clusterFailRows(rows) {
+  const groups = new Map();
+  (rows || []).forEach((row) => {
+    const fp = failFingerprint(row);
+    if (!groups.has(fp)) groups.set(fp, []);
+    groups.get(fp).push(row);
+  });
+  return [...groups.values()].map((list) => ({ row: list[0], extra: Math.max(0, list.length - 1) }));
+}
+
+function failCardTitle(row) {
+  const named = (typeof failJobTitle === "function") ? failJobTitle(row) : "";
+  if (named && !/^(ops|auto|job|failed job|last job|scheduled check)$/i.test(named)) return named;
+  const blob = failBlobOf(row);
+  const cronM = String(blob || "").match(/Cron Job:\s*([a-z0-9._-]+)/i);
+  if (cronM) return cronTitle(cronM[1]);
+  const fromName = row && (row.title || (typeof cronTitle === "function" ? cronTitle(row.name || row.id) : row.name));
+  if (fromName && !/^(ops|auto)$/i.test(String(fromName))) return fromName;
+  return "Scheduled job";
+}
+
 function failChromeHtml(row, open, mark, extraCount) {
-  const title = (row && (row.title || row.name)) ? (row.title || cronTitle(row.name || row.id) || row.name) : (jobStoryTitle(row) || "Job");
+  const title = failCardTitle(row);
   const own = failOwnership(row);
   const status = mark === "live" ? "Handling" : (mark === "result" ? own.resultStatus : own.status);
   const fold = String((row && (row.id || row.cron_id || title)) || "job");
   const savedOpen = Boolean((readWorkState().folds || {})[fold]);
-  const startOpen = Boolean(open || savedOpen || mark === "result" || mark === "next");
-  const fresh = typeof cronFreshness === "function" ? cronFreshness(row) : "";
+  const startOpen = Boolean(open || savedOpen);
   const extra = Number(extraCount) > 0 ? ` +${Number(extraCount)}` : "";
-  const choices = failChoices(row);
+  const choices = failChoices(row).slice(0, 1);
   const acts = choices.length
     ? `<div class="need-actions">${choiceButtonsHtml(choices, { id: (row && row.id) || "", project_id: (row && row.project_id) || projectId || "", cron_id: (row && (row.cron_id || row.id)) || "", kind: "failed", preset: (row && row.preset) || "" })}</div>`
     : "";
@@ -801,15 +827,14 @@ function failChromeHtml(row, open, mark, extraCount) {
   const detailFold = rawDetail && rawDetail.length > 40
     ? `<details class="cron-more" data-fold="raw-${escapeHtml(fold)}"><summary>Details</summary><pre>${escapeHtml(rawDetail.slice(0, 4000))}</pre></details>`
     : "";
-  return `<details class="cron-card failed handled" id="cron-${escapeHtml((row && row.id) || "")}" data-fold="${escapeHtml(fold)}" data-owner="${escapeHtml(own.owner)}" data-fail-status="${escapeHtml(status)}"${startOpen ? " open" : ""}>
+  const glance = clipWire(own.outcome, 88);
+  return `<details class="cron-card failed handled compact" id="cron-${escapeHtml((row && row.id) || "")}" data-fold="${escapeHtml(fold)}" data-owner="${escapeHtml(own.owner)}" data-fail-status="${escapeHtml(status)}"${startOpen ? " open" : ""}>
     <summary class="cron-head">
       <b>${escapeHtml(title)}${escapeHtml(extra)}</b>
-      <span>${escapeHtml(status)}${fresh ? ` · ${escapeHtml(fresh)}` : ""}</span>
+      <span>${escapeHtml(status)}</span>
     </summary>
-    <p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(own.outcome)}</p>
-    <p class="cron-why"><span class="cron-k">Why</span> ${escapeHtml(own.why)}</p>
+    <p class="cron-glance">${escapeHtml(glance)}</p>
     <p class="cron-next"><span class="cron-k">Next</span> ${escapeHtml(own.next)}</p>
-    <p class="cron-status"><span class="cron-k">Status</span> ${escapeHtml(status)}</p>
     ${acts}
     ${detailFold}
   </details>`;
@@ -1927,7 +1952,10 @@ function renderActivity(data) {
       if (inbox && next) inbox.outerHTML = next;
       else if (inbox && !next) inbox.remove();
       else if (!inbox && next) renderOrg(org);
-      if (tree) bindNeedActions(tree);
+      if (tree) {
+        bindNeedActions(tree);
+        bindOpenDesk(tree);
+      }
     }
   }
 }
@@ -3441,6 +3469,22 @@ function bindNeedActions(root) {
     });
   });
   bindGatewayRestart(root);
+  bindOpenDesk(root);
+}
+
+function bindOpenDesk(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-open-desk]").forEach((btn) => {
+    if (btn.dataset.deskBound) return;
+    btn.dataset.deskBound = "1";
+    btn.addEventListener("click", () => {
+      const pid = btn.dataset.openDesk || "";
+      setOrgNode(pid, "");
+      scheduleView = "next";
+      writeWorkState({ view: "next", open: true });
+      openSchedule("");
+    });
+  });
 }
 
 function bindGatewayRestart(root) {
@@ -3610,23 +3654,50 @@ function moveHeadLabel(rows) {
 
 function inboxHtml() {
   const rows = operatorMoveRows();
-  if (!rows.length) return "";
-  const items = rows.map((row) => {
-    const ping = row.kind === "brief" ? "" : " ping";
-    const subject = row.subject || row.name || "CEO";
-    const why = row.why || row.label || "Decide";
-    const choices = needChoices(row).slice(0, 2);
-    return `<div class="org-inbox-item${ping}" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
-      <b>${escapeHtml(subject)}</b>
+  if (rows.length) {
+    const items = rows.map((row) => {
+      const who = row.name || ceoMoveName(row.project_id);
+      const why = clipWire(row.why || row.label || "Needs you", 72);
+      const choices = needChoices(row).slice(0, 1);
+      return `<div class="org-inbox-item" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
+      <b>${escapeHtml(who)}</b>
       <span>${escapeHtml(why)}</span>
       <div class="org-inbox-actions need-actions">
         ${choiceButtonsHtml(choices, row)}
       </div>
     </div>`;
-  }).join("");
-  return `<div class="org-inbox">
-    <div class="org-inbox-head">${escapeHtml(moveHeadLabel(rows))} · ${rows.length}</div>
+    }).join("");
+    return `<div class="org-inbox adam">
+    <div class="org-inbox-head">${escapeHtml(moveHeadLabel(rows))}</div>
     ${items}
+  </div>`;
+  }
+  return handlingInboxHtml();
+}
+
+function handlingInboxHtml() {
+  const projects = ((cfg.org && cfg.org.projects) || []).filter((row) => row && row.id);
+  const bits = [];
+  projects.forEach((project) => {
+    const counts = workCounts(project.id);
+    const n = Number(counts.failed || counts.trustFailed || 0);
+    if (!n) return;
+    const need = topDigestFailNeed(project.id);
+    const blob = need ? (need.last_error || need.why || "") : "";
+    const own = need ? failOwnership({ last_error: blob, project_id: project.id, id: need.cron_id }) : null;
+    const title = need ? failCardTitle({ last_error: blob, title: String(need.subject || "").replace(/^[^·]+ · /, ""), name: need.cron_id }) : "";
+    const line = own && own.owner === "adam"
+      ? `${title || "job"} · ${own.next}`
+      : `${n} failed · ${title || "CEO handling"}`;
+    bits.push(`<button type="button" class="org-inbox-item handling" data-open-desk="${escapeHtml(project.id)}">
+      <b>${escapeHtml(project.name)}</b>
+      <span>${escapeHtml(clipWire(line, 78))}</span>
+    </button>`);
+  });
+  if (!bits.length) return "";
+  return `<div class="org-inbox handling">
+    <div class="org-inbox-head">In motion</div>
+    ${bits.join("")}
   </div>`;
 }
 
@@ -3843,6 +3914,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     bindNodeMenu(btn, btn.dataset.kind, btn.dataset.project || "", btn.dataset.worker || "");
   });
   bindNeedActions(tree);
+  bindOpenDesk(tree);
   paintAddCeoControls();
   tree.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
@@ -4041,7 +4113,9 @@ function cronTitle(name) {
     "competitor-content-watch": "Competitor watch",
     "daily-done-digest": "Daily wrap-up",
     "seo-execute-queue": "SEO fix queue",
-    "gbp-local-pack-audit": "Google Business Profile"
+    "gbp-local-pack-audit": "Google Business Profile",
+    "saved-search-alerts": "Saved search alerts",
+    "saved-search-alerts-immediate": "Saved search alerts"
   };
   const raw = String(name || "").trim();
   if (map[raw]) return map[raw];
@@ -5066,17 +5140,17 @@ function renderChatSchedule(rows, digest, focusId) {
     } else if (view === "schedule") {
       bits.push(`<p class="cron-empty">Pick a CEO to see the full enabled schedule roster.</p>`);
     } else {
-      const failJobs = dedupeFailRows(jobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort));
+      const failJobs = jobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
+      const clustered = clusterFailRows(failJobs);
       const okJobs = jobs.filter((row) => !jobIsFailed(row));
-      if (failJobs.length) {
+      if (clustered.length) {
         bits.push(`<h3 class="cron-section">Recovering · ${failJobs.length}</h3>`);
-        bits.push(failJobs.map((row) => failChromeHtml({
+        bits.push(clustered.map(({ row, extra }) => failChromeHtml({
           ...row,
-          title: row.title || jobLabel(row.preset) || jobStoryTitle(row) || "Job",
           last_status: row.status || row.last_status || "error",
           last_error: row.last_error || row.error || row.blocker || row.text || row.summary || "",
           cron_id: row.cron_id || row.id || ""
-        }, row.id === want, "result")).join(""));
+        }, false, "result", extra)).join(""));
       }
       if (okJobs.length) {
         bits.push(`<h3 class="cron-section">Resolved · ${okJobs.length}</h3>`);
@@ -5229,8 +5303,9 @@ function renderChatSchedule(rows, digest, focusId) {
     const needsAdam = actionFails.filter((row) => failOwnership(row).resultStatus === "Needs Adam");
     const staleFails = failed.filter((row) => cronIsStaleFail(row));
     if (recovering.length) {
+      const clustered = clusterFailRows(recovering);
       sections.push(`<h3 class="cron-section">Recovering · ${recovering.length}</h3>`);
-      sections.push(recovering.map((row) => failChromeHtml(row, row.id === want, "result")).join(""));
+      sections.push(clustered.map(({ row, extra }) => failChromeHtml(row, row.id === want, "result", extra)).join(""));
     }
     if (blockedCos.length) {
       sections.push(`<h3 class="cron-section">Blocked·Cos · ${blockedCos.length}</h3>`);

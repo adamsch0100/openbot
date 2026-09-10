@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Operator surface v150 — YOUR MOVE is Adam-only (keys/money/Accept). CEOs handle the rest.
-Last: Live — seated ListLogic + Nadia from Add CEO. SAA Search & Alerts stays on SAA.
-Next: Push v150 onto #105. Do not merge. Do not Accept parked restore.
+Now: Operator surface v151 — rail is In motion, Results are compact named jobs (no cron gore).
+Last: Live screenshot — YOUR MOVE dump + Recovering RESULT markdown.
+Next: Push v151 onto #105. Do not merge until dogfood on deploy.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
