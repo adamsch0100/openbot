@@ -783,6 +783,96 @@ def start_hermes_dashboard(home: str | None = None, project_id: str | None = Non
         return _start_hermes_dashboard(home, project_id)
 
 
+
+def _listener_pids(port: int) -> list[int]:
+    """PIDs listening on TCP port (Linux). Empty when probing is unavailable."""
+    if os.name == "nt":
+        return []
+    pids: list[int] = []
+    # Do not use _hidden_kwargs here — stdin=DEVNULL breaks check_output on some hosts.
+    try:
+        out = subprocess.check_output(
+            ["ss", "-lptn", f"sport = :{port}"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=4,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
+        try:
+            out = subprocess.check_output(
+                ["sh", "-c", f"fuser -n tcp {port} 2>/dev/null"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=4,
+            )
+            for part in out.replace("\n", " ").split():
+                if part.isdigit():
+                    pids.append(int(part))
+            return pids
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
+            return []
+    for line in out.splitlines():
+        if "pid=" not in line:
+            continue
+        for chunk in line.replace(",", " ").split():
+            if chunk.startswith("pid="):
+                raw = chunk.split("=", 1)[1].split(",")[0]
+                if raw.isdigit():
+                    pids.append(int(raw))
+    return pids
+
+
+def _proc_hermes_home(pid: int) -> str | None:
+    """HERMES_HOME from /proc/<pid>/environ (fallback: cwd)."""
+    try:
+        raw = Path(f"/proc/{pid}/environ").read_bytes()
+    except OSError:
+        raw = b""
+    for part in raw.split(b"\0"):
+        if part.startswith(b"HERMES_HOME="):
+            return part.split(b"=", 1)[1].decode("utf-8", "replace").strip() or None
+    try:
+        return str(Path(f"/proc/{pid}/cwd").resolve())
+    except OSError:
+        return None
+
+
+def _live_dash_home() -> str | None:
+    """Home the process on :9119 is actually using — catches stale /root/.hermes orphans."""
+    for pid in _listener_pids(HERMES_DASH_PORT):
+        home = _proc_hermes_home(pid)
+        if home:
+            return home
+    return _hermes_dash_home
+
+
+def _should_reuse_dash(target: str) -> bool:
+    """Reuse only when bookkeeping AND live process home match the CEO target."""
+    if not _port_open("127.0.0.1", HERMES_DASH_PORT):
+        return False
+    live = _live_dash_home()
+    if not _homes_match(live or _hermes_dash_home, target):
+        return False
+    # Aiming a CEO home while live is still default /root/.hermes → recycle.
+    try:
+        root = str(Path(hermes_home()).resolve())
+        want = str(Path(target).expanduser().resolve())
+    except OSError:
+        return True
+    if want != root and live and _homes_match(live, root):
+        return False
+    # Missing process handle with port open while aiming non-root → orphan risk.
+    if want != root and (_hermes_dash_proc is None or _hermes_dash_proc.poll() is not None):
+        if live and _homes_match(live, want):
+            return True
+        return False
+    return True
+
+
 def _homes_match(left: str | None, right: str | None) -> bool:
     if not left or not right:
         return False
@@ -822,25 +912,21 @@ def _start_hermes_dashboard(home: str | None = None, project_id: str | None = No
     if not target:
         target = str(hermes_home())
     _push_wallets(home=target)
-    # Reuse only when the live dash is already aimed at this CEO home.
-    # Cos orphan caveat: port up with unknown/_hermes_dash_home unset (or a
-    # different home) must recycle — never adopt the orphan as the new CEO.
-    if _port_open("127.0.0.1", HERMES_DASH_PORT) and _homes_match(_hermes_dash_home, target):
+    # Reuse only when live process home matches target (not bookkeeping alone).
+    # Stale /root/.hermes Cos dash must die when SAA (or any CEO home) is aimed.
+    if _should_reuse_dash(target):
+        _hermes_dash_home = target
         return _dash_ok(target)
     if _port_open("127.0.0.1", HERMES_DASH_PORT):
         _kill(_hermes_dash_proc)
         _hermes_dash_proc = None
         _hermes_dash_home = None
-        for _ in range(20):
+        # Always fuser-kill :9119 on retarget — soft-kill alone leaves Cos root orphans.
+        _kill_port(HERMES_DASH_PORT)
+        for _ in range(30):
             if not _port_open("127.0.0.1", HERMES_DASH_PORT):
                 break
             time.sleep(0.2)
-        if _port_open("127.0.0.1", HERMES_DASH_PORT):
-            _kill_port(HERMES_DASH_PORT)
-            for _ in range(20):
-                if not _port_open("127.0.0.1", HERMES_DASH_PORT):
-                    break
-                time.sleep(0.2)
     prepare_hermes()
     cmd = [
         path,

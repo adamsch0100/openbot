@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 class HermesDashRecycleTests(unittest.TestCase):
     def test_markers(self):
         src = (Path(__file__).resolve().parent.parent / "openbot" / "launch.py").read_text(encoding="utf-8")
-        self.assertIn("Cos orphan caveat", src)
-        self.assertIn("_homes_match(_hermes_dash_home, target)", src)
+        self.assertIn("Stale /root/.hermes Cos dash", src)
+        self.assertIn("_should_reuse_dash", src)
         self.assertNotIn(
             "if not _hermes_dash_home:\n            _hermes_dash_home = target\n            return _dash_ok(target)",
             src,
