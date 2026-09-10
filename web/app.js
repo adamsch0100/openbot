@@ -390,11 +390,14 @@ function humanFailReason(blob) {
   let text = String(blob || "").replace(/\s+/g, " ").trim();
   text = text.replace(/\b(?:THINK_OK|OPS_OK)\b/g, "").trim();
   const low = text.toLowerCase();
+  if (/anthropic/.test(low) && (/\b401\b|unauthorized|blocked by policy|authentication failed|x-api-key|invalid.?api.?key/.test(low))) {
+    return "Auth (Anthropic blocked by policy)";
+  }
   if (/\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key/.test(low)) {
     return "API key rejected (401)";
   }
-  if (/busy.?session|session.?busy|already running|locked by another/.test(low)) {
-    return "Session busy";
+  if (/busy.?session|session.?busy|already running|locked by another|hermes already busy/.test(low)) {
+    return "Hermes already busy";
   }
   if (/gateway shutdown|gateway stopped mid-run/.test(low)) {
     return "Hermes gateway stopped mid-run";
@@ -406,6 +409,9 @@ function humanFailReason(blob) {
     return "Wallet empty";
   }
   if (/timed? ?out|timeout/.test(low)) return "Timed out";
+  if (/think.*(couldn.?t|cannot|can.?t)\s*start|blocked anthropic|contributor.?tier/.test(low)) {
+    return "Think couldn't start (blocked Anthropic)";
+  }
   if (/exited 130\b|\bsigint\b|cancelled by (the )?operator/.test(low)) return "Cancelled";
   if (/#\s*cron job:|\*\*job id:\*\*|\*\*run time:\*\*|##\s*prompt/i.test(String(blob || ""))) {
     if (/\b401\b|unauthorized|invalid.?api.?key/.test(low)) return "API key rejected (401)";
@@ -436,19 +442,28 @@ function humanFailReason(blob) {
   return cleaned.slice(0, 120);
 }
 
-function jobIsFailed(job) {
+function jobIsBusySkip(job) {
   if (!job) return false;
   if (job.stopped) return false;
-  const blob = `${job.blocker || ""} ${job.text || ""} ${job.status || ""}`;
+  const blob = `${job.blocker || ""} ${job.text || ""} ${job.last_error || ""} ${job.outcome || ""} ${job.error || ""} ${job.status || ""}`;
   if (/exited 130\b|\bsigint\b/i.test(blob)) return false;
-  const blocker = String(job.blocker || "").trim();
-  if (blocker && blocker !== "—" && blocker !== "ok") return true;
-  return /fail|error/i.test(String(job.status || job.last_status || ""));
+  return /busy.?session|session.?busy|already running|locked by another|hermes already busy/i.test(blob);
+}
+
+function draftFileLabel(job) {
+  if (!job) return "files";
+  if (job.draft_path) return String(job.draft_path).split(/[/\\]/).pop() || "files";
+  if (job.draft_id) return String(job.draft_id);
+  if (Array.isArray(job.untracked) && job.untracked.length) {
+    return String(job.untracked[0]).split(/[/\\]/).pop() || "files";
+  }
+  if (job.diff_pending || (job.diff && String(job.diff).trim())) return "local diff";
+  return "files";
 }
 
 function gateLineKind(job) {
   if (!job) return "";
-  if (jobIsFailed(job)) return "";
+  if (jobIsBusySkip(job) || jobIsFailed(job)) return "";
   const gate = job.gate || {};
   if (!gate.label) return "";
   if (/irreversible|park/i.test(String(gate.label || ""))) return "parked";
@@ -457,9 +472,132 @@ function gateLineKind(job) {
     || (job.diff && String(job.diff).trim())
     || (job.untracked && job.untracked.length)
     || job.draft_id
+    || job.draft_path
   );
+  // Draft-line guard: only real draft + Accept — never OPS_OK / fail spam.
   if (hasDraft && (gate.action === "approval" || job.diff_pending)) return "draft";
   return "";
+}
+
+/** Outcome · Meaning · Next for chat stream + Results. */
+function outcomeMeaningNext(job) {
+  const empty = { outcome: "", meaning: "", next: "", summary: "Done", draftLine: "" };
+  if (!job) return empty;
+  const blob = `${job.blocker || ""} ${job.text || ""} ${job.last_error || ""} ${job.outcome || ""} ${job.message || ""} ${job.error || ""}`;
+  const low = blob.toLowerCase();
+  const preset = String(job.preset || "").toLowerCase();
+  const kind = gateLineKind(job);
+
+  if (kind === "parked") {
+    return {
+      outcome: "Parked · needs your yes",
+      meaning: "Send, publish, pay, or delete waits for Accept.",
+      next: "Review and Allow or Deny.",
+      summary: "Parked",
+      draftLine: "This is parked until you say yes — send, publish, pay, or delete."
+    };
+  }
+  if (kind === "draft") {
+    const file = draftFileLabel(job);
+    return {
+      outcome: `Draft ready · ${file}`,
+      meaning: "Nothing published.",
+      next: "Review draft.",
+      summary: "Draft",
+      draftLine: `Draft ready · ${file}. Nothing published.`
+    };
+  }
+
+  if (jobIsBusySkip(job) || (/ops/.test(preset) && /busy|already running|live owner/i.test(low))) {
+    return {
+      outcome: "Skipped · Hermes already busy",
+      meaning: "Another session owns this Hermes live.",
+      next: "wait or stop the other session",
+      summary: "Skipped",
+      draftLine: ""
+    };
+  }
+
+  // Anthropic 401 / policy (before Think couldn't start — Auth copy wins on 401)
+  if (/anthropic/.test(low) && (/\b401\b|blocked by policy|unauthorized|x-api-key|authentication failed/.test(low))) {
+    return {
+      outcome: "Failed · Auth (Anthropic blocked by policy)",
+      meaning: "Provider rejected the Anthropic key or policy.",
+      next: "confirm Go/OpenRouter in Settings",
+      summary: "Failed",
+      draftLine: ""
+    };
+  }
+
+  if (
+    (/think/.test(preset) || /\bthink\b/.test(low))
+    && (/anthropic/.test(low) || /contributor.?tier|blocked anthropic|couldn.?t start|cannot start/.test(low))
+    && (jobIsFailed(job) || /fail|error|block|denied/.test(low))
+  ) {
+    return {
+      outcome: "Failed · Think couldn't start (blocked Anthropic)",
+      meaning: "Hermes/Anthropic path is blocked for this seat.",
+      next: "use OpenCode Go pool · Retry",
+      summary: "Failed",
+      draftLine: ""
+    };
+  }
+
+  if (jobIsFailed(job)) {
+    const reason = humanFailReason(blob);
+    const failKind = failKindFromBlob(blob);
+    let next = "Retry · Open detail";
+    if (failKind === "key") next = "confirm Go/OpenRouter in Settings";
+    else if (failKind === "wallet") next = "add credits in Settings";
+    else if (failKind === "gateway") next = "Restart gateway — do not mass-fire";
+    else if (failKind === "script") next = "Restore script · Retry";
+    else if (failKind === "transient") next = "wait or stop the other session";
+    else if (/think/.test(preset)) next = "use OpenCode Go pool · Retry";
+    return {
+      outcome: `Failed · ${reason}`,
+      meaning: failWhyLine(failKind, reason),
+      next,
+      summary: "Failed",
+      draftLine: ""
+    };
+  }
+
+  if (opaqueLaneOk(job.text || "", preset)) {
+    if (preset === "ops") {
+      return {
+        outcome: "Ops finished",
+        meaning: "Nothing public.",
+        next: "No action unless something failed.",
+        summary: "Done",
+        draftLine: ""
+      };
+    }
+    if (preset === "think") {
+      return {
+        outcome: "Think finished",
+        meaning: "Plan is in the brief.",
+        next: "Ask Code to execute, or Cos for status.",
+        summary: "Done",
+        draftLine: ""
+      };
+    }
+  }
+
+  const body = cleanBotText(job.text || "") || String(job.text || "").trim();
+  return {
+    outcome: body ? body.split("\n")[0].slice(0, 160) : "Work finished",
+    meaning: "",
+    next: job.next && job.next !== "—" ? String(job.next).slice(0, 160) : "",
+    summary: "Done",
+    draftLine: ""
+  };
+}
+
+function omnPrimaryLine(omn) {
+  if (!omn || !omn.outcome) return "";
+  const bits = [omn.outcome];
+  if (omn.next) bits.push(`Next: ${omn.next}`);
+  return bits.join(". ");
 }
 
 function failFingerprint(row) {
@@ -631,16 +769,21 @@ function failOwnership(row) {
   // Honest ownership first — 401/key Fix key wins even when Hermes Off / gatewayScar also true.
   if (kind === "key") {
     // Never Auto-retry on 401/key — only Adam has the vault.
+    const authAnthropic = /anthropic/i.test(blob);
     return {
       owner: "adam",
       rank: 3,
       status: "Needs Adam",
       resultStatus: "Needs Adam",
       kind,
-      reason,
+      reason: authAnthropic ? "Auth (Anthropic blocked by policy)" : reason,
       why: failWhyLine(kind, reason),
-      next: "Needs Adam · Fix key in Settings. CEO cannot retry this.",
-      outcome: `Failed · ${reason}`
+      next: authAnthropic
+        ? "confirm Go/OpenRouter in Settings"
+        : "Needs Adam · Fix key in Settings. CEO cannot retry this.",
+      outcome: authAnthropic
+        ? "Failed · Auth (Anthropic blocked by policy)"
+        : `Failed · ${reason}`
     };
   }
   if (kind === "script") {
@@ -697,16 +840,17 @@ function failOwnership(row) {
     };
   }
   if (kind === "transient") {
+    const busy = /busy|already running|locked by another/i.test(blob);
     return {
-      owner: "auto",
-      rank: 0,
-      status: "Auto-retry",
+      owner: busy ? "ceo" : "auto",
+      rank: busy ? 1 : 0,
+      status: busy ? "CEO" : "Auto-retry",
       resultStatus: "Recovering",
       kind,
-      reason,
-      why: failWhyLine(kind, reason),
-      next: "Auto-retry — transient. Retry once if it stays red.",
-      outcome: `Failed · ${reason}`
+      reason: busy ? "Hermes already busy" : reason,
+      why: busy ? "Another session owns this Hermes live." : failWhyLine(kind, reason),
+      next: busy ? "wait or stop the other session" : "Auto-retry — transient. Retry once if it stays red.",
+      outcome: busy ? "Skipped · Hermes already busy" : `Failed · ${reason}`
     };
   }
   if (kind === "cancelled") {
@@ -834,6 +978,8 @@ function failChromeHtml(row, open, mark, extraCount) {
       <span>${escapeHtml(status)}</span>
     </summary>
     <p class="cron-glance">${escapeHtml(glance)}</p>
+    <p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(own.outcome)}</p>
+    <p class="cron-why"><span class="cron-k">Meaning</span> ${escapeHtml(own.why)}</p>
     <p class="cron-next"><span class="cron-k">Next</span> ${escapeHtml(own.next)}</p>
     ${acts}
     ${detailFold}
@@ -849,11 +995,12 @@ function opaqueLaneOk(text, preset) {
 }
 
 function primaryJobBody(job) {
-  const raw = String(job.text || "").trim();
-  if (jobIsFailed(job)) {
-    const reason = humanFailReason(`${job.blocker || ""} ${raw}`);
-    return `Failed · ${reason}`;
+  const omn = outcomeMeaningNext(job);
+  if (omn.summary === "Failed" || omn.summary === "Skipped" || omn.summary === "Draft" || omn.summary === "Parked") {
+    return omnPrimaryLine(omn);
   }
+  if (omn.outcome && omn.outcome !== "Work finished") return omn.outcome;
+  const raw = String(job.text || "").trim();
   if (opaqueLaneOk(raw, job.preset)) {
     if (job.preset === "ops") return "Ops finished. Nothing public.";
     if (job.preset === "think") return "Think finished.";
@@ -4510,13 +4657,16 @@ function honestWorkLine(line, counts) {
 function jobIsFailed(row) {
   if (!row) return false;
   if (row.stopped) return false;
+  if (jobIsBusySkip(row)) return false;
   const blob = `${row.blocker || ""} ${row.text || ""} ${row.status || ""} ${row.last_error || ""}`;
   if (/exited 130\b|\bsigint\b/i.test(blob)) return false;
   const status = String(row.status || row.last_status || "").trim();
   if (/^(ok|success|done|running|live|progress)$/i.test(status)) return false;
   if (/fail|error/i.test(status)) return true;
+  const blocker = String(row.blocker || "").trim();
+  if (blocker && blocker !== "—" && blocker !== "ok") return true;
   const body = [
-    row.outcome, row.cron_outcome, row.text, row.summary, row.error, row.last_error
+    row.outcome, row.cron_outcome, row.text, row.summary, row.error, row.last_error, row.blocker
   ].map((x) => String(x || "")).join(" ");
   return /fail|error|traceback|exception/i.test(body);
 }
@@ -5924,25 +6074,37 @@ function appendReceipt(el, job) {
 }
 
 function appendWorkDetails(el, job) {
-  if (!el || !job || el.querySelector(".done-fold")) return;
+  if (!el || !job || el.querySelector(".done-fold") || el.querySelector(".omn-card")) return;
   const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board");
   const cost = Number(job.usd_estimate || 0);
-  if ((engine === "board" || job.preset === "cos") && !cost && !job.cron) return;
+  const omn = outcomeMeaningNext(job);
+  const needsOmn = omn.summary === "Failed" || omn.summary === "Skipped" || omn.summary === "Draft" || omn.summary === "Parked";
+  if ((engine === "board" || job.preset === "cos") && !cost && !job.cron && !needsOmn) return;
+  if (needsOmn || omn.outcome) {
+    const card = document.createElement("div");
+    card.className = `omn-card${omn.summary === "Failed" || omn.summary === "Skipped" ? " warn" : ""}`;
+    const rows = [
+      `<p class="omn-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(omn.outcome)}</p>`,
+      omn.meaning ? `<p class="omn-meaning"><span class="cron-k">Meaning</span> ${escapeHtml(omn.meaning)}</p>` : "",
+      omn.next ? `<p class="omn-next"><span class="cron-k">Next</span> ${escapeHtml(omn.next)}</p>` : ""
+    ].filter(Boolean).join("");
+    card.innerHTML = rows;
+    el.appendChild(card);
+  }
   const line = receiptLine(job);
   if (!line) return;
-  const failed = jobIsFailed(job) || /^Failed\b/.test(line);
   const fold = document.createElement("details");
   fold.className = "done-fold bubble-work";
   const sum = document.createElement("summary");
-  sum.textContent = failed ? "Failed" : "Done";
+  sum.textContent = omn.summary || (jobIsFailed(job) ? "Failed" : "Done");
   fold.appendChild(sum);
   const rec = document.createElement("p");
   rec.className = "receipt receipt-line";
-  if (failed) rec.classList.add("warn");
+  if (omn.summary === "Failed" || omn.summary === "Skipped" || /^Failed\b/.test(line)) rec.classList.add("warn");
   rec.textContent = line;
   fold.appendChild(rec);
   const raw = String(job.text || "").trim();
-  if (failed && raw && humanFailReason(`${job.blocker || ""} ${raw}`) !== cleanBotText(raw)) {
+  if ((omn.summary === "Failed" || omn.summary === "Skipped") && raw && omn.outcome !== cleanBotText(raw)) {
     const more = document.createElement("details");
     more.className = "cron-more";
     more.innerHTML = `<summary>Details</summary><pre></pre>`;
@@ -5963,10 +6125,23 @@ function settleLive(live, job) {
     const think = live.querySelector(".thinking");
     if (think) think.remove();
     const text = live.querySelector(".bubble-text");
-    if (text) paintBotText(text, job.text || "");
+    const omn = outcomeMeaningNext(job);
+    if (text) {
+      if (omn.summary === "Failed" || omn.summary === "Skipped" || omn.summary === "Draft" || omn.summary === "Parked") {
+        paintBotText(text, omnPrimaryLine(omn));
+      } else {
+        paintBotText(text, job.text || "");
+      }
+    }
     stampLane(live, job, true);
     appendWorkDetails(live, job);
-    // Add report card to settled live bubble
+    const gateKind = gateLineKind(job);
+    if (gateKind && omn.draftLine && !live.querySelector(".gate-line")) {
+      const line = document.createElement("p");
+      line.className = `gate-line ${(job.gate && job.gate.action) || ""}`;
+      line.textContent = omn.draftLine + (omn.next ? ` Next: ${omn.next}` : "");
+      live.appendChild(line);
+    }
     if (!live.querySelector(".report-card")) {
       const reportCard = renderReportCard(job);
       if (reportCard) live.appendChild(reportCard);
@@ -6003,8 +6178,9 @@ function liveBubbleFor(key) {
 function jobMeta(job) {
   if (!job) return "";
   if (job.login_wall) return "This site asked for a login.";
-  if (jobIsFailed(job)) {
-    return `Failed · ${humanFailReason(`${job.blocker || ""} ${job.text || ""}`)}`;
+  const omn = outcomeMeaningNext(job);
+  if (omn.summary === "Failed" || omn.summary === "Skipped" || omn.summary === "Draft" || omn.summary === "Parked") {
+    return omn.outcome;
   }
   const hasDiff = Boolean((job.diff && String(job.diff).trim()) || (job.untracked && job.untracked.length) || job.diff_pending);
   if (hasDiff) return "A code change is ready. Accept to keep it or Reject to undo.";
@@ -6021,12 +6197,22 @@ function isTalk(job) {
 }
 
 function renderTalk(job) {
-  const el = bubble("bot", job.text || "");
+  const omn = outcomeMeaningNext(job);
+  const primary = (omn.summary === "Failed" || omn.summary === "Skipped" || omn.summary === "Draft" || omn.summary === "Parked")
+    ? omnPrimaryLine(omn)
+    : (job.text || "");
+  const el = bubble("bot", primary);
   if (job.id) {
     el.setAttribute("data-job-id", job.id);
   }
   stampLane(el, job);
   appendWorkDetails(el, job);
+  if (omn.draftLine && !el.querySelector(".gate-line")) {
+    const line = document.createElement("p");
+    line.className = `gate-line ${(job.gate && job.gate.action) || ""}`;
+    line.textContent = omn.draftLine + (omn.next ? ` Next: ${omn.next}` : "");
+    el.appendChild(line);
+  }
   const choices = jobChoices(job);
   if (choices.length && !el.querySelector(".need-actions")) {
     const actions = document.createElement("div");
@@ -6181,40 +6367,47 @@ function fillLoginOffer(parsed) {
 }
 
 function renderReportCard(job) {
-  return null;
   if (!job) return null;
+  const omn = outcomeMeaningNext(job);
+  // Only show when Outcome/Meaning/Next is the story (fail/skip/draft) or engine work.
+  const showOmn = omn.summary === "Failed" || omn.summary === "Skipped" || omn.summary === "Draft" || omn.summary === "Parked";
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board");
+  if (!showOmn && (engine === "board" || job.preset === "cos") && !job.cron) return null;
   const card = document.createElement("div");
-  card.className = "report-card";
-  
-  // Header: engine · model · $ · preset
+  card.className = `report-card${showOmn ? " omn" : ""}`;
+
   const header = document.createElement("div");
   header.className = "report-card-header";
-  const engine = escapeHtml(job.engine || "board");
   const model = escapeHtml(modelName(job.model) || job.model || "none");
   const cost = Number(job.usd_estimate || 0);
   const costStr = cost > 0 ? `$${cost.toFixed(4)}` : "$0";
   const presetLabel = escapeHtml(job.preset || "cos");
-  header.innerHTML = `<span><b>${engine}</b> · ${model} · <i>${costStr}</i> · ${presetLabel}</span>`;
+  header.innerHTML = `<span><b>${escapeHtml(engine)}</b> · ${model} · <i>${costStr}</i> · ${presetLabel}</span>`;
   card.appendChild(header);
-  
-  // RESULT section (≤20 lines or clear empty/error)
-  const result = document.createElement("div");
-  result.className = "report-result";
-  // Clean bot text before display (ops/think/research jobs can have Meta junk)
-  const text = cleanBotText(String(job.text || "")).trim();
-  if (text) {
-    const lines = text.split("\n");
-    const displayLines = lines.slice(0, 20);
-    result.textContent = displayLines.join("\n");
-    if (lines.length > 20) {
-      result.textContent += `\n… (${lines.length - 20} more lines)`;
+
+  if (showOmn || omn.outcome) {
+    const omnBlock = document.createElement("div");
+    omnBlock.className = "report-omn";
+    omnBlock.innerHTML = [
+      `<p><span class="cron-k">Outcome</span> ${escapeHtml(omn.outcome)}</p>`,
+      omn.meaning ? `<p><span class="cron-k">Meaning</span> ${escapeHtml(omn.meaning)}</p>` : "",
+      omn.next ? `<p><span class="cron-k">Next</span> ${escapeHtml(omn.next)}</p>` : ""
+    ].filter(Boolean).join("");
+    card.appendChild(omnBlock);
+  } else {
+    const result = document.createElement("div");
+    result.className = "report-result";
+    const text = cleanBotText(String(job.text || "")).trim();
+    if (text) {
+      const lines = text.split("\n");
+      result.textContent = lines.slice(0, 20).join("\n");
+      if (lines.length > 20) result.textContent += `\n… (${lines.length - 20} more lines)`;
+    } else if (job.blocker) {
+      result.textContent = `Error: ${job.blocker}`;
     }
-  } else if (job.blocker) {
-    result.textContent = `Error: ${job.blocker}`;
+    card.appendChild(result);
   }
-  card.appendChild(result);
-  
-  // INDEX delta: Now / Last / Next / Blocker
+
   const hasIndexDelta = job.index_now || job.index_last || job.next || job.index_blocker;
   if (hasIndexDelta) {
     const delta = document.createElement("div");
@@ -6240,7 +6433,7 @@ function renderReportCard(job) {
     delta.innerHTML = rows.join("");
     card.appendChild(delta);
   }
-  
+
   return card;
 }
 
@@ -6394,13 +6587,12 @@ function renderJob(job) {
   if (job.login_wall) mountLoginForm(el, job);
   const handoffCard = renderHandoffCard(job);
   if (handoffCard) el.appendChild(handoffCard);
+  const omn = outcomeMeaningNext(job);
   const gateKind = gateLineKind(job);
-  if (gateKind) {
+  if (gateKind && omn.draftLine) {
     const line = document.createElement("p");
     line.className = `gate-line ${(job.gate && job.gate.action) || ""}`;
-    line.textContent = gateKind === "parked"
-      ? "This is parked until you say yes — send, publish, pay, or delete."
-      : "A draft is ready in files. Nothing public yet.";
+    line.textContent = omn.draftLine + (omn.next ? ` Next: ${omn.next}` : "");
     el.appendChild(line);
   }
   // Add report card for non-talk jobs

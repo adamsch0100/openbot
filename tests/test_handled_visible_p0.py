@@ -23,12 +23,12 @@ class HandledVisibleUiTests(unittest.TestCase):
         # Honest map — never Auto-retry on 401/key
         own = js[js.find("function failOwnership") : js.find("function failOwnerRank")]
         key_i = own.index('if (kind === "key")')
-        auto_gate = own.index('status: "Auto-retry"')
-        # key branch must not return Auto-retry
-        key_block = own[key_i : key_i + 550]
+        key_end = own.index("if (kind === \"script\")", key_i)
+        key_block = own[key_i:key_end]
         self.assertIn('status: "Needs Adam"', key_block)
         self.assertIn("Fix key in Settings", key_block)
         self.assertIn("CEO cannot retry this", key_block)
+        self.assertIn("confirm Go/OpenRouter in Settings", key_block)
         self.assertNotIn('status: "Auto-retry"', key_block)
         self.assertIn("Never Auto-retry on 401", own)
         self.assertIn("gatewayScar", own)
@@ -69,7 +69,7 @@ class HandledVisibleUiTests(unittest.TestCase):
     def test_card_chrome_and_ctas(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn('cron-k">Outcome', js)
-        self.assertIn('cron-k">Why', js)
+        self.assertIn('cron-k">Meaning', js)
         self.assertIn('cron-k">Next', js)
         self.assertIn('cron-k">Status', js)
         self.assertIn('id: "restore_script"', js)
@@ -124,8 +124,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=152", html)
-        self.assertIn("styles.css?v=152", html)
+        self.assertIn("app.js?v=153", html)
+        self.assertIn("styles.css?v=153", html)
 
 
 

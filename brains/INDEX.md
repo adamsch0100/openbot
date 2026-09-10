@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Operator surface v152 live — rail In motion / Accept only; Results named jobs, one CTA, cards stay collapsed.
-Last: Merged #105 to master. Live v151 still opened every Recovering card from old session folds.
-Next: Hard-refresh live. Do not Accept parked restore. No stampede.
+Now: SAA chat Results clarity P0 — Outcome · Meaning · Next; no false draft; never Anthropic.
+Last: Operator surface v152 — rail In motion / Accept only; Recovering cards stay collapsed.
+Next: Open MERGEABLE PR house/saa-results-clarity-p0. Schedule trust is a separate follow-up. No Cloud Agents. DESKTOP off.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault

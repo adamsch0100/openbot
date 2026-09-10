@@ -2622,6 +2622,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .gate-line { font-size: 11px; color: var(--muted); margin: 8px 0 0; overflow-wrap: anywhere; }
 .gate-line.approval { color: var(--bronze); }
 .gate-line.blocked { color: #c45c4a; }
+.omn-card { margin: 8px 0 0; font-size: 13px; line-height: 1.35; }
+.omn-card.warn .omn-outcome { color: #c45c4a; }
+.omn-card .cron-k, .report-omn .cron-k { font-weight: 600; margin-right: 6px; color: var(--muted); }
+.report-card.omn .report-omn p { margin: 4px 0; }
 .diff { max-height: 280px; overflow: auto; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); overflow-wrap: anywhere; }
 .diff-actions { display: flex; gap: 8px; margin-top: 8px; }
 .card-blocker { border-left: 3px solid var(--danger); background: rgba(201, 137, 106, 0.08); }
