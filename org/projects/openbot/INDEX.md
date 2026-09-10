@@ -2,7 +2,7 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Round 4 UX PR open — Chat+Tools, engines bind Chat CEO, credit in About.
+Now: OpenBot Round 4 UX PR open — Chat+Tools, engines bind Chat CEO, credit in About.
 Last: #66 Activity sheet is on master.
 Next: Vitzer review of this Round 4 UX PR. Leave PR #48 untouched. Leave SEO/Hermes alone.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
