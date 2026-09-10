@@ -30,6 +30,7 @@ class FailedHonestyMarkers(unittest.TestCase):
         self.assertIn("jobIsFailed(row)", js)
         self.assertIn("!cronIsFailed(row) && cronIsDueSoon(row)", js)
         self.assertIn("attach a schedule", js)
+        self.assertIn("^Ready\\b", js)
 
 
 if __name__ == "__main__":

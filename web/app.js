@@ -2641,6 +2641,10 @@ function ceoWire(project) {
     const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
     return `Running · ${clipWire(line, 42)}`;
   }
+  // Known fails beat idle INDEX copy (Ready… / schedule fluff) once digest is ready.
+  if (counts.ready && (counts.failed || 0) > 0) {
+    return clipWire(`${counts.failed} failed — open Results`, 56);
+  }
   let line = (now && now !== "source of truth" && now !== "—") ? now : ((nxt && nxt !== "—") ? nxt : "");
   line = honestWorkLine(line, counts) || line;
   if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
@@ -3481,6 +3485,10 @@ function isScheduleFluff(line) {
   if (/^On schedule\b/i.test(raw)) return true;
   if (/attach a schedule/i.test(raw)) return true;
   if (/Ops asked Hermes to attach/i.test(raw)) return true;
+  // Idle INDEX copy must not beat real failed/due counts in the rail (#96 soft note).
+  if (/^Ready\b/i.test(raw)) return true;
+  if (/^Ready when you are/i.test(raw)) return true;
+  if (/^Idle\b/i.test(raw)) return true;
   return false;
 }
 

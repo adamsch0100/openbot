@@ -2,6 +2,7 @@
 
 
 ## Engine changelog (Steward propose)
+- 2026-09-10: Treat Ready…/Idle INDEX copy as fluff so org-now shows failed/due (#96 soft note).
 - 2026-09-10: Hotfix loadCeoDigest → renderBotMeta so indexSummary picks up honest failed counts.
 - 2026-09-10: Follow-up #94 — left-rail org-now + indexSummary use honestWorkLine (per-CEO workCounts).
 - 2026-09-10: P0 serve /otto.png before OpenCode catch-all; P1 rail/Next honesty for failed + Cos Results jobIsFailed (status often None).
