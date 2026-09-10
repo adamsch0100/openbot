@@ -2456,6 +2456,11 @@ class BusLawTests(unittest.TestCase):
                 self.assertEqual(parked["action"], "approval")
                 talk = bus_mod.classify_gate("cos", "hello", talk=True)
                 self.assertEqual(talk["action"], "allow")
+                ops_ok = bus_mod.classify_gate("ops", "check cron health", ok=True)
+                self.assertEqual(ops_ok["action"], "allow")
+                self.assertNotIn("draft", ops_ok["label"].lower())
+                ops_fail = bus_mod.classify_gate("ops", "check cron health", ok=False)
+                self.assertEqual(ops_fail["action"], "blocked")
                 rel = bus_mod.write_handoff(
                     "abc123",
                     "builder",

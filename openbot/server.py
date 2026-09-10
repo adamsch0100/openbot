@@ -203,6 +203,13 @@ def companion_payload(project_id: str | None = None) -> dict:
             item["text"] = item.get("label") or ""
         item["choices"] = item.get("choices") or need_choices(item)
         item["actions"] = [str(choice.get("id") or "") for choice in item["choices"] if choice.get("id")]
+        # iOS / inbox: subject + why + primary action
+        item["subject"] = str(item.get("subject") or item.get("name") or "Needs you")[:80]
+        item["why"] = str(item.get("why") or item.get("label") or "")[:160]
+        primary = (item["choices"] or [{}])[0]
+        item["primary_action"] = str(
+            item.get("primary_action") or primary.get("label") or primary.get("id") or "Open"
+        )
         needs.append(item)
     return {
         "now": activity.get("now") or four.get("Now") or "",

@@ -25,6 +25,54 @@ def _cron_is_noise(name: str) -> bool:
     return bool(CRON_INDEX_NOISE.match(str(name or "").strip()))
 
 
+def _cron_enabled(row: dict) -> bool:
+    if row.get("enabled") is False:
+        return False
+    return not bool(re.search(r"paused", str(row.get("state") or ""), re.I))
+
+
+def _cron_failed(row: dict) -> bool:
+    return bool(re.search(r"error|fail", str(row.get("last_status") or ""), re.I))
+
+
+def _cron_due_soon(row: dict, *, now: datetime | None = None) -> bool:
+    """Mirror board cronIsDueSoon: due within 24h, or late by up to 7 days."""
+    raw = str(row.get("next_run_at") or "").strip()
+    if not raw:
+        return False
+    when = _parse_when(raw)
+    if when is None:
+        return False
+    stamp = when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    ms = (stamp.astimezone(timezone.utc) - current).total_seconds()
+    return ms <= 24 * 3600 and ms > -7 * 86400
+
+
+def honest_next_line(peers: list[dict] | None) -> str:
+    """INDEX Next after a healthy cron. Never claim On schedule when peers are due or failed."""
+    rows = [
+        row
+        for row in (peers or [])
+        if isinstance(row, dict) and not _cron_is_noise(str(row.get("name") or ""))
+    ]
+    enabled = [row for row in rows if _cron_enabled(row)]
+    failed = [row for row in enabled if _cron_failed(row)]
+    if failed:
+        title = cron_title(str(failed[0].get("name") or failed[0].get("title") or "job"))
+        if len(failed) == 1:
+            return f"{title} failed · open Results"[:160]
+        return f"{len(failed)} failed · open Results · start with {title}"[:160]
+    due = [row for row in enabled if _cron_due_soon(row)]
+    if due:
+        due.sort(key=lambda row: str(row.get("next_run_at") or ""))
+        title = cron_title(str(due[0].get("name") or due[0].get("title") or "job"))
+        if len(due) == 1:
+            return f"Due soon · {title}. Open Next."[:160]
+        return f"{len(due)} due · next {title}. Open Next."[:160]
+    return "On schedule. Open Next for the upcoming job."
+
+
 def _load_seen() -> dict:
     if not SEEN.is_file():
         return {"lines": []}
@@ -109,7 +157,7 @@ def _ingest_home_files(project_id: str | None, hermes_home: str | None) -> list[
         known.add(key)
         if _cron_is_noise(str(row.get("name") or "")):
             continue
-        posted.append(_post_cron_card(project_id, row))
+        posted.append(_post_cron_card(project_id, row, peers=rows))
     if posted:
         seen["lines"] = list(known)[-400:]
         _save_seen(seen)
@@ -141,14 +189,14 @@ def _ingest_overlay_rows(project_id: str) -> list[dict]:
         known.add(key)
         if _cron_is_noise(str(row.get("name") or "")):
             continue
-        posted.append(_post_cron_card(project_id, row))
+        posted.append(_post_cron_card(project_id, row, peers=rows))
     if posted:
         seen["lines"] = list(known)[-400:]
         _save_seen(seen)
     return posted
 
 
-def _post_cron_card(project_id: str | None, row: dict) -> dict:
+def _post_cron_card(project_id: str | None, row: dict, *, peers: list[dict] | None = None) -> dict:
     name = str(row.get("name") or row.get("id") or "cron")
     title = str(row.get("title") or cron_title(name))
     outcome = str(row.get("outcome") or cron_outcome(row.get("last_status") or "", row.get("last_result") or "")[0])
@@ -193,7 +241,7 @@ def _post_cron_card(project_id: str | None, row: dict) -> dict:
     else:
         patch_scope(project_id, None, "Now", f"{title} is done · {outcome[:80]}")
         patch_scope(project_id, None, "Last", f"{title} · {outcome[:80]}")
-        patch_scope(project_id, None, "Next", "On schedule. Open What’s happening for the next job.")
+        patch_scope(project_id, None, "Next", honest_next_line(peers if peers is not None else [row]))
         patch_scope(project_id, None, "Blocker", "—")
     rollup_staff(project_id, None, f"{title} is done · {outcome}")
     append_turn(thread_key(project_id, None), {"role": "bot", "job": receipt})
