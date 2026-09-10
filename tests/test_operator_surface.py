@@ -47,8 +47,41 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=146", html)
-        self.assertIn("styles.css?v=146", html)
+        self.assertIn("app.js?v=147", html)
+        self.assertIn("styles.css?v=147", html)
+
+    def test_never_run_once_and_one_cta(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function rosterPrimaryChoice", js)
+        self.assertIn('label: "Run once"', js)
+        roster = js[js.find("function scheduleRosterRowHtml") : js.find("function workCounts")]
+        self.assertIn("${primaryCta}", roster)
+        body = roster[roster.index("</summary>") :]
+        self.assertNotIn("choiceButtonsHtml(failChoicesList", body)
+        self.assertNotIn("choiceButtonsHtml(failChoices", body)
+
+    def test_board_internals_fold_and_digest_fail(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Board internals · ${noiseRoster.length}", js)
+        self.assertIn("function topDigestFailNeed", js)
+        self.assertIn("function anyCeoHasFailedWork", js)
+        fluff = js[js.find("function isScheduleFluff") : js.find("function honestWorkLine")]
+        self.assertIn("/^Your move\\b/i.test(raw)", fluff)
+        noise = js[js.find("function cronIsNoise") : js.find("function cronNextUseful")]
+        self.assertIn("row.name || row.id || row.title", noise)
+        self.assertIn('name.replace(/\\s+/g, "-").toLowerCase()', noise)
+
+    def test_ask_cos_names_job_and_does_not_ride_code(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function failJobTitle", js)
+        self.assertIn("function failAskWhy", js)
+        ask = js[js.find('if (act === "ask_cos")') : js.find('if (act === "dismiss")')]
+        self.assertIn("await setOrgNode(\"\", \"\")", ask)
+        self.assertIn("forceNew: true", ask)
+        self.assertIn("${who} is stuck on ${title}", ask)
+        self.assertNotIn("job ${title}", ask)
+        send = js[js.find("async function sendMessage") : js.find("async function sendMessage") + 400]
+        self.assertIn("forceNew", send)
 
 
 class OperatorSurfaceBackendTests(unittest.TestCase):

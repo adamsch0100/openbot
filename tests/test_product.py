@@ -28,6 +28,15 @@ class CheapChatTests(unittest.TestCase):
             route_for_node("run all of the cron jobs and get everything working again", "ceo"),
             ["cos"],
         )
+        self.assertEqual(
+            route_for_node(
+                "What's going on. SAA Homes Citation audit failed with API key rejected (401). "
+                "Name one next move: Fix key, Restore, or wait.",
+                "staff",
+            ),
+            ["cos"],
+        )
+        self.assertNotEqual(route_for_node("Fix key in Settings for Citation audit", "staff"), ["builder"])
 
         with patch("openbot.router.seated_or_auto", return_value=""), patch(
             "openbot.router.recommended_chat_id", return_value=""

@@ -93,7 +93,8 @@ STATUS = re.compile(
     re.I,
 )
 CODE = re.compile(
-    r"\b(diff|commit|refactor|implement|fix|pr\b|pull request|opencode|change the code|"
+    r"\b(diff|commit|refactor|implement|pr\b|pull request|opencode|change the code|"
+    r"fix the code|fix this (bug|file)|"
     r"(create|write|add)\b.{0,48}\b(\.md|md file|markdown))\b",
     re.I,
 )
@@ -1310,6 +1311,7 @@ def handle(
     # Chat seat is auto: same composer hands Code / Think / Research / Ops
     # to the engines. Picking a work seat still forces that path.
     # Status always reads INDEX — even if Think / Research / Ops is pinned.
+    # Bare "Fix key" is an operator CTA, not a Builder job.
     if (
         (STATUS.search(message or "") or wants_run_existing(message or ""))
         and not URL.search(message or "")

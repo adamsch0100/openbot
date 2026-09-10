@@ -524,6 +524,28 @@ function failMoveWho(row) {
   return talkName();
 }
 
+function failJobTitle(row, cronId, fallbackId) {
+  const cid = String(cronId || fallbackId || (row && (row.cron_id || row.id)) || "").trim();
+  const pid = (row && row.project_id) || projectId;
+  const pack = digestCache.get(pid) || {};
+  const cron = ((pack.crons || []).find((r) => String(r.id) === cid || String(r.name) === cid));
+  if (cron) return cron.title || cronTitle(cron.name || cron.id) || cid;
+  const named = row && (row.title || row.subject);
+  if (named && !/^[0-9a-f]{8,}$/i.test(String(named))) {
+    return String(named).replace(/^[A-Za-z0-9 ._-]+ · /, "") || String(named);
+  }
+  if (cid && !/^[0-9a-f]{8,}$/i.test(cid)) return cronTitle(cid) || cid;
+  return "failed job";
+}
+
+function failAskWhy(pid, cronId) {
+  const pack = digestCache.get(pid) || {};
+  const cron = ((pack.crons || []).find((r) => String(r.id) === String(cronId || "") || String(r.name) === String(cronId || "")));
+  if (!cron) return "";
+  const own = failOwnership(cron);
+  return own.outcome || own.reason || "";
+}
+
 function failWhyLine(kind, reason) {
   if (kind === "gateway") return "Schedule stalled until the gateway recovers.";
   if (kind === "script") return "Job cannot run without its script on Hermes.";
@@ -3235,13 +3257,16 @@ async function runNeedChoice(btn) {
   }
   if (act === "ask_cos") {
     markFailHandling(cronId || id, "ask_cos");
-    const who = (currentProject() && currentProject().name) || "this CEO";
-    const title = cronId || id || "failed job";
-    if (pid) await setOrgNode(pid, "");
+    const who = ceoMoveName(pid);
+    const title = failJobTitle({ project_id: pid, id, cron_id: cronId }, cronId, id);
+    const why = failAskWhy(pid, cronId || id);
+    // Cos desk — never ride a live SAA Code/Think run, never send a hex job id.
+    await setOrgNode("", "");
+    if (typeof syncLiveFromAim === "function") syncLiveFromAim();
     focusLane("cos");
     sendMessage(
-      `Ask Cos: CEO is stuck on ${who} job ${title}. Judge the fail, pick Retry / Restore / Fix key / Restart gateway, or escalate to Adam only if money/secret/irreversible.`,
-      { preset: "cos" }
+      `Ask Cos: ${who} is stuck on ${title}${why ? ` (${why})` : ""}. Judge the fail, pick Retry / Restore / Fix key / Restart gateway, or escalate to Adam only if money/secret/irreversible.`,
+      { preset: "cos", forceNew: true }
     );
     paintWorkTabs();
     openWork("doing", cronId || id || "");
@@ -3430,12 +3455,41 @@ function ceoHasFailedWork(pid) {
   return (Number(counts.failed || 0) + Number(counts.trustFailed || 0)) > 0;
 }
 
+function anyCeoHasFailedWork() {
+  return ((cfg.org && cfg.org.projects) || []).some((row) => row && row.id && ceoHasFailedWork(row.id));
+}
+
+function topDigestFailNeed(pid) {
+  if (!pid) return null;
+  const pack = digestCache.get(pid) || {};
+  const failed = ((pack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row))).slice().sort(ownershipSort);
+  if (!failed.length) return null;
+  const row = failed[0];
+  const own = failOwnership(row);
+  const who = ceoMoveName(pid);
+  const title = row.title || cronTitle(row.name || row.id);
+  return {
+    id: `digest-fail-${pid}-${row.id || row.name || "job"}`,
+    kind: "failed",
+    name: who,
+    subject: `${who} · ${title}`,
+    why: own.why || own.outcome || "failed",
+    project_id: pid,
+    cron_id: row.id,
+    last_error: failBlobOf(row),
+    last_status: "error",
+    last_result: row.last_result || ""
+  };
+}
+
 function operatorMoveRows() {
-  return visibleNeedsYou()
+  const filtered = visibleNeedsYou()
     .filter((row) => {
       if (row.kind === "continue" || row.kind === "brief") {
         if (row.project_id && ceoHasFailedWork(row.project_id)) return false;
       }
+      // Cos staff crash is not the operator move when a CEO has real fails.
+      if (!row.project_id && row.kind === "failed" && anyCeoHasFailedWork()) return false;
       return true;
     })
     .map((row) => {
@@ -3443,6 +3497,20 @@ function operatorMoveRows() {
       const subject = String(row.subject || "").replace(/^this CEO\b/i, who) || `${who} · ${row.why || row.kind || "Decide"}`;
       return Object.assign({}, row, { name: who, subject });
     });
+  const haveFail = new Set(filtered.filter((row) => row.kind === "failed").map((row) => String(row.project_id || "")));
+  const extra = [];
+  const pids = [];
+  if (projectId) pids.push(projectId);
+  ((cfg.org && cfg.org.projects) || []).forEach((row) => {
+    if (row && row.id && pids.indexOf(row.id) < 0) pids.push(row.id);
+  });
+  pids.forEach((pid) => {
+    if (haveFail.has(String(pid))) return;
+    if (!ceoHasFailedWork(pid)) return;
+    const need = topDigestFailNeed(pid);
+    if (need) extra.push(need);
+  });
+  return filtered.concat(extra);
 }
 
 function moveHeadLabel(rows) {
@@ -3778,6 +3846,7 @@ function renderBotMeta(opts) {
       let ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
       ask = honestWorkLine(ask, counts) || ask;
       const trustAsk = scheduleTrustNowLine(counts, project);
+      if (trustAsk && (!ask || isScheduleFluff(ask))) ask = trustAsk;
       if (!ask && trustAsk) ask = trustAsk;
       if (!ask && (counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
       else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Next`;
@@ -4016,6 +4085,18 @@ function scheduleRosterSort(a, b) {
   return String(a.next_run_at || "").localeCompare(String(b.next_run_at || ""));
 }
 
+function rosterPrimaryChoice(row) {
+  const status = cronRosterStatus(row);
+  if (status === "never") {
+    return { id: "retry", label: "Run once", cron_id: row.id || "" };
+  }
+  if (status === "fail") {
+    const list = failChoices(row);
+    return list[0] || null;
+  }
+  return null;
+}
+
 function scheduleRosterRowHtml(row, want) {
   const title = row.title || cronTitle(row.name || row.id);
   const status = cronRosterStatus(row);
@@ -4028,23 +4109,22 @@ function scheduleRosterRowHtml(row, want) {
     : (row.last_run_at ? (cronFreshness(row) || cronWhen(row.last_run_at)) : "—");
   const own = status === "fail" ? failOwnership(row) : null;
   const headStatus = own ? own.status : status;
-  const failChoicesList = own ? failChoices(row) : [];
-  // Collapsed glance: Status + primary CTA inside <summary> (details UA hides non-summary kids).
-  const primaryCta = failChoicesList[0]
-    ? `<span class="cron-roster-cta need-actions">${choiceButtonsHtml([failChoicesList[0]], { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: "failed" })}</span>`
+  const primary = rosterPrimaryChoice(row);
+  // Collapsed glance: one CTA inside <summary>. Expanded body is Outcome/Why/Next only — no button dump.
+  const primaryCta = primary
+    ? `<span class="cron-roster-cta need-actions">${choiceButtonsHtml([primary], { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: status === "fail" ? "failed" : "run" })}</span>`
     : "";
   const failBit = own
     ? `<p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(own.outcome)}</p>
        <p class="cron-why"><span class="cron-k">Why</span> ${escapeHtml(own.why)}</p>
        <p class="cron-next"><span class="cron-k">Next</span> ${escapeHtml(own.next)}</p>
-       <p class="cron-status"><span class="cron-k">Status</span> ${escapeHtml(own.status)}</p>
-       <div class="need-actions">${choiceButtonsHtml(failChoicesList, { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: "failed" })}</div>`
+       <p class="cron-status"><span class="cron-k">Status</span> ${escapeHtml(own.status)}</p>`
     : "";
   const glance = own
     ? `<p class="cron-roster-glance"><span>${escapeHtml(own.status)}</span> · ${escapeHtml(own.next)}</p>`
     : "";
   const open = String(row.id || "") === String(want || "");
-  return `<details class="cron-card schedule-roster${status === "fail" ? " failed" : ""}${status === "late" ? " late" : ""}" id="cron-${escapeHtml(row.id || "")}" data-fold="sched-${escapeHtml(row.id || row.name || "job")}"${open ? " open" : ""}>
+  return `<details class="cron-card schedule-roster${status === "fail" ? " failed" : ""}${status === "late" ? " late" : ""}${status === "never" ? " never" : ""}" id="cron-${escapeHtml(row.id || "")}" data-fold="sched-${escapeHtml(row.id || row.name || "job")}"${open ? " open" : ""}>
     <summary class="cron-head">
       <b>${escapeHtml(title)}</b>
       <span>${escapeHtml(headStatus)}</span>
@@ -4098,10 +4178,10 @@ function workCounts(forProjectId) {
     if (st === "Handling") handling += 1;
     if (st === "Waiting Cos") waitingCos += 1;
   });
-  // Live schedule trust — compute from cron rows (never hardcode snapshot counts).
-  const enabledRows = all.filter((row) => !cronIsPaused(row));
-  const disabledRows = all.filter((row) => cronIsPaused(row));
-  const trustFailed = all.filter((row) => /error|fail/i.test(String(row.last_status || "")));
+  // Live schedule trust — operator jobs only (grok/alerts are Board internals, not SEO overdue).
+  const enabledRows = list.filter((row) => !cronIsPaused(row));
+  const disabledRows = list.filter((row) => cronIsPaused(row));
+  const trustFailed = list.filter((row) => /error|fail/i.test(String(row.last_status || "")));
   const never = enabledRows.filter((row) => cronIsNeverRun(row));
   const overdue = enabledRows.filter((row) => cronIsOverdue(row));
   if (!aim) {
@@ -4192,7 +4272,10 @@ function cronClaimAt(row) {
 }
 
 function cronIsNoise(row) {
-  return /^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$/i.test(String(row.name || ""));
+  const name = String((row && (row.name || row.id || row.title)) || "").trim();
+  if (!name) return false;
+  const slug = name.replace(/\s+/g, "-").toLowerCase();
+  return /^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$/i.test(slug);
 }
 
 function cronNextUseful(next) {
@@ -4237,6 +4320,9 @@ function isScheduleFluff(line) {
   if (/^Ready when you are/i.test(raw)) return true;
   if (/on this Railway board/i.test(raw)) return true;
   if (/^Idle\b/i.test(raw)) return true;
+  if (/^Your move\b/i.test(raw)) return true;
+  if (/Continue from Last/i.test(raw)) return true;
+  if (/Retry or Ask Cos/i.test(raw)) return true;
   return false;
 }
 
@@ -4245,7 +4331,7 @@ function honestWorkLine(line, counts) {
   const next = (counts && counts.next) || 0;
   const raw = String(line || "").trim();
   const trust = scheduleTrustNowLine(counts, currentProject());
-  if (trust && (!raw || raw === "—" || isScheduleFluff(raw) || /open Results/i.test(raw))) {
+  if (trust && (!raw || raw === "—" || isScheduleFluff(raw) || /open Results/i.test(raw) || /^Your move\b/i.test(raw) || /Continue from Last/i.test(raw))) {
     return trust;
   }
   if (failed > 0 && (!raw || raw === "—" || isScheduleFluff(raw))) {
@@ -5000,8 +5086,9 @@ function renderChatSchedule(rows, digest, focusId) {
     }
   } else if (view === "schedule") {
     const counts = workCounts();
-    // Full inventory (incl. script/noise jobs) — Adam ~enabled is schedule truth.
-    const inventory = rows || list;
+    // Operator roster is non-noise. Grok/alerts fold as Board internals — not "late" SEO work.
+    const inventory = list;
+    const noiseRoster = (rows || []).filter((row) => cronIsNoise(row));
     const enabledRoster = inventory
       .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")))
       .slice()
@@ -5019,8 +5106,16 @@ function renderChatSchedule(rows, digest, focusId) {
     if (disabledRoster.length) {
       sections.push(`<details class="cron-stale" data-fold="disabled-roster"><summary>Disabled · ${disabledRoster.length}</summary>${disabledRoster.map((row) => scheduleRosterRowHtml(row, want)).join("")}</details>`);
     }
+    if (noiseRoster.length) {
+      sections.push(`<details class="cron-stale" data-fold="internal-roster"><summary>Board internals · ${noiseRoster.length}</summary>${noiseRoster.map((row) => scheduleRosterRowHtml(row, want)).join("")}</details>`);
+    }
   } else {
-    const waits = operatorMoveRows().filter((row) => String(row.project_id || "") === String(projectId || ""));
+    const waitRecoverIds = new Set(failed.map((row) => String(row.id || "")));
+    const waits = operatorMoveRows().filter((row) => {
+      if (String(row.project_id || "") !== String(projectId || "")) return false;
+      if (row.kind === "failed" && (waitRecoverIds.has(String(row.cron_id || "")) || waitRecoverIds.has(String(row.id || "")))) return false;
+      return true;
+    });
     if (waits.length) {
       sections.push(`<h3 class="cron-section">${escapeHtml(moveHeadLabel(waits))} · ${waits.length}</h3>`);
       sections.push(waits.map((row) => `<article class="cron-card">
@@ -8386,7 +8481,7 @@ if ($("msg")) {
 async function sendMessage(message, opts) {
   const attachmentsToSend = [...pendingAttachments];
   if (!message && !attachmentsToSend.length) return;
-  if (liveRunId) {
+  if (liveRunId && !(opts && opts.forceNew)) {
     enqueueMessage(message, opts);
     return;
   }

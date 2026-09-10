@@ -97,6 +97,10 @@ class HandledVisibleUiTests(unittest.TestCase):
         sum_i = roster.index("<summary class=\"cron-head\">")
         end_sum = roster.index("</summary>", sum_i)
         self.assertIn("${primaryCta}", roster[sum_i:end_sum])
+        body = roster[end_sum:]
+        self.assertNotIn("choiceButtonsHtml(failChoicesList", body)
+        self.assertIn("function rosterPrimaryChoice", js)
+        self.assertIn('label: "Run once"', js)
         css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
         self.assertIn("schedule-roster.failed > .need-actions", css)
         self.assertIn("cron-roster-cta", css)
@@ -119,8 +123,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=146", html)
-        self.assertIn("styles.css?v=146", html)
+        self.assertIn("app.js?v=147", html)
+        self.assertIn("styles.css?v=147", html)
 
 
 
