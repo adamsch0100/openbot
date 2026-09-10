@@ -575,6 +575,7 @@ def run_opencode(
     run_id: str | None = None,
     mcp_github: bool = False,
     on_progress=None,
+    session_id: str | None = None,
     _attempt: int = 0,
 ) -> tuple[int, str]:
     exe = binary or "opencode"
@@ -583,19 +584,35 @@ def run_opencode(
         cmd.extend(["--model", model])
     cmd.append(prompt)
     env = os.environ.copy()
+    
+    # Build config overlay for MCP and session headers
+    config: dict = {}
     if mcp_github:
-        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(
-            {
-                "mcp": {
-                    "github": {
-                        "type": "remote",
-                        "url": "https://api.githubcopilot.com/mcp/",
-                        "enabled": True,
-                        "oauth": True,
-                    }
-                }
+        config["mcp"] = {
+            "github": {
+                "type": "remote",
+                "url": "https://api.githubcopilot.com/mcp/",
+                "enabled": True,
+                "oauth": True,
             }
-        )
+        }
+    
+    # Attach x-opencode-session header for Go/Zen session affinity (deepseek-v4-flash, etc)
+    sid = str(session_id or "").strip()
+    if sid:
+        # Inject header for ALL providers so OpenCode Go models route correctly
+        if "providers" not in config:
+            config["providers"] = {}
+        # OpenCode Go requires x-opencode-session for some models (deepseek-v4-flash)
+        for provider_id in ("opencode", "opencode-go", "zen"):
+            if provider_id not in config["providers"]:
+                config["providers"][provider_id] = {}
+            if "headers" not in config["providers"][provider_id]:
+                config["providers"][provider_id]["headers"] = {}
+            config["providers"][provider_id]["headers"]["x-opencode-session"] = sid
+    
+    if config:
+        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
     kwargs: dict = {
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
@@ -1793,6 +1810,15 @@ def _handle_preset(
             parsed = parse_opencode_events("")
             from .usage import error_message_from_raw
 
+            # Ensure OpenCode session exists and is persisted before first job run
+            opencode_session = str(tools.get("opencode_session_id") or "").strip()
+            if not opencode_session:
+                from .launch import _open_opencode_session
+                
+                opencode_session = _open_opencode_session(work, Path(work).name)
+                if opencode_session and project_id:
+                    patch_project_tools(project_id, {"opencode_session_id": opencode_session})
+
             for account, attempt_model in attempts:
                 if account.get("id"):
                     activate_account(str(account["id"]))
@@ -1809,6 +1835,7 @@ def _handle_preset(
                     run_id=run_id,
                     mcp_github=_effective_mcp_github(tools),
                     on_progress=on_progress,
+                    session_id=opencode_session,
                 )
                 write_session_log(job_id, raw_log)
                 mark_job_has_log(job_id)
@@ -2062,6 +2089,17 @@ def _handle_preset(
             schedule = parse_schedule(message)
             if schedule:
                 _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
+                
+                # Ensure OpenCode session exists for Hermes cron jobs that use OpenCode Go
+                # Hermes agent/opencode_affinity.py needs OPENCODE_SESSION_ID env var
+                if project_id and not tools.get("opencode_session_id"):
+                    from .launch import _open_opencode_session
+                    
+                    opencode_session = _open_opencode_session(work, Path(work).name)
+                    if opencode_session:
+                        patch_project_tools(project_id, {"opencode_session_id": opencode_session})
+                        tools = project_tools(project_id)  # Reload
+                
                 created = cron_create(
                     schedule,
                     message,

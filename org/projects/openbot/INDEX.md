@@ -8,7 +8,7 @@ Next: Hard-refresh ?v=117. Close CA #57 without merging. Skip conversion-surge, 
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
-Folder: C:\Users\adamm\Projects\openbot
+Folder: /tmp/tmp3cu0ad7k
 
 ## Law (every job)
 
@@ -65,7 +65,7 @@ Ask Research only for public pages or the courtesy draft.
 Ask Ops only to save a later reminder, not to email anyone.
 After each job: Now / Last / Next / Blocker on this file.
 Git: local repo, no origin
-Hermes: C:\Users\adamm\Projects\openbot\hermes-homes\openbot
+Hermes: /workspace/hermes-homes/openbot
 
 ## Contract
 
