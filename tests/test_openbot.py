@@ -217,6 +217,45 @@ class RouterClassifyTests(unittest.TestCase):
         self.assertNotIn("abc123", _index_last("Patched the footer."))
 
 
+class ProviderFailoverTests(unittest.TestCase):
+    def test_provider_error_detection(self):
+        """Test that provider auth/init errors are detected for failover."""
+        from openbot.router import provider_error
+        
+        # Anthropic package required error
+        self.assertTrue(provider_error("The 'anthropic' package is required for the Anthropic provider"))
+        
+        # x-api-key 401 error
+        self.assertTrue(provider_error("x-api-key authentication failed with 401"))
+        
+        # Generic auth failures
+        self.assertTrue(provider_error("Unauthorized: Invalid API key"))
+        self.assertTrue(provider_error("Authentication failed"))
+        self.assertTrue(provider_error("Provider init failed: credentials invalid"))
+        
+        # Should not match normal errors
+        self.assertFalse(provider_error("Connection timeout"))
+        self.assertFalse(provider_error("Model not found"))
+        self.assertFalse(provider_error("Successfully completed"))
+    
+    def test_wallet_empty_still_works(self):
+        """Ensure wallet_empty detection still works alongside provider_error."""
+        from openbot.router import wallet_empty, provider_error
+        
+        # Wallet empty patterns
+        self.assertTrue(wallet_empty("insufficient balance"))
+        self.assertTrue(wallet_empty("Check billing at opencode.ai/workspace/billing"))
+        
+        # These should not trigger wallet_empty
+        self.assertFalse(wallet_empty("x-api-key 401 error"))
+        self.assertFalse(wallet_empty("anthropic package required"))
+        
+        # Provider errors should not trigger wallet_empty
+        provider_text = "The 'anthropic' package is required"
+        self.assertTrue(provider_error(provider_text))
+        self.assertFalse(wallet_empty(provider_text))
+
+
 class SpendTests(unittest.TestCase):
     def test_period_and_sum(self):
         now = datetime(2026, 8, 31, 15, 0, tzinfo=timezone.utc)
@@ -1651,6 +1690,37 @@ class OrgTests(unittest.TestCase):
             with patch("openbot.hermes.hermes_home", return_value=machine):
                 overlay = hermes_mod._hermes_env(ceo)
             self.assertEqual(overlay.get("OPENCODE_ZEN_API_KEY"), "test-ceo-overlay")
+
+    def test_hermes_env_strips_anthropic_keys(self):
+        """Regression test: Anthropic keys must be stripped to prevent provider init failures."""
+        from unittest.mock import patch
+
+        import openbot.hermes as hermes_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            machine = Path(tmp) / "machine"
+            ceo = Path(tmp) / "ceo"
+            machine.mkdir()
+            ceo.mkdir()
+            # Machine has stale Anthropic key that would cause 401 errors
+            (machine / ".env").write_text(
+                "OPENCODE_ZEN_API_KEY=test-key\nANTHROPIC_API_KEY=sk-ant-stale123\n",
+                encoding="utf-8",
+            )
+            with patch("openbot.hermes.hermes_home", return_value=machine):
+                env = hermes_mod._hermes_env(ceo)
+            # Anthropic keys should be stripped
+            self.assertNotIn("ANTHROPIC_API_KEY", env)
+            self.assertNotIn("ANTHROPIC_TOKEN", env)
+            # But other keys should remain
+            self.assertEqual(env.get("OPENCODE_ZEN_API_KEY"), "test-key")
+            
+            # CEO-level Anthropic keys should also be stripped
+            (ceo / ".env").write_text("ANTHROPIC_TOKEN=tok-stale456\n", encoding="utf-8")
+            with patch("openbot.hermes.hermes_home", return_value=machine):
+                env2 = hermes_mod._hermes_env(ceo)
+            self.assertNotIn("ANTHROPIC_API_KEY", env2)
+            self.assertNotIn("ANTHROPIC_TOKEN", env2)
 
     def test_folder_inbox_and_session(self):
         import openbot.org as org_mod
