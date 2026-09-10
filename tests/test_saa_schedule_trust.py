@@ -23,7 +23,7 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
         self.assertIn("function cronFailNext", js)
         self.assertIn("Open Schedule", js)
         self.assertIn("Auto-retry — gateway will pick this up", js)
-        self.assertIn("Your move · restore from bootstrap", js)
+        self.assertIn("Your move (CEO) · Restore script from bootstrap", js)
         self.assertIn("Script not found", js)
         self.assertIn("trustFailed", js)
         self.assertIn("schedule: enabledRows.length", js)
@@ -37,8 +37,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=142", html)
-        self.assertIn("styles.css?v=142", html)
+        self.assertIn("app.js?v=143", html)
+        self.assertIn("styles.css?v=143", html)
 
     def test_roster_status_priority_in_sort(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -78,6 +78,7 @@ class SaaScheduleTrustBackendTests(unittest.TestCase):
         self.assertIn("Script not found", outcome2)
         self.assertIn("Your move", nxt2)
         self.assertIn("bootstrap", nxt2)
+        self.assertIn("Your move (CEO)", nxt2)
 
     def test_cronwatch_open_schedule(self):
         from openbot.cronwatch import honest_next_line

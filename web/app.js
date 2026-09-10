@@ -43,6 +43,9 @@ let lastHermesHome = "";
 let pendingAttachments = [];
 const threadCache = new Map();
 const digestCache = new Map();
+const failHandling = new Map();
+const FAIL_HANDLING_MS = 12 * 60 * 1000;
+
 
 function isCollaborator() {
   return cfg.actor === "collaborator";
@@ -458,15 +461,255 @@ function failClustersHtml(rows, want) {
   }).join("");
 }
 
+function markFailHandling(id, act) {
+  const key = String(id || "").trim();
+  if (!key) return;
+  const status = act === "ask_cos" ? "Waiting Cos" : "Handling";
+  failHandling.set(key, { at: Date.now(), act: String(act || ""), status });
+}
+
+function failHandlingStatus(id) {
+  const key = String(id || "").trim();
+  const row = failHandling.get(key);
+  if (!row) return "";
+  if ((Date.now() - Number(row.at || 0)) > FAIL_HANDLING_MS) {
+    failHandling.delete(key);
+    return "";
+  }
+  return String(row.status || "");
+}
+
+function failBlobOf(row) {
+  if (!row) return "";
+  if (typeof cronFailBlob === "function" && (row.last_error || row.last_status || row.outcome || row.last_result)) {
+    return cronFailBlob(row);
+  }
+  return [
+    row.last_error, row.error, row.outcome, row.cron_outcome, row.text, row.summary, row.last_result, row.last_status, row.status, row.blocker
+  ].map((x) => String(x || "")).join(" ");
+}
+
+function failKindFromBlob(blob) {
+  const low = String(blob || "").toLowerCase();
+  if (/\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key/.test(low)) {
+    return "key";
+  }
+  if (/script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\//.test(low)) {
+    return "script";
+  }
+  if (/gateway shutdown|gateway stopped mid-run/.test(low)) return "gateway";
+  if (/insufficient balance|wallet.?empty|out of (?:quota|credit)|billing/.test(low)) return "wallet";
+  if (/busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout/.test(low)) {
+    return "transient";
+  }
+  return "unknown";
+}
+
+function failWhyLine(kind, reason) {
+  if (kind === "gateway") return "Schedule stalled until the gateway recovers.";
+  if (kind === "script") return "Job cannot run without its script on Hermes.";
+  if (kind === "key") return "Auth rejected — retries will keep failing until the key is fixed.";
+  if (kind === "wallet") return "Spend/credits blocked — only Adam can top up.";
+  if (kind === "transient") return "Transient stall — auto-retry should clear it.";
+  return reason ? `Last run failed · ${reason}` : "Last run did not finish — needs a call.";
+}
+
+function failOwnership(row) {
+  const id = String((row && (row.id || row.cron_id || row.job_id)) || "");
+  const blob = failBlobOf(row);
+  const reason = humanFailReason(blob);
+  const kind = failKindFromBlob(blob);
+  const local = failHandlingStatus(id);
+  const live = Boolean(row && typeof cronIsLive === "function" && cronIsLive(row));
+  const gatewayScar = kind === "gateway" || (typeof cronIsGatewayFail === "function" && cronIsGatewayFail(row));
+
+  if (local === "Waiting Cos") {
+    return {
+      owner: "cos",
+      rank: 2,
+      status: "Waiting Cos",
+      resultStatus: "Blocked·Cos",
+      kind,
+      reason,
+      why: "CEO stuck — Cos judgment requested.",
+      next: "Waiting on Cos · thread opened.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (local === "Handling" || (live && (jobIsFailed(row) || /error|fail/i.test(String((row && (row.last_status || row.status)) || ""))))) {
+    return {
+      owner: "ceo",
+      rank: 0,
+      status: "Handling",
+      resultStatus: "Recovering",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Handling now · status will move when the run lands.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+
+  if (gatewayScar) {
+    if (!gatewayRunning) {
+      return {
+        owner: "ceo",
+        rank: 1,
+        status: "CEO",
+        resultStatus: "Recovering",
+        kind: "gateway",
+        reason,
+        why: "Gateway is off — scheduled work waits.",
+        next: "Restart gateway — do not mass-fire.",
+        outcome: `Failed · ${reason}`
+      };
+    }
+    return {
+      owner: "auto",
+      rank: 0,
+      status: "Auto-retry",
+      resultStatus: "Recovering",
+      kind: "gateway",
+      reason,
+      why: failWhyLine("gateway", reason),
+      next: "Auto-retry — gateway will pick this up. Do not mass-fire.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (kind === "script") {
+    return {
+      owner: "ceo",
+      rank: 1,
+      status: "CEO",
+      resultStatus: "Recovering",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Your move (CEO) · Restore script from bootstrap (Hermes scripts/).",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (kind === "key") {
+    // Never Auto-retry on 401/key — CEO Fix key / Settings.
+    return {
+      owner: "ceo",
+      rank: 1,
+      status: "CEO",
+      resultStatus: "Recovering",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Your move (CEO) · Fix key in Settings.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (kind === "wallet") {
+    return {
+      owner: "adam",
+      rank: 3,
+      status: "Needs Adam",
+      resultStatus: "Needs Adam",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Needs Adam · add credits / fix billing.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (kind === "transient") {
+    return {
+      owner: "auto",
+      rank: 0,
+      status: "Auto-retry",
+      resultStatus: "Recovering",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Auto-retry — transient. Retry once if it stays red.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  return {
+    owner: "ceo",
+    rank: 1,
+    status: "CEO",
+    resultStatus: "Recovering",
+    kind,
+    reason,
+    why: failWhyLine(kind, reason),
+    next: "Your move (CEO) · Decide · Retry or Ask Cos.",
+    outcome: `Failed · ${reason}`
+  };
+}
+
+function failOwnerRank(row) {
+  return Number((failOwnership(row) || {}).rank || 1);
+}
+
+function ownershipSort(a, b) {
+  const d = failOwnerRank(a) - failOwnerRank(b);
+  if (d) return d;
+  return String((b && b.last_run_at) || "").localeCompare(String((a && a.last_run_at) || ""));
+}
+
+function failChoices(row) {
+  const own = failOwnership(row);
+  const cronId = (row && (row.cron_id || row.id)) || "";
+  const out = [];
+  if (own.kind === "gateway" && !gatewayRunning) {
+    out.push({ id: "restart_gateway", label: "Restart gateway" });
+  } else if (own.kind === "script") {
+    out.push({ id: "restore_script", label: "Restore script", cron_id: cronId });
+    out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+  } else if (own.kind === "key") {
+    out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
+    out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+  } else if (own.kind === "wallet") {
+    out.push({ id: "fix_key", label: "Open Settings", cron_id: cronId });
+  } else if (own.owner === "auto") {
+    out.push({ id: "open_detail", label: "Open detail", cron_id: cronId });
+    if (!cronSkipRetry(row)) out.push({ id: "retry", label: "Retry once", cron_id: cronId });
+  } else {
+    if (!cronSkipRetry(row)) out.push({ id: "retry", label: "Retry", cron_id: cronId });
+    out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+    out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
+  }
+  return out;
+}
+
 function cronFailNext(row) {
-  if (cronIsGatewayFail(row)) {
-    return "Auto-retry — gateway will pick this up. Do not mass-fire.";
-  }
-  const blob = cronFailBlob(row);
-  if (/script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\//i.test(blob)) {
-    return "Your move · restore from bootstrap (Hermes scripts/).";
-  }
-  return "Fix model/key · Retry · Open detail.";
+  return failOwnership(row).next;
+}
+
+function failChromeHtml(row, open, mark, extraCount) {
+  const title = (row && (row.title || row.name)) ? (row.title || cronTitle(row.name || row.id) || row.name) : (jobStoryTitle(row) || "Job");
+  const own = failOwnership(row);
+  const status = mark === "live" ? "Handling" : (mark === "result" ? own.resultStatus : own.status);
+  const fold = String((row && (row.id || row.cron_id || title)) || "job");
+  const savedOpen = Boolean((readWorkState().folds || {})[fold]);
+  const startOpen = Boolean(open || savedOpen || mark === "result" || mark === "next");
+  const fresh = typeof cronFreshness === "function" ? cronFreshness(row) : "";
+  const extra = Number(extraCount) > 0 ? ` +${Number(extraCount)}` : "";
+  const choices = failChoices(row);
+  const acts = choices.length
+    ? `<div class="need-actions">${choiceButtonsHtml(choices, { id: (row && row.id) || "", project_id: (row && row.project_id) || projectId || "", cron_id: (row && (row.cron_id || row.id)) || "", kind: "failed", preset: (row && row.preset) || "" })}</div>`
+    : "";
+  const rawDetail = String((row && (row.last_error || row.last_result || row.text || row.summary || "")) || "").trim();
+  const detailFold = rawDetail && rawDetail.length > 40
+    ? `<details class="cron-more" data-fold="raw-${escapeHtml(fold)}"><summary>Details</summary><pre>${escapeHtml(rawDetail.slice(0, 4000))}</pre></details>`
+    : "";
+  return `<details class="cron-card failed handled" id="cron-${escapeHtml((row && row.id) || "")}" data-fold="${escapeHtml(fold)}" data-owner="${escapeHtml(own.owner)}" data-fail-status="${escapeHtml(status)}"${startOpen ? " open" : ""}>
+    <summary class="cron-head">
+      <b>${escapeHtml(title)}${escapeHtml(extra)}</b>
+      <span>${escapeHtml(status)}${fresh ? ` · ${escapeHtml(fresh)}` : ""}</span>
+    </summary>
+    <p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(own.outcome)}</p>
+    <p class="cron-why"><span class="cron-k">Why</span> ${escapeHtml(own.why)}</p>
+    <p class="cron-next"><span class="cron-k">Next</span> ${escapeHtml(own.next)}</p>
+    <p class="cron-status"><span class="cron-k">Status</span> ${escapeHtml(status)}</p>
+    ${acts}
+    ${detailFold}
+  </details>`;
 }
 
 function opaqueLaneOk(text, preset) {
@@ -736,6 +979,10 @@ function composerAliveLine() {
   if (story && story.on && story.line) {
     return { line: story.line, on: true, warn: false };
   }
+  const move = handlingAliveLine(counts);
+  if (move) {
+    return { line: move, on: true, warn: true };
+  }
   const trust = scheduleTrustNowLine(counts, currentProject());
   if (trust) {
     return { line: trust, on: false, warn: true };
@@ -750,6 +997,27 @@ function composerAliveLine() {
   }
   // Quiet idle — no bare Done spam in composer chrome.
   return { line: "", on: false, warn: false };
+}
+
+function handlingAliveLine(counts) {
+  // Movement only — idle Auto-retry ownership stays on cards, not composer.
+  const pack = digestCache.get(projectId) || {};
+  const list = (pack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row));
+  const moving = list.filter((row) => {
+    const st = failOwnership(row).status;
+    return st === "Handling" || st === "Waiting Cos";
+  });
+  const n = moving.length || (counts && counts.handling) || 0;
+  if (!n) return "";
+  const top = moving[0] ? failOwnership(moving[0]) : null;
+  const fails = (counts && counts.failed) || list.length || n;
+  if (top && top.status === "Waiting Cos") {
+    return `Waiting Cos · ${fails} fail${fails === 1 ? "" : "s"} · next: Cos judgment`;
+  }
+  const bit = top
+    ? (top.kind === "key" ? "fix key" : (top.kind === "script" ? "restore script" : (top.kind === "gateway" ? "retry gateway" : "retry")))
+    : "Open Next";
+  return `Handling · ${fails} fail${fails === 1 ? "" : "s"} · next: ${bit}`;
 }
 
 function paintWorkStatus() {
@@ -2837,11 +3105,15 @@ function needChoices(row) {
   if (kind === "continue") return [{ id: "continue", label: "Continue" }];
   if (kind === "brief") return [{ id: "open", label: "Open chat" }];
   if (kind === "failed") {
-    return [
-      { id: "fix_model", label: "Fix model/key" },
-      { id: "retry", label: "Retry", cron_id: row.cron_id || "" },
-      { id: "open_detail", label: "Open detail", cron_id: row.cron_id || "" }
-    ];
+    return failChoices({
+      id: row.cron_id || row.id || "",
+      cron_id: row.cron_id || row.id || "",
+      project_id: row.project_id || "",
+      last_error: row.last_error || row.why || row.label || "",
+      last_status: "error",
+      name: row.subject || row.name || "",
+      title: row.subject || row.name || ""
+    });
   }
   return [{ id: "open", label: "Open" }];
 }
@@ -2871,7 +3143,7 @@ function jobChoices(job) {
 
 function choiceButtonsHtml(choices, row) {
   return (choices || []).map((choice) => {
-    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue" || choice.id === "allow_cookie_export" || choice.id === "allow_facebook" || choice.id === "fix_model" || choice.id === "retry";
+    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue" || choice.id === "allow_cookie_export" || choice.id === "allow_facebook" || choice.id === "fix_model" || choice.id === "fix_key" || choice.id === "retry" || choice.id === "restore_script" || choice.id === "restart_gateway" || choice.id === "ask_cos";
     const danger = choice.id === "reject" || choice.id === "deny";
     return `<button type="button" class="${primary ? "send" : "ghost-btn"}${danger ? " danger" : ""}" data-need-act="${escapeHtml(choice.id)}" data-need-id="${escapeHtml(row.id || "")}" data-need-project="${escapeHtml(row.project_id || "")}" data-need-preset="${escapeHtml(row.preset || "")}" data-need-approval="${escapeHtml(row.approval_id || row.id || "")}" data-need-login="${escapeHtml(choice.login_id || "")}" data-need-url="${escapeHtml(choice.url || row.url || "")}" data-need-cron="${escapeHtml(choice.cron_id || row.cron_id || "")}">${escapeHtml(choice.label || choice.id)}</button>`;
   }).join("");
@@ -2896,8 +3168,41 @@ async function runNeedChoice(btn) {
     if (act === "schedule" || act === "open_detail") openSchedule(cronId || id || "");
     return;
   }
-  if (act === "fix_model") {
+  if (act === "fix_model" || act === "fix_key") {
+    markFailHandling(cronId || id, "fix_key");
     setSettings(true, "keys");
+    paintWorkTabs();
+    if (scheduleOpen) openSchedule(cronId || id || "");
+    return;
+  }
+  if (act === "restart_gateway") {
+    markFailHandling(cronId || id || "gateway", "restart_gateway");
+    restartGateway();
+    return;
+  }
+  if (act === "restore_script") {
+    markFailHandling(cronId || id, "restore_script");
+    if (pid) await setOrgNode(pid, "");
+    sendMessage(
+      "Restore the missing Hermes script for this failed job from bootstrap/<ceo>/scripts onto the live Hermes home scripts/. Do not invent a new script body — copy the bootstrap file. Then Retry the job once.",
+      { preset: "ops" }
+    );
+    paintWorkTabs();
+    openWork("doing", cronId || id || "");
+    return;
+  }
+  if (act === "ask_cos") {
+    markFailHandling(cronId || id, "ask_cos");
+    const who = (currentProject() && currentProject().name) || "this CEO";
+    const title = cronId || id || "failed job";
+    if (pid) await setOrgNode(pid, "");
+    focusLane("cos");
+    sendMessage(
+      `Ask Cos: CEO is stuck on ${who} job ${title}. Judge the fail, pick Retry / Restore / Fix key / Restart gateway, or escalate to Adam only if money/secret/irreversible.`,
+      { preset: "cos" }
+    );
+    paintWorkTabs();
+    openWork("doing", cronId || id || "");
     return;
   }
   if (act === "dismiss") {
@@ -2959,6 +3264,7 @@ async function runNeedChoice(btn) {
     return;
   }
   if (act === "retry" && cronId && pid) {
+    markFailHandling(cronId, "retry");
     await setOrgNode(pid, "");
     await fetch("/api/crons/run", {
       method: "POST",
@@ -2966,11 +3272,14 @@ async function runNeedChoice(btn) {
       body: JSON.stringify({ project_id: pid, job_id: cronId })
     });
     await loadCeoDigest(true);
+    paintWorkTabs();
+    openWork("doing", cronId);
     return;
   }
   if (act === "retry") {
+    markFailHandling(cronId || id, "retry");
     if (pid) await setOrgNode(pid, "");
-    openSchedule(id || "");
+    openWork("doing", cronId || id || "");
   }
 }
 
@@ -3089,7 +3398,7 @@ function inboxHtml() {
     </div>`;
   }).join("");
   return `<div class="org-inbox">
-    <div class="org-inbox-head">Your move · ${rows.length}</div>
+    <div class="org-inbox-head">Your move (CEO) · ${rows.length}</div>
     ${items}
   </div>`;
 }
@@ -3128,7 +3437,7 @@ function paintHelpPanel() {
   const headCount = needs.length || open.length;
   host.innerHTML = `
     <div class="org-inbox working-on">
-      <div class="org-inbox-head">${needs.length ? `Your move · ${needs.length}` : `Working on · ${open.length}`}</div>
+      <div class="org-inbox-head">${needs.length ? `Your move (CEO) · ${needs.length}` : `Working on · ${open.length}`}</div>
       ${body}
       ${warn}
     </div>`;
@@ -3604,6 +3913,15 @@ function scheduleTrustNowLine(counts, project) {
   const who = ceoShortName(project || currentProject());
   const failed = counts.trustFailed || 0;
   const never = counts.never || 0;
+  const handling = counts.handling || 0;
+  const waitingCos = counts.waitingCos || 0;
+  // Movement verbs when CEO/Cos actively handling — else keep #100 trust counts.
+  if ((handling > 0 || waitingCos > 0) && (failed > 0 || never > 0)) {
+    const bits = [];
+    if (handling) bits.push(`Handling ${handling}`);
+    if (waitingCos) bits.push(`Waiting Cos ${waitingCos}`);
+    return `${who} · ${bits.join(" · ")} · Open Schedule`;
+  }
   if (failed > 0 || never > 0) {
     return `${who} · ${failed} failed · ${never} never · Open Schedule`;
   }
@@ -3637,20 +3955,29 @@ function scheduleRosterRowHtml(row, want) {
   const last = cronIsNeverRun(row)
     ? "never"
     : (row.last_run_at ? (cronFreshness(row) || cronWhen(row.last_run_at)) : "—");
-  const failBit = status === "fail"
-    ? `<p class="cron-outcome">Failed · ${escapeHtml(humanFailReason(cronFailBlob(row)))}</p>
-       <p class="cron-next">Next: ${escapeHtml(cronFailNext(row))}</p>`
+  const own = status === "fail" ? failOwnership(row) : null;
+  const headStatus = own ? own.status : status;
+  const failBit = own
+    ? `<p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(own.outcome)}</p>
+       <p class="cron-why"><span class="cron-k">Why</span> ${escapeHtml(own.why)}</p>
+       <p class="cron-next"><span class="cron-k">Next</span> ${escapeHtml(own.next)}</p>
+       <p class="cron-status"><span class="cron-k">Status</span> ${escapeHtml(own.status)}</p>
+       <div class="need-actions">${choiceButtonsHtml(failChoices(row), { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: "failed" })}</div>`
+    : "";
+  const glance = own
+    ? `<p class="cron-roster-glance"><span>${escapeHtml(own.status)}</span> · ${escapeHtml(own.next)}</p>`
     : "";
   const open = String(row.id || "") === String(want || "");
   return `<details class="cron-card schedule-roster${status === "fail" ? " failed" : ""}${status === "late" ? " late" : ""}" id="cron-${escapeHtml(row.id || "")}" data-fold="sched-${escapeHtml(row.id || row.name || "job")}"${open ? " open" : ""}>
     <summary class="cron-head">
       <b>${escapeHtml(title)}</b>
-      <span>${escapeHtml(status)}</span>
+      <span>${escapeHtml(headStatus)}</span>
     </summary>
+    ${glance}
     <p class="cron-meta schedule-row"><span>enabled</span><b>${escapeHtml(enabled)}</b></p>
     <p class="cron-meta schedule-row"><span>Next</span><b>${escapeHtml(next)}</b></p>
     <p class="cron-meta schedule-row"><span>Last</span><b>${escapeHtml(last)}</b></p>
-    <p class="cron-meta schedule-row"><span>Status</span><b>${escapeHtml(status)}</b></p>
+    <p class="cron-meta schedule-row"><span>Status</span><b>${escapeHtml(headStatus)}</b></p>
     ${failBit}
   </details>`;
 }
@@ -3674,11 +4001,25 @@ function workCounts(forProjectId) {
   const failed = list.filter((row) => cronIsFailed(row));
   const gateway = failed.filter((row) => cronIsGatewayFail(row));
   const freshFail = failed.filter((row) => !cronIsGatewayFail(row) && !cronIsStaleFail(row));
+  const actionFails = failed.filter((row) => !cronIsStaleFail(row));
   const done = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row));
-  const results = Math.min(done.length, 8) + freshFail.length + (gateway.length ? 1 : 0);
-  const next = list.filter((row) => (
+  // Results badge = recover loop + recent resolved — not Done-only lie.
+  const recoverN = actionFails.length;
+  const results = recoverN > 0
+    ? recoverN + Math.min(done.length, 4)
+    : Math.min(done.length, 8);
+  const dueSoon = list.filter((row) => (
     row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && !cronIsFailed(row) && cronIsDueSoon(row)
   )).length;
+  // Next = ownership action queue when fails exist; else due dump.
+  const next = actionFails.length > 0 ? actionFails.length : dueSoon;
+  let handling = 0;
+  let waitingCos = 0;
+  actionFails.forEach((row) => {
+    const st = failOwnership(row).status;
+    if (st === "Handling") handling += 1;
+    if (st === "Waiting Cos") waitingCos += 1;
+  });
   // Live schedule trust — compute from cron rows (never hardcode snapshot counts).
   const enabledRows = all.filter((row) => !cronIsPaused(row));
   const disabledRows = all.filter((row) => cronIsPaused(row));
@@ -3691,12 +4032,24 @@ function workCounts(forProjectId) {
     const jobs = (((cfg.activity || {}).jobs) || []);
     const orgFailed = jobs.filter((row) => jobIsFailed(row)).length;
     const orgLive = (((cfg.activity || {}).live_runs) || []).length + lives.size;
+    const orgJobs = (((cfg.activity || {}).jobs) || []);
+    const orgFailRows = orgJobs.filter((row) => jobIsFailed(row));
+    let orgHandling = 0;
+    let orgWaiting = 0;
+    orgFailRows.forEach((row) => {
+      const st = failOwnership(row).status;
+      if (st === "Handling") orgHandling += 1;
+      if (st === "Waiting Cos") orgWaiting += 1;
+    });
+    const orgAction = orgFailRows.length;
     return {
-      doing: orgLive,
-      next: orgNext,
-      results: Math.min(jobs.length, 12),
+      doing: orgLive + orgHandling,
+      next: orgAction > 0 ? orgAction : orgNext,
+      results: orgAction > 0 ? orgAction + Math.min(orgJobs.length, 4) : Math.min(jobs.length, 12),
       failed: orgFailed,
       trustFailed: orgFailed,
+      handling: orgHandling,
+      waitingCos: orgWaiting,
       never: 0,
       overdue: 0,
       enabled: 0,
@@ -3707,11 +4060,13 @@ function workCounts(forProjectId) {
     };
   }
   return {
-    doing,
+    doing: doing + handling,
     next,
     results,
-    failed: freshFail.length + (gateway.length ? 1 : 0),
+    failed: actionFails.length,
     trustFailed: trustFailed.length,
+    handling,
+    waitingCos,
     never: never.length,
     overdue: overdue.length,
     enabled: enabledRows.length,
@@ -3737,6 +4092,8 @@ function paintWorkTabs() {
       btn.classList.toggle("hot", view === "doing" && n > 0);
       const scheduleNeed = prefersScheduleTrust(counts);
       btn.classList.toggle("need", (view === "results" && (counts.failed || 0) > 0)
+        || (view === "next" && (counts.failed || 0) > 0)
+        || (view === "doing" && ((counts.handling || 0) > 0 || (counts.waitingCos || 0) > 0))
         || (view === "schedule" && scheduleNeed));
       // Never flash a hollow "0" as if work is counted — blank until known, digit only when > 0.
       const badge = n > 0
@@ -3932,6 +4289,9 @@ function cronCardHtml(row, open, mark, extraCount) {
   const title = row.title || cronTitle(row.name || row.id);
   const status = String(row.last_status || "").toLowerCase();
   const failed = /error|fail/.test(status);
+  if (failed && mark !== "live") {
+    return failChromeHtml(row, open, mark === "next" ? "next" : (mark || "result"), extraCount);
+  }
   const err = cleanBotText(String(row.last_error || "").trim());
   let outcome = cleanBotText(row.outcome || (failed ? "Failed." : "No result on this copy yet."));
   if (/^#\s*Cron Job:/i.test(outcome) || cronIsPromptDump(row.last_result || "")) {
@@ -4405,22 +4765,72 @@ function renderChatSchedule(rows, digest, focusId) {
     const bits = [];
     if (view === "doing") {
       if (liveRunId) bits.push(liveRunCard({ preset: liveLane || preset, title: "This chat" }));
-      bits.push(runs.length ? runs.map((row) => liveRunCard(row)).join("") : (liveRunId ? "" : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`));
+      bits.push(runs.length ? runs.map((row) => liveRunCard(row)).join("") : "");
+      const failJobs = allJobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort).slice(0, 6);
+      const moving = failJobs.filter((row) => {
+        const st = failOwnership(row).status;
+        return st === "Handling" || st === "Waiting Cos" || st === "Auto-retry" || st === "CEO";
+      });
+      if (moving.length) {
+        bits.push(`<h3 class="cron-section">Handling · ${moving.length}</h3>`);
+        bits.push(moving.map((row) => failChromeHtml({
+          ...row,
+          title: row.title || jobLabel(row.preset) || jobStoryTitle(row) || "Job",
+          last_status: row.status || row.last_status || "error",
+          last_error: row.last_error || row.error || row.blocker || row.text || row.summary || "",
+          cron_id: row.cron_id || row.id || ""
+        }, true, "live")).join(""));
+      }
+      if (!liveRunId && !runs.length && !moving.length) {
+        bits.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`);
+      }
     } else if (view === "next") {
+      const failJobs = allJobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
+      if (failJobs.length) {
+        bits.push(`<h3 class="cron-section">Action queue · ${failJobs.length}</h3>`);
+        bits.push(failJobs.map((row) => failChromeHtml({
+          ...row,
+          title: row.title || jobLabel(row.preset) || jobStoryTitle(row) || "Job",
+          last_status: row.status || row.last_status || "error",
+          last_error: row.last_error || row.error || row.blocker || row.text || row.summary || "",
+          cron_id: row.cron_id || row.id || ""
+        }, false, "next")).join(""));
+      }
       const next = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—");
-      bits.push(next.length ? next.map((row) => `<details class="cron-card" data-fold="ceo-${escapeHtml(row.id || "")}">
-        <summary class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></summary>
-        <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.index_next), 180))}</p>
-        <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
-      </details>`).join("") : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("next"))}</p>`);
+      if (next.length) {
+        bits.push(`<h3 class="cron-section">CEO next · ${next.length}</h3>`);
+        bits.push(next.map((row) => `<details class="cron-card" data-fold="ceo-${escapeHtml(row.id || "")}">
+          <summary class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></summary>
+          <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.index_next), 180))}</p>
+          <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
+        </details>`).join(""));
+      }
+      if (!failJobs.length && !next.length) bits.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("next"))}</p>`);
     } else if (view === "schedule") {
       bits.push(`<p class="cron-empty">Pick a CEO to see the full enabled schedule roster.</p>`);
     } else {
-      bits.push(jobs.length ? jobs.map((row) => `<details class="cron-card${jobIsFailed(row) ? " failed" : ""}" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
-        <summary class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></summary>
-        <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.text || row.summary || row.outcome || ""), 180) || (jobIsFailed(row) ? "Failed." : "Done."))}</p>
-        ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
-      </details>`).join("") : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`);
+      const failJobs = jobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
+      const okJobs = jobs.filter((row) => !jobIsFailed(row));
+      if (failJobs.length) {
+        bits.push(`<h3 class="cron-section">Recovering · ${failJobs.length}</h3>`);
+        bits.push(failJobs.map((row) => failChromeHtml({
+          ...row,
+          title: row.title || jobLabel(row.preset) || jobStoryTitle(row) || "Job",
+          last_status: row.status || row.last_status || "error",
+          last_error: row.last_error || row.error || row.blocker || row.text || row.summary || "",
+          cron_id: row.cron_id || row.id || ""
+        }, row.id === want, "result")).join(""));
+      }
+      if (okJobs.length) {
+        bits.push(`<h3 class="cron-section">Resolved · ${okJobs.length}</h3>`);
+        bits.push(okJobs.map((row) => `<details class="cron-card" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
+          <summary class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>Resolved</span></summary>
+          <p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(clipWire(cleanBotText(row.text || row.summary || row.outcome || ""), 180) || "Done.")}</p>
+          <p class="cron-status"><span class="cron-k">Status</span> Resolved</p>
+          ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
+        </details>`).join(""));
+      }
+      if (!jobs.length) bits.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`);
     }
     el.innerHTML = bits.join("");
     bindNeedActions(el);
@@ -4464,14 +4874,33 @@ function renderChatSchedule(rows, digest, focusId) {
   if (view === "doing") {
     if (!gatewayRunning) sections.push(gatewayOffHtml());
     if (boardRuns.length) sections.push(boardRuns.map((row) => liveRunCard(row)).join(""));
-    sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : (boardRuns.length ? "" : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`));
+    sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : "");
+    const recover = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort).slice(0, 8);
+    if (recover.length) {
+      sections.push(`<h3 class="cron-section">Handling · ${recover.length}</h3>`);
+      sections.push(recover.map((row) => failChromeHtml(row, row.id === want, "next")).join(""));
+    }
+    if (!boardRuns.length && !running.length && !recover.length) {
+      sections.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`);
+    }
   } else if (view === "next") {
     if (waitName) {
       sections.push(`<p class="cron-empty">Waiting · ${escapeHtml(waitName)} is on this CEO's Hermes. Due jobs stay queued.</p>`);
     }
+    // HARD: ownership-sorted action queue — fails first, never Due-dump alone.
+    const actionFails = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort);
+    if (actionFails.length) {
+      const autoN = actionFails.filter((row) => failOwnership(row).owner === "auto").length;
+      const ceoN = actionFails.filter((row) => failOwnership(row).owner === "ceo").length;
+      const cosN = actionFails.filter((row) => failOwnership(row).owner === "cos").length;
+      const adamN = actionFails.filter((row) => failOwnership(row).owner === "adam").length;
+      const bits = [`Auto ${autoN}`, `CEO ${ceoN}`, `Cos ${cosN}`, `Adam ${adamN}`].filter((x) => !x.endsWith(" 0"));
+      sections.push(`<h3 class="cron-section">Action queue · ${actionFails.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}</h3>`);
+      sections.push(actionFails.map((row) => failChromeHtml(row, row.id === want, "next")).join(""));
+    }
     const dueShow = soon.slice(0, 6);
     const dueMore = soon.slice(6);
-    sections.push(`<h3 class="cron-section">Due · ${soon.length}</h3>${dueShow.length ? dueShow.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing due in the next day.</p>`}`);
+    sections.push(`<h3 class="cron-section">Due · ${soon.length}</h3>${dueShow.length ? dueShow.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : (actionFails.length ? "" : `<p class="cron-empty">Nothing due in the next day.</p>`)}`);
     if (dueMore.length) {
       sections.push(`<details class="cron-stale" data-fold="more-due"><summary>More due · ${dueMore.length}</summary>${dueMore.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
     }
@@ -4479,7 +4908,10 @@ function renderChatSchedule(rows, digest, focusId) {
       sections.push(`<details class="cron-stale" data-fold="later"><summary>Later · ${later.length}</summary>${later.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
     }
     if (paused.length) {
-      sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
+      sections.push(`<details class="cron-stale" data-fold="paused"><summary>Paused · ${paused.length}</summary>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}</details>`);
+    }
+    if (!actionFails.length && !soon.length && !later.length && !paused.length) {
+      sections.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("next"))}</p>`);
     }
   } else if (view === "schedule") {
     const counts = workCounts();
@@ -4505,27 +4937,46 @@ function renderChatSchedule(rows, digest, focusId) {
   } else {
     const waits = visibleNeedsYou().filter((row) => String(row.project_id || "") === String(projectId || ""));
     if (waits.length) {
-      sections.push(`<h3 class="cron-section">Your move · ${waits.length}</h3>`);
+      sections.push(`<h3 class="cron-section">Your move (CEO) · ${waits.length}</h3>`);
       sections.push(waits.map((row) => `<article class="cron-card">
         <div class="cron-head"><b>${escapeHtml(row.subject || row.name || "CEO")}</b><span>${escapeHtml(row.kind || "")}</span></div>
         <p class="cron-outcome">${escapeHtml(row.why || row.label || "")}</p>
         <div class="need-actions">${choiceButtonsHtml(needChoices(row), row)}</div>
       </article>`).join(""));
     }
-    const gatewayFails = failed.filter((row) => cronIsGatewayFail(row));
-    const otherFails = failed.filter((row) => !cronIsGatewayFail(row));
-    const freshFails = otherFails.filter((row) => !cronIsStaleFail(row));
-    const staleFails = otherFails.filter((row) => cronIsStaleFail(row));
-    if (gatewayFails.length) {
-      sections.push(gatewayRunning ? `<h3 class="cron-section">Failed</h3>${gatewayFailClusterHtml(gatewayFails, want)}` : gatewayOffHtml());
+    if (!gatewayRunning) sections.push(gatewayOffHtml());
+    const actionFails = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort);
+    const recovering = actionFails.filter((row) => {
+      const st = failOwnership(row).resultStatus;
+      return st === "Recovering";
+    });
+    const blockedCos = actionFails.filter((row) => failOwnership(row).resultStatus === "Blocked·Cos");
+    const needsAdam = actionFails.filter((row) => failOwnership(row).resultStatus === "Needs Adam");
+    const staleFails = failed.filter((row) => cronIsStaleFail(row));
+    if (recovering.length) {
+      sections.push(`<h3 class="cron-section">Recovering · ${recovering.length}</h3>`);
+      sections.push(recovering.map((row) => failChromeHtml(row, row.id === want, "result")).join(""));
     }
-    if (freshFails.length) {
-      sections.push(`${gatewayFails.length && gatewayRunning ? "" : `<h3 class="cron-section">Failed · ${freshFails.length}</h3>`}${failClustersHtml(freshFails, want)}`);
+    if (blockedCos.length) {
+      sections.push(`<h3 class="cron-section">Blocked·Cos · ${blockedCos.length}</h3>`);
+      sections.push(blockedCos.map((row) => failChromeHtml(row, row.id === want, "result")).join(""));
+    }
+    if (needsAdam.length) {
+      sections.push(`<h3 class="cron-section">Needs Adam · ${needsAdam.length}</h3>`);
+      sections.push(needsAdam.map((row) => failChromeHtml(row, row.id === want, "result")).join(""));
     }
     if (staleFails.length) {
-      sections.push(`<details class="cron-stale" data-fold="older-fails"><summary>Older fails · ${staleFails.length}</summary>${staleFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}</details>`);
+      sections.push(`<details class="cron-stale" data-fold="older-fails"><summary>Older fails · ${staleFails.length}</summary>${staleFails.map((row) => failChromeHtml(row, row.id === want, "result")).join("")}</details>`);
     }
-    sections.push(`<h3 class="cron-section">Done · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : (failed.length ? "" : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`)}`);
+    sections.push(`<h3 class="cron-section">Resolved · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => {
+      const title = row.title || cronTitle(row.name || row.id);
+      const fold = String(row.id || title || "job");
+      return `<details class="cron-card" id="cron-${escapeHtml(row.id || "")}" data-fold="${escapeHtml(fold)}">
+        <summary class="cron-head"><b>${escapeHtml(title)}</b><span>Resolved${cronFreshness(row) ? ` · ${escapeHtml(cronFreshness(row))}` : ""}</span></summary>
+        <p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(cleanBotText(row.outcome || cronReportText(row) || "Done.") || "Done.")}</p>
+        <p class="cron-status"><span class="cron-k">Status</span> Resolved</p>
+      </details>`;
+    }).join("") : (actionFails.length ? "" : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`)}`);
   }
   el.innerHTML = sections.join("");
   bindNeedActions(el);

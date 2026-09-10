@@ -187,10 +187,11 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertIn("No action", nxt)
         failed, fix = cron_outcome("error", "## Response\nGateway shutdown")
         self.assertTrue(failed.startswith("Failed"))
-        self.assertIn("Fix model/key", fix)
+        self.assertIn("Auto-retry", fix)
         gated, cred = cron_outcome("error", "", "cron endpoint returned 401")
         self.assertIn("401", gated)
-        self.assertIn("Fix model/key", cred)
+        self.assertIn("Fix key", cred)
+        self.assertNotIn("Auto-retry", cred)
         ok_copy, nxt2 = cron_outcome("ok", "")
         self.assertIn("Healthy on the live box", ok_copy)
 

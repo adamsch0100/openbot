@@ -3907,3 +3907,57 @@ footer a { color: var(--bronze); }
 
 .usage-card .wire-bad { color: var(--danger, #c66); }
 #ceoEngineHealthCard .kv dd { overflow-wrap: anywhere; }
+
+
+/* P0 Handled + Visible — Outcome · Why · Next · Status */
+.cron-k {
+  display: inline-block;
+  min-width: 3.4em;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.cron-why, .cron-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cron-roster-glance {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+details.cron-card > .cron-why,
+details.cron-card > .cron-status {
+  display: none;
+}
+details.cron-card[open] > .cron-why,
+details.cron-card[open] > .cron-status {
+  display: block;
+}
+/* Schedule fail glance: Status + CTA visible without expand */
+details.cron-card.schedule-roster.failed > .cron-roster-glance {
+  display: block;
+}
+details.cron-card.schedule-roster.failed > .need-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+details.cron-card.handled.failed > .need-actions {
+  display: flex;
+}
+details.cron-card.handled:not([open]) > .cron-outcome,
+details.cron-card.handled:not([open]) > .cron-why,
+details.cron-card.handled:not([open]) > .cron-next,
+details.cron-card.handled:not([open]) > .cron-status {
+  display: none;
+}
+details.cron-card.handled[open] > .cron-outcome,
+details.cron-card.handled[open] > .cron-why,
+details.cron-card.handled[open] > .cron-next,
+details.cron-card.handled[open] > .cron-status {
+  display: block;
+}
