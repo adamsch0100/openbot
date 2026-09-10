@@ -817,7 +817,7 @@ function failChromeHtml(row, open, mark, extraCount) {
   const status = mark === "live" ? "Handling" : (mark === "result" ? own.resultStatus : own.status);
   const fold = String((row && (row.id || row.cron_id || title)) || "job");
   const savedOpen = Boolean((readWorkState().folds || {})[fold]);
-  const startOpen = Boolean(open || savedOpen);
+  const startOpen = Boolean(open);
   const extra = Number(extraCount) > 0 ? ` +${Number(extraCount)}` : "";
   const choices = failChoices(row).slice(0, 1);
   const acts = choices.length
