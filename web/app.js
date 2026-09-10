@@ -4141,7 +4141,7 @@ function fillKeys(keyring) {
   if (!select) return;
   const catalog = keyring.catalog || [];
   if (catalog.length) {
-    const options = catalog.map((item) => (
+    const options = catalog.filter((item) => item.id !== "anthropic").map((item) => (
       `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`
     )).join("");
     if (select) select.innerHTML = options;
@@ -4160,16 +4160,24 @@ function fillKeys(keyring) {
       : "No Portal login yet. Subscribe, then paste a key or connect in the Hermes tab.";
   }
   const accounts = keyring.accounts || [];
+  const never = new Set(keyring.never_providers || ["anthropic"]);
   const order = keyring.fallback || accounts.map((row) => row.id);
   const ranked = new Map(order.map((id, i) => [id, i]));
   const sorted = accounts.slice().sort((a, b) => (ranked.get(a.id) ?? 99) - (ranked.get(b.id) ?? 99));
+  const failoverHint = $("keyFailoverHint");
+  if (failoverHint) {
+    const chain = sorted.filter((row) => !never.has(row.provider)).map((row) => row.label || row.provider);
+    failoverHint.textContent = chain.length
+      ? `Failover order (board → Hermes → OpenCode): ${chain.join(" → ")}. Anthropic never runs.`
+      : "Add OpenCode Go keys (up to 3) then OpenRouter as ordered backup. Anthropic never runs.";
+  }
   $("keyList").innerHTML = sorted.length ? sorted.map((row, index) => `
-    <article class="provider">
+    <article class="provider${never.has(row.provider) ? " blocked-provider" : ""}">
       <div class="provider-top">
         <b>${escapeHtml(row.label)}</b>
         <div class="pills">
           <span class="pill">${escapeHtml(row.provider)}</span>
-          ${index === 0 ? '<span class="pill on">primary</span>' : '<span class="pill">backup</span>'}
+          ${never.has(row.provider) ? '<span class="pill warn">blocked</span>' : (index === 0 ? '<span class="pill on">primary</span>' : '<span class="pill">backup</span>')}
           ${row.has_key ? '<span class="pill on">on</span>' : ""}
         </div>
       </div>

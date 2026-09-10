@@ -3874,3 +3874,6 @@ footer a { color: var(--bronze); }
     padding-left: 16px;
   }
 }
+
+.provider.blocked-provider { opacity: 0.55; }
+.provider .pill.warn { border-color: #a85; color: #c96; }
