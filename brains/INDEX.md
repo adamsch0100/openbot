@@ -2,9 +2,9 @@
 
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: OttoBot rename PR — product chrome + logo + CEO INDEX build law (separate from UX Round 4).
-Last: Branched brand-ottobot-rename from master. OTTOBOT · On it. mark, Otto assets, `.cursor/rules/ceo-index-build.mdc`.
-Next: Open rename PR; do not merge. Leave board-vitzer-ux-round4 alone.
+Now: Un-retire Nadia/ListLogic + show Add CEO for unlocked owner (hosted too).
+Last: Master tip 05f11e26 (post-#72). No auto-seat; seat via Add CEO after unlock.
+Next: Open MERGEABLE PR; do not merge. No Cloud Agents. Laptop only.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
@@ -14,7 +14,7 @@ Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No
 - Unlock PIN in You → Settings gates the board. Do not paste keys or passwords into chat.
 - OpenCode (three Go wallets, same catalog): shared pool first, then SAA Homes / Conversion, then ListLogic wallet if still in the keyring. OpenRouter PAYG last.
 - Seats are Auto unless you pin: Auto stays on OpenCode Go (flash). Muse Spark on an OpenRouter id is not Auto. OpenRouter PAYG is last after the three Go wallets. Empty Chat can still be Board (INDEX) for free status.
-- CEO pins: openbot + Support → shared pool. SAA Homes → SAA Go. Nadia and ListLogic CEOs are retired from routing (folders stay on disk).
+- CEO pins: openbot + Support → shared pool. SAA Homes → SAA Go. Nadia + ListLogic eligible again (not in RETIRED_CEO_IDS); seat via Add CEO after unlock — do not auto-wire here.
 - Hermes native: Nous Portal subscription. Subscribe at portal.nousresearch.com/r/adam-schwartz. Connect with `hermes portal` or paste `NOUS_API_KEY`. Not in this vault yet, so Auto is Go then OpenRouter.
 - PAYG: OpenRouter after the three Go wallets are empty, plus OpenCode Zen after Go quota
 - Not imported: Telegram, SMTP, GitHub, Meta — those stay on Railway. TOTP and CAPTCHA still stop on this screen.

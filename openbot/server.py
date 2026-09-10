@@ -546,6 +546,7 @@ def _public_config() -> dict:
         "x_intake_enabled": bool(load_settings().get("x_intake_enabled")),
         "x_username": str(load_settings().get("x_username") or ""),
         "hosted": board_is_hosted(),
+        "can_add_ceo": True,
     }
 
 
@@ -585,6 +586,7 @@ def _member_config(member: dict) -> dict:
             "work_dir": "",
             "spend": spend_summary(float(cap), cfg["spend_cap_period"], project_id=pid),
             "setup_needed": False,
+            "can_add_ceo": False,
         }
     )
     if not member_can(member, "engines_view"):

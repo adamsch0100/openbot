@@ -21,12 +21,12 @@ SITE_BY_ID = {
 }
 
 RETIRED_CEO_IDS = frozenset({
-    "nadia",
-    "listlogic",
     "nadia-marketing",
     "app",
     "index",
 })
+# Eligible via Add CEO / add_project. Never auto-reattached from hermes-homes.
+MANUAL_SEAT_CEO_IDS = frozenset({"nadia", "listlogic"})
 HOSTED_FOLDER_SLUGS = frozenset({"app", "data", "workspace"})
 SUPPORT_CEO_ID = "support"
 SUPPORT_WORKER_ID = SUPPORT_CEO_ID
@@ -211,6 +211,7 @@ def reattach_imported_ceos(saved: dict) -> dict:
             not home.is_dir()
             or pid in have
             or pid in RETIRED_CEO_IDS
+            or pid in MANUAL_SEAT_CEO_IDS
             or pid == SUPPORT_CEO_ID
             or pid in {"opencode-test", "staff"}
             or pid.startswith("test")
@@ -246,7 +247,7 @@ def reattach_imported_ceos(saved: dict) -> dict:
 
 
 def retire_archived_ceos(saved: dict) -> dict:
-    """Drop Nadia ISA and ListLogic from routing. Keep folders on disk."""
+    """Drop still-retired CEOs from routing. Keep folders on disk. Nadia + ListLogic stay eligible."""
     rows = list(saved.get("projects") or [])
     kept = []
     changed = False

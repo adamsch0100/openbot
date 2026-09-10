@@ -48,6 +48,12 @@ function isCollaborator() {
   return cfg.actor === "collaborator";
 }
 
+function canAddCeo() {
+  // Unlocked owners can Add CEO on laptop and hosted. Collaborators cannot.
+  if (cfg && typeof cfg.can_add_ceo === "boolean") return cfg.can_add_ceo;
+  return !isCollaborator();
+}
+
 function isLiveBoard() {
   if (cfg && cfg.hosted) return true;
   const host = String((location && location.hostname) || "").toLowerCase();
@@ -1574,7 +1580,8 @@ function showNodeMenu(x, y, kind, pid, wid) {
   const folder = (project && project.folder) || "";
   let html = "";
   if (kind === "staff") {
-    html = `
+    html = canAddCeo()
+      ? `
       <div class="menu-field">
         <label for="menuCeoAddName">Add CEO</label>
         <input id="menuCeoAddName" type="text" placeholder="Name" autocomplete="off" />
@@ -1584,6 +1591,13 @@ function showNodeMenu(x, y, kind, pid, wid) {
         <input id="menuProjectFolder" type="text" placeholder="${escapeHtml((org && org.folder) || "default OpenCode folder")}" autocomplete="off" />
         <button type="button" class="ghost-btn" data-menu="add-project">Add</button>
       </div>
+      <div class="menu-field">
+        <label for="menuIndexEdit">Staff brief</label>
+        <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
+        <button type="button" class="ghost-btn" data-menu="save-index">Save brief</button>
+      </div>
+      <button type="button" role="menuitem" data-menu="configure">Open settings</button>`
+      : `
       <div class="menu-field">
         <label for="menuIndexEdit">Staff brief</label>
         <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
@@ -2683,7 +2697,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     ${inboxHtml()}
     ${capNoticesHtml()}
     ${projectBits}
-    ${isCollaborator() || (cfg && cfg.hosted) ? "" : `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>`}
+    ${canAddCeo() ? `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>` : ""}
   `;
   tree.querySelectorAll(".org-btn").forEach((btn) => {
     btn.addEventListener("click", () => setOrgNode(btn.dataset.project || "", btn.dataset.worker || ""));
