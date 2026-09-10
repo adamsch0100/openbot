@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=2" />
   <link rel="apple-touch-icon" href="/favicon.png?v=2" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=120" />
+  <link rel="stylesheet" href="/styles.css?v=121" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -21,10 +21,6 @@
         <img class="mark-lockup" src="/logo.png?v=2" alt="OPENBOT LOCAL ORG." width="240" height="182" />
       </div>
       <h2 id="firstRunTitle">Setup</h2>
-      <p class="credit">
-        OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
-        Not affiliated with, sponsored by, or endorsed by those projects.
-      </p>
       <p class="muted" id="wizardStepLabel">Engines</p>
       <section class="wizard-step" data-step="engines">
         <section class="engines" id="firstEngines">…</section>
@@ -185,7 +181,6 @@
         </div>
         <aside id="ceoLive" class="ceo-live" hidden></aside>
         <aside id="ceoBrief" class="ceo-brief" hidden></aside>
-        <aside id="chatSchedule" class="chat-schedule" hidden></aside>
         <nav class="lanes" id="laneStatus" hidden aria-label="Work in this chat">
           <button type="button" class="lane on" data-lane="all" title="Show every turn in this chat">All</button>
           <button type="button" class="lane" data-lane="builder" title="Show only Code jobs in this chat">Code</button>
@@ -194,6 +189,13 @@
           <button type="button" class="lane" data-lane="ops" title="Show only Ops jobs in this chat">Ops</button>
         </nav>
       </div>
+      <aside id="chatSchedule" class="activity-sheet" hidden>
+        <div class="activity-bar">
+          <span id="activityTitle">Activity</span>
+          <button type="button" class="activity-close" id="closeActivity">Close</button>
+        </div>
+        <div id="activityBody" class="activity-body"></div>
+      </aside>
       <details class="index" id="indexWrap">
         <summary id="indexSummary">Brief</summary>
         <pre id="indexCard"></pre>
@@ -203,16 +205,7 @@
       <form class="composer" id="form">
         <input id="folder" type="hidden" />
         <input id="attachInput" type="file" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.cpp,.c,.h,.go,.rs,.rb,.php,.swift,.kt,.sql,.yaml,.yml,.toml" />
-        <div class="composer-meta">
-          <p class="composer-who" id="composerWho">Talking to Chief of Staff</p>
-          <select class="route-select" id="routeSelect" aria-label="Send mode">
-            <option value="cos" selected>Auto</option>
-            <option value="builder">Code</option>
-            <option value="think">Think</option>
-            <option value="research">Research</option>
-            <option value="ops">Ops</option>
-          </select>
-        </div>
+        <p class="composer-who sr-only" id="composerWho">Talking to Chief of Staff</p>
         <div class="seat-autocomplete hidden" id="seatAutocomplete" role="listbox"></div>
         <div class="reply-chip hidden" id="replyChip">
           <span class="reply-chip-kicker">Replying to</span>
@@ -229,6 +222,16 @@
         <div class="composer-input-row">
           <button type="button" class="attach-btn" id="attachBtn" title="Attach files or images">📎</button>
           <textarea id="msg" rows="1" placeholder="Message Chief of Staff"></textarea>
+          <details class="route-hatch" id="routeHatch">
+            <summary id="routeHatchSummary">Auto</summary>
+            <div class="route-menu" id="routeMenu" role="listbox" aria-label="Force send mode">
+              <button type="button" role="option" data-route="cos">Auto</button>
+              <button type="button" role="option" data-route="builder">Code</button>
+              <button type="button" role="option" data-route="think">Think</button>
+              <button type="button" role="option" data-route="research">Research</button>
+              <button type="button" role="option" data-route="ops">Ops</button>
+            </div>
+          </details>
           <button class="send" type="submit" id="sendBtn">Send</button>
         </div>
         <p class="composer-hint hidden" id="workHint" aria-live="polite"></p>
@@ -683,10 +686,6 @@
             </form>
           </section>
           <section class="drawer-panel" id="panel-about">
-            <p class="credit">
-              OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
-              Not affiliated with, sponsored by, or endorsed by those projects.
-            </p>
             <p class="muted" id="aboutMark">OPENBOT · LOCAL ORG. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.</p>
             <div class="actions">
               <button type="button" class="ghost-btn" id="aboutOpenCode">Open OpenCode</button>
@@ -700,10 +699,6 @@
 
   <footer>
     <span id="boardMark">OPENBOT · LOCAL ORG.</span>
-    · Engines: <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a>
-    · <a href="https://github.com/anomalyco/opencode">OpenCode</a>
-    · OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).
-    Not affiliated with, sponsored by, or endorsed by those projects.
   </footer>
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>

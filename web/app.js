@@ -950,11 +950,7 @@ function paintLanes() {
       ? "Show every turn in this chat"
       : (fresh ? `New ${jobLabel(lane)} — click to show only those` : `Show only ${jobLabel(lane)} jobs in this chat`);
   });
-  const routeSelect = $("routeSelect");
-  if (routeSelect) {
-    routeSelect.value = preset || "cos";
-    routeSelect.classList.toggle("working", Boolean(liveRunId) && preset !== "cos" && preset === liveLane);
-  }
+  paintRouteHatch();
   applyLaneFilter();
 }
 
@@ -2716,14 +2712,6 @@ function renderBotMeta(opts) {
   const cachedPack = digestCache.get(projectId) || {};
   paintCeoBrief(cachedPack.digest || cachedPack);
   paintCeoLive(cachedPack);
-  if (!project) {
-    scheduleOpen = false;
-    const panel = $("chatSchedule");
-    if (panel) {
-      panel.hidden = true;
-      panel.innerHTML = "";
-    }
-  }
   if (!opts || !opts.skipSpend) loadSpend();
 }
 
@@ -2737,6 +2725,68 @@ function renderSchedules(project) {
 let scheduleOpen = false;
 let scheduleFocusId = "";
 let scheduleView = "doing";
+
+function workStateKey() {
+  return `ob-work:${projectId || "cos"}`;
+}
+
+function readWorkState() {
+  try {
+    return JSON.parse(sessionStorage.getItem(workStateKey()) || "{}") || {};
+  } catch (_err) {
+    return {};
+  }
+}
+
+function writeWorkState(patch) {
+  sessionStorage.setItem(workStateKey(), JSON.stringify(Object.assign({}, readWorkState(), patch || {})));
+}
+
+function rememberWorkFolds(root) {
+  if (!root) return;
+  const folds = {};
+  root.querySelectorAll("details[data-fold]").forEach((el) => {
+    const id = el.getAttribute("data-fold");
+    if (id && el.open) folds[id] = true;
+  });
+  writeWorkState({ folds });
+}
+
+function restoreWorkFolds(root) {
+  if (!root) return;
+  const folds = readWorkState().folds || {};
+  root.querySelectorAll("details[data-fold]").forEach((el) => {
+    const id = el.getAttribute("data-fold");
+    if (id && folds[id]) el.open = true;
+  });
+}
+
+function bindWorkFolds(root) {
+  if (!root) return;
+  restoreWorkFolds(root);
+  if (root.dataset.foldBound) return;
+  root.dataset.foldBound = "1";
+  root.addEventListener("toggle", (event) => {
+    const target = event.target;
+    if (target && target.matches && target.matches("details[data-fold]")) rememberWorkFolds(root);
+  }, true);
+}
+
+function activityBody() {
+  return $("activityBody") || $("chatSchedule");
+}
+
+function paintActivityTitle() {
+  const el = $("activityTitle");
+  if (!el) return;
+  el.textContent = scheduleView === "next" ? "Next" : (scheduleView === "results" ? "Results" : "Doing");
+}
+
+function applySavedWork() {
+  const saved = readWorkState();
+  if (saved.view) scheduleView = saved.view;
+  return Boolean(saved.open);
+}
 
 function cronTitle(name) {
   const map = {
@@ -2977,8 +3027,6 @@ function cronKind(row, mark) {
 
 function cronCardHtml(row, open, mark) {
   const title = row.title || cronTitle(row.name || row.id);
-  const last = cronWhen(row.last_run_at);
-  const nextAt = cronWhenClock(row.next_run_at);
   const status = String(row.last_status || "").toLowerCase();
   const failed = /error|fail/.test(status);
   const err = cleanBotText(String(row.last_error || "").trim());
@@ -2991,26 +3039,27 @@ function cronCardHtml(row, open, mark) {
   outcome = String(outcome).replace(/#\s*Cron Job:\s*[\w.-]+/gi, "").trim() || (failed ? "Failed." : outcome);
   const next = row.next_action || "";
   const showNext = cronNextUseful(next);
-  const engine = cronEngineName(row);
   const report = cronReportText(row);
   const changed = cronChangedLine(report);
   const live = mark === "live";
   const kind = cronKind(row, mark);
-  const sched = String(row.schedule || "").trim();
-  return `<article class="cron-card${open ? " open" : ""}${live ? " live" : ""}${failed ? " failed" : ""}" id="cron-${escapeHtml(row.id || "")}">
-    <div class="cron-head">
+  const fold = String(row.id || title || "job");
+  const savedOpen = Boolean((readWorkState().folds || {})[fold]);
+  const startOpen = Boolean(open || live || savedOpen || (failed && mark === "result"));
+  const line = live
+    ? "Running now on this CEO's Hermes."
+    : (failed ? (err ? `Failed. ${err.slice(0, 120)}` : "Failed.") : outcome);
+  return `<details class="cron-card${live ? " live" : ""}${failed ? " failed" : ""}" id="cron-${escapeHtml(row.id || "")}" data-fold="${escapeHtml(fold)}"${startOpen ? " open" : ""}>
+    <summary class="cron-head">
       <b>${escapeHtml(title)}</b>
       <span>${escapeHtml(kind)}</span>
-    </div>
-    <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${sched ? ` · Runs ${escapeHtml(sched)}` : ""} · ${escapeHtml(engine)}</p>
-    <p class="cron-outcome">${escapeHtml(live ? "Running now on this CEO's Hermes. Other jobs wait. The result lands here when it finishes." : outcome)}</p>
-    ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
-    ${changed && !live ? `<p class="cron-next">${escapeHtml(changed)}</p>` : ""}
+    </summary>
+    <p class="cron-outcome">${escapeHtml(line)}</p>
     ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="send cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry</button>` : ""}
-    ${report && !failed ? `<details class="cron-more"><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
-    ${err && !live && !failed ? `<p class="cron-snip">${escapeHtml(err)}</p>` : ""}
-    ${err && failed && outcome && !outcome.includes(err.slice(0, 40)) ? `<p class="cron-snip">${escapeHtml(err)}</p>` : ""}
-  </article>`;
+    ${!failed && showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
+    ${!failed && changed && !live ? `<p class="cron-next">${escapeHtml(changed)}</p>` : ""}
+    ${report && !failed ? `<details class="cron-more" data-fold="report-${escapeHtml(fold)}"><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
+  </details>`;
 }
 
 function paintCeoBrief(digest) {
@@ -3233,15 +3282,15 @@ function liveRunCard(row) {
   const who = currentProject() ? (currentProject().name || "This CEO") : "Chat";
   const engine = String(row.engine || PRESET_ENGINE[row.preset] || "board");
   const open = [{ id: "open", label: "Open chat" }];
-  return `<article class="cron-card live">
-    <div class="cron-head">
+  const fold = `live-${row.id || row.preset || "chat"}`;
+  return `<details class="cron-card live" data-fold="${escapeHtml(fold)}" open>
+    <summary class="cron-head">
       <b>${escapeHtml(laneLabel(row.preset || "cos"))}</b>
       <span>Running</span>
-    </div>
-    <p class="cron-meta">${escapeHtml(who)} · ${escapeHtml(engine)}</p>
-    <p class="cron-outcome">${escapeHtml(row.title || "This chat is answering now.")}</p>
+    </summary>
+    <p class="cron-outcome">${escapeHtml(row.title || "This chat is answering now.")} · ${escapeHtml(who)} · ${escapeHtml(engine)}</p>
     <div class="need-actions">${choiceButtonsHtml(open, row)}</div>
-  </article>`;
+  </details>`;
 }
 
 function gatewayFailClusterHtml(rows, want) {
@@ -3251,36 +3300,40 @@ function gatewayFailClusterHtml(rows, want) {
   return `<article class="cron-card failed cron-cluster">
     <div class="cron-head"><b>Hermes gateway stopped</b><span>Failed</span></div>
     <p class="cron-outcome">Same stop hit ${list.length} jobs. Retry one job — do not fire the whole set.</p>
-    <details class="cron-stale"><summary>Show ${list.length} jobs</summary>${inner}</details>
+    <details class="cron-stale" data-fold="gateway-jobs"><summary>Show ${list.length} jobs</summary>${inner}</details>
   </article>`;
 }
 
 function paintWorkSurface() {
   const shell = document.querySelector(".chat-shell");
-  if (shell) shell.classList.toggle("work-open", Boolean(scheduleOpen));
+  if (shell) {
+    shell.classList.toggle("work-open", Boolean(scheduleOpen));
+    shell.classList.toggle("activity-open", Boolean(scheduleOpen));
+  }
   const lanes = $("laneStatus");
   if (lanes && scheduleOpen) lanes.hidden = true;
+  paintActivityTitle();
 }
 
 function closeSchedule() {
   scheduleOpen = false;
+  writeWorkState({ open: false, view: scheduleView });
   const panel = $("chatSchedule");
-  if (panel) {
-    panel.hidden = true;
-    panel.innerHTML = "";
-  }
+  if (panel) panel.hidden = true;
   paintWorkSurface();
   paintWorkTabs();
 }
 
 function renderChatSchedule(rows, digest, focusId) {
-  const el = $("chatSchedule");
+  const panel = $("chatSchedule");
+  const el = activityBody();
   if (!el) return;
   if (!scheduleOpen) {
-    el.hidden = true;
+    if (panel) panel.hidden = true;
     return;
   }
-  el.hidden = false;
+  if (panel) panel.hidden = false;
+  paintActivityTitle();
   const want = String(focusId || scheduleFocusId || "");
   const view = scheduleView || "doing";
   if (!projectId) {
@@ -3290,31 +3343,25 @@ function renderChatSchedule(rows, digest, focusId) {
     const jobs = allJobs.slice(0, 12);
     const bits = [];
     if (view === "doing") {
-      bits.push(`<p class="cron-story">What is moving right now across Cos and the CEOs.</p>`);
-      bits.push(`<h3 class="cron-section">Doing · ${runs.length + (liveRunId ? 1 : 0)}</h3>`);
       if (liveRunId) bits.push(liveRunCard({ preset: liveLane || preset, title: "This chat" }));
       bits.push(runs.length ? runs.map((row) => liveRunCard(row)).join("") : (liveRunId ? "" : `<p class="cron-empty">Nothing running.</p>`));
     } else if (view === "next") {
-      bits.push(`<p class="cron-story">What each CEO is lined up to do next.</p>`);
       const next = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—");
-      bits.push(`<h3 class="cron-section">Next · ${next.length}</h3>`);
-      bits.push(next.length ? next.map((row) => `<article class="cron-card">
-        <div class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></div>
+      bits.push(next.length ? next.map((row) => `<details class="cron-card" data-fold="ceo-${escapeHtml(row.id || "")}">
+        <summary class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></summary>
         <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.index_next), 180))}</p>
         <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
-      </article>`).join("") : `<p class="cron-empty">No next step on the briefs.</p>`);
+      </details>`).join("") : `<p class="cron-empty">No next step on the briefs.</p>`);
     } else {
-      bits.push(`<p class="cron-story">Latest job cards from this board.</p>`);
-      bits.push(`<h3 class="cron-section">Results · ${allJobs.length}</h3>`);
-      bits.push(jobs.length ? jobs.map((row) => `<article class="cron-card${/fail|error/i.test(String(row.status || "")) ? " failed" : ""}">
-        <div class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></div>
-        <p class="cron-meta">${escapeHtml(row.engine || PRESET_ENGINE[row.preset] || "board")} · ${escapeHtml(cronWhen(row.at))}</p>
+      bits.push(jobs.length ? jobs.map((row) => `<details class="cron-card${/fail|error/i.test(String(row.status || "")) ? " failed" : ""}" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
+        <summary class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></summary>
         <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.text || row.summary || ""), 180) || (/fail|error/i.test(String(row.status || "")) ? "Failed." : "Done."))}</p>
         ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
-      </article>`).join("") : `<p class="cron-empty">No job cards yet.</p>`);
+      </details>`).join("") : `<p class="cron-empty">No job cards yet.</p>`);
     }
     el.innerHTML = bits.join("");
     bindNeedActions(el);
+    bindWorkFolds(el);
     paintWorkSurface();
     paintWorkTabs();
     return;
@@ -3349,18 +3396,8 @@ function renderChatSchedule(rows, digest, focusId) {
   const soon = scheduled.filter((row) => cronIsDueSoon(row));
   const later = scheduled.filter((row) => !cronIsDueSoon(row));
   const sections = [];
-  const synced = cached.synced_at || pack.synced_at || "";
   const waitName = running.length ? (running[0].title || cronTitle(running[0].name)) : "";
-  const stamp = view === "results"
-    ? "Latest outcomes."
-    : (view === "next"
-      ? "What’s due next."
-      : (running.length
-        ? `Running · ${running.map((row) => row.title || cronTitle(row.name)).slice(0, 2).join(", ")}. Other jobs on this CEO wait.`
-        : "Nothing running."));
-  sections.push(`<p class="cron-story">${escapeHtml(stamp)}</p>`);
   if (view === "doing") {
-    sections.push(`<h3 class="cron-section">Doing · ${running.length + boardRuns.length}</h3>`);
     if (boardRuns.length) sections.push(boardRuns.map((row) => liveRunCard(row)).join(""));
     sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : (boardRuns.length ? "" : `<p class="cron-empty">Nothing running.</p>`));
   } else if (view === "next") {
@@ -3371,10 +3408,10 @@ function renderChatSchedule(rows, digest, focusId) {
     const dueMore = soon.slice(6);
     sections.push(`<h3 class="cron-section">Due · ${soon.length}</h3>${dueShow.length ? dueShow.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing due in the next day.</p>`}`);
     if (dueMore.length) {
-      sections.push(`<details class="cron-stale"><summary>More due · ${dueMore.length}</summary>${dueMore.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
+      sections.push(`<details class="cron-stale" data-fold="more-due"><summary>More due · ${dueMore.length}</summary>${dueMore.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
     }
     if (later.length) {
-      sections.push(`<details class="cron-stale"><summary>Later · ${later.length}</summary>${later.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
+      sections.push(`<details class="cron-stale" data-fold="later"><summary>Later · ${later.length}</summary>${later.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
     }
     if (paused.length) {
       sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
@@ -3400,12 +3437,13 @@ function renderChatSchedule(rows, digest, focusId) {
       sections.push(`${gatewayFails.length ? "" : `<h3 class="cron-section">Failed · ${freshFails.length}</h3>`}${freshFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}`);
     }
     if (staleFails.length) {
-      sections.push(`<details class="cron-stale"><summary>Older fails · ${staleFails.length}</summary>${staleFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}</details>`);
+      sections.push(`<details class="cron-stale" data-fold="older-fails"><summary>Older fails · ${staleFails.length}</summary>${staleFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}</details>`);
     }
     sections.push(`<h3 class="cron-section">Done · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : (failed.length ? "" : `<p class="cron-empty">No result on this copy yet.</p>`)}`);
   }
   el.innerHTML = sections.join("");
   bindNeedActions(el);
+  bindWorkFolds(el);
   paintWorkSurface();
   paintWorkTabs();
   if (want && window.CSS && CSS.escape) {
@@ -3416,16 +3454,7 @@ function renderChatSchedule(rows, digest, focusId) {
 
 async function openWork(view, focusId) {
   const next = view || "doing";
-  if (stage !== "chat") {
-    setStage("chat");
-    scheduleView = next;
-    await openSchedule(focusId || "");
-    return;
-  }
-  if (scheduleOpen && scheduleView === next && !focusId) {
-    closeSchedule();
-    return;
-  }
+  if (stage !== "chat") setStage("chat");
   scheduleView = next;
   await openSchedule(focusId || "");
 }
@@ -3433,23 +3462,23 @@ async function openWork(view, focusId) {
 async function openSchedule(focusId) {
   scheduleOpen = true;
   scheduleFocusId = focusId || "";
+  writeWorkState({ open: true, view: scheduleView });
   paintWorkSurface();
   paintWorkTabs();
-  const el = $("chatSchedule");
+  const panel = $("chatSchedule");
+  const body = activityBody();
   const cached = projectId ? digestCache.get(projectId) : null;
-  if (el) {
-    el.hidden = false;
-    if (!projectId) renderChatSchedule([], {}, focusId);
-    else if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
-    else el.innerHTML = `<p class="muted">Loading what’s moving…</p>`;
-  }
+  if (panel) panel.hidden = false;
+  if (!projectId) renderChatSchedule([], {}, focusId);
+  else if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
+  else if (body) body.innerHTML = `<p class="cron-empty">Loading what’s moving…</p>`;
   if (!projectId) {
     paintWorkTabs();
     return;
   }
   const data = await loadCeoDigest(true);
   if (data) renderChatSchedule(data.crons || [], data.digest || {}, focusId);
-  else if (el && !cached) el.innerHTML = `<p class="muted">Could not load the schedule.</p>`;
+  else if (body && !cached) body.innerHTML = `<p class="cron-empty">Could not load the schedule.</p>`;
 }
 
 function fillProfile(data) {
@@ -3847,16 +3876,43 @@ async function setOrgNode(project, worker) {
   scrollChatBottom();
   startOpenCode();
   startHermes();
-  if (scheduleOpen) openSchedule("");
-  else {
-    closeSchedule();
-  }
+  if (applySavedWork()) openSchedule("");
+  else closeSchedule();
   if (!liveRunId) await drainQueue();
+}
+
+function guessLane(text) {
+  const t = String(text || "");
+  if (/\b(cron|schedule|every day|daily|weekly)\b/i.test(t)) return "ops";
+  if (/https?:\/\//i.test(t) || /\b(look up|research|fetch url)\b/i.test(t)) return "research";
+  if (/\b(code|diff|patch|refactor|implement|fix the)\b/i.test(t)) return "builder";
+  if (/\b(think|why|explain|plan)\b/i.test(t)) return "think";
+  return "cos";
+}
+
+function paintRouteHatch() {
+  const sum = $("routeHatchSummary");
+  const menu = $("routeMenu");
+  if (menu) {
+    menu.querySelectorAll("[data-route]").forEach((btn) => {
+      btn.classList.toggle("on", (btn.getAttribute("data-route") || "cos") === (preset || "cos"));
+    });
+  }
+  if (!sum) return;
+  const forced = Boolean(preset && preset !== "cos");
+  const guess = guessLane(($("msg") || {}).value || "");
+  if (forced) sum.textContent = jobLabel(preset);
+  else if (guess !== "cos") sum.textContent = `Auto · ${jobLabel(guess)}`;
+  else sum.textContent = "Auto";
+  sum.classList.toggle("forced", forced);
 }
 
 function setRoute(name) {
   preset = name || "cos";
   if (preset && preset !== "cos") unreadLanes.delete(preset);
+  const hatch = $("routeHatch");
+  if (hatch) hatch.open = false;
+  paintRouteHatch();
   renderBotMeta();
   scrollChatBottom();
 }
@@ -5359,6 +5415,8 @@ async function boot() {
   loadSkillHints();
   window.setTimeout(refreshCatalog, 400);
   sizeComposer();
+  paintRouteHatch();
+  if (applySavedWork()) openSchedule("");
   if (location.hash) applyHash();
   window.addEventListener("hashchange", applyHash);
   window.setTimeout(() => {
@@ -5435,8 +5493,16 @@ async function pollActivity() {
 document.querySelectorAll(".stage-btn").forEach((btn) => {
   btn.addEventListener("click", () => setStage(btn.dataset.stage));
 });
-if ($("routeSelect")) {
-  $("routeSelect").addEventListener("change", (e) => setRoute(e.target.value));
+if ($("routeMenu")) {
+  $("routeMenu").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-route]");
+    if (!btn) return;
+    event.preventDefault();
+    setRoute(btn.getAttribute("data-route") || "cos");
+  });
+}
+if ($("closeActivity")) {
+  $("closeActivity").addEventListener("click", () => closeSchedule());
 }
 document.querySelectorAll(".lane").forEach((btn) => {
   btn.addEventListener("click", () => focusLane(btn.dataset.lane));
@@ -6472,6 +6538,7 @@ $("form").addEventListener("submit", async (e) => {
 if ($("msg")) {
   $("msg").addEventListener("input", (event) => {
     sizeComposer();
+    paintRouteHatch();
     const msg = event.target;
     const value = msg.value;
     const pos = msg.selectionStart;

@@ -212,7 +212,7 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn("_kill_port", (ROOT / "openbot" / "launch.py").read_text(encoding="utf-8"))
         self.assertIn("color-scheme: dark", css)
         self.assertIn("appearance: none", css)
-        self.assertIn('id="routeToggle"', html)
+        self.assertIn('id="routeHatch"', html)
         self.assertIn("function setRoute", js)
         self.assertIn("function paintLanes", js)
         self.assertIn("function applyLaneFilter", js)
@@ -229,13 +229,19 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn("overflow-wrap: anywhere", css)
         self.assertIn("gate-line", css)
         self.assertIn("action gate", js)
-        self.assertIn("handoff_path", js)
+        self.assertIn("handoff_to", js)
 
     def test_credit_stays_on_the_board(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
+        self.assertNotIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
+        self.assertNotIn("OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
         self.assertIn("Hermes Agent", html)
         self.assertIn("OpenCode", html)
+        self.assertIn("activity-sheet", html)
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function rememberWorkFolds", js)
+        self.assertIn("data-fold=\"gateway-jobs\"", js)
+        self.assertIn("function guessLane", js)
 
 
 class SeamlessTogetherTests(unittest.TestCase):
