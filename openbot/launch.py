@@ -938,6 +938,13 @@ def warm_engines() -> dict:
                 ceo_home = _ceo_hermes_home(pid)
                 if ceo_home:
                     sync_opencode_go_pool_env(home=ceo_home)
+            # Persist SAA (etc.) cron wrappers even when supervise list is empty.
+            try:
+                from .org import sync_ceo_hermes_scripts
+
+                sync_ceo_hermes_scripts("saa-homes")
+            except Exception:
+                pass
         except Exception as err:
             print(f"[openbot] key push skipped: {err}", flush=True)
         opencode = start_opencode_web(_opencode_cwd)
@@ -1008,6 +1015,12 @@ def ensure_supervised_gateway(project_id: str) -> dict:
 
         preserve_merge_hermes_env(home)
         sync_opencode_go_pool_env(home=home)
+    except Exception:
+        pass
+    try:
+        from .org import sync_ceo_hermes_scripts
+
+        sync_ceo_hermes_scripts(project_id, home)
     except Exception:
         pass
     status = gateway_status(home, timeout=5)

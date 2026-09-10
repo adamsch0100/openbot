@@ -1539,7 +1539,9 @@ const CEO_SEAT_PRESETS = {
     github_repo: "adamsch0100/pmillsports",
     railway: "victorious-presence",
     goals: "profitability"
-  }
+  },
+  nadia: { goals: "marketing + growth" },
+  listlogic: { goals: "MLS + lead ops" }
 };
 
 function ceoSeatPreset(name) {
@@ -1592,6 +1594,7 @@ function applyCeoSeatPresetToForm(name) {
 function addCeoFormHtml() {
   const folderHint = escapeHtml((org && org.folder) || "default OpenCode folder");
   return `
+      <p class="menu-note">Name unlocks presets (Pmill, Nadia, ListLogic). Site / GitHub / Railway wire tools on seat.</p>
       <div class="menu-field">
         <label for="menuCeoAddName">Name</label>
         <input id="menuCeoAddName" type="text" placeholder="Pmill" autocomplete="off" />
@@ -1600,21 +1603,25 @@ function addCeoFormHtml() {
         <label for="menuProjectFolder">Folder (optional)</label>
         <input id="menuProjectFolder" type="text" placeholder="${folderHint}" autocomplete="off" />
       </div>
-      <div class="menu-field">
-        <label for="menuCeoSite">Site</label>
-        <input id="menuCeoSite" type="url" placeholder="https://pmill.ai" autocomplete="off" />
+      <div class="menu-grid-2">
+        <div class="menu-field">
+          <label for="menuCeoSite">Site</label>
+          <input id="menuCeoSite" type="url" placeholder="https://pmill.ai" autocomplete="off" />
+        </div>
+        <div class="menu-field">
+          <label for="menuCeoRepo">GitHub repo</label>
+          <input id="menuCeoRepo" type="text" placeholder="owner/repo" autocomplete="off" />
+        </div>
       </div>
-      <div class="menu-field">
-        <label for="menuCeoRepo">GitHub repo</label>
-        <input id="menuCeoRepo" type="text" placeholder="owner/repo" autocomplete="off" />
-      </div>
-      <div class="menu-field">
-        <label for="menuCeoRailway">Railway</label>
-        <input id="menuCeoRailway" type="text" placeholder="project or service name" autocomplete="off" />
-      </div>
-      <div class="menu-field">
-        <label for="menuCeoGoals">Goal</label>
-        <input id="menuCeoGoals" type="text" placeholder="profitability" autocomplete="off" />
+      <div class="menu-grid-2">
+        <div class="menu-field">
+          <label for="menuCeoRailway">Railway</label>
+          <input id="menuCeoRailway" type="text" placeholder="project or service name" autocomplete="off" />
+        </div>
+        <div class="menu-field">
+          <label for="menuCeoGoals">Goal</label>
+          <input id="menuCeoGoals" type="text" placeholder="profitability" autocomplete="off" />
+        </div>
       </div>
       <fieldset class="menu-field menu-auth">
         <legend>Authorize tools</legend>

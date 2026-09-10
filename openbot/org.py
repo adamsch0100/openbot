@@ -29,6 +29,12 @@ CEO_SEAT_PRESETS = {
         "railway": "victorious-presence",
         "goals": "profitability",
     },
+    "nadia": {
+        "goals": "marketing + growth",
+    },
+    "listlogic": {
+        "goals": "MLS + lead ops",
+    },
 }
 
 RETIRED_CEO_IDS = frozenset({
@@ -960,6 +966,45 @@ def _init_git(folder: Path) -> bool:
     return ran.returncode == 0
 
 
+
+def sync_ceo_hermes_scripts(project_id: str, home: str | Path | None = None) -> list[str]:
+    """Copy repo bootstrap/<ceo>/scripts into Hermes home scripts/ (idempotent).
+
+    SAA alert-digest wrappers lived only on the volume; empty scripts/ caused
+    cron Script-not-found until a one-off restore. Persist them in-repo.
+    """
+    from .store import CODE_ROOT
+
+    pid = _slug(project_id)
+    src_root = CODE_ROOT / "bootstrap" / pid / "scripts"
+    if not src_root.is_dir():
+        return []
+    dest_home = Path(home).expanduser() if home else (HERMES_HOMES / pid)
+    dest = dest_home / "scripts"
+    dest.mkdir(parents=True, exist_ok=True)
+    written: list[str] = []
+    for src in sorted(src_root.iterdir()):
+        if not src.is_file():
+            continue
+        target = dest / src.name
+        body = src.read_text(encoding="utf-8")
+        if target.is_file() and target.read_text(encoding="utf-8") == body:
+            # still ensure executable bit
+            try:
+                target.chmod(0o755)
+            except OSError:
+                pass
+            written.append(src.name)
+            continue
+        target.write_text(body, encoding="utf-8")
+        try:
+            target.chmod(0o755)
+        except OSError:
+            pass
+        written.append(src.name)
+    return written
+
+
 def bootstrap_ceo_runtime(project_id: str, title: str | None = None, folder: str | None = None) -> dict:
     """Attach a Hermes home and a Code folder. Keys stay in the vault. Idempotent."""
     pid = _slug(project_id)
@@ -996,11 +1041,17 @@ def bootstrap_ceo_runtime(project_id: str, title: str | None = None, folder: str
         sync_skills_to_hermes_home(str(home.resolve()))
     except Exception:
         pass
+    scripts = []
+    try:
+        scripts = sync_ceo_hermes_scripts(pid, home)
+    except Exception:
+        scripts = []
     return {
         "project_id": pid,
         "folder": str(work.resolve()),
         "hermes_home": str(home.resolve()),
         "git": git_ok,
+        "scripts": scripts,
     }
 
 
