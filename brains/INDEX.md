@@ -2,9 +2,9 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #54 (OpenRouter env leak fix) ready — Vitzer overnight priority
-Last: Fixed push_engine_wallets to NOT write OPENROUTER_API_KEY when CEO chain is Go-only. PR #53 already merged.
-Next: Merge PR #54, verify SAA Homes .env has no OPENROUTER_API_KEY
+Now: PR #55 (phone-first board) is mergeable — conflicts resolved.
+Last: Merged master into board-phone-first. INDEX conflict resolved, session/provider fixes preserved.
+Next: User decides when to merge PR #55. Leave PR #48 untouched.
 Blocker: —
 
 ## Vault
