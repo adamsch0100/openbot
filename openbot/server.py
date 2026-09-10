@@ -2541,13 +2541,18 @@ def main() -> None:
         name="openbot-saa-gateway",
         daemon=True,
     ).start()
-    from .hermes import overlay_saa_live_background
-
-    threading.Thread(
-        target=overlay_saa_live_background,
-        name="openbot-saa-overlay",
-        daemon=True,
-    ).start()
+    
+    # SAA live overlay: disabled by default due to railway SSH zombie accumulation.
+    # Even with PR #59 (killpg, single-flight, 300s interval), zombies still climb to ~540.
+    # Enable only if you have verified railway CLI version and zombie reaping work in your env.
+    if os.environ.get("OPENBOT_SAA_OVERLAY_ENABLED", "").lower() in ("1", "true", "yes"):
+        from .hermes import overlay_saa_live_background
+        threading.Thread(
+            target=overlay_saa_live_background,
+            name="openbot-saa-overlay",
+            daemon=True,
+        ).start()
+        print("[openbot] SAA live overlay enabled (OPENBOT_SAA_OVERLAY_ENABLED=1)", flush=True)
     threading.Thread(
         target=zen_models,
         name="zen-catalog",

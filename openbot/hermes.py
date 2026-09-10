@@ -1324,6 +1324,10 @@ def overlay_saa_live_background(interval: int | None = None) -> None:
     """Keep the SAA Homes board copy of jobs.json in step with live Hermes.
     
     Single-flight locked: if a prior tick is still running, skip the new tick.
+    
+    DISABLED BY DEFAULT: Set OPENBOT_SAA_OVERLAY_ENABLED=1 to enable.
+    Even with PR #59 fixes (killpg, single-flight, longer interval), railway SSH
+    still accumulates zombies in production. Enable only if verified safe in your env.
     """
     global _overlay_miss_logged
     delay = interval if interval is not None else int(os.environ.get("OPENBOT_SAA_OVERLAY_INTERVAL", "120") or "120")
