@@ -3003,11 +3003,13 @@ function cronCardHtml(row, open, mark) {
       <span>${escapeHtml(kind)}</span>
     </div>
     <p class="cron-meta">Last ${escapeHtml(last)} · Next ${escapeHtml(nextAt)}${sched ? ` · Runs ${escapeHtml(sched)}` : ""} · ${escapeHtml(engine)}</p>
-    <p class="cron-outcome">${escapeHtml(live ? "Running now on this CEO's Hermes. Other jobs wait. The result lands here when it finishes." : `Result: ${outcome}`)}</p>
+    <p class="cron-outcome">${escapeHtml(live ? "Running now on this CEO's Hermes. Other jobs wait. The result lands here when it finishes." : outcome)}</p>
     ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
     ${changed && !live ? `<p class="cron-next">${escapeHtml(changed)}</p>` : ""}
     ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="send cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry</button>` : ""}
-    ${report ? `<details class="cron-more"><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : (err && !live ? `<p class="cron-snip">${escapeHtml(err)}</p>` : "")}
+    ${report && !failed ? `<details class="cron-more"><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : ""}
+    ${err && !live && !failed ? `<p class="cron-snip">${escapeHtml(err)}</p>` : ""}
+    ${err && failed && outcome && !outcome.includes(err.slice(0, 40)) ? `<p class="cron-snip">${escapeHtml(err)}</p>` : ""}
   </article>`;
 }
 
@@ -3366,7 +3368,12 @@ function renderChatSchedule(rows, digest, focusId) {
     if (waitName) {
       sections.push(`<p class="cron-empty">Waiting · ${escapeHtml(waitName)} is on this CEO's Hermes. Due jobs stay queued.</p>`);
     }
-    sections.push(`<h3 class="cron-section">Due · ${soon.length}</h3>${soon.length ? soon.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing due in the next day.</p>`}`);
+    const dueShow = soon.slice(0, 6);
+    const dueMore = soon.slice(6);
+    sections.push(`<h3 class="cron-section">Due · ${soon.length}</h3>${dueShow.length ? dueShow.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing due in the next day.</p>`}`);
+    if (dueMore.length) {
+      sections.push(`<details class="cron-stale"><summary>More due · ${dueMore.length}</summary>${dueMore.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
+    }
     if (later.length) {
       sections.push(`<details class="cron-stale"><summary>Later · ${later.length}</summary>${later.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
     }
@@ -4292,39 +4299,7 @@ function renderJob(job) {
     return;
   }
   if (job.cron) {
-    if (cronJobIsNoise(job)) return;
-    const title = cronTitle(job.cron_name || "Scheduled check");
-    const outcome = job.cron_outcome || "";
-    const nxt = job.cron_next || "";
-    const when = job.cron_when ? cronWhen(job.cron_when) : "";
-    const report = cronReportText({ last_result: job.cron_report || job.cron_result || "" });
-    const changed = cronChangedLine(report);
-    const el = bubble("bot", [title, when ? `Last run ${when}` : "", outcome, changed, nxt && !/no action/i.test(nxt) ? `If needed: ${nxt}` : ""].filter(Boolean).join("\n"));
-    el.classList.add("cron");
-    if (job.id) el.setAttribute("data-job-id", job.id);
-    stampLane(el, job);
-    appendReceipt(el, Object.assign({ engine: job.engine || "Hermes Agent", cron: true }, job));
-    if (report) {
-      const det = document.createElement("details");
-      det.className = "cron-more";
-      det.open = true;
-      const sum = document.createElement("summary");
-      sum.textContent = "Full report";
-      const pre = document.createElement("pre");
-      pre.textContent = report;
-      det.appendChild(sum);
-      det.appendChild(pre);
-      el.appendChild(det);
-    }
-    const actions = document.createElement("div");
-    actions.className = "job-actions";
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "ghost-btn";
-    open.textContent = "Open schedule";
-    open.addEventListener("click", () => openSchedule(job.cron_id || ""));
-    actions.appendChild(open);
-    el.appendChild(actions);
+    // Chat is talk. Cron landings live in Results.
     return;
   }
   const kind = job.login_wall ? "bot wall" : "bot";
@@ -4530,7 +4505,7 @@ function isNoiseTurn(turn) {
   if (!turn) return true;
   if (turn.role === "user") return !String(turn.text || "").trim();
   const job = turn.job || {};
-  if (cronJobIsNoise(job)) return true;
+  if (job.cron || cronJobIsNoise(job)) return true;
   if (projectId && job.project_id && String(job.project_id) !== String(projectId)) return true;
   const text = job.text || turn.text || "";
   const message = job.message || "";
