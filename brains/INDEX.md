@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: PR #55 (phone-first board) is mergeable — conflicts resolved.
-Last: Merged master into board-phone-first. INDEX conflict resolved, session/provider fixes preserved.
-Next: User decides when to merge PR #55. Leave PR #48 untouched.
-Blocker: —
+Now: Phone board — no page-wide horizontal scroll at ~390px. Doing / Next / Results stay the 44px lane.
+Last: PR #55 phone-first lane is on master. Header fits Chat / Code / Hermes; overflow-x hidden (not 100vw).
+Next: Hard-refresh ?v=117. Close CA #57 without merging (pre-#55 + 100vw). Leave PR #48 untouched.
+Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
 

@@ -14,7 +14,7 @@
   --radius: 12px;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); color-scheme: dark; }
+html, body { margin: 0; height: 100%; max-width: 100%; background: var(--bg); color: var(--ink); color-scheme: dark; overflow-x: hidden; }
 body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -34,6 +34,7 @@ body {
   border-bottom: 1px solid var(--line);
   background: rgba(16, 15, 13, 0.96);
   min-width: 0;
+  max-width: 100%;
 }
 .bar-left {
   display: flex;
@@ -1507,8 +1508,8 @@ body {
 .caps { display: flex; gap: 6px; flex-wrap: wrap; }
 .menu button { padding: 9px 12px; height: auto; }
 .menu small { display: none; }
-.workspace { display: none; min-height: 0; min-width: 0; }
-.workspace.on { display: grid; min-height: 0; height: 100%; }
+.workspace { display: none; min-height: 0; min-width: 0; max-width: 100%; }
+.workspace.on { display: grid; min-height: 0; height: 100%; max-width: 100%; }
 #stage-opencode, #stage-hermes {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -2292,20 +2293,25 @@ footer {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 footer a { color: var(--bronze); }
 /* Mobile-first layout: phone ≤480px, usable ≤860px */
 @media (max-width: 860px) {
-  body { overflow: auto; }
+  /* page-wide: vertical scroll only */
+  html { overflow-x: hidden; max-width: 100%; }
+  body { overflow: auto; overflow-x: hidden; max-width: 100%; }
   .bar {
     display: flex;
     flex-wrap: nowrap;
     grid-template-columns: none;
     padding: 8px 12px;
     gap: 8px;
+    max-width: 100%;
+    overflow: hidden;
   }
   .bar-left { flex: 0 0 auto; }
-  .bar-right { flex: 0 0 auto; margin-left: auto; }
+  .bar-right { flex: 1 1 0; min-width: 0; margin-left: auto; }
   
   /* Compact header: hide "LOCAL ORG." sub, keep gem + OPENBOT */
   .sub { display: none; }
@@ -2321,14 +2327,12 @@ footer a { color: var(--bronze); }
     opacity: 0.7;
   }
   
-  /* Stage tabs stay on the same row as the mark */
+  /* Stage tabs stay on the same row as the mark — do not crush Chat/Code/Hermes */
   .stages {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     justify-self: center;
     justify-content: center;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    min-width: 0;
+    overflow: visible;
     grid-column: auto;
   }
   .stage-btn { 
@@ -2392,6 +2396,8 @@ footer a { color: var(--bronze); }
   #stage-chat.on { 
     grid-template-columns: minmax(0, 1fr);
     position: relative;
+    max-width: 100%;
+    overflow-x: hidden;
   }
   #stage-opencode,
   #stage-hermes {
@@ -2488,10 +2494,12 @@ footer a { color: var(--bronze); }
   .rail-scrim.open { display: block; }
   
   /* Chat column full width */
-  .chat-col { width: 100%; }
+  .chat-col { width: 100%; max-width: 100%; overflow-x: hidden; }
   .chat-shell { 
     width: 100%;
+    max-width: 100%;
     padding: 0 10px 10px;
+    overflow-x: hidden;
   }
   
   /* Tighter chat head */
@@ -2573,6 +2581,8 @@ footer a { color: var(--bronze); }
     gap: 10px;
     min-height: 140px;
     padding-bottom: 24px;
+    max-width: 100%;
+    overflow-x: hidden;
   }
   
   /* Compact bubbles */
@@ -2642,6 +2652,8 @@ footer a { color: var(--bronze); }
     padding: 6px 8px;
     margin-bottom: env(safe-area-inset-bottom, 8px);
     gap: 4px;
+    max-width: 100%;
+    overflow-x: hidden;
   }
   .composer textarea {
     font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
@@ -2877,14 +2889,20 @@ footer a { color: var(--bronze); }
 
 /* Phone-specific: ≤480px */
 @media (max-width: 480px) {
+  html { overflow-x: hidden; max-width: 100%; }
+  body { overflow-x: hidden; max-width: 100%; }
   .bar { 
     padding: 6px 10px; 
-    gap: 8px;
+    gap: 6px;
+    max-width: 100%;
+    overflow: hidden;
   }
   .mark-gem { width: 24px; height: 24px; }
-  .word { font-size: 10px; letter-spacing: 0.16em; }
+  .word { display: none; }
+  .meter { display: none; }
   .stage-full { display: none; }
   .stage-short { display: inline; }
+  .pulse { max-width: 100%; min-width: 0; }
   
   .mobile-org-toggle {
     width: 44px;
