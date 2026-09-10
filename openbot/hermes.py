@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1080,6 +1081,10 @@ def saa_live_ssh(
     timeout: int = 30,
     stdin: str | None = None,
 ) -> subprocess.CompletedProcess:
+    """SSH to Railway with hard process cleanup on timeout/completion.
+    
+    Creates new process group to ensure all children are killed on timeout.
+    """
     binary = railway_cmd()
     if not binary:
         raise FileNotFoundError("railway")
@@ -1101,17 +1106,46 @@ def saa_live_ssh(
     payload = stdin
     if payload is not None:
         payload = payload.replace("\r\n", "\n").replace("\r", "\n")
-    ran = subprocess.run(
+    
+    # Start new session to isolate process group for cleanup
+    proc = subprocess.Popen(
         cmd,
-        capture_output=True,
-        timeout=timeout,
-        input=None if payload is None else payload.encode("utf-8"),
+        stdin=subprocess.PIPE if payload is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
     )
+    
+    try:
+        stdout_data, stderr_data = proc.communicate(
+            input=payload.encode("utf-8") if payload is not None else None,
+            timeout=timeout,
+        )
+        returncode = proc.returncode
+    except subprocess.TimeoutExpired:
+        # Hard kill the entire process group on timeout
+        try:
+            if os.name != "nt":
+                # Unix: kill the entire process group
+                os.killpg(os.getpgid(proc.pid), 9)
+            else:
+                # Windows: terminate the process tree
+                proc.kill()
+            proc.wait(timeout=2)
+        except (ProcessLookupError, OSError):
+            pass
+        # Collect any partial output
+        try:
+            stdout_data, stderr_data = proc.communicate(timeout=1)
+        except (subprocess.TimeoutExpired, ValueError):
+            stdout_data, stderr_data = b"", b""
+        returncode = 124  # timeout exit code
+    
     return subprocess.CompletedProcess(
-        ran.args,
-        ran.returncode,
-        (ran.stdout or b"").decode("utf-8", "replace"),
-        (ran.stderr or b"").decode("utf-8", "replace"),
+        cmd,
+        returncode,
+        (stdout_data or b"").decode("utf-8", "replace"),
+        (stderr_data or b"").decode("utf-8", "replace"),
     )
 
 
@@ -1190,19 +1224,46 @@ def _mark_overlay_live(overlay: list[dict], live_ids: set[str] | None = None) ->
 
 
 def dump_saa_live_cron_overlay() -> list[dict]:
+    """Fetch live cron status from Railway, coalescing dump+live-check into one SSH.
+    
+    Falls back to cache if SSH unavailable. Uses cache on timeout or error.
+    """
     cached = load_saa_overlay_cache()
     overlay = cached
     if railway_cmd():
         try:
+            # Step 1: dump jobs.json and write overlay script
             wrote = saa_live_ssh(["tee", "/tmp/saa-overlay-dump.py"], timeout=20, stdin=_SAA_OVERLAY_REMOTE)
-            if wrote.returncode == 0:
-                ran = saa_live_ssh(["python3", "/tmp/saa-overlay-dump.py"], timeout=60)
-                dumped = _overlay_jobs_from_text((ran.stdout or "") + "\n" + (ran.stderr or ""))
+            if wrote.returncode != 0:
+                return cached
+            
+            # Step 2: run overlay dump and get running job IDs in one SSH session
+            # Coalesce both operations to reduce SSH calls
+            combined_script = (
+                "python3 /tmp/saa-overlay-dump.py && "
+                "echo '___RUNNING_JOBS___' && "
+                "hermes cron runs --limit 25"
+            )
+            ran = saa_live_ssh(["sh", "-c", combined_script], timeout=60)
+            
+            if ran.returncode == 0:
+                output = (ran.stdout or "") + "\n" + (ran.stderr or "")
+                
+                # Split output: overlay JSON before marker, running jobs after
+                parts = output.split("___RUNNING_JOBS___", 1)
+                overlay_text = parts[0]
+                running_text = parts[1] if len(parts) > 1 else ""
+                
+                dumped = _overlay_jobs_from_text(overlay_text)
                 if dumped:
                     overlay = dumped
+                    # Mark live jobs from the same SSH session
+                    live_ids = set(parse_hermes_running_job_ids(running_text))
+                    overlay = _mark_overlay_live(overlay, live_ids)
         except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            # On any SSH failure, fall back to cache
             overlay = cached
-        overlay = _mark_overlay_live(overlay)
+        
         if overlay:
             save_saa_overlay_cache(overlay)
             return overlay
@@ -1255,12 +1316,24 @@ def sync_saa_live_crons(home: str | Path | None) -> dict:
     return {"ok": True, "updated": updated, "live": True, "jobs": len(overlay)}
 
 
+# Single-flight lock to prevent overlapping SSH overlay refreshes
+_overlay_lock = threading.Lock()
+
+
 def overlay_saa_live_background(interval: int | None = None) -> None:
-    """Keep the SAA Homes board copy of jobs.json in step with live Hermes."""
+    """Keep the SAA Homes board copy of jobs.json in step with live Hermes.
+    
+    Single-flight locked: if a prior tick is still running, skip the new tick.
+    """
     global _overlay_miss_logged
-    delay = interval if interval is not None else int(os.environ.get("OPENBOT_SAA_OVERLAY_INTERVAL", "12") or "12")
+    delay = interval if interval is not None else int(os.environ.get("OPENBOT_SAA_OVERLAY_INTERVAL", "120") or "120")
     time.sleep(3)
     while True:
+        # Try to acquire lock without blocking; skip tick if already running
+        if not _overlay_lock.acquire(blocking=False):
+            time.sleep(max(8, delay))
+            continue
+        
         try:
             from .org import project_tools
 
@@ -1272,6 +1345,9 @@ def overlay_saa_live_background(interval: int | None = None) -> None:
                 _overlay_miss_logged = True
         except Exception as err:
             print(f"[openbot] saa live overlay: {err}", flush=True)
+        finally:
+            _overlay_lock.release()
+        
         time.sleep(max(8, delay))
 
 
