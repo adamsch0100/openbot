@@ -194,7 +194,7 @@ def _honest_next_line(project_id: str | None, hermes_home: str | None = None, fi
     if fails:
         title = cron_title(str(fails[0].get("name") or fails[0].get("id") or "job"))
         if len(fails) == 1:
-            return f"{title} needs a look · open Results."
+            return f"{title} failed — open Results."
         return f"{len(fails)} jobs failed — open Results."
     if dues:
         stamp, row = dues[0]
