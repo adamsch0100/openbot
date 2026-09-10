@@ -56,20 +56,20 @@ function isLiveBoard() {
 
 function paintBoardMark() {
   const live = isLiveBoard();
-  const mark = live ? "OPENBOT" : "OPENBOT · LOCAL ORG.";
+  const mark = live ? "OTTOBOT" : "OTTOBOT · On it.";
   const el = $("boardMark");
   if (el) el.textContent = mark;
   const about = $("aboutMark");
   if (about) {
     about.textContent = live
-      ? "OPENBOT. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
-      : "OPENBOT · LOCAL ORG. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
+      ? "OTTOBOT. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
+      : "OTTOBOT · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
   }
   const credit = $("aboutCredit");
   if (credit && cfg && cfg.credit) credit.textContent = cfg.credit;
   const sub = document.querySelector(".sub");
   if (sub) sub.hidden = live;
-  document.title = live ? "OpenBot" : "OpenBot · Local Org.";
+  document.title = live ? "OttoBot" : "OttoBot · On it.";
 }
 
 function sharePerm(name) {

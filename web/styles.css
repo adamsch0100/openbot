@@ -2531,7 +2531,7 @@ footer a { color: var(--bronze); }
   .bar-left { flex: 0 0 auto; }
   .bar-right { flex: 1 1 0; min-width: 0; margin-left: auto; }
   
-  /* Compact header: hide "LOCAL ORG." sub, keep gem + OPENBOT */
+  /* Compact header: hide "On it." sub, keep gem + OTTOBOT */
   .sub { display: none; }
   .word { font-size: 11px; letter-spacing: 0.18em; }
   .mark-gem { width: 24px; height: 24px; }
