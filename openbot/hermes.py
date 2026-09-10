@@ -2072,6 +2072,119 @@ def _popen_detached(cmd: list[str], home: str | Path | None = None):
     return subprocess.Popen(cmd, **kwargs)
 
 
+
+def _pid_alive(pid: int) -> bool:
+    """True if pid exists (or we lack permission to signal it)."""
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def _ceo_slug_from_home(home: Path) -> str:
+    try:
+        parts = home.resolve().parts
+    except OSError:
+        parts = home.parts
+    for key in ("hermes-homes", "homes"):
+        if key in parts:
+            i = parts.index(key)
+            if i + 1 < len(parts):
+                return str(parts[i + 1])
+    return home.name
+
+
+def _gateway_state_roots(home: str | Path | None = None) -> list[Path]:
+    """Canonical HERMES_HOME plus legacy /data/hermes/homes/<ceo> if present."""
+    roots: list[Path] = []
+    if home:
+        roots.append(Path(home))
+    else:
+        try:
+            roots.append(Path(hermes_home()))
+        except Exception:
+            pass
+    data = Path(os.environ.get("OPENBOT_DATA_DIR") or "/data")
+    extras: list[Path] = []
+    for root in list(roots):
+        slug = _ceo_slug_from_home(root) if root else ""
+        if not slug:
+            continue
+        legacy = data / "hermes" / "homes" / slug
+        try:
+            if legacy.is_dir() and (
+                not root.is_dir() or legacy.resolve() != root.resolve()
+            ):
+                extras.append(legacy)
+        except OSError:
+            if legacy.is_dir():
+                extras.append(legacy)
+    roots.extend(extras)
+    seen: set[str] = set()
+    out: list[Path] = []
+    for root in roots:
+        try:
+            key = str(root.resolve())
+        except OSError:
+            key = str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(root)
+    return out
+
+
+_GATEWAY_STALE_NAMES = ("gateway_state.json", "gateway.sock", "gateway.pid")
+
+
+def clear_stale_gateway_state(home: str | Path | None = None) -> dict:
+    """Drop gateway_state/sock/pid when the recorded process is gone.
+
+    Post-redeploy Hermes often leaves gateway_state.json + gateway.sock claiming
+    a dead pid; start then 502s. Also clears legacy /data/hermes/homes/<ceo>.
+    Never clears when the recorded pid is still alive.
+    """
+    cleared: list[str] = []
+    for root in _gateway_state_roots(home):
+        if not root.is_dir():
+            continue
+        state_path = root / "gateway_state.json"
+        stale = True
+        if state_path.is_file():
+            try:
+                import json
+
+                payload = json.loads(state_path.read_text(encoding="utf-8"))
+                if not isinstance(payload, dict):
+                    payload = {}
+                pid = int(payload.get("pid") or payload.get("gateway_pid") or 0)
+                state = str(
+                    payload.get("gateway_state") or payload.get("state") or ""
+                ).lower()
+                if state in {"running", "starting", "start"} and pid and _pid_alive(pid):
+                    stale = False
+            except Exception:
+                stale = True
+        if not stale:
+            continue
+        for name in _GATEWAY_STALE_NAMES:
+            path = root / name
+            try:
+                if path.exists() or path.is_symlink():
+                    path.unlink()
+                    cleared.append(str(path))
+            except OSError:
+                pass
+    return {"ok": True, "cleared": cleared, "count": len(cleared)}
+
+
 def gateway_process_running(text: str) -> bool:
     """True only when Hermes reports a live gateway. 'not running' contains 'running'."""
     low = (text or "").lower()
@@ -2130,49 +2243,55 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
             "running": True,
             "started": False,
         }
-    
-    if _in_container():
-        cmd = [binary, "gateway", "run"]
-        try:
-            proc = _popen_detached(cmd, home)
-            time.sleep(1.5)
-            status_check = gateway_status(home, timeout=5)
-            running = bool(status_check.get("running"))
+
+    # Not running — drop dead-pid gateway_state/sock (canonical + legacy) before start.
+    cleared = clear_stale_gateway_state(home)
+
+    def _finish(result: dict) -> dict:
+        if cleared.get("count"):
+            result = dict(result)
+            result["cleared_stale"] = cleared.get("cleared") or []
+        return result
+
+    def _attempt() -> dict:
+        if _in_container():
+            cmd = [binary, "gateway", "run"]
+            try:
+                proc = _popen_detached(cmd, home)
+                time.sleep(1.5)
+                status_check = gateway_status(home, timeout=5)
+                running = bool(status_check.get("running"))
+                return {
+                    "ok": running,
+                    "code": 0 if running else 1,
+                    "text": "hermes gateway run (container)",
+                    "running": running,
+                    "started": running,
+                    "pid": proc.pid if hasattr(proc, "pid") else None,
+                }
+            except Exception as err:
+                return {
+                    "ok": False,
+                    "code": 1,
+                    "error": str(err),
+                    "running": False,
+                    "started": False,
+                }
+
+        cmd = [binary, "gateway", "start"]
+        if wait:
+            code, out = _run(cmd, None, timeout, home=home)
+            text = out.strip()
+            running = code == 0
             return {
-                "ok": running,
-                "code": 0 if running else 1,
-                "text": "hermes gateway run (container)",
+                "ok": code == 0,
+                "code": code,
+                "text": text or "(no output)",
                 "running": running,
                 "started": running,
-                "pid": proc.pid if hasattr(proc, "pid") else None,
             }
-        except Exception as err:
-            return {
-                "ok": False,
-                "code": 1,
-                "error": str(err),
-                "running": False,
-                "started": False,
-            }
-
-    cmd = [binary, "gateway", "start"]
-    if wait:
-        # Synchronous start (wait for completion)
-        code, out = _run(cmd, None, timeout, home=home)
-        text = out.strip()
-        running = code == 0
-        return {
-            "ok": code == 0,
-            "code": code,
-            "text": text or "(no output)",
-            "running": running,
-            "started": running,
-        }
-    else:
-        # Async start (spawn and return immediately)
         try:
             proc = _popen(cmd, None, home=home)
-            # Give it a moment to start, then check status
             time.sleep(0.5)
             status_check = gateway_status(home, timeout=5)
             return {
@@ -2191,6 +2310,30 @@ def gateway_start(home: str | Path | None = None, wait: bool = False, timeout: i
                 "running": False,
                 "started": False,
             }
+
+    result = _attempt()
+    # One retry after a second clear if start still looks dead / blocked by stale state.
+    err_blob = " ".join(
+        str(result.get(k) or "") for k in ("text", "error")
+    ).lower()
+    needs_retry = (not result.get("running")) and (
+        not result.get("ok")
+        or "already" in err_blob
+        or "recorded" in err_blob
+        or "stale" in err_blob
+        or "502" in err_blob
+    )
+    if needs_retry:
+        cleared2 = clear_stale_gateway_state(home)
+        if cleared2.get("count") or cleared.get("count"):
+            result = _attempt()
+            result = dict(result)
+            result["retried_after_stale_clear"] = True
+            merged = list(cleared.get("cleared") or []) + list(cleared2.get("cleared") or [])
+            if merged:
+                result["cleared_stale"] = merged
+            return result
+    return _finish(result)
 
 
 def gateway_stop(home: str | Path | None = None, timeout: int = 10) -> dict:
