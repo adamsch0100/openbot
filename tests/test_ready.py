@@ -174,6 +174,8 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("Add CEO", js)
         self.assertIn("function canAddCeo", js)
         self.assertIn("can_add_ceo", server)
+        self.assertIn("_token_unlocked", server)
+        self.assertIn("unlock_tokens.json", server)
         self.assertNotIn("isCollaborator() || (cfg && cfg.hosted)", js)
         self.assertIn("Type", js)
         self.assertIn("Delete CEO", js)

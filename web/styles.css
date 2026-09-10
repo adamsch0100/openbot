@@ -301,7 +301,13 @@ body {
 .org-add:hover { color: var(--bronze); border-color: var(--bronze); }
 .git-card { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; overflow-wrap: anywhere; }
 #stage-chat.on { grid-template-columns: 252px minmax(0, 1fr); min-height: 0; height: 100%; }
-.rail-scrim { display: none; }
+.rail-scrim {
+  display: none;
+  pointer-events: none;
+}
+.rail-scrim.open {
+  pointer-events: auto;
+}
 .rail {
   border-right: 1px solid var(--line);
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
