@@ -617,11 +617,42 @@ body {
   overflow: auto;
   z-index: 40;
 }
+.node-menu.ceo-add {
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(92vh, 720px);
+  padding: 14px 12px 16px;
+  overflow: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.node-menu .menu-head {
+  margin: 0 10px 4px;
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+}
 .node-menu .menu-field {
   display: grid;
   gap: 6px;
   padding: 8px 10px 10px;
   min-width: 0;
+}
+.node-menu .menu-field.menu-actions {
+  padding-top: 4px;
+}
+.node-menu .menu-field.menu-auth {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin: 4px 10px 8px;
+  padding: 10px 12px;
+  gap: 8px;
+}
+.node-menu .menu-field.menu-auth legend {
+  padding: 0 4px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .node-menu .menu-field textarea {
   min-height: 88px;
@@ -752,8 +783,9 @@ body {
   gap: 6px;
   flex-shrink: 0;
   min-width: 0;
-  padding: 6px 2px 8px;
-  border-top: 1px solid var(--line);
+  padding: 8px 14px 6px;
+  border-top: 0;
+  margin: 0;
 }
 .work-status[hidden] { display: none !important; }
 .work-status-live {
@@ -1391,8 +1423,8 @@ details.cron-card[open] > .need-actions { display: flex; }
 }
 .schedule-row b { color: var(--ink); font-weight: 500; }
 .composer {
-  margin: 4px 0 0;
-  padding: 10px 12px 10px 16px;
+  margin: 0;
+  padding: 10px 14px;
   border: 1px solid var(--line);
   background: rgba(28, 26, 22, 0.94);
   display: grid;
@@ -1406,6 +1438,7 @@ details.cron-card[open] > .need-actions { display: flex; }
   z-index: 8;
   min-width: 0;
   width: 100%;
+  box-sizing: border-box;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
 }
 .composer:focus-within {
@@ -1466,16 +1499,20 @@ details.cron-card[open] > .need-actions { display: flex; }
 .composer-hint.hidden { display: none; }
 .composer-input-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   align-items: end;
   min-width: 0;
+}
+.composer-input-row:has(.route-hatch:not([hidden])) {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
 }
 .route-hatch {
   position: relative;
   align-self: center;
   min-width: 0;
 }
+.route-hatch[hidden] { display: none !important; }
 .route-hatch summary {
   list-style: none;
   cursor: pointer;
@@ -2629,13 +2666,18 @@ footer a { color: var(--bronze); }
   .mark-gem { width: 28px; height: 28px; border-radius: 7px; }
   .mark-row { gap: 10px; }
   
-  /* MOBILE COMPOSER FIX: Compact "Talking to" label */
-  .composer-who {
-    font-size: 9px;
-    letter-spacing: 0.06em;
-    padding: 0 4px;
-    margin: 0;
-    opacity: 0.7;
+  /* Keep composer-who screen-reader only — do not unclip sr-only on mobile */
+  .composer-who.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+    opacity: 1;
+    font-size: 1px;
   }
   
   /* Stage tabs stay on the same row as the mark — do not crush Chat/Tools */

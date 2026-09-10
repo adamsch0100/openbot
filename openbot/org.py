@@ -18,6 +18,17 @@ from .store import ROOT, clean_memory_text, now_iso, patch_index_line, read_inde
 
 SITE_BY_ID = {
     "saa-homes": "https://saahomes.com",
+    "pmill": "https://pmill.ai",
+}
+
+# Prefill when seating a known CEO (Add CEO form). Operator can edit before submit.
+CEO_SEAT_PRESETS = {
+    "pmill": {
+        "site_url": "https://pmill.ai",
+        "github_repo": "adamsch0100/pmillsports",
+        "railway": "victorious-presence",
+        "goals": "profitability",
+    },
 }
 
 RETIRED_CEO_IDS = frozenset({
@@ -114,10 +125,27 @@ def _carry_tools(row: dict) -> dict:
         "account_id",
         "fallback",
         "site_url",
+        "github_repo",
+        "railway",
+        "authorize_site",
+        "authorize_railway",
     ):
         if key in row:
             out[key] = row[key]
     return out
+
+
+def seat_preset_for_name(name: str | None) -> dict:
+    """Return known seat prefs for a CEO name (e.g. Pmill). Empty if unknown."""
+    slug = _slug(name or "")
+    if not slug:
+        return {}
+    if slug in CEO_SEAT_PRESETS:
+        return dict(CEO_SEAT_PRESETS[slug])
+    for key, prefs in CEO_SEAT_PRESETS.items():
+        if slug.startswith(f"{key}-"):
+            return dict(prefs)
+    return {}
 
 
 def _project_dir(project_id: str) -> Path:
@@ -627,6 +655,10 @@ def _public_tools(row: dict) -> dict:
         "account_id": str(row.get("account_id") or ""),
         "fallback": [str(item) for item in (row.get("fallback") or []) if str(item).strip()],
         "site_url": str(row.get("site_url") or "").strip(),
+        "github_repo": str(row.get("github_repo") or "").strip(),
+        "railway": str(row.get("railway") or "").strip(),
+        "authorize_site": bool(row.get("authorize_site")),
+        "authorize_railway": bool(row.get("authorize_railway")),
         "connectors": {
             "skills": connectors.get("skills") if isinstance(connectors.get("skills"), dict) else {},
             "mcp": connectors.get("mcp") if isinstance(connectors.get("mcp"), dict) else {}
@@ -1059,6 +1091,10 @@ def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = 
         found = True
         if "mcp_github" in patch:
             row["mcp_github"] = bool(patch.get("mcp_github"))
+        if "authorize_site" in patch:
+            row["authorize_site"] = bool(patch.get("authorize_site"))
+        if "authorize_railway" in patch:
+            row["authorize_railway"] = bool(patch.get("authorize_railway"))
         if "skills" in patch:
             row["skills"] = str(patch.get("skills") or "").strip()
         if "connectors" in patch and isinstance(patch.get("connectors"), dict):
@@ -1084,7 +1120,16 @@ def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = 
                     continue
                 current[key] = {"model": str(item.get("model") or "").strip()}
             row["seats"] = current
-        for key in ("hermes_home", "hermes_instance_id", "hermes_session_id", "opencode_session_id", "account_id", "site_url"):
+        for key in (
+            "hermes_home",
+            "hermes_instance_id",
+            "hermes_session_id",
+            "opencode_session_id",
+            "account_id",
+            "site_url",
+            "github_repo",
+            "railway",
+        ):
             if key not in patch:
                 continue
             value = str(patch.get(key) or "").strip()
@@ -1110,7 +1155,16 @@ def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = 
                 "primary": len(data.get("projects") or []) == 0,
                 "workers": [],
             }
-            for key in ("hermes_home", "hermes_instance_id", "hermes_session_id", "opencode_session_id", "account_id", "site_url"):
+            for key in (
+                "hermes_home",
+                "hermes_instance_id",
+                "hermes_session_id",
+                "opencode_session_id",
+                "account_id",
+                "site_url",
+                "github_repo",
+                "railway",
+            ):
                 if key in patch:
                     value = str(patch.get(key) or "").strip()
                     if value:
@@ -1372,7 +1426,18 @@ def session_name(project_id: str | None, worker_id: str | None) -> str | None:
     return None
 
 
-def add_project(folder: str | None = None, name: str | None = None) -> dict:
+def add_project(
+    folder: str | None = None,
+    name: str | None = None,
+    *,
+    site_url: str | None = None,
+    github_repo: str | None = None,
+    railway: str | None = None,
+    goals: str | None = None,
+    mcp_github: bool | None = None,
+    authorize_site: bool | None = None,
+    authorize_railway: bool | None = None,
+) -> dict:
     ensure_org()
     data = _load_saved()
     work = str(data.get("folder") or load_config().get("work_dir") or "")
@@ -1408,21 +1473,63 @@ def add_project(folder: str | None = None, name: str | None = None) -> dict:
         resolved = str(dest.resolve())
     if not resolved:
         raise ValueError("set a default folder first, or pass a project folder")
+    preset = seat_preset_for_name(title)
+    site = str(site_url if site_url is not None else "").strip() or str(preset.get("site_url") or "").strip()
+    repo = str(github_repo if github_repo is not None else "").strip() or str(preset.get("github_repo") or "").strip()
+    rail = str(railway if railway is not None else "").strip() or str(preset.get("railway") or "").strip()
+    goal = str(goals if goals is not None else "").strip() or str(preset.get("goals") or "").strip()
+    use_github = bool(mcp_github) if mcp_github is not None else bool(repo)
+    use_site = bool(authorize_site) if authorize_site is not None else bool(site)
+    use_rail = bool(authorize_railway) if authorize_railway is not None else bool(rail)
     _ensure_project_index(slug, title, resolved)
     projects = list(data.get("projects") or [])
-    projects.append(
-        {
-            "id": slug,
-            "name": title,
-            "role": "ceo",
-            "folder": resolved,
-            "primary": False,
-            "workers": [],
-        }
-    )
+    row = {
+        "id": slug,
+        "name": title,
+        "role": "ceo",
+        "folder": resolved,
+        "primary": False,
+        "workers": [],
+    }
+    if site:
+        row["site_url"] = site
+    if repo:
+        row["github_repo"] = repo
+    if rail:
+        row["railway"] = rail
+    if use_github:
+        row["mcp_github"] = True
+    if use_site:
+        row["authorize_site"] = True
+    if use_rail:
+        row["authorize_railway"] = True
+    projects.append(row)
     data["projects"] = projects
     _save(data)
     info = bootstrap_ceo_runtime(slug, title, resolved)
+    tool_patch = {}
+    if site:
+        tool_patch["site_url"] = site
+    if repo:
+        tool_patch["github_repo"] = repo
+    if rail:
+        tool_patch["railway"] = rail
+    if use_github:
+        tool_patch["mcp_github"] = True
+    if use_site:
+        tool_patch["authorize_site"] = True
+    if use_rail:
+        tool_patch["authorize_railway"] = True
+    if tool_patch:
+        patch_project_tools(slug, tool_patch)
+    if goal:
+        patch_scope(slug, None, "Goals", goal)
+    if repo:
+        patch_scope(slug, None, "Git", repo)
+    if rail:
+        patch_scope(slug, None, "Railway", rail)
+    if site:
+        patch_scope(slug, None, "Site", site)
     org = public_org(_load_saved())
     org["project_id"] = slug
     org["hermes_home"] = info["hermes_home"]

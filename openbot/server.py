@@ -1849,7 +1849,27 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 folder = str(data.get("folder") or "").strip() or None
                 name = str(data.get("name") or "").strip() or None
-                return self._json(200, add_project(folder, name))
+                site_url = str(data.get("site_url") or "").strip() or None
+                github_repo = str(data.get("github_repo") or "").strip() or None
+                railway = str(data.get("railway") or "").strip() or None
+                goals = str(data.get("goals") or "").strip() or None
+                mcp_raw = data.get("mcp_github")
+                site_auth = data.get("authorize_site")
+                rail_auth = data.get("authorize_railway")
+                return self._json(
+                    200,
+                    add_project(
+                        folder,
+                        name,
+                        site_url=site_url,
+                        github_repo=github_repo,
+                        railway=railway,
+                        goals=goals,
+                        mcp_github=bool(mcp_raw) if mcp_raw is not None else None,
+                        authorize_site=bool(site_auth) if site_auth is not None else None,
+                        authorize_railway=bool(rail_auth) if rail_auth is not None else None,
+                    ),
+                )
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
         worker_add = WORKER_ADD.match(path)
@@ -2065,6 +2085,10 @@ class Handler(SimpleHTTPRequestHandler):
                         "account_id",
                         "fallback",
                         "site_url",
+                        "github_repo",
+                        "railway",
+                        "authorize_site",
+                        "authorize_railway",
                     )
                 ):
                     result = patch_project_tools(pid, data)

@@ -935,13 +935,13 @@ function syncComposerWho() {
   const project = currentProject();
   const worker = currentWorker();
   const pin = preset && preset !== "cos";
-  const engine = pin ? (PRESET_ENGINE[preset] || "board") : "OpenCode or Hermes";
+  const engine = pin ? (PRESET_ENGINE[preset] || "board") : "";
   let desk = "Chief of Staff";
   if (worker && project) desk = `${worker.name} · ${project.name}`;
   else if (project) desk = project.name;
   const line = pin
-    ? `${desk} · ${jobLabel(preset)} · ${engine}`
-    : `${desk} · Auto · ${engine}`;
+    ? `${desk} · ${jobLabel(preset)}${engine ? ` · ${engine}` : ""}`
+    : desk;
   if ($("composerWho")) $("composerWho").textContent = line;
   if ($("msg")) {
     const prefix = pin ? `${jobLabel(preset)} · ` : "";
@@ -1406,7 +1406,11 @@ let menuJustOpened = false;
 
 function hideNodeMenu() {
   const menu = $("nodeMenu");
-  if (menu) menu.classList.add("hidden");
+  if (menu) {
+    menu.classList.add("hidden");
+    menu.classList.remove("ceo-add");
+    menu.style.transform = "";
+  }
   hideMsgMenu();
 }
 
@@ -1503,11 +1507,15 @@ async function applyOrg(next) {
   paintWorkTabs();
 }
 
-async function postProject(folder, name) {
+async function postProject(folder, name, extras) {
+  const body = Object.assign(
+    { folder: folder || "", name: name || "" },
+    extras && typeof extras === "object" ? extras : {}
+  );
   const res = await fetch("/api/org/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ folder: folder || "", name: name || "" })
+    body: JSON.stringify(body)
   });
   const data = await res.json();
   $("orgStatus").textContent = res.ok ? "" : (data.error || "add failed");
@@ -1516,6 +1524,100 @@ async function postProject(folder, name) {
     await applyOrg(data);
     if (data.project_id) await setOrgNode(data.project_id, "");
   }
+}
+
+const CEO_SEAT_PRESETS = {
+  pmill: {
+    site_url: "https://pmill.ai",
+    github_repo: "adamsch0100/pmillsports",
+    railway: "victorious-presence",
+    goals: "profitability"
+  }
+};
+
+function ceoSeatPreset(name) {
+  const slug = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (!slug) return null;
+  if (CEO_SEAT_PRESETS[slug]) return Object.assign({}, CEO_SEAT_PRESETS[slug]);
+  for (const key of Object.keys(CEO_SEAT_PRESETS)) {
+    if (slug.startsWith(`${key}-`)) return Object.assign({}, CEO_SEAT_PRESETS[key]);
+  }
+  return null;
+}
+
+function readAddCeoForm() {
+  const name = ($("menuCeoAddName") && $("menuCeoAddName").value.trim()) || "";
+  const folder = ($("menuProjectFolder") && $("menuProjectFolder").value.trim()) || "";
+  const site = ($("menuCeoSite") && $("menuCeoSite").value.trim()) || "";
+  const repo = ($("menuCeoRepo") && $("menuCeoRepo").value.trim()) || "";
+  const railway = ($("menuCeoRailway") && $("menuCeoRailway").value.trim()) || "";
+  const goals = ($("menuCeoGoals") && $("menuCeoGoals").value.trim()) || "";
+  const mcp = Boolean($("menuCeoAuthGithub") && $("menuCeoAuthGithub").checked);
+  const authSite = Boolean($("menuCeoAuthSite") && $("menuCeoAuthSite").checked);
+  const authRail = Boolean($("menuCeoAuthRailway") && $("menuCeoAuthRailway").checked);
+  return {
+    name,
+    folder,
+    extras: {
+      site_url: site,
+      github_repo: repo,
+      railway,
+      goals,
+      mcp_github: mcp,
+      authorize_site: authSite,
+      authorize_railway: authRail
+    }
+  };
+}
+
+function applyCeoSeatPresetToForm(name) {
+  const prefs = ceoSeatPreset(name);
+  if (!prefs) return;
+  if ($("menuCeoSite") && !$("menuCeoSite").value.trim()) $("menuCeoSite").value = prefs.site_url || "";
+  if ($("menuCeoRepo") && !$("menuCeoRepo").value.trim()) $("menuCeoRepo").value = prefs.github_repo || "";
+  if ($("menuCeoRailway") && !$("menuCeoRailway").value.trim()) $("menuCeoRailway").value = prefs.railway || "";
+  if ($("menuCeoGoals") && !$("menuCeoGoals").value.trim()) $("menuCeoGoals").value = prefs.goals || "";
+  if ($("menuCeoAuthGithub") && prefs.github_repo) $("menuCeoAuthGithub").checked = true;
+  if ($("menuCeoAuthSite") && prefs.site_url) $("menuCeoAuthSite").checked = true;
+  if ($("menuCeoAuthRailway") && prefs.railway) $("menuCeoAuthRailway").checked = true;
+}
+
+function addCeoFormHtml() {
+  const folderHint = escapeHtml((org && org.folder) || "default OpenCode folder");
+  return `
+      <div class="menu-field">
+        <label for="menuCeoAddName">Name</label>
+        <input id="menuCeoAddName" type="text" placeholder="Pmill" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuProjectFolder">Folder (optional)</label>
+        <input id="menuProjectFolder" type="text" placeholder="${folderHint}" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoSite">Site</label>
+        <input id="menuCeoSite" type="url" placeholder="https://example.com" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoRepo">GitHub repo</label>
+        <input id="menuCeoRepo" type="text" placeholder="owner/repo" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoRailway">Railway</label>
+        <input id="menuCeoRailway" type="text" placeholder="project or service name" autocomplete="off" />
+      </div>
+      <div class="menu-field">
+        <label for="menuCeoGoals">Goal</label>
+        <input id="menuCeoGoals" type="text" placeholder="profitability" autocomplete="off" />
+      </div>
+      <fieldset class="menu-field menu-auth">
+        <legend>Authorize tools</legend>
+        <label class="check-line"><input id="menuCeoAuthGithub" type="checkbox" /> GitHub MCP (Code)</label>
+        <label class="check-line"><input id="menuCeoAuthSite" type="checkbox" /> Site research</label>
+        <label class="check-line"><input id="menuCeoAuthRailway" type="checkbox" /> Railway</label>
+      </fieldset>
+      <div class="menu-field menu-actions">
+        <button type="button" class="send" data-menu="add-project">Add CEO</button>
+      </div>`;
 }
 
 async function saveProjectFolder(id, folder) {
@@ -1623,18 +1725,19 @@ function showNodeMenu(x, y, kind, pid, wid) {
   const project = pid ? projectById(pid) : null;
   const folder = (project && project.folder) || "";
   let html = "";
-  if (kind === "staff") {
+  menu.classList.remove("ceo-add");
+  if (kind === "add-ceo") {
+    menu.classList.add("ceo-add");
+    html = `
+      <div class="menu-head">Add CEO</div>
+      <p class="muted menu-note">Name the desk. Site, repo, Railway, and tool auth seat with it. Pmill prefills known prefs.</p>
+      ${addCeoFormHtml()}`;
+  } else if (kind === "staff") {
+    if (canAddCeo()) menu.classList.add("ceo-add");
     html = canAddCeo()
       ? `
-      <div class="menu-field">
-        <label for="menuCeoAddName">Add CEO</label>
-        <input id="menuCeoAddName" type="text" placeholder="Name" autocomplete="off" />
-      </div>
-      <div class="menu-field">
-        <label for="menuProjectFolder">Folder (optional)</label>
-        <input id="menuProjectFolder" type="text" placeholder="${escapeHtml((org && org.folder) || "default OpenCode folder")}" autocomplete="off" />
-        <button type="button" class="ghost-btn" data-menu="add-project">Add</button>
-      </div>
+      <div class="menu-head">Chief of Staff</div>
+      ${addCeoFormHtml()}
       <div class="menu-field">
         <label for="menuIndexEdit">Staff brief</label>
         <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
@@ -1689,23 +1792,37 @@ function showNodeMenu(x, y, kind, pid, wid) {
   }
   menu.innerHTML = html;
   menu.classList.remove("hidden");
-  const left = Math.min(x, window.innerWidth - 340);
-  const top = Math.min(y, window.innerHeight - 80);
-  menu.style.left = `${Math.max(8, left)}px`;
-  menu.style.top = `${Math.max(8, top)}px`;
+  if (kind === "add-ceo") {
+    menu.style.left = "50%";
+    menu.style.top = "50%";
+    menu.style.right = "auto";
+    menu.style.transform = "translate(-50%, -50%)";
+  } else {
+    menu.style.transform = "";
+    const left = Math.min(x, window.innerWidth - (kind === "staff" ? 420 : 340));
+    const top = Math.min(y, window.innerHeight - 80);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+    menu.style.right = "auto";
+  }
   menuJustOpened = true;
   setTimeout(() => { menuJustOpened = false; }, 0);
+  const nameInput = $("menuCeoAddName");
+  if (nameInput) {
+    nameInput.addEventListener("input", () => applyCeoSeatPresetToForm(nameInput.value));
+    nameInput.addEventListener("change", () => applyCeoSeatPresetToForm(nameInput.value));
+    nameInput.focus();
+  }
   menu.querySelectorAll("[data-menu]").forEach((btn) => {
     btn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const action = btn.dataset.menu;
       if (action === "add-project") {
-        const folderInput = $("menuProjectFolder");
-        const nameInput = $("menuCeoAddName");
-        const folderValue = folderInput ? folderInput.value.trim() : "";
-        const name = nameInput ? nameInput.value.trim() : "";
-        if (name || folderValue) await postProject(folderValue, name);
+        const form = readAddCeoForm();
+        if (form.name || form.folder || form.extras.site_url || form.extras.github_repo) {
+          await postProject(form.folder, form.name, form.extras);
+        }
       } else if (action === "save-index") {
         const input = $("menuIndexEdit");
         await saveStaffIndex(input ? input.value : "");
@@ -1721,7 +1838,7 @@ function showNodeMenu(x, y, kind, pid, wid) {
         await renameNode("worker", btn.dataset.project, btn.dataset.worker, input ? input.value : "");
       } else if (action === "configure") {
         hideNodeMenu();
-        setSettings(true, kind === "staff" ? "you" : "ceo");
+        setSettings(true, kind === "staff" || kind === "add-ceo" ? "you" : "ceo");
       } else if (action === "opencode") {
         hideNodeMenu();
         openWorkspace("opencode");
@@ -2765,9 +2882,7 @@ function openAddCeoMenu(event) {
     event.stopPropagation();
   }
   setOrgNode("", "");
-  const x = event && typeof event.clientX === "number" ? event.clientX : 24;
-  const y = event && typeof event.clientY === "number" ? event.clientY : 120;
-  showNodeMenu(x, y, "staff", "", "");
+  showNodeMenu(0, 0, "add-ceo", "", "");
 }
 
 function paintAddCeoControls() {
@@ -3390,7 +3505,8 @@ function paintPulse() {
   el.classList.toggle("warn", false);
   if (running) {
     el.hidden = false;
-    el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+    // Engine names only while work is live — skip idle OpenCode/Hermes noise.
+    el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span>`;
   } else if (done) {
     el.hidden = false;
     el.innerHTML = `<i aria-hidden="true"></i><span>Done</span>`;
@@ -4137,18 +4253,26 @@ function guessLane(text) {
 function paintRouteHatch() {
   const sum = $("routeHatchSummary");
   const menu = $("routeMenu");
+  const hatch = $("routeHatch");
+  const forced = Boolean(preset && preset !== "cos");
   if (menu) {
     menu.querySelectorAll("[data-route]").forEach((btn) => {
       btn.classList.toggle("on", (btn.getAttribute("data-route") || "cos") === (preset || "cos"));
     });
   }
+  // Cos routes from the message. Hatch is only for an explicit force (@mention / reply lane).
+  if (hatch) {
+    hatch.hidden = !forced;
+    if (!forced) hatch.open = false;
+  }
   if (!sum) return;
-  const forced = Boolean(preset && preset !== "cos");
-  const guess = guessLane(($("msg") || {}).value || "");
-  if (forced) sum.textContent = jobLabel(preset);
-  else if (guess !== "cos") sum.textContent = `Auto · ${jobLabel(guess)}`;
-  else sum.textContent = "Auto";
-  sum.classList.toggle("forced", forced);
+  if (forced) {
+    sum.textContent = jobLabel(preset);
+    sum.classList.add("forced");
+  } else {
+    sum.textContent = "Auto";
+    sum.classList.remove("forced");
+  }
 }
 
 function setRoute(name) {

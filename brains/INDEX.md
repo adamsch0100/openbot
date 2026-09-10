@@ -2,9 +2,9 @@
 
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Hotfix can_add_ceo for owner — rail Add CEO slot + Settings entry + railScrim.
-Last: OttoBot chrome dogfood P0 PR — mark spacing, empties, work-status strip, Activity keeps chat.
-Next: Open MERGEABLE chrome PR; do not merge. No Cloud Agents. Do not touch DESKTOP.
+Now: CEO form + composer polish — expanded Add CEO (site/repo/Railway/tools + Pmill prefs), centered menu, hide Auto hatch.
+Last: Hotfix can_add_ceo for owner — rail Add CEO slot + Settings entry + railScrim.
+Next: Dogfood Add CEO → Pmill seat; confirm composer has no Auto hatch and no idle OpenCode/Hermes noise.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault

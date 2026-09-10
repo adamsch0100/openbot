@@ -197,6 +197,27 @@ class RetiredOrgTests(LaborLoopIsolation):
         with self.assertRaises(ValueError):
             org_mod.add_project(str(self.home), "Nadia Marketing")
 
+    def test_add_project_pmill_seat_prefs(self):
+        prefs = org_mod.seat_preset_for_name("Pmill")
+        self.assertEqual(prefs.get("site_url"), "https://pmill.ai")
+        self.assertEqual(prefs.get("github_repo"), "adamsch0100/pmillsports")
+        self.assertEqual(prefs.get("railway"), "victorious-presence")
+        self.assertEqual(prefs.get("goals"), "profitability")
+        data = org_mod.add_project(str(self.home), "Pmill")
+        self.assertEqual(data.get("project_id"), "pmill")
+        ceo = next(row for row in data["projects"] if row["id"] == "pmill")
+        tools = ceo.get("tools") or {}
+        self.assertEqual(tools.get("site_url"), "https://pmill.ai")
+        self.assertEqual(tools.get("github_repo"), "adamsch0100/pmillsports")
+        self.assertEqual(tools.get("railway"), "victorious-presence")
+        self.assertTrue(tools.get("mcp_github"))
+        self.assertTrue(tools.get("authorize_site"))
+        self.assertTrue(tools.get("authorize_railway"))
+        index = (ceo.get("index") or "")
+        self.assertIn("Goals: profitability", index)
+        self.assertIn("Site: https://pmill.ai", index)
+        self.assertIn("Railway: victorious-presence", index)
+
     def test_clean_memory_strips_contributor_banner(self):
         raw = (
             "Saved inbox/ops.md. !!! CONTRIBUTOR TIER — TRAINS ON YOUR DATA !!! "
