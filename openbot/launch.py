@@ -822,15 +822,15 @@ def _start_hermes_dashboard(home: str | None = None, project_id: str | None = No
     if not target:
         target = str(hermes_home())
     _push_wallets(home=target)
-    if _port_open("127.0.0.1", HERMES_DASH_PORT):
-        if not _hermes_dash_home:
-            _hermes_dash_home = target
-            return _dash_ok(target)
-        if _homes_match(_hermes_dash_home, target):
-            return _dash_ok(target)
+    # Reuse only when the live dash is already aimed at this CEO home.
+    # Cos orphan caveat: port up with unknown/_hermes_dash_home unset (or a
+    # different home) must recycle — never adopt the orphan as the new CEO.
+    if _port_open("127.0.0.1", HERMES_DASH_PORT) and _homes_match(_hermes_dash_home, target):
+        return _dash_ok(target)
     if _port_open("127.0.0.1", HERMES_DASH_PORT):
         _kill(_hermes_dash_proc)
         _hermes_dash_proc = None
+        _hermes_dash_home = None
         for _ in range(20):
             if not _port_open("127.0.0.1", HERMES_DASH_PORT):
                 break
