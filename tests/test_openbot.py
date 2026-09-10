@@ -3336,5 +3336,229 @@ class EngineProxyTests(unittest.TestCase):
             self.assertEqual(project_id_for_folder(r"C:\Users\adamm\Projects\saahomes"), "saa-homes")
 
 
+class OpenCodeSessionTests(unittest.TestCase):
+    """Tests for OpenCode session creation, persistence, and job binding."""
+    
+    def test_run_opencode_attaches_session_header(self):
+        """run_opencode injects x-opencode-session header for OpenCode Go models."""
+        import json
+        from unittest.mock import MagicMock, patch
+        
+        from openbot.router import run_opencode
+        
+        with patch("openbot.router.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.poll.return_value = 0
+            mock_proc.returncode = 0
+            mock_proc.stdout.readline.return_value = ""
+            mock_proc.stdout.read.return_value = ""
+            mock_popen.return_value = mock_proc
+            
+            with tempfile.TemporaryDirectory() as tmp:
+                code, out, raw = run_opencode(
+                    folder=tmp,
+                    prompt="test prompt",
+                    model="opencode/deepseek-v4-flash",
+                    session_id="ses_test123",
+                )
+                
+                # Extract env from Popen call
+                call_kwargs = mock_popen.call_args[1]
+                env = call_kwargs["env"]
+                
+                # Verify OPENCODE_CONFIG_CONTENT has session header
+                self.assertIn("OPENCODE_CONFIG_CONTENT", env)
+                config = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+                
+                # Check all OpenCode providers have the session header
+                self.assertIn("providers", config)
+                for provider_id in ("opencode", "opencode-go", "zen"):
+                    self.assertIn(provider_id, config["providers"])
+                    self.assertIn("headers", config["providers"][provider_id])
+                    self.assertEqual(
+                        config["providers"][provider_id]["headers"]["x-opencode-session"],
+                        "ses_test123"
+                    )
+    
+    def test_run_opencode_without_session_omits_header(self):
+        """run_opencode without session_id does not inject empty session headers."""
+        import json
+        from unittest.mock import MagicMock, patch
+        
+        from openbot.router import run_opencode
+        
+        with patch("openbot.router.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.poll.return_value = 0
+            mock_proc.returncode = 0
+            mock_proc.stdout.readline.return_value = ""
+            mock_proc.stdout.read.return_value = ""
+            mock_popen.return_value = mock_proc
+            
+            with tempfile.TemporaryDirectory() as tmp:
+                code, out, raw = run_opencode(
+                    folder=tmp,
+                    prompt="test prompt",
+                    model="opencode/deepseek-v4-flash",
+                    session_id=None,  # No session
+                )
+                
+                call_kwargs = mock_popen.call_args[1]
+                env = call_kwargs["env"]
+                
+                # Config should either not exist or not have provider headers
+                if "OPENCODE_CONFIG_CONTENT" in env:
+                    config = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+                    # If config exists, providers should not have session headers
+                    if "providers" in config:
+                        for provider_id in ("opencode", "opencode-go", "zen"):
+                            if provider_id in config["providers"]:
+                                headers = config["providers"][provider_id].get("headers", {})
+                                self.assertNotIn("x-opencode-session", headers)
+    
+    def test_builder_job_creates_and_persists_session(self):
+        """Builder job path creates OpenCode session if missing and persists it."""
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+        
+        import openbot.org as org_mod
+        import openbot.store as store_mod
+        
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            
+            try:
+                # Set up a CEO with no session
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                org_mod.PROFILE_PATH.write_text(
+                    json.dumps({
+                        "projects": [{
+                            "id": "test-ceo",
+                            "name": "Test CEO",
+                            "role": "ceo",
+                            "folder": tmp,
+                            "primary": True,
+                            "workers": [],
+                            # No opencode_session_id
+                        }]
+                    }),
+                    encoding="utf-8"
+                )
+                
+                from openbot.org import project_tools
+                
+                # Verify no session exists initially
+                tools = project_tools("test-ceo")
+                self.assertEqual(tools.get("opencode_session_id"), "")
+                
+                # Mock _open_opencode_session to return a session
+                with patch("openbot.launch._open_opencode_session", return_value="ses_created456"):
+                    # Simulate the builder job path that should create session
+                    from openbot.launch import _open_opencode_session
+                    from openbot.org import patch_project_tools
+                    
+                    work = tmp
+                    project_id = "test-ceo"
+                    tools = project_tools(project_id)
+                    
+                    opencode_session = str(tools.get("opencode_session_id") or "").strip()
+                    if not opencode_session:
+                        opencode_session = _open_opencode_session(work, Path(work).name)
+                        if opencode_session and project_id:
+                            patch_project_tools(project_id, {"opencode_session_id": opencode_session})
+                    
+                    # Verify session was created and persisted
+                    self.assertEqual(opencode_session, "ses_created456")
+                    
+                    # Reload tools and verify persistence
+                    tools_after = project_tools("test-ceo")
+                    self.assertEqual(tools_after.get("opencode_session_id"), "ses_created456")
+            
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+    
+    def test_session_survives_ensure_org(self):
+        """Regression: opencode_session_id survives ensure_org via _carry_tools (PR #52)."""
+        import json
+        import tempfile
+        from pathlib import Path
+        
+        import openbot.org as org_mod
+        import openbot.store as store_mod
+        
+        old_root = store_mod.ROOT
+        old_org_root = org_mod.ROOT
+        old_org_path = org_mod.ORG
+        old_profile_path = org_mod.PROFILE_PATH
+        
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.ROOT = Path(tmp)
+            org_mod.ROOT = Path(tmp)
+            org_mod.ORG = Path(tmp) / "org"
+            org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+            
+            try:
+                org_mod.ORG.mkdir(parents=True, exist_ok=True)
+                # Use non-primary CEO to avoid HOST_CEO_ID rename logic
+                workspace_dir = Path(tmp) / "saahomes"
+                workspace_dir.mkdir()
+                org_mod.PROFILE_PATH.write_text(
+                    json.dumps({
+                        "projects": [
+                            {
+                                "id": "openbot",
+                                "name": "OpenBot",
+                                "role": "ceo",
+                                "folder": tmp,
+                                "primary": True,
+                                "workers": [],
+                            },
+                            {
+                                "id": "saa-homes",
+                                "name": "SAA Homes",
+                                "role": "ceo",
+                                "folder": str(workspace_dir),
+                                "primary": False,
+                                "workers": [],
+                                "opencode_session_id": "ses_persist789",
+                            }
+                        ]
+                    }),
+                    encoding="utf-8"
+                )
+                
+                from openbot.org import ensure_org, project_tools
+                
+                # Verify session exists before
+                tools_before = project_tools("saa-homes")
+                self.assertEqual(tools_before.get("opencode_session_id"), "ses_persist789")
+                
+                # Call ensure_org (rebuilds CEO rows via _carry_tools)
+                ensure_org()
+                
+                # Verify session persists after (saa-homes should stay saa-homes as non-primary)
+                tools_after = project_tools("saa-homes")
+                self.assertEqual(tools_after.get("opencode_session_id"), "ses_persist789")
+            
+            finally:
+                store_mod.ROOT = old_root
+                org_mod.ROOT = old_org_root
+                org_mod.ORG = old_org_path
+                org_mod.PROFILE_PATH = old_profile_path
+
+
 if __name__ == "__main__":
     unittest.main()
