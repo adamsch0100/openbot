@@ -144,6 +144,17 @@ WALLET_EMPTY = re.compile(
     r"insufficient balance|opencode\.ai/.*/billing",
     re.I,
 )
+PROVIDER_ERROR = re.compile(
+    r"(?:anthropic.*?package.*?required|"
+    r"x-api-key.*?401|"
+    r"unauthorized|"
+    r"invalid\s+api\s+key|"
+    r"authentication\s+failed|"
+    r"provider.*?init.*?fail|"
+    r"credentials.*?invalid|"
+    r"api\s+key.*?invalid)",
+    re.I,
+)
 NEED_OPERATOR = re.compile(
     r"\b(login|pay|send|publish|approve|approval|password|gbp)\b",
     re.I,
@@ -471,6 +482,11 @@ def _quiet_delta(on_delta):
 
 def wallet_empty(text: str) -> bool:
     return bool(WALLET_EMPTY.search(text or ""))
+
+
+def provider_error(text: str) -> bool:
+    """Detect provider auth/init failures that should trigger failover."""
+    return bool(PROVIDER_ERROR.search(text or ""))
 
 
 def wallet_empty_reply() -> str:
@@ -1530,7 +1546,8 @@ def _handle_preset(
                 chosen_model = model
                 if ran.get("stopped"):
                     break
-                if wallet_empty(ran.get("text") or ""):
+                text_output = ran.get("text") or ""
+                if wallet_empty(text_output):
                     if account.get("id"):
                         mark_wallet_empty(str(account["id"]))
                     # Clear sticky session on wallet failure
@@ -1539,9 +1556,14 @@ def _handle_preset(
                     except (ValueError, TypeError):
                         pass
                     continue
+                if provider_error(text_output):
+                    # Provider auth/init failure: try next model/account
+                    if account.get("id"):
+                        mark_wallet_empty(str(account["id"]))
+                    continue
                 if ran.get("ok"):
                     break
-                # Non-wallet error: don't retry
+                # Non-retriable error: don't retry
                 break
             
             text = ran.get("text") or "(no output)"
@@ -1955,7 +1977,8 @@ def _handle_preset(
                     chosen_model = model
                     if ran.get("stopped"):
                         break
-                    if wallet_empty(ran.get("text") or ""):
+                    text_output = ran.get("text") or ""
+                    if wallet_empty(text_output):
                         if account.get("id"):
                             mark_wallet_empty(str(account["id"]))
                         # Clear sticky session on wallet failure
@@ -1964,9 +1987,14 @@ def _handle_preset(
                         except (ValueError, TypeError):
                             pass
                         continue
+                    if provider_error(text_output):
+                        # Provider auth/init failure: try next model/account
+                        if account.get("id"):
+                            mark_wallet_empty(str(account["id"]))
+                        continue
                     if ran.get("ok"):
                         break
-                    # Non-wallet error: don't retry
+                    # Non-retriable error: don't retry
                     break
                 
                 text = ran.get("text") or "(no output)"
@@ -2113,7 +2141,8 @@ def _handle_preset(
                     chosen_model = model
                     if ran.get("stopped"):
                         break
-                    if wallet_empty(ran.get("text") or ""):
+                    text_output = ran.get("text") or ""
+                    if wallet_empty(text_output):
                         if account.get("id"):
                             mark_wallet_empty(str(account["id"]))
                         # Clear sticky session on wallet failure
@@ -2122,9 +2151,14 @@ def _handle_preset(
                         except (ValueError, TypeError):
                             pass
                         continue
+                    if provider_error(text_output):
+                        # Provider auth/init failure: try next model/account
+                        if account.get("id"):
+                            mark_wallet_empty(str(account["id"]))
+                        continue
                     if ran.get("ok"):
                         break
-                    # Non-wallet error: don't retry
+                    # Non-retriable error: don't retry
                     break
                 
                 text = (ran.get("text") or "").strip() or (

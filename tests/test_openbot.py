@@ -217,6 +217,45 @@ class RouterClassifyTests(unittest.TestCase):
         self.assertNotIn("abc123", _index_last("Patched the footer."))
 
 
+class ProviderFailoverTests(unittest.TestCase):
+    def test_provider_error_detection(self):
+        """Test that provider auth/init errors are detected for failover."""
+        from openbot.router import provider_error
+        
+        # Anthropic package required error
+        self.assertTrue(provider_error("The 'anthropic' package is required for the Anthropic provider"))
+        
+        # x-api-key 401 error
+        self.assertTrue(provider_error("x-api-key authentication failed with 401"))
+        
+        # Generic auth failures
+        self.assertTrue(provider_error("Unauthorized: Invalid API key"))
+        self.assertTrue(provider_error("Authentication failed"))
+        self.assertTrue(provider_error("Provider init failed: credentials invalid"))
+        
+        # Should not match normal errors
+        self.assertFalse(provider_error("Connection timeout"))
+        self.assertFalse(provider_error("Model not found"))
+        self.assertFalse(provider_error("Successfully completed"))
+    
+    def test_wallet_empty_still_works(self):
+        """Ensure wallet_empty detection still works alongside provider_error."""
+        from openbot.router import wallet_empty, provider_error
+        
+        # Wallet empty patterns
+        self.assertTrue(wallet_empty("insufficient balance"))
+        self.assertTrue(wallet_empty("Check billing at opencode.ai/workspace/billing"))
+        
+        # These should not trigger wallet_empty
+        self.assertFalse(wallet_empty("x-api-key 401 error"))
+        self.assertFalse(wallet_empty("anthropic package required"))
+        
+        # Provider errors should not trigger wallet_empty
+        provider_text = "The 'anthropic' package is required"
+        self.assertTrue(provider_error(provider_text))
+        self.assertFalse(wallet_empty(provider_text))
+
+
 class SpendTests(unittest.TestCase):
     def test_period_and_sum(self):
         now = datetime(2026, 8, 31, 15, 0, tzinfo=timezone.utc)
@@ -1034,6 +1073,111 @@ class KeyringTests(unittest.TestCase):
         finally:
             keyring_mod.SECRETS_PATH = old
 
+    def test_push_engine_wallets_go_only_no_openrouter_env(self):
+        """Go-only prefer chain should NOT write OPENROUTER_API_KEY to Hermes .env"""
+        import openbot.keyring as keyring_mod
+
+        old_secrets = keyring_mod.SECRETS_PATH
+        old_env = os.environ.copy()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                # Setup keyring with Go-only accounts
+                secrets_path = Path(tmp) / "secrets.local.json"
+                keyring_mod.SECRETS_PATH = secrets_path
+                secrets_path.write_text(
+                    json.dumps(
+                        {
+                            "accounts": [
+                                {"id": "go1", "provider": "opencode", "label": "Go 1", "key": "sk-go-1"},
+                                {"id": "go2", "provider": "opencode", "label": "Go 2", "key": "sk-go-2"},
+                                # OpenRouter exists but NOT in prefer/fallback chain
+                                {"id": "or1", "provider": "openrouter", "label": "OR", "key": "sk-or-1"},
+                            ],
+                            "fallback": ["go1", "go2"],  # No openrouter
+                            "active": {},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                
+                # Setup Hermes home
+                hermes_home = Path(tmp) / "hermes-home"
+                hermes_home.mkdir()
+                
+                # Call push_engine_wallets with Go-only prefer chain
+                tools = {"account_id": "go1", "fallback": ["go2"]}  # No openrouter
+                keyring_mod.push_engine_wallets(tools=tools, hermes_home_dir=str(hermes_home))
+                
+                # Check .env file
+                env_file = hermes_home / ".env"
+                self.assertTrue(env_file.is_file(), ".env should be created")
+                env_content = env_file.read_text(encoding="utf-8")
+                
+                # Should have OpenCode keys
+                self.assertIn("OPENCODE_API_KEY=", env_content)
+                self.assertIn("OPENCODE_GO_API_KEY=", env_content)
+                
+                # Should NOT have OpenRouter key (not in prefer chain)
+                self.assertNotIn("OPENROUTER_API_KEY", env_content)
+                
+                # Should NEVER have Anthropic keys
+                self.assertNotIn("ANTHROPIC_API_KEY", env_content)
+                self.assertNotIn("ANTHROPIC_TOKEN", env_content)
+        finally:
+            keyring_mod.SECRETS_PATH = old_secrets
+            os.environ.clear()
+            os.environ.update(old_env)
+
+    def test_push_engine_wallets_with_openrouter_writes_key(self):
+        """Prefer chain WITH openrouter should write OPENROUTER_API_KEY"""
+        import openbot.keyring as keyring_mod
+
+        old_secrets = keyring_mod.SECRETS_PATH
+        old_env = os.environ.copy()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                # Setup keyring with Go + OpenRouter in chain
+                secrets_path = Path(tmp) / "secrets.local.json"
+                keyring_mod.SECRETS_PATH = secrets_path
+                secrets_path.write_text(
+                    json.dumps(
+                        {
+                            "accounts": [
+                                {"id": "go1", "provider": "opencode", "label": "Go 1", "key": "sk-go-1"},
+                                {"id": "or1", "provider": "openrouter", "label": "OR", "key": "sk-or-1"},
+                            ],
+                            "fallback": ["go1", "or1"],  # OpenRouter IS in chain
+                            "active": {},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                
+                # Setup Hermes home
+                hermes_home = Path(tmp) / "hermes-home"
+                hermes_home.mkdir()
+                
+                # Call push_engine_wallets with Go + OpenRouter chain
+                tools = {"account_id": "go1", "fallback": ["or1"]}  # OpenRouter included
+                keyring_mod.push_engine_wallets(tools=tools, hermes_home_dir=str(hermes_home))
+                
+                # Check .env file
+                env_file = hermes_home / ".env"
+                self.assertTrue(env_file.is_file(), ".env should be created")
+                env_content = env_file.read_text(encoding="utf-8")
+                
+                # Should have both OpenCode and OpenRouter keys
+                self.assertIn("OPENCODE_API_KEY=", env_content)
+                self.assertIn("OPENROUTER_API_KEY=", env_content)
+                
+                # Should NEVER have Anthropic keys
+                self.assertNotIn("ANTHROPIC_API_KEY", env_content)
+                self.assertNotIn("ANTHROPIC_TOKEN", env_content)
+        finally:
+            keyring_mod.SECRETS_PATH = old_secrets
+            os.environ.clear()
+            os.environ.update(old_env)
+
     def test_empty_opencode_wallet_is_skipped_for_next_key(self):
         import openbot.keyring as keyring_mod
         from openbot import router as router_mod
@@ -1652,6 +1796,37 @@ class OrgTests(unittest.TestCase):
                 overlay = hermes_mod._hermes_env(ceo)
             self.assertEqual(overlay.get("OPENCODE_ZEN_API_KEY"), "test-ceo-overlay")
 
+    def test_hermes_env_strips_anthropic_keys(self):
+        """Regression test: Anthropic keys must be stripped to prevent provider init failures."""
+        from unittest.mock import patch
+
+        import openbot.hermes as hermes_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            machine = Path(tmp) / "machine"
+            ceo = Path(tmp) / "ceo"
+            machine.mkdir()
+            ceo.mkdir()
+            # Machine has stale Anthropic key that would cause 401 errors
+            (machine / ".env").write_text(
+                "OPENCODE_ZEN_API_KEY=test-key\nANTHROPIC_API_KEY=sk-ant-stale123\n",
+                encoding="utf-8",
+            )
+            with patch("openbot.hermes.hermes_home", return_value=machine):
+                env = hermes_mod._hermes_env(ceo)
+            # Anthropic keys should be stripped
+            self.assertNotIn("ANTHROPIC_API_KEY", env)
+            self.assertNotIn("ANTHROPIC_TOKEN", env)
+            # But other keys should remain
+            self.assertEqual(env.get("OPENCODE_ZEN_API_KEY"), "test-key")
+            
+            # CEO-level Anthropic keys should also be stripped
+            (ceo / ".env").write_text("ANTHROPIC_TOKEN=tok-stale456\n", encoding="utf-8")
+            with patch("openbot.hermes.hermes_home", return_value=machine):
+                env2 = hermes_mod._hermes_env(ceo)
+            self.assertNotIn("ANTHROPIC_API_KEY", env2)
+            self.assertNotIn("ANTHROPIC_TOKEN", env2)
+
     def test_folder_inbox_and_session(self):
         import openbot.org as org_mod
 
@@ -1713,6 +1888,63 @@ class OrgTests(unittest.TestCase):
                 self.assertEqual(org_mod.read_schedules("extra")[0]["schedule"], "0 9 * * *")
                 ceo = next(row for row in org_mod.public_org()["projects"] if row["id"] == "extra")
                 self.assertTrue(Path(ceo["tools"]["hermes_home"]).is_dir())
+        finally:
+            org_mod.ORG = old_org
+            org_mod.PROFILE_PATH = old_profile
+            org_mod.HERMES_HOMES = old_homes
+
+    def test_opencode_session_survives_ensure_org(self):
+        """Regression test: opencode_session_id must survive ensure_org() rebuild."""
+        import openbot.org as org_mod
+
+        old_org = org_mod.ORG
+        old_profile = org_mod.PROFILE_PATH
+        old_homes = org_mod.HERMES_HOMES
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                work = root / "work"
+                work.mkdir()
+                org_mod.ORG = root / "org"
+                org_mod.PROFILE_PATH = org_mod.ORG / "profile.json"
+                org_mod.HERMES_HOMES = root / "hermes-homes"
+                org_mod.ORG.mkdir()
+                org_mod.PROFILE_PATH.write_text(
+                    json.dumps(
+                        {
+                            "name": "OPENBOT",
+                            "role": "cos",
+                            "folder": str(work),
+                            "projects": [
+                                {
+                                    "id": "saa-homes",
+                                    "name": "SAA Homes",
+                                    "role": "ceo",
+                                    "folder": str(work),
+                                    "primary": False,
+                                    "workers": [],
+                                    "hermes_home": str(org_mod.HERMES_HOMES / "saa-homes"),
+                                    "opencode_session_id": "ses_f76aac189ffeDZM9fzq0xE51dQ",
+                                }
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                # First call to ensure_org should preserve opencode_session_id
+                data = org_mod.ensure_org()
+                ceo = next(row for row in data["projects"] if row["id"] == "saa-homes")
+                self.assertEqual(ceo["tools"]["opencode_session_id"], "ses_f76aac189ffeDZM9fzq0xE51dQ")
+                
+                # Second call simulates GET /api/org which calls ensure_org again
+                data2 = org_mod.ensure_org()
+                ceo2 = next(row for row in data2["projects"] if row["id"] == "saa-homes")
+                self.assertEqual(ceo2["tools"]["opencode_session_id"], "ses_f76aac189ffeDZM9fzq0xE51dQ")
+                
+                # Also verify it's in the raw saved data
+                saved = org_mod._load_saved()
+                raw_ceo = next(row for row in saved["projects"] if row["id"] == "saa-homes")
+                self.assertEqual(raw_ceo["opencode_session_id"], "ses_f76aac189ffeDZM9fzq0xE51dQ")
         finally:
             org_mod.ORG = old_org
             org_mod.PROFILE_PATH = old_profile
@@ -1844,12 +2076,27 @@ class ResearchTests(unittest.TestCase):
 class HermesGlueTests(unittest.TestCase):
     def test_parse_schedule_and_split_model(self):
         from openbot.hermes import chat_packet, job_packet, parse_schedule, split_model
+        from openbot import models
 
         self.assertEqual(parse_schedule("Every morning ping the board"), "0 9 * * *")
         self.assertEqual(parse_schedule("every 2 hours check the site"), "every 2h")
         self.assertEqual(parse_schedule("every 30 minutes"), "every 30m")
         self.assertIsNone(parse_schedule("remind me sometime"))
-        self.assertEqual(split_model("opencode/gpt-5.4-mini"), ("opencode-zen", "gpt-5.4-mini"))
+        
+        # Mock model catalog for OpenCode Go models
+        with unittest.mock.patch("openbot.models.all_models") as mock_all_models:
+            mock_all_models.return_value = [
+                {"id": "opencode/deepseek-v4-flash", "provider": "opencode", "family": "go"},
+                {"id": "opencode/gemini-3.8-flash", "provider": "opencode", "family": "go"},
+                {"id": "opencode/gpt-5.4-mini", "provider": "opencode", "family": "zen"},
+            ]
+            # OpenCode Go models should map to opencode-go
+            self.assertEqual(split_model("opencode/deepseek-v4-flash"), ("opencode-go", "deepseek-v4-flash"))
+            self.assertEqual(split_model("opencode/gemini-3.8-flash"), ("opencode-go", "gemini-3.8-flash"))
+            # OpenCode Zen models should map to opencode-zen
+            self.assertEqual(split_model("opencode/gpt-5.4-mini"), ("opencode-zen", "gpt-5.4-mini"))
+        
+        # Other providers
         self.assertEqual(split_model("openrouter/anthropic/claude-sonnet-4.6"), ("openrouter", "anthropic/claude-sonnet-4.6"))
         self.assertEqual(split_model("nous/hermes-3"), ("nous", "hermes-3"))
         self.assertEqual(split_model("local-model"), (None, "local-model"))
