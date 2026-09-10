@@ -45,6 +45,28 @@ function isCollaborator() {
   return cfg.actor === "collaborator";
 }
 
+function isLiveBoard() {
+  if (cfg && cfg.hosted) return true;
+  const host = String((location && location.hostname) || "").toLowerCase();
+  return host.endsWith(".railway.app") || host.includes("railway.app");
+}
+
+function paintBoardMark() {
+  const live = isLiveBoard();
+  const mark = live ? "OPENBOT" : "OPENBOT · LOCAL ORG.";
+  const el = $("boardMark");
+  if (el) el.textContent = mark;
+  const about = $("aboutMark");
+  if (about) {
+    about.textContent = live
+      ? "OPENBOT. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
+      : "OPENBOT · LOCAL ORG. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
+  }
+  const sub = document.querySelector(".sub");
+  if (sub) sub.hidden = live;
+  document.title = live ? "OpenBot" : "OpenBot · Local Org.";
+}
+
 function sharePerm(name) {
   if (!isCollaborator()) return true;
   const perms = (cfg.share && cfg.share.member && cfg.share.member.permissions) || {};
@@ -2783,8 +2805,10 @@ function workCounts() {
   ));
   const doing = list.filter((row) => cronIsLive(row)).length + boardRuns.length + (liveRunId ? 1 : 0);
   const failed = list.filter((row) => cronIsFailed(row));
+  const gateway = failed.filter((row) => cronIsGatewayFail(row));
+  const freshFail = failed.filter((row) => !cronIsGatewayFail(row) && !cronIsStaleFail(row));
   const done = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row));
-  const results = done.length + failed.length;
+  const results = Math.min(done.length, 8) + freshFail.length + (gateway.length ? 1 : 0);
   const next = list.filter((row) => (
     row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row) && cronIsDueSoon(row)
   )).length;
@@ -2794,9 +2818,9 @@ function workCounts() {
     const jobs = (((cfg.activity || {}).jobs) || []);
     const orgFailed = jobs.filter((row) => /fail|error/i.test(String(row.status || ""))).length;
     const orgLive = (((cfg.activity || {}).live_runs) || []).length + (liveRunId ? 1 : 0);
-    return { doing: orgLive, next: orgNext, results: jobs.length, failed: orgFailed };
+    return { doing: orgLive, next: orgNext, results: Math.min(jobs.length, 12), failed: orgFailed };
   }
-  return { doing, next, results, failed: failed.length };
+  return { doing, next, results, failed: freshFail.length + (gateway.length ? 1 : 0) };
 }
 
 function paintWorkTabs() {
@@ -2862,6 +2886,28 @@ function cronIsFailed(row) {
   if (!row || cronIsNoise(row) || cronIsLive(row)) return false;
   if (row.enabled === false) return false;
   return /error|fail/i.test(String(row.last_status || ""));
+}
+
+function cronFailBlob(row) {
+  if (!row) return "";
+  return `${row.last_error || ""} ${row.outcome || ""} ${row.last_result || ""} ${row.last_status || ""}`;
+}
+
+function cronIsGatewayFail(row) {
+  return /gateway shutdown|gateway stopped mid-run/i.test(cronFailBlob(row));
+}
+
+function cronIsStaleFail(row) {
+  const at = Date.parse(String((row && row.last_run_at) || ""));
+  if (!Number.isFinite(at)) return true;
+  return (Date.now() - at) > 48 * 3600 * 1000;
+}
+
+function quietStory(story) {
+  const row = story || {};
+  if (row.on) return row;
+  if (/^Scheduled\b/i.test(String(row.line || ""))) return { on: false, warn: false, line: "Done" };
+  return row;
 }
 
 function cronIsLive(row) {
@@ -2960,8 +3006,8 @@ function cronCardHtml(row, open, mark) {
     <p class="cron-outcome">${escapeHtml(live ? "Running now on this CEO's Hermes. Other jobs wait. The result lands here when it finishes." : `Result: ${outcome}`)}</p>
     ${showNext && !live ? `<p class="cron-next">If needed: ${escapeHtml(next)}</p>` : ""}
     ${changed && !live ? `<p class="cron-next">${escapeHtml(changed)}</p>` : ""}
-    ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="ghost-btn cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry on live Hermes</button>` : ""}
-    ${report ? `<details class="cron-more"${open || mark === "result" || failed ? " open" : ""}><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : (err && !live ? `<p class="cron-snip">${escapeHtml(err)}</p>` : "")}
+    ${failed && !live && !cronSkipRetry(row) ? `<button type="button" class="send cron-retry" data-cron-id="${escapeHtml(row.id || "")}">Retry</button>` : ""}
+    ${report ? `<details class="cron-more"><summary>Full report</summary><pre>${escapeHtml(report)}</pre></details>` : (err && !live ? `<p class="cron-snip">${escapeHtml(err)}</p>` : "")}
   </article>`;
 }
 
@@ -3036,13 +3082,6 @@ function engineStory(kind) {
   if (liveCron) {
     return { on: true, line: `Running · ${liveCron.title || cronTitle(liveCron.name) || "job"}` };
   }
-  const due = crons
-    .filter((row) => row.enabled !== false && !cronIsLive(row) && cronIsDueSoon(row))
-    .slice()
-    .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")));
-  if (due.length) {
-    return { on: false, line: `Scheduled · ${due[0].title || cronTitle(due[0].name) || "job"}` };
-  }
   const latest = crons
     .filter((row) => row.last_run_at && !cronIsLive(row))
     .slice()
@@ -3096,13 +3135,6 @@ function runningStory() {
     }
     return { on: false, line: "Done" };
   }
-  const due = (pack.crons || []).filter((row) => (
-    !cronIsNoise(row) && row.enabled !== false && !cronIsLive(row) && cronIsDueSoon(row)
-  ));
-  if (due.length) {
-    const row = due.slice().sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")))[0];
-    return { on: false, line: `Scheduled · ${row.title || cronTitle(row.name) || "job"}` };
-  }
   const latest = (pack.crons || [])
     .filter((row) => row.last_run_at && !cronIsNoise(row) && !cronIsLive(row))
     .slice()
@@ -3114,8 +3146,8 @@ function runningStory() {
 }
 
 function paintEmbedLive() {
-  const oc = engineStory("OpenCode");
-  const hermes = engineStory("Hermes Agent");
+  const oc = quietStory(engineStory("OpenCode"));
+  const hermes = quietStory(engineStory("Hermes Agent"));
   [["ocLive", oc], ["hermesLive", hermes]].forEach(([id, story]) => {
     const el = $(id);
     if (!el || !story || !story.line) return;
@@ -3129,10 +3161,15 @@ function paintEmbedLive() {
 function paintPulse() {
   const el = $("pulse");
   if (!el) return;
-  const story = runningStory();
+  const story = quietStory(runningStory());
   el.classList.toggle("on", story.on);
   el.classList.toggle("warn", Boolean(story.warn) && !story.on);
-  el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+  el.hidden = !story.on;
+  if (story.on) {
+    el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+  } else {
+    el.innerHTML = `<i aria-hidden="true"></i><span>Done</span><small>${escapeHtml(engineFoundLine())}</small>`;
+  }
   paintEmbedLive();
   paintWorkTabs();
 }
@@ -3140,96 +3177,22 @@ function paintPulse() {
 function paintCeoLive(pack) {
   const el = $("ceoLive");
   if (!el) return;
-  if (!projectId) {
-    const story = runningStory();
-    const counts = workCounts();
-    const tally = [`Doing ${counts.doing}`, `Next ${counts.next}`, `Results ${counts.results}`];
-    if (counts.failed) tally.push(`${counts.failed} failed`);
-    el.hidden = false;
-    el.classList.toggle("on", story.on);
-    el.classList.toggle("warn", Boolean(story.warn) && !story.on);
-    el.innerHTML = `<div class="ceo-pulse">
-      <i class="ceo-live-dot" aria-hidden="true"></i>
-      <div class="ceo-pulse-copy">
-        <b>${escapeHtml(story.line)}</b>
-        <span>${escapeHtml(tally.join(" · "))}</span>
-      </div>
-    </div>`;
+  const story = quietStory(runningStory());
+  if (!story.on || scheduleOpen) {
+    el.hidden = true;
+    el.innerHTML = "";
     paintPulse();
     return;
   }
-  const data = pack || digestCache.get(projectId) || {};
-  const digest = data.digest || data;
-  const crons = data.crons || [];
-  const chatLive = Boolean(liveRunId);
-  const boardRuns = ((data.live_runs || (cfg.activity || {}).live_runs) || []).filter((row) => String(row.project_id || "") === String(projectId));
-  const claimed = crons.filter((row) => cronIsLive(row));
-  const running = [...(digest.running || [])].filter((row) => cronIsLive(row));
-  const seenRun = new Set(running.map((row) => row.id));
-  claimed.forEach((row) => {
-    if (!seenRun.has(row.id)) running.push(row);
-  });
-  const finished = digest.just_finished || [];
-  const latestOk = crons
-    .filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsNoise(row))
-    .slice()
-    .sort((a, b) => String(b.last_run_at || "").localeCompare(String(a.last_run_at || "")));
-  const latest = latestOk[0] || (digest.latest && !cronIsNoise(digest.latest) ? digest.latest : null) || finished[0] || null;
-  const upcoming = (digest.upcoming || (digest.next_up ? [digest.next_up] : [])).filter((row) => !cronIsNoise(row));
-  const failed = crons.filter((row) => cronIsFailed(row));
-  const counts = workCounts();
-  const active = chatLive || boardRuns.length || running.length;
-  let lead = "Done";
-  let detail = "";
-  if (chatLive) {
-    lead = `Running · ${talkName()}`;
-    detail = `${laneLabel(liveLane || preset)} · this chat`;
-  } else if (boardRuns.length) {
-    const row = boardRuns[0];
-    lead = `Running · ${laneLabel(row.preset)}`;
-    detail = String(row.title || "this chat").slice(0, 48);
-  } else if (running.length) {
-    const row = running[0];
-    lead = `Running · ${row.title || cronTitle(row.name)}`;
-    detail = rowEngineKind(row);
-  } else if (upcoming[0] && cronIsDueSoon(upcoming[0])) {
-    lead = `Scheduled · ${upcoming[0].title || cronTitle(upcoming[0].name)}`;
-    detail = cronWhenClock(upcoming[0].next_run_at);
-  } else if (failed.length) {
-    lead = `Done · ${failed[0].title || cronTitle(failed[0].name)}`;
-    detail = failed.length === 1 ? "Failed · needs retry" : `${failed.length} failed`;
-  } else if (latest) {
-    lead = `Done · ${latest.title || cronTitle(latest.name)}`;
-    detail = cronWhen(latest.last_run_at);
-  }
-  const reportRow = failed[0] || latest;
-  const report = reportRow ? cronReportText(reportRow) : "";
-  let snippet = clipWire(cleanBotText(report || (reportRow && reportRow.outcome) || ""), 160);
-  if (reportRow && cronIsFailed(reportRow)) {
-    snippet = clipWire(cleanBotText(String(reportRow.last_error || report || reportRow.outcome || "Failed.")), 160) || "Failed.";
-  }
-  snippet = String(snippet).replace(/#\s*Cron Job:\s*[\w.-]+/gi, "").trim();
-  const next = upcoming[0];
-  const nextLine = next
-    ? `Scheduled · ${next.title || cronTitle(next.name)} · ${cronWhenClock(next.next_run_at)}`
-    : "";
-  const need = failed.length
-    ? `${failed.length} failed`
-    : "";
-  const tally = [`Doing ${counts.doing}`, `Next ${counts.next}`, `Results ${counts.results}`];
   el.hidden = false;
-  el.classList.toggle("on", Boolean(active));
-  el.classList.toggle("warn", Boolean(failed.length) && !active);
+  el.classList.add("on");
+  el.classList.remove("warn");
   el.innerHTML = `<div class="ceo-pulse">
       <i class="ceo-live-dot" aria-hidden="true"></i>
       <div class="ceo-pulse-copy">
-        <b>${escapeHtml(lead)}</b>
-        <span>${escapeHtml([detail, tally.join(" · ")].filter(Boolean).join(" · "))}</span>
-        ${!active && snippet ? `<p class="ceo-pulse-result">${escapeHtml(snippet)}</p>` : ""}
+        <b>${escapeHtml(story.line)}</b>
       </div>
-      ${need ? `<em>${escapeHtml(need)}</em>` : ""}
-    </div>
-    ${nextLine && !active ? `<p class="ceo-next">${escapeHtml(nextLine)}</p>` : ""}`;
+    </div>`;
   paintPulse();
 }
 
@@ -3280,6 +3243,24 @@ function liveRunCard(row) {
   </article>`;
 }
 
+function gatewayFailClusterHtml(rows, want) {
+  const list = rows || [];
+  if (list.length === 1) return cronCardHtml(list[0], list[0].id === want, "result");
+  const inner = list.map((row) => cronCardHtml(row, row.id === want, "result")).join("");
+  return `<article class="cron-card failed cron-cluster">
+    <div class="cron-head"><b>Hermes gateway stopped</b><span>Failed</span></div>
+    <p class="cron-outcome">Same stop hit ${list.length} jobs. Retry one job — do not fire the whole set.</p>
+    <details class="cron-stale"><summary>Show ${list.length} jobs</summary>${inner}</details>
+  </article>`;
+}
+
+function paintWorkSurface() {
+  const shell = document.querySelector(".chat-shell");
+  if (shell) shell.classList.toggle("work-open", Boolean(scheduleOpen));
+  const lanes = $("laneStatus");
+  if (lanes && scheduleOpen) lanes.hidden = true;
+}
+
 function closeSchedule() {
   scheduleOpen = false;
   const panel = $("chatSchedule");
@@ -3287,6 +3268,7 @@ function closeSchedule() {
     panel.hidden = true;
     panel.innerHTML = "";
   }
+  paintWorkSurface();
   paintWorkTabs();
 }
 
@@ -3332,6 +3314,7 @@ function renderChatSchedule(rows, digest, focusId) {
     }
     el.innerHTML = bits.join("");
     bindNeedActions(el);
+    paintWorkSurface();
     paintWorkTabs();
     return;
   }
@@ -3356,7 +3339,7 @@ function renderChatSchedule(rows, digest, focusId) {
     .slice(0, 12);
   const failed = list.filter((row) => cronIsFailed(row));
   const failedIds = new Set(failed.map((row) => row.id));
-  const latestOk = latest.filter((row) => !failedIds.has(row.id));
+  const latestOk = latest.filter((row) => !failedIds.has(row.id)).slice(0, 8);
   const paused = list.filter((row) => row.enabled === false || /paused/i.test(String(row.state || "")));
   const scheduled = list
     .filter((row) => row.enabled !== false && !/paused/i.test(String(row.state || "")) && !cronIsLive(row))
@@ -3367,9 +3350,13 @@ function renderChatSchedule(rows, digest, focusId) {
   const sections = [];
   const synced = cached.synced_at || pack.synced_at || "";
   const waitName = running.length ? (running[0].title || cronTitle(running[0].name)) : "";
-  const stamp = running.length
-    ? `Running · ${running.map((row) => row.title || cronTitle(row.name)).slice(0, 2).join(", ")}. Other jobs on this CEO wait.`
-    : (synced ? `Live Hermes ${cronWhen(synced)}.` : "What this CEO is doing, what is next, and what just landed.");
+  const stamp = view === "results"
+    ? "Latest outcomes."
+    : (view === "next"
+      ? "What’s due next."
+      : (running.length
+        ? `Running · ${running.map((row) => row.title || cronTitle(row.name)).slice(0, 2).join(", ")}. Other jobs on this CEO wait.`
+        : "Nothing running."));
   sections.push(`<p class="cron-story">${escapeHtml(stamp)}</p>`);
   if (view === "doing") {
     sections.push(`<h3 class="cron-section">Doing · ${running.length + boardRuns.length}</h3>`);
@@ -3381,7 +3368,7 @@ function renderChatSchedule(rows, digest, focusId) {
     }
     sections.push(`<h3 class="cron-section">Due · ${soon.length}</h3>${soon.length ? soon.map((row) => cronCardHtml(row, row.id === want, "next")).join("") : `<p class="cron-empty">Nothing due in the next day.</p>`}`);
     if (later.length) {
-      sections.push(`<h3 class="cron-section">Later · ${later.length}</h3>${later.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}`);
+      sections.push(`<details class="cron-stale"><summary>Later · ${later.length}</summary>${later.map((row) => cronCardHtml(row, row.id === want, "next")).join("")}</details>`);
     }
     if (paused.length) {
       sections.push(`<h3 class="cron-section">Paused · ${paused.length}</h3>${paused.map((row) => cronCardHtml(row, row.id === want)).join("")}`);
@@ -3396,13 +3383,24 @@ function renderChatSchedule(rows, digest, focusId) {
         <div class="need-actions">${choiceButtonsHtml(needChoices(row), row)}</div>
       </article>`).join(""));
     }
-    if (failed.length) {
-      sections.push(`<h3 class="cron-section">Failed · ${failed.length}</h3>${failed.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}`);
+    const gatewayFails = failed.filter((row) => cronIsGatewayFail(row));
+    const otherFails = failed.filter((row) => !cronIsGatewayFail(row));
+    const freshFails = otherFails.filter((row) => !cronIsStaleFail(row));
+    const staleFails = otherFails.filter((row) => cronIsStaleFail(row));
+    if (gatewayFails.length) {
+      sections.push(`<h3 class="cron-section">Failed</h3>${gatewayFailClusterHtml(gatewayFails, want)}`);
+    }
+    if (freshFails.length) {
+      sections.push(`${gatewayFails.length ? "" : `<h3 class="cron-section">Failed · ${freshFails.length}</h3>`}${freshFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}`);
+    }
+    if (staleFails.length) {
+      sections.push(`<details class="cron-stale"><summary>Older fails · ${staleFails.length}</summary>${staleFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}</details>`);
     }
     sections.push(`<h3 class="cron-section">Done · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : (failed.length ? "" : `<p class="cron-empty">No result on this copy yet.</p>`)}`);
   }
   el.innerHTML = sections.join("");
   bindNeedActions(el);
+  paintWorkSurface();
   paintWorkTabs();
   if (want && window.CSS && CSS.escape) {
     const target = el.querySelector(`#cron-${CSS.escape(want)}`);
@@ -3429,6 +3427,7 @@ async function openWork(view, focusId) {
 async function openSchedule(focusId) {
   scheduleOpen = true;
   scheduleFocusId = focusId || "";
+  paintWorkSurface();
   paintWorkTabs();
   const el = $("chatSchedule");
   const cached = projectId ? digestCache.get(projectId) : null;
@@ -3665,6 +3664,7 @@ function fillImport(instances) {
 
 function applyConfig(data) {
   cfg = data;
+  paintBoardMark();
   if (data.org) {
     org = data.org;
     renderOrg(org);
@@ -7467,6 +7467,7 @@ function initMobileMenu() {
   window.addEventListener("resize", updateMobileUI);
 }
 
+paintBoardMark();
 boot().catch((err) => {
   renderIndex(String(err));
   loadOrgTree();

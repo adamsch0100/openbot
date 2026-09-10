@@ -496,6 +496,12 @@ def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> di
     }
 
 
+def board_is_hosted() -> bool:
+    if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_PROJECT_ID"):
+        return True
+    return ROOT.resolve() != CODE_ROOT.resolve()
+
+
 def _public_config() -> dict:
     ensure_chat_model()
     cfg = load_config()
@@ -539,7 +545,7 @@ def _public_config() -> dict:
         "share": None,
         "x_intake_enabled": bool(load_settings().get("x_intake_enabled")),
         "x_username": str(load_settings().get("x_username") or ""),
-        "hosted": ROOT.resolve() != CODE_ROOT.resolve(),
+        "hosted": board_is_hosted(),
     }
 
 
