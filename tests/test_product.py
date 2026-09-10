@@ -205,7 +205,7 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertNotIn("data-add-helper", js)
         self.assertIn("unreadLanes", js)
         self.assertIn("function scrollChatBottom", js)
-        self.assertIn("idle: true", js)
+        self.assertIn("idle: false", js)
         self.assertIn("/chat?resume=", js)
         self.assertIn("--isolated", (ROOT / "openbot" / "launch.py").read_text(encoding="utf-8"))
         self.assertIn("def home_summary", (ROOT / "openbot" / "channel.py").read_text(encoding="utf-8"))
@@ -233,8 +233,8 @@ class SimpleBoardUiTests(unittest.TestCase):
 
     def test_credit_stays_on_the_board(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertNotIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
-        self.assertNotIn("OpenBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
+        self.assertIn("id=\"aboutCredit\"", html)
+        self.assertIn("Not affiliated with, sponsored by, or endorsed by those projects.", html)
         self.assertIn("Hermes Agent", html)
         self.assertIn("OpenCode", html)
         self.assertIn("activity-sheet", html)
@@ -242,6 +242,9 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn("function rememberWorkFolds", js)
         self.assertIn("data-fold=\"gateway-jobs\"", js)
         self.assertIn("function guessLane", js)
+        self.assertIn("function chatCeoProject", js)
+        self.assertIn("function restartGateway", js)
+        self.assertIn("data-stage=\"tools\"", html)
 
 
 class SeamlessTogetherTests(unittest.TestCase):

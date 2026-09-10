@@ -15,6 +15,9 @@ let inboxSeen = new Set();
 let modelQuery = "";
 let org = {};
 let stage = "chat";
+let lastTool = "opencode";
+let lastCeoId = "";
+let gatewayRunning = true;
 let brains = {};
 let cfg = {};
 let ocStarted = false;
@@ -62,6 +65,8 @@ function paintBoardMark() {
       ? "OPENBOT. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
       : "OPENBOT · LOCAL ORG. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
   }
+  const credit = $("aboutCredit");
+  if (credit && cfg && cfg.credit) credit.textContent = cfg.credit;
   const sub = document.querySelector(".sub");
   if (sub) sub.hidden = live;
   document.title = live ? "OpenBot" : "OpenBot · Local Org.";
@@ -355,6 +360,7 @@ function cleanBotText(text) {
   cleaned = cleaned.replace(/^#\s*Cron Job:[\s\S]*?(?=^##\s*Response\s*$|\Z)/gim, "");
   cleaned = cleaned.replace(/[·•]\s*#\s*Cron Job:\s*[\w.-]+/gi, "");
   cleaned = cleaned.replace(/#\s*Cron Job:\s*[\w.-]+/gi, "");
+  cleaned = cleaned.replace(/\bTHINK_OK\b/g, "");
 
   const lines = cleaned.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
@@ -940,6 +946,8 @@ function stampLane(el, job, unread) {
 }
 
 function paintLanes() {
+  const lanes = $("laneStatus");
+  if (lanes) lanes.hidden = true;
   document.querySelectorAll(".lane").forEach((btn) => {
     const lane = btn.dataset.lane === "all" ? "" : (btn.dataset.lane || "");
     const fresh = Boolean(lane) && unreadLanes.has(lane);
@@ -2294,7 +2302,7 @@ function jobChoices(job) {
   }
   if (job.diff_pending) return needChoices({ kind: "diff" });
   if (job.keep_going && !job.stopped) {
-    const n = job.step_count && job.total_steps ? `Continue (${job.step_count}/${job.total_steps})` : "Continue";
+    const n = job.step_count && job.total_steps ? `Keep going (${job.step_count}/${job.total_steps})` : "Keep going";
     return [{ id: "continue", label: n }];
   }
   const status = String(job.status || job.last_status || "").toLowerCase();
@@ -2403,6 +2411,59 @@ function bindNeedActions(root) {
       runNeedChoice(btn);
     });
   });
+  bindGatewayRestart(root);
+}
+
+function bindGatewayRestart(root) {
+  const host = root || document;
+  host.querySelectorAll(".gateway-restart, [data-restart-gateway]").forEach((btn) => {
+    if (btn.dataset.restartBound) return;
+    btn.dataset.restartBound = "1";
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      restartGateway();
+    });
+  });
+}
+
+async function refreshGatewayStatus() {
+  const aim = currentAim();
+  const pid = aim.projectId || projectId || "";
+  if (!pid) return;
+  try {
+    const res = await fetch(`/api/hermes/gateway/status?project_id=${encodeURIComponent(pid)}`);
+    const data = await res.json();
+    gatewayRunning = data.running !== false;
+  } catch (_err) {
+    /* keep last */
+  }
+  syncHermesHint();
+}
+
+async function restartGateway() {
+  const aim = currentAim();
+  const retry = $("retryHermes");
+  if (retry) retry.textContent = "Restarting…";
+  try {
+    const res = await fetch("/api/hermes/gateway/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: aim.projectId || projectId || "", wait: false })
+    });
+    const data = await res.json().catch(() => ({}));
+    gatewayRunning = Boolean(data.running || data.ok);
+    hermesFailed = !gatewayRunning;
+    if ($("hermesStatus")) $("hermesStatus").textContent = gatewayRunning ? "" : (data.error || "Gateway still off");
+  } catch (_err) {
+    gatewayRunning = false;
+    hermesFailed = true;
+  }
+  if (retry) retry.textContent = "Restart";
+  syncHermesHint();
+  hermesStarted = false;
+  startHermes();
+  if (scheduleOpen) openSchedule(scheduleFocusId);
 }
 
 function visibleNeedsYou() {
@@ -2695,7 +2756,7 @@ function renderBotMeta(opts) {
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
     if (!project) {
-      $("chatFolder").textContent = "One chat. Cos routes. Pick a CEO for that desk.";
+      $("chatFolder").textContent = "One chat. Cos routes. Open a CEO in the rail for that desk.";
     } else {
       const nxt = String(project.index_next || "").trim();
       const now = String(project.index_now || "").trim();
@@ -3184,7 +3245,7 @@ function runningStory() {
     if (last) {
       return { on: false, warn: /fail|error/i.test(String(last.status || "")), line: `Done · ${jobStoryTitle(last)}` };
     }
-    return { on: false, line: "Done" };
+    return { on: false, line: "" };
   }
   const latest = (pack.crons || [])
     .filter((row) => row.last_run_at && !cronIsNoise(row) && !cronIsLive(row))
@@ -3193,7 +3254,7 @@ function runningStory() {
   if (latest) {
     return { on: false, warn: cronIsFailed(latest), line: `Done · ${latest.title || cronTitle(latest.name) || "job"}` };
   }
-  return { on: false, line: "Done" };
+  return { on: false, line: "" };
 }
 
 function paintEmbedLive() {
@@ -3213,13 +3274,20 @@ function paintPulse() {
   const el = $("pulse");
   if (!el) return;
   const story = quietStory(runningStory());
-  el.classList.toggle("on", story.on);
-  el.classList.toggle("warn", Boolean(story.warn) && !story.on);
-  el.hidden = !story.on;
-  if (story.on) {
+  const running = Boolean(story.on);
+  const done = !running && /^Done\b/i.test(String(story.line || ""));
+  el.classList.toggle("on", running);
+  el.classList.toggle("ok", done);
+  el.classList.toggle("warn", false);
+  if (running) {
+    el.hidden = false;
     el.innerHTML = `<i aria-hidden="true"></i><span>${escapeHtml(story.line)}</span><small>${escapeHtml(engineFoundLine())}</small>`;
+  } else if (done) {
+    el.hidden = false;
+    el.innerHTML = `<i aria-hidden="true"></i><span>Done</span>`;
   } else {
-    el.innerHTML = `<i aria-hidden="true"></i><span>Done</span><small>${escapeHtml(engineFoundLine())}</small>`;
+    el.hidden = true;
+    el.innerHTML = `<i aria-hidden="true"></i><span>Done</span>`;
   }
   paintEmbedLive();
   paintWorkTabs();
@@ -3250,6 +3318,7 @@ function paintCeoLive(pack) {
 async function loadCeoDigest(refreshLive) {
   paintWorkTabs();
   if (!projectId) {
+    gatewayRunning = true;
     paintCeoBrief(null);
     paintCeoLive(null);
     if (scheduleOpen) renderChatSchedule([], {}, scheduleFocusId);
@@ -3257,15 +3326,27 @@ async function loadCeoDigest(refreshLive) {
   }
   const cached = digestCache.get(projectId);
   if (cached) {
+    if (typeof cached.gateway_running === "boolean") gatewayRunning = cached.gateway_running;
     paintCeoBrief(cached.digest || cached);
     paintCeoLive(cached);
   }
   try {
     const pid = projectId;
-    const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`);
+    const [res, gwRes] = await Promise.all([
+      fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`),
+      fetch(`/api/hermes/gateway/status?project_id=${encodeURIComponent(pid)}`).catch(() => null)
+    ]);
     const data = await res.json();
+    if (gwRes && gwRes.ok) {
+      const gw = await gwRes.json().catch(() => ({}));
+      gatewayRunning = gw.running !== false;
+      data.gateway_running = gatewayRunning;
+    } else {
+      gatewayRunning = true;
+    }
     digestCache.set(pid, data);
     if (projectId === pid) {
+      syncHermesHint();
       paintCeoBrief(data.digest);
       paintCeoLive(data);
       paintWorkTabs();
@@ -3293,7 +3374,29 @@ function liveRunCard(row) {
   </details>`;
 }
 
+function gatewayOffHtml() {
+  return `<article class="cron-card gateway-off">
+    <div class="cron-head"><b>Hermes gateway</b><span>Off</span></div>
+    <p class="cron-outcome">Gateway is off. Scheduled jobs wait. Restart it — do not fire the whole set.</p>
+    <button type="button" class="send gateway-restart">Restart</button>
+  </article>`;
+}
+
+function emptyWorkCopy(view) {
+  const who = currentProject() ? (currentProject().name || "this CEO") : "Chief of Staff";
+  if (view === "doing") {
+    return gatewayRunning
+      ? `Nothing is running on ${who}. Send a message, or wait for the next scheduled check.`
+      : `Nothing is running on ${who}. Hermes gateway is off — Restart it to resume scheduled work.`;
+  }
+  if (view === "next") {
+    return `Nothing queued for ${who}. When this brief has a Next, or a job is due in the next day, it shows up here.`;
+  }
+  return `No finished jobs for ${who} yet. Results land here when work completes.`;
+}
+
 function gatewayFailClusterHtml(rows, want) {
+  if (!gatewayRunning) return gatewayOffHtml();
   const list = rows || [];
   if (list.length === 1) return cronCardHtml(list[0], list[0].id === want, "result");
   const inner = list.map((row) => cronCardHtml(row, row.id === want, "result")).join("");
@@ -3311,7 +3414,7 @@ function paintWorkSurface() {
     shell.classList.toggle("activity-open", Boolean(scheduleOpen));
   }
   const lanes = $("laneStatus");
-  if (lanes && scheduleOpen) lanes.hidden = true;
+  if (lanes) lanes.hidden = true;
   paintActivityTitle();
 }
 
@@ -3344,23 +3447,24 @@ function renderChatSchedule(rows, digest, focusId) {
     const bits = [];
     if (view === "doing") {
       if (liveRunId) bits.push(liveRunCard({ preset: liveLane || preset, title: "This chat" }));
-      bits.push(runs.length ? runs.map((row) => liveRunCard(row)).join("") : (liveRunId ? "" : `<p class="cron-empty">Nothing running.</p>`));
+      bits.push(runs.length ? runs.map((row) => liveRunCard(row)).join("") : (liveRunId ? "" : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`));
     } else if (view === "next") {
       const next = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—");
       bits.push(next.length ? next.map((row) => `<details class="cron-card" data-fold="ceo-${escapeHtml(row.id || "")}">
         <summary class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></summary>
         <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.index_next), 180))}</p>
         <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
-      </details>`).join("") : `<p class="cron-empty">No next step on the briefs.</p>`);
+      </details>`).join("") : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("next"))}</p>`);
     } else {
       bits.push(jobs.length ? jobs.map((row) => `<details class="cron-card${/fail|error/i.test(String(row.status || "")) ? " failed" : ""}" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
         <summary class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>${escapeHtml(jobStatusWord(row))}</span></summary>
         <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.text || row.summary || ""), 180) || (/fail|error/i.test(String(row.status || "")) ? "Failed." : "Done."))}</p>
         ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
-      </details>`).join("") : `<p class="cron-empty">No job cards yet.</p>`);
+      </details>`).join("") : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`);
     }
     el.innerHTML = bits.join("");
     bindNeedActions(el);
+    bindGatewayRestart(el);
     bindWorkFolds(el);
     paintWorkSurface();
     paintWorkTabs();
@@ -3398,8 +3502,9 @@ function renderChatSchedule(rows, digest, focusId) {
   const sections = [];
   const waitName = running.length ? (running[0].title || cronTitle(running[0].name)) : "";
   if (view === "doing") {
+    if (!gatewayRunning) sections.push(gatewayOffHtml());
     if (boardRuns.length) sections.push(boardRuns.map((row) => liveRunCard(row)).join(""));
-    sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : (boardRuns.length ? "" : `<p class="cron-empty">Nothing running.</p>`));
+    sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : (boardRuns.length ? "" : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`));
   } else if (view === "next") {
     if (waitName) {
       sections.push(`<p class="cron-empty">Waiting · ${escapeHtml(waitName)} is on this CEO's Hermes. Due jobs stay queued.</p>`);
@@ -3431,18 +3536,19 @@ function renderChatSchedule(rows, digest, focusId) {
     const freshFails = otherFails.filter((row) => !cronIsStaleFail(row));
     const staleFails = otherFails.filter((row) => cronIsStaleFail(row));
     if (gatewayFails.length) {
-      sections.push(`<h3 class="cron-section">Failed</h3>${gatewayFailClusterHtml(gatewayFails, want)}`);
+      sections.push(gatewayRunning ? `<h3 class="cron-section">Failed</h3>${gatewayFailClusterHtml(gatewayFails, want)}` : gatewayOffHtml());
     }
     if (freshFails.length) {
-      sections.push(`${gatewayFails.length ? "" : `<h3 class="cron-section">Failed · ${freshFails.length}</h3>`}${freshFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}`);
+      sections.push(`${gatewayFails.length && gatewayRunning ? "" : `<h3 class="cron-section">Failed · ${freshFails.length}</h3>`}${freshFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}`);
     }
     if (staleFails.length) {
       sections.push(`<details class="cron-stale" data-fold="older-fails"><summary>Older fails · ${staleFails.length}</summary>${staleFails.map((row) => cronCardHtml(row, row.id === want, "result")).join("")}</details>`);
     }
-    sections.push(`<h3 class="cron-section">Done · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : (failed.length ? "" : `<p class="cron-empty">No result on this copy yet.</p>`)}`);
+    sections.push(`<h3 class="cron-section">Done · ${latestOk.length}</h3>${latestOk.length ? latestOk.map((row) => cronCardHtml(row, row.id === want, "result")).join("") : (failed.length ? "" : `<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`)}`);
   }
   el.innerHTML = sections.join("");
   bindNeedActions(el);
+  bindGatewayRestart(el);
   bindWorkFolds(el);
   paintWorkSurface();
   paintWorkTabs();
@@ -3469,6 +3575,7 @@ async function openSchedule(focusId) {
   const body = activityBody();
   const cached = projectId ? digestCache.get(projectId) : null;
   if (panel) panel.hidden = false;
+  await refreshGatewayStatus();
   if (!projectId) renderChatSchedule([], {}, focusId);
   else if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
   else if (body) body.innerHTML = `<p class="cron-empty">Loading what’s moving…</p>`;
@@ -3729,17 +3836,25 @@ function applyCollaboratorChrome() {
     btn.classList.toggle("hidden", isCollaborator() && hide.has(btn.dataset.panel));
   });
   document.querySelectorAll(".stage-btn").forEach((btn) => {
-    if (btn.dataset.stage === "opencode" || btn.dataset.stage === "hermes") {
+    if (btn.dataset.stage === "tools") {
       btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
     }
   });
 }
 
 function syncHermesHint() {
+  const toolsOpen = stage === "hermes" || stage === "opencode";
+  const show = toolsOpen && (!gatewayRunning || hermesFailed);
   const hint = $("hermesHint");
-  if (hint) hint.classList.toggle("hidden", stage !== "hermes" || !hermesFailed);
+  if (hint) hint.classList.toggle("hidden", !show);
   const retry = $("retryHermes");
-  if (retry) retry.classList.toggle("hidden", stage !== "hermes" || !hermesFailed);
+  if (retry) {
+    retry.classList.toggle("hidden", !show);
+    retry.textContent = "Restart";
+  }
+  if (show && !gatewayRunning && $("hermesStatus") && !hermesFailed) {
+    $("hermesStatus").textContent = "Hermes gateway is off.";
+  }
 }
 
 let applyingHash = false;
@@ -3752,6 +3867,8 @@ function syncHash() {
   if (open) {
     const panel = document.querySelector(".drawer-tab.on");
     next = `#settings/${(panel && panel.dataset.panel) || "you"}`;
+  } else if (stage === "opencode" || stage === "hermes") {
+    next = `#tools/${stage}`;
   } else if (stage && stage !== "chat") {
     next = `#${stage}`;
   }
@@ -3770,6 +3887,11 @@ function applyHash() {
       return;
     }
     if ($("settings") && !$("settings").classList.contains("hidden")) setSettings(false);
+    if (raw === "tools" || raw.startsWith("tools/")) {
+      const tool = raw.split("/")[1] || lastTool || "opencode";
+      setStage(tool === "hermes" ? "hermes" : "opencode");
+      return;
+    }
     if (raw === "opencode" || raw === "hermes") setStage(raw);
     else setStage("chat");
   } finally {
@@ -3778,12 +3900,18 @@ function applyHash() {
 }
 
 function setStage(name) {
+  if (name === "tools") name = lastTool === "hermes" ? "hermes" : "opencode";
+  if (name === "opencode" || name === "hermes") lastTool = name;
   stage = name;
   document.querySelectorAll(".stage-btn").forEach((btn) => {
-    btn.classList.toggle("on", btn.dataset.stage === name);
+    const slot = btn.dataset.stage;
+    btn.classList.toggle("on", slot === name || (slot === "tools" && (name === "opencode" || name === "hermes")));
   });
   document.querySelectorAll(".workspace").forEach((el) => {
     el.classList.toggle("on", el.id === `stage-${name}`);
+  });
+  document.querySelectorAll(".tool-tab").forEach((btn) => {
+    btn.classList.toggle("on", btn.dataset.stage === name);
   });
   syncHermesHint();
   if (name === "opencode") startOpenCode();
@@ -3820,7 +3948,7 @@ function setSettingsPanel(name) {
     btn.classList.toggle("hidden", isCollaborator() && hide.has(panel));
   });
   document.querySelectorAll(".stage-btn").forEach((btn) => {
-    if (btn.dataset.stage === "opencode" || btn.dataset.stage === "hermes") {
+    if (btn.dataset.stage === "tools") {
       btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
     }
   });
@@ -3863,7 +3991,10 @@ async function setOrgNode(project, worker) {
   preset = "cos";
   focusedLane = "";
   unreadLanes = new Set();
-  if (projectId) expanded.add(projectId);
+  if (projectId) {
+    lastCeoId = projectId;
+    expanded.add(projectId);
+  }
   syncLiveFromAim();
   paintOrgSelection();
   renderOrg(org);
@@ -3993,29 +4124,23 @@ function appendReceipt(el, job) {
 }
 
 function appendWorkDetails(el, job) {
-  if (!el || !job) return;
-  appendReceipt(el, job);
-  const rec = el.querySelector(".receipt-line");
-  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "");
-  if (!rec) return;
-  if (engine === "Hermes Agent" && !el.querySelector("[data-open-hermes]")) {
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "ghost-btn receipt-go";
-    open.dataset.openHermes = "1";
-    open.textContent = "Open Hermes";
-    open.addEventListener("click", () => setStage("hermes"));
-    rec.after(open);
-  }
-  if (engine === "OpenCode" && !el.querySelector("[data-open-opencode]")) {
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "ghost-btn receipt-go";
-    open.dataset.openOpencode = "1";
-    open.textContent = "Open OpenCode";
-    open.addEventListener("click", () => setStage("opencode"));
-    rec.after(open);
-  }
+  if (!el || !job || el.querySelector(".done-fold")) return;
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board");
+  const cost = Number(job.usd_estimate || 0);
+  if ((engine === "board" || job.preset === "cos") && !cost && !job.cron) return;
+  const line = receiptLine(job);
+  if (!line) return;
+  const fold = document.createElement("details");
+  fold.className = "done-fold bubble-work";
+  const sum = document.createElement("summary");
+  sum.textContent = "Done";
+  fold.appendChild(sum);
+  const rec = document.createElement("p");
+  rec.className = "receipt receipt-line";
+  if (/^Failed\b/.test(line)) rec.classList.add("warn");
+  rec.textContent = line;
+  fold.appendChild(rec);
+  el.appendChild(fold);
 }
 
 function settleLive(live, job) {
@@ -4596,7 +4721,7 @@ function emptyStreamHtml() {
       ${nowLine}
       ${stuckLine}
       <p>${escapeHtml(lead)}</p>
-      ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">☰ Pick a CEO</button>' : ""}
+      ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">☰ Open a CEO</button>' : ""}
     </div>`;
 }
 
@@ -5003,10 +5128,11 @@ async function refreshProviders() {
 }
 
 function currentAim() {
-  const project = currentProject();
+  const project = chatCeoProject();
   if (!project) {
-    return { name: "Chief of Staff", folder: "", hermesHome: "", sessionId: "", idle: true, projectId: "" };
+    return { name: "Chat", folder: "", hermesHome: "", sessionId: "", idle: false, staff: false, projectId: "" };
   }
+  lastCeoId = project.id || lastCeoId;
   const tools = project.tools || {};
   return {
     name: project.name,
@@ -5014,8 +5140,23 @@ function currentAim() {
     hermesHome: tools.hermes_home_live || tools.hermes_home || "",
     sessionId: tools.hermes_session_id || "",
     idle: false,
+    staff: false,
     projectId: project.id || ""
   };
+}
+
+function chatCeoProject() {
+  const current = currentProject();
+  if (current) {
+    lastCeoId = current.id || lastCeoId;
+    return current;
+  }
+  const list = ((org && org.projects) || []).filter((row) => row && row.id);
+  if (lastCeoId) {
+    const found = list.find((row) => row.id === lastCeoId);
+    if (found) return found;
+  }
+  return list.find((row) => row.id === "saa-homes") || list.find((row) => row.id !== "support") || list[0] || null;
 }
 
 function frameUrlMatches(frame, url) {
@@ -5077,17 +5218,10 @@ function reloadEngineFrame(frameId, url, token) {
 
 async function startOpenCode() {
   const aim = currentAim();
-  const folder = aim.idle
-    ? (lastOcFolder || (($("folder") && $("folder").value.trim()) || null))
-    : (aim.folder || (($("folder") && $("folder").value.trim()) || null));
-  if ($("ocTitle")) $("ocTitle").textContent = aim.idle ? "OpenCode" : `OpenCode · ${aim.name}`;
-  if (aim.idle) {
-    paintEmbedAim("ocStatus", lastOcFolder
-      ? `Last folder · ${shortLeaf(lastOcFolder)}. Pick a CEO so this matches Chat.`
-      : "Pick a CEO so OpenCode opens that folder.");
-    setEmbedOpen("ocOpen", "");
-  } else if (!ocStarted) {
-    paintEmbedAim("ocStatus", folder ? `Starting · ${shortLeaf(folder)}` : "Starting…");
+  const folder = aim.folder || (($("folder") && $("folder").value.trim()) || lastOcFolder || null);
+  if ($("ocTitle")) $("ocTitle").textContent = `OpenCode · ${aim.name}`;
+  if (!ocStarted) {
+    paintEmbedAim("ocStatus", folder ? `Starting · ${shortLeaf(folder)}` : `Starting · ${aim.name}`);
   }
   const res = await fetch("/api/engines/opencode/web", {
     method: "POST",
@@ -5104,10 +5238,8 @@ async function startOpenCode() {
   const url = data.url || "/engine/opencode/";
   const aimed = data.folder || folder || "";
   const sid = data.session_id || "";
-  if (!aim.idle) {
-    paintEmbedAim("ocStatus", aimed ? `Folder · ${shortLeaf(aimed)}` : "OpenCode is up.");
-    setEmbedOpen("ocOpen", url);
-  }
+  paintEmbedAim("ocStatus", aimed ? `${aim.name} · ${shortLeaf(aimed)}` : `${aim.name} · OpenCode is up.`);
+  setEmbedOpen("ocOpen", url);
   reloadEngineFrame("ocFrame", url, `${aimed}|${sid}`);
   lastOcFolder = aimed;
   ocStarted = true;
@@ -5116,17 +5248,10 @@ async function startOpenCode() {
 
 async function startHermes() {
   const aim = currentAim();
-  const home = aim.idle ? (lastHermesHome || "") : (aim.hermesHome || "");
-  const sid = aim.idle ? "" : (aim.sessionId || "");
-  if ($("hermesTitle")) $("hermesTitle").textContent = aim.idle ? "Hermes" : `Hermes · ${aim.name}`;
-  if (aim.idle) {
-    paintEmbedAim("hermesAim", lastHermesHome
-      ? `Last home · ${shortLeaf(lastHermesHome)}. Pick a CEO so this matches Chat.`
-      : "Pick a CEO so Hermes opens that home.");
-    setEmbedOpen("hermesOpen", "");
-  } else {
-    paintEmbedAim("hermesAim", "Starting…");
-  }
+  const home = aim.hermesHome || "";
+  const sid = aim.sessionId || "";
+  if ($("hermesTitle")) $("hermesTitle").textContent = `Hermes · ${aim.name}`;
+  paintEmbedAim("hermesAim", "Starting…");
   hermesFailed = false;
   syncHermesHint();
   const res = await fetch("/api/engines/hermes/dashboard", {
@@ -5152,15 +5277,13 @@ async function startHermes() {
   const url = resume ? `${prefix}/chat?resume=${encodeURIComponent(resume)}` : `${prefix}/`;
   hermesFailed = false;
   if ($("hermesStatus")) $("hermesStatus").textContent = "";
-  if (!aim.idle) {
-    const count = Number(data.session_count || 0);
-    const title = String(data.session_title || "").trim();
-    const bits = [aimed ? `Home · ${shortLeaf(aimed)}` : "Home attached"];
-    if (count) bits.push(`${count.toLocaleString()} sessions`);
-    if (title) bits.push(`Telegram · ${title}`);
-    paintEmbedAim("hermesAim", bits.join(" · "));
-    setEmbedOpen("hermesOpen", url);
-  }
+  const count = Number(data.session_count || 0);
+  const title = String(data.session_title || "").trim();
+  const bits = [aim.name, aimed ? shortLeaf(aimed) : "Home attached"];
+  if (count) bits.push(`${count.toLocaleString()} sessions`);
+  if (title) bits.push(`Telegram · ${title}`);
+  paintEmbedAim("hermesAim", bits.join(" · "));
+  setEmbedOpen("hermesOpen", url);
   syncHermesHint();
   reloadEngineFrame("hermesFrame", url, `${aimed}|${resume}`);
   lastHermesHome = aimed;
@@ -5493,6 +5616,9 @@ async function pollActivity() {
 document.querySelectorAll(".stage-btn").forEach((btn) => {
   btn.addEventListener("click", () => setStage(btn.dataset.stage));
 });
+document.querySelectorAll(".tool-tab").forEach((btn) => {
+  btn.addEventListener("click", () => setStage(btn.dataset.stage));
+});
 if ($("routeMenu")) {
   $("routeMenu").addEventListener("click", (event) => {
     const btn = event.target.closest("[data-route]");
@@ -5608,8 +5734,7 @@ if ($("aboutOpenCode")) {
   $("aboutOpenCode").addEventListener("click", () => openWorkspace("opencode"));
 }
 $("retryHermes").addEventListener("click", () => {
-  hermesStarted = false;
-  startHermes();
+  restartGateway();
 });
 $("providerList").addEventListener("click", (event) => {
   const btn = event.target.closest("[data-open-stage]");

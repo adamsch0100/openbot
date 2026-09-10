@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Chat is home. Activity is one sheet over chat. Composer stays. Credit is out of chrome.
-Last: #65 cache-only overlay is on master. #64 folded diffs.
-Next: Vitzer review of this Activity sheet PR. Leave PR #48 untouched. Leave SEO/Hermes alone.
+Now: Round 4 UX PR open — Chat+Tools, engines bind Chat CEO, credit in About.
+Last: #66 Activity sheet is on master.
+Next: Vitzer review of this Round 4 UX PR. Leave PR #48 untouched. Leave SEO/Hermes alone.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
