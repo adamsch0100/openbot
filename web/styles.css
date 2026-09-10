@@ -682,13 +682,19 @@ body {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
   width: min(44rem, 100%);
   margin: 0 auto;
   padding: 0 16px 12px;
 }
 .chat-shell.work-open .stream,
+.chat-shell.activity-open .stream,
 .chat-shell.work-open .index,
-.chat-shell.work-open .lanes { display: none; }
+.chat-shell.activity-open .index,
+.chat-shell.work-open .lanes,
+.chat-shell.activity-open .lanes { display: none; }
 .diff-fold summary {
   min-height: 44px;
   display: flex;
@@ -906,23 +912,64 @@ body {
   color: var(--ink);
 }
 .ceo-brief p:last-child { margin-bottom: 0; color: var(--muted); }
-.chat-schedule {
-  display: grid;
-  gap: 8px;
-  margin: 8px 0 4px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-  max-height: min(70vh, 640px);
-  overflow: auto;
-}
-.chat-schedule[hidden] { display: none; }
-.cron-story {
+.chat-schedule,
+.activity-sheet {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  overflow: hidden;
 }
+.activity-sheet:not([hidden]),
+.chat-shell.activity-open .activity-sheet:not([hidden]) { display: flex; }
+.activity-sheet[hidden],
+.chat-schedule[hidden] { display: none !important; }
+.activity-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 2px 2px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.activity-bar span {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bronze);
+}
+.activity-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  min-height: 44px;
+  padding: 0 12px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.activity-close:hover { color: var(--bronze); }
+.activity-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 2px 12px;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+.activity-body .cron-meta { display: none; }
+.cron-story { display: none; }
 .cron-section {
   margin: 8px 0 0;
   font-size: 11px;
@@ -984,12 +1031,27 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .cron-card:last-child { border-bottom: 0; }
+details.cron-card > .cron-outcome,
+details.cron-card > .cron-next,
+details.cron-card > .cron-more,
+details.cron-card > .cron-retry,
+details.cron-card > .need-actions { display: none; }
+details.cron-card[open] > .cron-outcome,
+details.cron-card[open] > .cron-next,
+details.cron-card[open] > .cron-more { display: block; }
+details.cron-card[open] > .cron-retry,
+details.cron-card[open] > .need-actions { display: flex; }
 .cron-head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   font-size: 12px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
 }
+.cron-head::-webkit-details-marker { display: none; }
 .cron-head span { color: var(--muted); }
 .cron-outcome, .cron-next {
   margin: 0;
@@ -1198,13 +1260,16 @@ body {
   margin: 4px 0 0;
   padding: 10px 12px 10px 16px;
   border: 1px solid var(--line);
-  background: rgba(28, 26, 22, 0.72);
+  background: rgba(28, 26, 22, 0.94);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "meta" "autocomplete" "reply" "queue" "attachments" "input" "hint";
-  gap: 8px;
+  grid-template-areas: "autocomplete" "reply" "queue" "attachments" "input" "hint";
+  gap: 6px;
   border-radius: 18px;
   flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
   min-width: 0;
   width: 100%;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
@@ -1213,7 +1278,6 @@ body {
   border-color: var(--bronze);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(201, 166, 107, 0.18);
 }
-.composer .composer-meta { grid-area: meta; }
 .composer .seat-autocomplete { grid-area: autocomplete; }
 .composer .reply-chip { grid-area: reply; }
 .composer #queueChip { grid-area: queue; }
@@ -1268,11 +1332,61 @@ body {
 .composer-hint.hidden { display: none; }
 .composer-input-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 8px;
   align-items: end;
   min-width: 0;
 }
+.route-hatch {
+  position: relative;
+  align-self: center;
+  min-width: 0;
+}
+.route-hatch summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2px;
+}
+.route-hatch summary::-webkit-details-marker { display: none; }
+.route-hatch summary.forced { color: var(--bronze); }
+.route-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  min-width: 7.5rem;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #161411;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  z-index: 9;
+}
+.route-hatch[open] .route-menu { display: grid; gap: 2px; }
+.route-menu button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.route-menu button:hover,
+.route-menu button.on { color: var(--ink); background: var(--bronze-soft); }
 .route-select {
   appearance: none;
   -webkit-appearance: none;
@@ -2331,7 +2445,7 @@ footer a { color: var(--bronze); }
 @media (max-width: 860px) {
   /* page-wide: vertical scroll only */
   html { overflow-x: hidden; max-width: 100%; }
-  body { overflow: auto; overflow-x: hidden; max-width: 100%; }
+  body { overflow: hidden; overflow-x: hidden; max-width: 100%; height: 100%; }
   .bar {
     display: flex;
     flex-wrap: nowrap;
@@ -2450,8 +2564,11 @@ footer a { color: var(--bronze); }
   .ceo-brief { display: none; }
   .composer-who { display: none; }
   .chat-shell.work-open .stream,
+  .chat-shell.activity-open .stream,
   .chat-shell.work-open .index,
-  .chat-shell.work-open .lanes { display: none; }
+  .chat-shell.activity-open .index,
+  .chat-shell.work-open .lanes,
+  .chat-shell.activity-open .lanes { display: none; }
   /* calm phone work lane */
   .chat-head-row {
     flex-direction: column;
@@ -2556,24 +2673,15 @@ footer a { color: var(--bronze); }
     padding: 4px 0 0;
   }
   .ceo-pulse-copy span { display: none; }
-  .chat-schedule {
-    margin: 8px 0 0;
-    padding: 8px 0 4px;
+  .chat-schedule,
+  .activity-sheet {
+    margin: 0;
+    padding: 0;
     border: 0;
-    border-top: 1px solid var(--line);
-    border-radius: 0;
-    background: transparent;
-    max-height: min(58vh, 520px);
-    gap: 10px;
-  }
-  .cron-story {
-    font-size: 13px;
-    color: var(--muted);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    max-height: none;
     overflow: hidden;
   }
+  .cron-story { display: none; }
   .cron-section {
     margin: 10px 0 0;
     font-size: 10px;
@@ -2703,7 +2811,7 @@ footer a { color: var(--bronze); }
     font-family: var(--ui); /* Use UI font, not serif display font */
   }
   .composer-input-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     gap: 6px;
     align-items: center;
   }
@@ -2930,7 +3038,7 @@ footer a { color: var(--bronze); }
 /* Phone-specific: ≤480px */
 @media (max-width: 480px) {
   html { overflow-x: hidden; max-width: 100%; }
-  body { overflow-x: hidden; max-width: 100%; }
+  body { overflow: hidden; overflow-x: hidden; max-width: 100%; height: 100%; }
   .bar { 
     padding: 6px 10px; 
     gap: 6px;
@@ -2994,7 +3102,7 @@ footer a { color: var(--bronze); }
     font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
   }
   .composer-input-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     gap: 5px;
   }
   .route-select {

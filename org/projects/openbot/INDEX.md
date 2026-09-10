@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OpenBot cache-only SAA overlay on board load. PR open for VibeCoder review. Do not merge.
-Last: #62 disabled background overlay; request-path refresh=1 still left ~77 railway zombies.
-Next: VibeCoder review. Leave UX simplify PR on hold. Hard-refresh ?v=121 after merge.
+Now: Chat is home. Activity is one sheet over chat. Composer stays. Credit is out of chrome.
+Last: #65 cache-only overlay is on master. #64 folded diffs.
+Next: Vitzer review of this Activity sheet PR. Leave PR #48 untouched. Leave SEO/Hermes alone.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
