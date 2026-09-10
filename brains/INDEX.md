@@ -2,10 +2,10 @@
 
 Source of truth for this OpenBot instance. Status questions read this file only.
 
-Now: Phone-first board — Doing / Next / Results as a full-width 44px lane. Chat / Code / Hermes stay in the header.
-Last: PR #54 (OpenRouter env leak fix) merged. Visibility UX on Chat + OpenCode + Hermes. Results hide auth dumps.
-Next: Hard-refresh ?v=116. Leave PR #48 untouched.
-Blocker: Do not Accept parked restore cards. saahomes production is deploying — do not kill/redeploy. No stampede.
+Now: PR #55 (phone-first board) is mergeable — conflicts resolved.
+Last: Merged master into board-phone-first. INDEX conflict resolved, session/provider fixes preserved.
+Next: User decides when to merge PR #55. Leave PR #48 untouched.
+Blocker: —
 
 ## Vault
 
