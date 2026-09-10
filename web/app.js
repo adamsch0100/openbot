@@ -666,6 +666,8 @@ function failChoices(row) {
     out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
   } else if (own.kind === "key") {
     out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
+    // Companion while Hermes Off — Fix key stays primary; Restart does not mass-fire.
+    if (!gatewayRunning) out.push({ id: "restart_gateway", label: "Restart gateway" });
     out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
   } else if (own.kind === "wallet") {
     out.push({ id: "fix_key", label: "Open Settings", cron_id: cronId });
@@ -3173,9 +3175,15 @@ async function runNeedChoice(btn) {
   }
   if (act === "fix_model" || act === "fix_key") {
     markFailHandling(cronId || id, "fix_key");
+    if (pid) await setOrgNode(pid, "");
+    // Deep-link Settings → Keys / keyring (Engines wire lives on This CEO + Keys).
+    // Do not re-open schedule — activity sheet must not swallow the keys drawer.
     setSettings(true, "keys");
+    const keysPanel = $("panel-keys") || $("keyList") || $("saveKey");
+    if (keysPanel && typeof keysPanel.scrollIntoView === "function") {
+      requestAnimationFrame(() => keysPanel.scrollIntoView({ block: "start", behavior: "smooth" }));
+    }
     paintWorkTabs();
-    if (scheduleOpen) openSchedule(cronId || id || "");
     return;
   }
   if (act === "restart_gateway") {
@@ -4010,7 +4018,8 @@ function workCounts(forProjectId) {
   const failed = list.filter((row) => cronIsFailed(row));
   const gateway = failed.filter((row) => cronIsGatewayFail(row));
   const freshFail = failed.filter((row) => !cronIsGatewayFail(row) && !cronIsStaleFail(row));
-  const actionFails = failed.filter((row) => !cronIsStaleFail(row));
+  // Action queue honesty: count ALL ownership fails (fresh + older), matching Schedule failed set.
+  const actionFails = failed.slice();
   const done = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row));
   // Results badge = recover loop + recent resolved — not Done-only lie.
   const recoverN = actionFails.length;
@@ -4896,16 +4905,23 @@ function renderChatSchedule(rows, digest, focusId) {
     if (waitName) {
       sections.push(`<p class="cron-empty">Waiting · ${escapeHtml(waitName)} is on this CEO's Hermes. Due jobs stay queued.</p>`);
     }
-    // HARD: ownership-sorted action queue — fails first, never Due-dump alone.
-    const actionFails = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort);
+    // HARD: ownership-sorted action queue — ALL fails (fresh + older), never Due-dump alone.
+    // Fresh first; Older (>48h) bucketed like Results so Schedule N failed matches Action queue total.
+    const freshFails = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort);
+    const olderFails = failed.filter((row) => cronIsStaleFail(row)).slice().sort(ownershipSort);
+    const actionFails = freshFails.concat(olderFails);
     if (actionFails.length) {
       const autoN = actionFails.filter((row) => failOwnership(row).owner === "auto").length;
       const ceoN = actionFails.filter((row) => failOwnership(row).owner === "ceo").length;
       const cosN = actionFails.filter((row) => failOwnership(row).owner === "cos").length;
       const adamN = actionFails.filter((row) => failOwnership(row).owner === "adam").length;
       const bits = [`Auto ${autoN}`, `CEO ${ceoN}`, `Cos ${cosN}`, `Adam ${adamN}`].filter((x) => !x.endsWith(" 0"));
-      sections.push(`<h3 class="cron-section">Action queue · ${actionFails.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}</h3>`);
-      sections.push(actionFails.map((row) => failChromeHtml(row, row.id === want, "next")).join(""));
+      const ageBit = olderFails.length ? ` · Fresh ${freshFails.length} · Older ${olderFails.length}` : "";
+      sections.push(`<h3 class="cron-section">Action queue · ${actionFails.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}${ageBit}</h3>`);
+      sections.push(freshFails.map((row) => failChromeHtml(row, row.id === want, "next")).join(""));
+      if (olderFails.length) {
+        sections.push(`<details class="cron-stale" data-fold="older-action-fails" open><summary>Older fails · ${olderFails.length}</summary>${olderFails.map((row) => failChromeHtml(row, row.id === want, "next")).join("")}</details>`);
+      }
     }
     const dueShow = soon.slice(0, 6);
     const dueMore = soon.slice(6);

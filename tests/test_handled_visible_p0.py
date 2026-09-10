@@ -115,8 +115,63 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=144", html)
-        self.assertIn("styles.css?v=144", html)
+        self.assertIn("app.js?v=145", html)
+        self.assertIn("styles.css?v=145", html)
+
+
+
+    def test_action_queue_includes_older_fails(self):
+        """Next Action queue must not drop >48h fails — Fresh + Older with honest total."""
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("older-action-fails", js)
+        self.assertIn("Older fails · ${olderFails.length}", js)
+        self.assertIn("Fresh ${freshFails.length} · Older ${olderFails.length}", js)
+        # workCounts counts ALL ownership fails (not 48h-only)
+        wc = js[js.find("function workCounts") : js.find("function paintWorkTabs")]
+        self.assertIn("actionFails = failed.slice()", wc)
+        self.assertIn("count ALL ownership fails", wc)
+        # Next builds fresh + older before Due
+        hard = js.find("HARD: ownership-sorted action queue")
+        self.assertGreater(hard, 0)
+        nxt = js[hard : js.find('view === "schedule"', hard)]
+        self.assertIn("freshFails", nxt)
+        self.assertIn("olderFails", nxt)
+        aq = nxt.index("Action queue · ${actionFails.length}")
+        older = nxt.index("Older fails · ${olderFails.length}")
+        due = nxt.index("Due · ${soon.length}")
+        self.assertLess(aq, older)
+        self.assertLess(older, due)
+
+    def test_fix_key_deeplink_settings_keys(self):
+        """Fix key must open Settings→Keys and must not re-open schedule over the drawer."""
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        # Handler block
+        start = js.find('if (act === "fix_model" || act === "fix_key")')
+        end = js.find('if (act === "restart_gateway")', start)
+        block = js[start:end]
+        self.assertIn('setSettings(true, "keys")', block)
+        self.assertIn("panel-keys", block)
+        self.assertIn("keyList", block)
+        self.assertIn("scrollIntoView", block)
+        self.assertIn("Do not re-open schedule", block)
+        self.assertNotIn("openSchedule(", block)
+        # Drawer stays above activity/rail
+        css = (ROOT / "web" / "styles.css").read_text(encoding="utf-8")
+        drawer = css[css.find(".drawer {") : css.find(".drawer {") + 220]
+        self.assertIn("z-index: 40", drawer)
+
+    def test_401_hermes_off_restart_secondary(self):
+        """While Hermes Off, 401 cards keep Fix key primary + Restart gateway secondary."""
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        choices = js[js.find("function failChoices") : js.find("function cronFailNext")]
+        key_i = choices.index('own.kind === "key"')
+        key_block = choices[key_i : key_i + 420]
+        self.assertIn('id: "fix_key", label: "Fix key"', key_block)
+        self.assertIn("!gatewayRunning", key_block)
+        self.assertIn('id: "restart_gateway", label: "Restart gateway"', key_block)
+        # Fix key still precedes Restart in the push order
+        self.assertLess(key_block.index("fix_key"), key_block.index("restart_gateway"))
+
 
 
 class HandledVisibleBackendTests(unittest.TestCase):
