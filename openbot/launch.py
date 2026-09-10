@@ -189,6 +189,17 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
     if root.resolve() != install.resolve():
         for name, value in _dotenv(root / ".env").items():
             env[name] = value
+    # Board embed: Files + Hermes BASE_PATH under /engine/hermes
+    env.setdefault("OPENBOT_HERMES_EMBED_PREFIX", "/engine/hermes")
+    try:
+        parts = root.resolve().parts
+        if "hermes-homes" in parts:
+            ceo = parts[parts.index("hermes-homes") + 1] if parts.index("hermes-homes") + 1 < len(parts) else ""
+            workspace = Path("/data/workspaces") / ceo if ceo else None
+            if workspace is not None and workspace.is_dir():
+                env.setdefault("HERMES_DASHBOARD_FILES_ROOT", str(workspace))
+    except (ValueError, OSError):
+        pass
     return env
 
 
