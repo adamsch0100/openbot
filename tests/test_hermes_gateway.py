@@ -52,10 +52,12 @@ class TestGatewayManagement(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertFalse(result["running"])
     
+    @patch("openbot.hermes._in_container", return_value=False)
+    @patch("openbot.hermes.clear_stale_gateway_state", return_value={"ok": True, "cleared": [], "count": 0})
     @patch("openbot.hermes.which")
     @patch("openbot.hermes.gateway_status")
     @patch("openbot.hermes._popen")
-    def test_gateway_start_no_wait(self, mock_popen, mock_status, mock_which):
+    def test_gateway_start_no_wait(self, mock_popen, mock_status, mock_which, _clear, _box):
         """Gateway start launches process without blocking."""
         from openbot.hermes import gateway_start
         
@@ -76,10 +78,11 @@ class TestGatewayManagement(unittest.TestCase):
 
     @patch.dict("os.environ", {"RAILWAY_ENVIRONMENT": "production"})
     @patch("openbot.hermes.time.sleep")
+    @patch("openbot.hermes.clear_stale_gateway_state", return_value={"ok": True, "cleared": [], "count": 0})
     @patch("openbot.hermes.which")
     @patch("openbot.hermes.gateway_status")
     @patch("openbot.hermes._popen_detached")
-    def test_gateway_start_uses_run_in_container(self, mock_detached, mock_status, mock_which, _sleep):
+    def test_gateway_start_uses_run_in_container(self, mock_detached, mock_status, mock_which, _clear, _sleep):
         from openbot.hermes import gateway_start
 
         mock_which.return_value = "/usr/local/bin/hermes"
@@ -323,10 +326,12 @@ class TestNonBlocking(unittest.TestCase):
         # Should complete within timeout + small overhead
         self.assertLess(elapsed, 4.0)
     
+    @patch("openbot.hermes._in_container", return_value=False)
+    @patch("openbot.hermes.clear_stale_gateway_state", return_value={"ok": True, "cleared": [], "count": 0})
     @patch("openbot.hermes.which")
     @patch("openbot.hermes.gateway_status")
     @patch("openbot.hermes._popen")
-    def test_gateway_start_no_wait_immediate(self, mock_popen, mock_status, mock_which):
+    def test_gateway_start_no_wait_immediate(self, mock_popen, mock_status, mock_which, _clear, _box):
         """Gateway start without wait returns immediately."""
         from openbot.hermes import gateway_start
         import time
@@ -454,3 +459,67 @@ class TestGatewaySupervise(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestClearStaleGatewayState(unittest.TestCase):
+    def test_clears_dead_pid_and_legacy_home(self):
+        from openbot.hermes import clear_stale_gateway_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp)
+            home = data / "hermes-homes" / "saa-homes"
+            legacy = data / "hermes" / "homes" / "saa-homes"
+            home.mkdir(parents=True)
+            legacy.mkdir(parents=True)
+            for root in (home, legacy):
+                (root / "gateway_state.json").write_text(
+                    '{"gateway_state":"running","pid":1}', encoding="utf-8"
+                )
+                (root / "gateway.sock").write_text("x", encoding="utf-8")
+                (root / "gateway.pid").write_text("1", encoding="utf-8")
+            with patch.dict(os.environ, {"OPENBOT_DATA_DIR": str(data)}):
+                with patch("openbot.hermes._pid_alive", return_value=False):
+                    result = clear_stale_gateway_state(home)
+            self.assertTrue(result["ok"])
+            self.assertGreaterEqual(result["count"], 3)
+            self.assertFalse((home / "gateway_state.json").exists())
+            self.assertFalse((legacy / "gateway.sock").exists())
+
+    def test_keeps_live_pid_state(self):
+        from openbot.hermes import clear_stale_gateway_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "hermes-homes" / "saa-homes"
+            home.mkdir(parents=True)
+            (home / "gateway_state.json").write_text(
+                '{"gateway_state":"running","pid":4242}', encoding="utf-8"
+            )
+            with patch("openbot.hermes._pid_alive", return_value=True):
+                result = clear_stale_gateway_state(home)
+            self.assertEqual(result["count"], 0)
+            self.assertTrue((home / "gateway_state.json").exists())
+
+    @patch("openbot.hermes._in_container", return_value=False)
+    @patch("openbot.hermes.clear_stale_gateway_state")
+    @patch("openbot.hermes.which")
+    @patch("openbot.hermes.gateway_status")
+    @patch("openbot.hermes._popen")
+    def test_gateway_start_clears_stale_before_launch(
+        self, mock_popen, mock_status, mock_which, mock_clear, _box
+    ):
+        from openbot.hermes import gateway_start
+
+        mock_which.return_value = "/usr/local/bin/hermes"
+        mock_clear.return_value = {"ok": True, "cleared": ["/tmp/gateway_state.json"], "count": 1}
+        mock_status.side_effect = [
+            {"running": False, "text": "Gateway is not running"},
+            {"running": True},
+        ]
+        mock_proc = MagicMock()
+        mock_proc.pid = 55
+        mock_popen.return_value = mock_proc
+        result = gateway_start(wait=False)
+        self.assertTrue(result["ok"])
+        mock_clear.assert_called()
+        self.assertIn("cleared_stale", result)
+

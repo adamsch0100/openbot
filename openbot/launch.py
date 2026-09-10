@@ -191,15 +191,29 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
             env[name] = value
     # Board embed: Files + Hermes BASE_PATH under /engine/hermes
     env.setdefault("OPENBOT_HERMES_EMBED_PREFIX", "/engine/hermes")
+    # Always set Files root — unset Hermes defaults to /root and 404s.
+    files_root = None
     try:
         parts = root.resolve().parts
-        if "hermes-homes" in parts:
-            ceo = parts[parts.index("hermes-homes") + 1] if parts.index("hermes-homes") + 1 < len(parts) else ""
-            workspace = Path("/data/workspaces") / ceo if ceo else None
-            if workspace is not None and workspace.is_dir():
-                env.setdefault("HERMES_DASHBOARD_FILES_ROOT", str(workspace))
+        ceo = ""
+        for key in ("hermes-homes", "homes"):
+            if key in parts:
+                i = parts.index(key)
+                if i + 1 < len(parts):
+                    ceo = str(parts[i + 1])
+                    break
+        if ceo:
+            data = Path(os.environ.get("OPENBOT_DATA_DIR") or "/data")
+            workspace = data / "workspaces" / ceo
+            if workspace.is_dir():
+                files_root = workspace
+        if files_root is None and root.is_dir():
+            files_root = root
     except (ValueError, OSError):
-        pass
+        if root.is_dir():
+            files_root = root
+    if files_root is not None:
+        env["HERMES_DASHBOARD_FILES_ROOT"] = str(files_root)
     return env
 
 
