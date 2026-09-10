@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OpenBot Chat folds diffs behind See change. Cron stays in Results. Due folds after six.
-Last: PR #63 Chat-as-talk. Live still on #60 until merge.
-Next: Hard-refresh ?v=120 after merge. Leave PR #48 untouched. Leave SEO/Hermes alone.
+Now: OpenBot cache-only SAA overlay on board load. PR open for VibeCoder review. Do not merge.
+Last: #62 disabled background overlay; request-path refresh=1 still left ~77 railway zombies.
+Next: VibeCoder review. Leave UX simplify PR on hold. Hard-refresh ?v=121 after merge.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 
