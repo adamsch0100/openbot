@@ -60,7 +60,7 @@ class AliveBoardP0Tests(unittest.TestCase):
         with patch.object(cw, "read_home_crons", return_value=rows):
             line = cw._honest_next_line("saa-homes", hermes_home="/tmp/h")
         self.assertIn("failed", line.lower())
-        self.assertIn("Results", line)
+        self.assertIn("Open Schedule", line)
 
 
 class AliveBoardCronwatchTests(unittest.TestCase):
@@ -88,7 +88,7 @@ class AliveBoardCronwatchTests(unittest.TestCase):
         )
         self.assertNotIn("On schedule", failed)
         self.assertIn("failed", failed.lower())
-        self.assertIn("Results", failed)
+        self.assertIn("Open Schedule", failed)
 
         due = honest_next_line(
             [

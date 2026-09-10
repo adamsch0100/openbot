@@ -1666,6 +1666,8 @@ def cron_title(name: str) -> str:
 
 
 _FAIL_NEXT = "Fix model/key · Retry · Open detail."
+_GATEWAY_FAIL_NEXT = "Auto-retry — gateway will pick this up. Do not mass-fire."
+_SCRIPT_FAIL_NEXT = "Your move · restore from bootstrap (Hermes scripts/)."
 
 
 def human_fail_reason(blob: str) -> str:
@@ -1679,6 +1681,8 @@ def human_fail_reason(blob: str) -> str:
         return "Session busy"
     if re.search(r"gateway shutdown|gateway stopped mid-run", low):
         return "Hermes gateway stopped mid-run"
+    if re.search(r"script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts/", low):
+        return "Script not found"
     if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
         return "Wallet empty"
     if re.search(r"timed? ?out|timeout", low):
@@ -1704,6 +1708,11 @@ def cron_outcome(status: str, result: str, error: str = "") -> tuple[str, str]:
         return "Healthy. Nothing new to report.", "No action. It will run again on schedule."
     if re.search(r"error|fail", st):
         reason = human_fail_reason(blob)
+        low = blob.lower()
+        if re.search(r"gateway shutdown|gateway stopped mid-run", low):
+            return f"Failed. {reason}", _GATEWAY_FAIL_NEXT
+        if re.search(r"script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts/", low):
+            return f"Failed. {reason}", _SCRIPT_FAIL_NEXT
         return f"Failed. {reason}", _FAIL_NEXT
     if not body:
         if st in {"ok", "success", "completed", "succeeded"}:

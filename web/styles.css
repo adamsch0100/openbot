@@ -1172,6 +1172,7 @@ body {
   gap: 2px;
 }
 .activity-body .cron-meta { display: none; }
+.activity-body .cron-card.schedule-roster .cron-meta { display: grid; }
 .cron-story { display: none; }
 .cron-section {
   margin: 8px 0 0;
@@ -1451,6 +1452,15 @@ details.cron-card[open] > .need-actions { display: flex; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   max-height: 180px;
   overflow: auto;
+}
+
+.cron-card.late .cron-head span { color: var(--bronze); }
+.cron-card.schedule-roster .cron-meta.schedule-row { display: grid; }
+.activity-body .cron-card.schedule-roster .cron-meta { display: grid; }
+.schedule-roster-head {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
 }
 .schedule { display: grid; gap: 4px; padding: 0 0 8px; }
 .schedule[hidden] { display: none; }
@@ -2887,7 +2897,7 @@ footer a { color: var(--bronze); }
   .work-tabs,
   .embed-head .work-tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     width: 100%;
     gap: 0;
     padding: 3px;
