@@ -2,8 +2,8 @@
 
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: OttoBot chrome dogfood P0 PR — mark spacing, empties, work-status strip, Activity keeps chat.
-Last: Master tip 7a32402 (post-#70 rename, #72 schedule, #73 un-retire). Chat+Tools and Activity sheet stay.
+Now: Hotfix can_add_ceo for owner — rail Add CEO slot + Settings entry + railScrim.
+Last: OttoBot chrome dogfood P0 PR — mark spacing, empties, work-status strip, Activity keeps chat.
 Next: Open MERGEABLE chrome PR; do not merge. No Cloud Agents. Do not touch DESKTOP.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 

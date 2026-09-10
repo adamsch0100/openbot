@@ -151,6 +151,7 @@
     <div class="rail-scrim" id="railScrim"></div>
     <aside class="rail" id="rail">
       <nav class="org" id="orgTree" aria-label="Projects"></nav>
+      <div class="org-add-slot" id="orgAddCeoSlot"></div>
       <p class="sr-only" id="orgStatus" aria-live="polite"></p>
       <div class="profile-dock" id="profileDock">
         <button type="button" class="profile-card" id="openSettings" data-panel="you">
@@ -360,6 +361,10 @@
               <input id="licenseKey" type="password" autocomplete="off" placeholder="stored on this machine" />
             </div>
             <p class="muted" id="licenseNote"></p>
+            <div class="actions" id="addCeoSettingsRow">
+              <button type="button" class="ghost-btn" id="settingsAddCeo">Add CEO</button>
+              <p class="muted">Opens the same Add CEO flow as the org rail.</p>
+            </div>
             <div class="actions">
               <button type="button" class="send" id="saveYou">Save</button>
               <button type="button" class="ghost-btn" id="clearPin">Clear PIN</button>

@@ -546,6 +546,7 @@ def _public_config() -> dict:
         "x_intake_enabled": bool(load_settings().get("x_intake_enabled")),
         "x_username": str(load_settings().get("x_username") or ""),
         "hosted": board_is_hosted(),
+        # Owner/operator only. Collaborators get False in _member_config.
         "can_add_ceo": True,
     }
 
@@ -586,6 +587,7 @@ def _member_config(member: dict) -> dict:
             "work_dir": "",
             "spend": spend_summary(float(cap), cfg["spend_cap_period"], project_id=pid),
             "setup_needed": False,
+            # Collaborators only — never overwrite owner unlock (uses _public_config).
             "can_add_ceo": False,
         }
     )
@@ -741,7 +743,7 @@ class Handler(SimpleHTTPRequestHandler):
             return None
         return None
 
-    def _json(self, code: int, payload: dict, set_cookie: str | None = None):
+    def _json(self, code: int, payload: dict, set_cookie: str | list[str] | None = None):
         raw = json.dumps(payload).encode("utf-8")
         try:
             self.send_response(code)
@@ -751,7 +753,10 @@ class Handler(SimpleHTTPRequestHandler):
             for name, value in _CORS_HEADERS:
                 self.send_header(name, value)
             if set_cookie:
-                self.send_header("Set-Cookie", set_cookie)
+                cookies = [set_cookie] if isinstance(set_cookie, str) else list(set_cookie)
+                for cookie in cookies:
+                    if cookie:
+                        self.send_header("Set-Cookie", cookie)
             self.end_headers()
             self.wfile.write(raw)
         except Exception as e:
@@ -1756,13 +1761,20 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/unlock":
             pin = str(data.get("pin") or "")
             if not load_settings().get("pin_hash"):
-                return self._json(200, self._config_payload())
+                # No PIN: owner board. Prefer public owner config; drop stale share cookie.
+                payload = _public_config()
+                return self._json(200, payload, set_cookie=self._clear_share_cookie())
             if not verify_pin(pin):
                 return self._json(403, {"error": "wrong PIN", "needs_unlock": True})
             token = _mint_unlock()
             payload = _public_config()
             payload["token"] = token
-            return self._json(200, payload, set_cookie=self._unlock_cookie(token))
+            # Owner unlock wins over a leftover collaborator share session.
+            return self._json(
+                200,
+                payload,
+                set_cookie=[self._unlock_cookie(token), self._clear_share_cookie()],
+            )
 
         if path == "/api/config":
             if self._require_owner():

@@ -49,9 +49,10 @@ function isCollaborator() {
 }
 
 function canAddCeo() {
-  // Unlocked owners can Add CEO on laptop and hosted. Collaborators cannot.
+  // Collaborators never Add CEO. Owner/operator can on laptop and hosted.
+  if (isCollaborator()) return false;
   if (cfg && typeof cfg.can_add_ceo === "boolean") return cfg.can_add_ceo;
-  return !isCollaborator();
+  return true;
 }
 
 function isLiveBoard() {
@@ -2740,21 +2741,13 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     ${inboxHtml()}
     ${capNoticesHtml()}
     ${projectBits}
-    ${canAddCeo() ? `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>` : ""}
   `;
   tree.querySelectorAll(".org-btn").forEach((btn) => {
     btn.addEventListener("click", () => setOrgNode(btn.dataset.project || "", btn.dataset.worker || ""));
     bindNodeMenu(btn, btn.dataset.kind, btn.dataset.project || "", btn.dataset.worker || "");
   });
   bindNeedActions(tree);
-  const addCeo = $("addCeoBtn");
-  if (addCeo) {
-    addCeo.addEventListener("click", (event) => {
-      event.preventDefault();
-      setOrgNode("", "");
-      showNodeMenu(event.clientX, event.clientY, "staff", "", "");
-    });
-  }
+  paintAddCeoControls();
   tree.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -2764,6 +2757,32 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
       renderOrg(org);
     });
   });
+}
+
+function openAddCeoMenu(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  setOrgNode("", "");
+  const x = event && typeof event.clientX === "number" ? event.clientX : 24;
+  const y = event && typeof event.clientY === "number" ? event.clientY : 120;
+  showNodeMenu(x, y, "staff", "", "");
+}
+
+function paintAddCeoControls() {
+  const slot = $("orgAddCeoSlot");
+  if (slot) {
+    if (canAddCeo()) {
+      slot.innerHTML = `<button type="button" class="org-add" id="addCeoBtn">Add CEO</button>`;
+      const addCeo = $("addCeoBtn");
+      if (addCeo) addCeo.addEventListener("click", openAddCeoMenu);
+    } else {
+      slot.innerHTML = "";
+    }
+  }
+  const settingsRow = $("addCeoSettingsRow");
+  if (settingsRow) settingsRow.classList.toggle("hidden", !canAddCeo());
 }
 
 function currentProject() {
@@ -3933,6 +3952,7 @@ function applyCollaboratorChrome() {
       btn.classList.toggle("hidden", isCollaborator() && !sharePerm("engines_view"));
     }
   });
+  paintAddCeoControls();
 }
 
 function syncHermesHint() {
@@ -4837,8 +4857,7 @@ function renderTurns(turns, extras) {
         const rail = $("rail");
         const scrim = $("railScrim");
         if (rail && scrim) {
-          rail.classList.add("open");
-          scrim.classList.add("open");
+          openOrgRail();
         }
       });
     }
@@ -5422,6 +5441,7 @@ async function waitForUnlock() {
       });
       const data = await res.json();
       if (res.ok && !data.needs_unlock) {
+        try { localStorage.removeItem("openbot_share_member"); } catch (_err) { /* ignore */ }
         gate.classList.add("hidden");
         resolve(data);
         return;
@@ -5788,6 +5808,14 @@ $("openSettings").addEventListener("click", (event) => {
   event.stopPropagation();
   setSettings(true, "you");
 });
+if ($("settingsAddCeo")) {
+  $("settingsAddCeo").addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSettings(false);
+    openAddCeoMenu(event);
+  });
+}
 if ($("openHelp")) {
   $("openHelp").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -7680,32 +7708,51 @@ if ($("saveMemory")) {
 }
 
 // Mobile menu toggle
+function closeOrgRail() {
+  const rail = $("rail");
+  const scrim = $("railScrim");
+  if (rail) rail.classList.remove("open");
+  if (scrim) {
+    scrim.classList.remove("open");
+    scrim.setAttribute("aria-hidden", "true");
+  }
+}
+
+function openOrgRail() {
+  const rail = $("rail");
+  const scrim = $("railScrim");
+  if (rail) rail.classList.add("open");
+  if (scrim) {
+    scrim.classList.add("open");
+    scrim.setAttribute("aria-hidden", "false");
+  }
+}
+
 function initMobileMenu() {
   const toggle = $("mobileOrgToggle");
   const rail = $("rail");
   const scrim = $("railScrim");
   
-  if (!toggle || !rail || !scrim) return;
+  if (!rail || !scrim) return;
+  closeOrgRail();
   
-  // Close rail when resizing to desktop
+  // Close rail when resizing to desktop — never leave scrim trapping clicks
   function updateMobileUI() {
-    const isMobile = window.innerWidth <= 860;
-    if (!isMobile) {
-      rail.classList.remove("open");
-      scrim.classList.remove("open");
-    }
+    if (window.innerWidth > 860) closeOrgRail();
   }
   
-  // Toggle rail
-  toggle.addEventListener("click", () => {
-    rail.classList.toggle("open");
-    scrim.classList.toggle("open");
-  });
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      if (rail.classList.contains("open")) closeOrgRail();
+      else openOrgRail();
+    });
+  }
   
-  // Close on scrim click
-  scrim.addEventListener("click", () => {
-    rail.classList.remove("open");
-    scrim.classList.remove("open");
+  // Close on scrim click (immediate — no timeout trap)
+  scrim.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeOrgRail();
   });
   
   // Close on CEO selection (so user sees chat immediately)
@@ -7713,12 +7760,7 @@ function initMobileMenu() {
   if (orgTree) {
     orgTree.addEventListener("click", (event) => {
       const btn = event.target.closest(".org-btn");
-      if (btn && window.innerWidth <= 860) {
-        window.setTimeout(() => {
-          rail.classList.remove("open");
-          scrim.classList.remove("open");
-        }, 200);
-      }
+      if (btn && window.innerWidth <= 860) closeOrgRail();
     });
   }
   

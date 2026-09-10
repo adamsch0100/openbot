@@ -286,6 +286,11 @@ body {
   text-transform: uppercase;
 }
 .org-hint { padding: 8px 10px 12px; color: var(--muted); font-size: 11px; }
+.org-add-slot {
+  flex-shrink: 0;
+  padding: 0 0 4px;
+  background: var(--bg-rail);
+}
 .org-add {
   margin: 8px 6px 4px;
   width: calc(100% - 12px);
@@ -297,11 +302,16 @@ body {
   text-transform: uppercase;
   font-size: 11px;
   height: 36px;
+  flex-shrink: 0;
+  display: block;
 }
 .org-add:hover { color: var(--bronze); border-color: var(--bronze); }
 .git-card { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; overflow-wrap: anywhere; }
 #stage-chat.on { grid-template-columns: 252px minmax(0, 1fr); min-height: 0; height: 100%; }
-.rail-scrim { display: none; }
+.rail-scrim {
+  display: none !important;
+  pointer-events: none !important;
+}
 .rail {
   border-right: 1px solid var(--line);
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
@@ -2858,15 +2868,19 @@ footer a { color: var(--bronze); }
   }
   .rail.open { transform: translateX(0); }
   
-  /* Rail scrim */
+  /* Rail scrim — mobile overlay only; never trap clicks when closed or on desktop */
   .rail-scrim {
     display: none;
     position: fixed;
     inset: 0;
     background: rgba(10, 9, 8, 0.7);
     z-index: 29;
+    pointer-events: none;
   }
-  .rail-scrim.open { display: block; }
+  .rail-scrim.open {
+    display: block !important;
+    pointer-events: auto !important;
+  }
   
   /* Chat column full width */
   .chat-col { width: 100%; max-width: 100%; overflow-x: hidden; }
