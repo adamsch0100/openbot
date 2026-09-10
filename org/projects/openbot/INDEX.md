@@ -2,7 +2,7 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Round 4 UX PR open — Chat+Tools, engines bind Chat CEO, credit in About.
+Now: OttoBot Round 4 UX PR open — Chat+Tools, engines bind Chat CEO, credit in About.
 Last: #66 Activity sheet is on master.
 Next: Vitzer review of this Round 4 UX PR. Leave PR #48 untouched. Leave SEO/Hermes alone.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
@@ -12,7 +12,7 @@ Folder: /tmp/tmp3cu0ad7k
 
 ## Law (every job)
 
-- Sell OpenBot help, not OpenCode or Hermes.
+- Sell OttoBot help, not OpenCode or Hermes.
 - The repo stays runnable without a payment. Monthly is optional supporter, not an access gate.
 - Keep the three-line credit. Not affiliated, not sponsored, not endorsed.
 - Call official binaries. Do not vendor those trees.
@@ -47,14 +47,14 @@ Monthly is allowed only as supporter or later hosted. Not as "pay to use the wra
 1. Operator instance — this machine, delightful Builder + one window + honest receipts.
 2. Fair copy — About / first-run / README: repo is free; $7/mo is optional help; engines stay free.
 3. Courtesy — after phase 1 works, Research drafts notes. Human sends. Do not ask permission.
-4. Others clone — MIT. Their instance, their keys. No OpenBot cloud.
+4. Others clone — MIT. Their instance, their keys. No OttoBot cloud.
 5. Optional supporter — only after clones exist. Then give-back from that revenue.
 
 ## Courtesy (phase 3, not now)
 
 Where: OpenCode GitHub Discussions, Nous Research Discord.
 Frame: I built a control plane that calls your binaries. MIT. Not a request to endorse.
-Include: product name OpenBot, credit, engines remain free, link after it works.
+Include: product name OttoBot, credit, engines remain free, link after it works.
 Do not: use their logos, call it official, dump support on their rooms.
 
 ## How to run this
