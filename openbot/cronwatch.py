@@ -195,7 +195,7 @@ def _honest_next_line(project_id: str | None, hermes_home: str | None = None, fi
         title = cron_title(str(fails[0].get("name") or fails[0].get("id") or "job"))
         if len(fails) == 1:
             return f"{title} needs a look · open Results."
-        return f"{len(fails)} jobs need a look · open Results."
+        return f"{len(fails)} jobs failed — open Results."
     if dues:
         stamp, row = dues[0]
         title = cron_title(str(row.get("name") or row.get("id") or "job"))
@@ -251,7 +251,7 @@ def _post_cron_card(project_id: str | None, row: dict, hermes_home: str | None =
     }
     write_job(receipt)
     if receipt["keep_going"]:
-        patch_scope(project_id, None, "Now", f"{title} needs you · {outcome[:80]}")
+        patch_scope(project_id, None, "Now", f"{title} failed · {outcome[:80]}")
         patch_scope(project_id, None, "Last", f"{title} failed")
         patch_scope(project_id, None, "Next", nxt[:160] or "Open this CEO and handle the failed job.")
         patch_scope(project_id, None, "Blocker", outcome[:140])
