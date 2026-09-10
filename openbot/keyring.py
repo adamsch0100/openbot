@@ -909,7 +909,7 @@ def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None =
             pass
         # Only write keys that are in the prefer/fallback chain
         # Never write ANTHROPIC keys
-        allowed_keys = ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY", "OPENCODE_GO_API_KEY"]
+        allowed_keys = ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY", "OPENCODE_GO_API_KEY", "OPENCODE_GO_API_KEYS"]
         if has_openrouter_hermes:
             allowed_keys.append("OPENROUTER_API_KEY")
         
