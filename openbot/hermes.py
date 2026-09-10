@@ -1665,9 +1665,12 @@ def cron_title(name: str) -> str:
     return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
 
 
-_FAIL_NEXT = "Fix model/key · Retry · Open detail."
+_FAIL_NEXT = "Your move (CEO) · Decide · Retry or Ask Cos."
 _GATEWAY_FAIL_NEXT = "Auto-retry — gateway will pick this up. Do not mass-fire."
-_SCRIPT_FAIL_NEXT = "Your move · restore from bootstrap (Hermes scripts/)."
+_SCRIPT_FAIL_NEXT = "Your move (CEO) · Restore script from bootstrap (Hermes scripts/)."
+_KEY_FAIL_NEXT = "Your move (CEO) · Fix key in Settings."
+_WALLET_FAIL_NEXT = "Needs Adam · add credits / fix billing."
+_TRANSIENT_FAIL_NEXT = "Auto-retry — transient. Retry once if it stays red."
 
 
 def human_fail_reason(blob: str) -> str:
@@ -1713,6 +1716,13 @@ def cron_outcome(status: str, result: str, error: str = "") -> tuple[str, str]:
             return f"Failed. {reason}", _GATEWAY_FAIL_NEXT
         if re.search(r"script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts/", low):
             return f"Failed. {reason}", _SCRIPT_FAIL_NEXT
+        # Never Auto-retry on 401/key — CEO Fix key / Settings.
+        if re.search(r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key", low):
+            return f"Failed. {reason}", _KEY_FAIL_NEXT
+        if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
+            return f"Failed. {reason}", _WALLET_FAIL_NEXT
+        if re.search(r"busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout", low):
+            return f"Failed. {reason}", _TRANSIENT_FAIL_NEXT
         return f"Failed. {reason}", _FAIL_NEXT
     if not body:
         if st in {"ok", "success", "completed", "succeeded"}:
