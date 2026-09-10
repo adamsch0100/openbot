@@ -372,6 +372,9 @@ function cleanBotText(text) {
   cleaned = cleaned.replace(/#\s*Cron Job:\s*[\w.-]+/gi, "");
   cleaned = cleaned.replace(/\bTHINK_OK\b/g, "");
   cleaned = cleaned.replace(/\bOPS_OK\b/g, "");
+  cleaned = cleaned.replace(/\bSMOKE\d+_[A-Z0-9_]+\b/g, "");
+  cleaned = cleaned.replace(/^Reply with exactly[^\n]*$/gmi, "");
+  cleaned = cleaned.replace(/^Ignore (?:any )?banners[^\n]*$/gmi, "");
 
   const lines = cleaned.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   if (lines.length === 1 && /^SMOKE\d+_[A-Z_]+$/i.test(lines[0])) {
@@ -3614,10 +3617,10 @@ function paintHelpPanel() {
   const body = needItems || ticketItems
     || `<p class="org-inbox-empty">No open tickets.</p>`;
   const warn = expired ? `<p class="org-inbox-empty">Expired approvals: ${expired} (did not auto-approve)</p>` : "";
-  const headCount = needs.length || open.length;
+  const headCount = open.length;
   host.innerHTML = `
     <div class="org-inbox working-on">
-      <div class="org-inbox-head">${needs.length ? `${escapeHtml(moveHeadLabel(needs))} · ${needs.length}` : `Working on · ${open.length}`}</div>
+      <div class="org-inbox-head">${open.length ? `Tickets · ${open.length}` : (needs.length ? `${escapeHtml(moveHeadLabel(needs))} · ${needs.length}` : "Working on · 0")}</div>
       ${body}
       ${warn}
     </div>`;
@@ -6368,18 +6371,28 @@ function cronJobIsNoise(job) {
     || /^(grok heartbeat|grok finish notify|grok build supervisor|grok build driver|alerts email outbox)$/i.test(name);
 }
 
+function isE2ePing(text) {
+  const raw = String(text || "");
+  if (!raw.trim()) return false;
+  if (/SMOKE\d+_/i.test(raw)) return true;
+  if (/Reply with exactly/i.test(raw)) return true;
+  if (/Ignore (?:any )?banners/i.test(raw) && /_OK|SMOKE/i.test(raw)) return true;
+  if (/https?:\/\/example\.com/i.test(raw) && /SMOKE|_OK|look at this site/i.test(raw)) return true;
+  if (/e2e_wc8_|e2e_test_routine|WC8-|Create file e2e_/i.test(raw)) return true;
+  return false;
+}
+
 function isNoiseText(text) {
   const raw = String(text || "");
   if (!raw.trim()) return true;
+  if (isE2ePing(raw)) return true;
   if (/Saved inbox\/ops\.md/i.test(raw)) return true;
-  if (/e2e_wc8_|e2e_test_routine|WC8-/i.test(raw)) return true;
   if (/hermes cron list/i.test(raw)) return true;
   if (/List every cron\/schedule\/routine/i.test(raw)) return true;
   if (/pipeline-health/.test(raw) && /indexation-patrol/.test(raw) && (/[┌│]/.test(raw) || /hermes cron list/i.test(raw))) return true;
   if (/Scheduled Jobs/.test(raw) && /[┌│]/.test(raw)) return true;
   if (/Gateway reports not running/i.test(raw)) return true;
   if (/raw\.githubusercontent\.com\/adamsch0100\/openbot/i.test(raw)) return true;
-  if (/Create file e2e_/i.test(raw)) return true;
   if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
   if (/need your google.{0,40}password/i.test(raw)) return true;
   if (/share your GBP login credentials/i.test(raw)) return true;
@@ -6391,12 +6404,13 @@ function isNoiseText(text) {
 
 function isNoiseTurn(turn) {
   if (!turn) return true;
-  if (turn.role === "user") return !String(turn.text || "").trim();
   const job = turn.job || {};
-  if (job.cron || cronJobIsNoise(job) || chatLaneNoise(job)) return true;
-  if (projectId && job.project_id && String(job.project_id) !== String(projectId)) return true;
   const text = job.text || turn.text || "";
   const message = job.message || "";
+  if (isE2ePing(text) || isE2ePing(message)) return true;
+  if (turn.role === "user") return !String(turn.text || "").trim();
+  if (job.cron || cronJobIsNoise(job) || chatLaneNoise(job)) return true;
+  if (projectId && job.project_id && String(job.project_id) !== String(projectId)) return true;
   return isNoiseText(text) || isNoiseText(message);
 }
 
@@ -7428,6 +7442,7 @@ if ($("openHelp")) {
   $("openHelp").addEventListener("click", (event) => {
     event.stopPropagation();
     setSettings(true, "help");
+    setOrgNode("support", "");
   });
 }
 if ($("suggestForm")) {

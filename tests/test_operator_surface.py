@@ -38,6 +38,16 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         self.assertIn("chatLaneNoise(job)", js[js.find("function renderJob") : js.find("function renderJob") + 400])
         turns = js[js.find("function isNoiseTurn") : js.find("function emptyStreamHtml")]
         self.assertIn("chatLaneNoise(job)", turns)
+        self.assertIn("isE2ePing", turns)
+
+    def test_e2e_smoke_is_chat_noise(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function isE2ePing", js)
+        ping = js[js.find("function isE2ePing") : js.find("function isNoiseText")]
+        self.assertIn("SMOKE\\d+_", ping)
+        self.assertIn("Reply with exactly", ping)
+        self.assertIn("setOrgNode(\"support\", \"\")", js)
+        self.assertIn("Tickets · ${open.length}", js)
 
     def test_hermes_exit_is_not_key(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -47,8 +57,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=148", html)
-        self.assertIn("styles.css?v=148", html)
+        self.assertIn("app.js?v=149", html)
+        self.assertIn("styles.css?v=149", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
