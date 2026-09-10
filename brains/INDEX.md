@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Operator surface v147 — Ask Cos names the job, status+Fix-key stays Cos not OpenCode.
-Last: Live dogfood — Ask Cos rode SAA Code; Cos “what's going on + Fix key” became OpenCode retry.
-Next: Push v147 onto #105. Do not merge. Do not Accept parked restore. No stampede.
+Now: Operator surface v148 — YOUR MOVE fail beats Continue; RESULT gore stripped; 130 is cancelled.
+Last: Live click — Fix key opened Settings Keys. Results YOUR MOVE still Continue; Cos Next dumped Cron Job RESULT twice; OpenBot needs-you was exited 130.
+Next: Push v148 onto #105. Do not merge. Do not Accept parked restore.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault

@@ -1025,6 +1025,8 @@ def need_choices(row: dict) -> list[dict]:
             ]
         if fail_kind == "wallet":
             return [{"id": "fix_key", "label": "Open Settings", "cron_id": cron_id}]
+        if fail_kind == "cancelled":
+            return [{"id": "open", "label": "Open chat", "cron_id": cron_id}]
         return [
             {"id": "retry", "label": "Retry", "cron_id": cron_id},
             {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
@@ -1073,11 +1075,37 @@ def job_choices(job: dict) -> list[dict]:
 def pending_approvals(limit: int = 12) -> list[dict]:
     jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
     latest: dict[str, dict] = {}
+
+    def _cancelled(job: dict) -> bool:
+        blob = f"{job.get('blocker') or ''} {job.get('text') or ''} {job.get('status') or ''}"
+        return bool(re.search(r"exited 130\b|\bsigint\b|cancelled by (?:the )?operator", blob, re.I))
+
+    def _need_rank(job: dict) -> int:
+        if job.get("login_wall"):
+            return 0
+        if job.get("diff_pending"):
+            return 1
+        status = str(job.get("status") or job.get("last_status") or "").lower()
+        failed = bool(job.get("blocker") and str(job.get("blocker") or "").strip() not in {"", "—", "ok"}) or (
+            "error" in status or "fail" in status
+        )
+        if failed and not _cancelled(job):
+            return 2
+        if job.get("keep_going") and not job.get("stopped") and not job.get("cron"):
+            return 8
+        return 9
+
     for job in jobs:
         if not isinstance(job, dict) or job.get("stopped"):
             continue
+        if _cancelled(job):
+            continue
+        rank = _need_rank(job)
+        if rank >= 9:
+            continue
         key = str(job.get("project_id") or "") or "_staff"
-        if key in latest:
+        prev = latest.get(key)
+        if prev is not None and _need_rank(prev) <= rank:
             continue
         latest[key] = job
     projects = list_projects()
@@ -1157,6 +1185,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         nxt = index_field(text, "Next")
         blocker = index_field(text, "Blocker")
         stuck = blocker and blocker != "—"
+        if re.search(r"exited 130\b|\bsigint\b", f"{blocker}\n{nxt}", re.I):
+            continue
         if not stuck and not NEED_OPERATOR.search(f"{now}\n{nxt}"):
             continue
         ask = nxt if nxt and nxt != "—" else (now if now and now != "—" else "needs a decision")

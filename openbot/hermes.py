@@ -1687,6 +1687,8 @@ def fail_kind_from_blob(blob: str) -> str:
         low,
     ):
         return "script"
+    if re.search(r"exited 130\b|\bsigint\b|cancelled by (?:the )?operator", low):
+        return "cancelled"
     if re.search(r"gateway shutdown|gateway stopped mid-run", low):
         return "gateway"
     if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
@@ -1718,12 +1720,21 @@ def human_fail_reason(blob: str) -> str:
         return "Wallet empty"
     if re.search(r"timed? ?out|timeout", low):
         return "Timed out"
+    if re.search(r"exited 130\b|\bsigint\b|cancelled by (?:the )?operator", low):
+        return "Cancelled"
     exit_m = re.search(r"(?:hermes\s+)?(?:chat\s+|think\s+)?exit(?:ed)?\s*(\d+)", low)
     if exit_m or re.search(r"hermes.*(exit|fail)|exit code", low):
         code = exit_m.group(1) if exit_m else ""
         return f"Hermes exited{(' ' + code) if code else ''}".strip()
-    cleaned = re.sub(r"(?:~|/|[A-Za-z]:[\\/])[^\s]{16,}", "…", text)
-    cleaned = re.sub(r"^Failed\.?\s*", "", cleaned, flags=re.I).strip()
+    cron_m = re.search(r"Cron Job:\s*([a-z0-9._-]+)", str(blob or ""), re.I)
+    if cron_m and re.search(r"fail", low):
+        return f"{cron_title(cron_m.group(1))} failed"
+    cleaned = re.sub(r"\*\*Job ID:\*\*\s*\S+", "", text, flags=re.I)
+    cleaned = re.sub(r"#\s*Cron Job:\s*\S+", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"\bRESULT\b", "", cleaned)
+    cleaned = re.sub(r"(?:~|/|[A-Za-z]:[\\/])[^\s]{16,}", "…", cleaned)
+    cleaned = re.sub(r"^Failed\.?\s*", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
     if not cleaned or cleaned in {"(no output)", "Failed", "Failed."}:
         return "The last run did not finish"
     return cleaned[:120]

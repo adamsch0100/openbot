@@ -47,8 +47,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=147", html)
-        self.assertIn("styles.css?v=147", html)
+        self.assertIn("app.js?v=148", html)
+        self.assertIn("styles.css?v=148", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -83,6 +83,13 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         send = js[js.find("async function sendMessage") : js.find("async function sendMessage") + 400]
         self.assertIn("forceNew", send)
 
+    def test_result_gore_and_cancelled_130(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function dedupeFailRows", js)
+        self.assertIn("Cron Job:", js[js.find("function humanFailReason") : js.find("function jobIsFailed")])
+        self.assertIn("exited 130", js[js.find("function failKindFromBlob") : js.find("function ceoMoveName")])
+        self.assertIn('own.kind === "cancelled"', js[js.find("function failChoices") : js.find("function cronFailNext")])
+
 
 class OperatorSurfaceBackendTests(unittest.TestCase):
     def test_fail_kind_script_vs_hermes_vs_key(self):
@@ -94,6 +101,62 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
             fail_kind_from_blob("Traceback File \"/usr/local/lib/hermes-agent/hermes\" Hermes chat exited 1"),
             "hermes",
         )
+        self.assertEqual(fail_kind_from_blob("opencode run exited 130"), "cancelled")
+
+    def test_human_fail_reason_strips_cron_result(self):
+        from openbot.hermes import human_fail_reason
+
+        reason = human_fail_reason(
+            "RESULT Saved search alerts immediate Failed. # Cron Job: saved-search-alerts-immediate **Job ID:** 402427761418"
+        )
+        self.assertNotIn("Job ID", reason)
+        self.assertNotIn("RESULT", reason)
+        self.assertIn("failed", reason.lower())
+        self.assertEqual(human_fail_reason("opencode run exited 130"), "Cancelled")
+
+    def test_pending_approvals_fail_beats_continue(self):
+        from unittest.mock import patch
+
+        from openbot.router import pending_approvals
+
+        jobs = [
+            {
+                "id": "cont",
+                "at": "2026-09-10T21:00:00",
+                "keep_going": True,
+                "project_id": "saa-homes",
+                "engine": "board",
+                "preset": "think",
+            },
+            {
+                "id": "fail",
+                "at": "2026-09-10T20:00:00",
+                "status": "error",
+                "blocker": "API key rejected (401)",
+                "project_id": "saa-homes",
+                "engine": "Hermes Agent",
+                "preset": "ops",
+            },
+            {
+                "id": "abort",
+                "at": "2026-09-10T22:00:00",
+                "blocker": "opencode run exited 130",
+                "project_id": "openbot",
+                "engine": "OpenCode",
+                "preset": "builder",
+            },
+        ]
+        with patch("openbot.router.list_jobs", return_value=jobs), patch(
+            "openbot.router.list_projects",
+            return_value=[
+                {"id": "saa-homes", "name": "SAA Homes"},
+                {"id": "openbot", "name": "OpenBot"},
+            ],
+        ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"):
+            rows = pending_approvals()
+        kinds = {row["project_id"]: row["kind"] for row in rows}
+        self.assertEqual(kinds["saa-homes"], "failed")
+        self.assertNotIn("openbot", kinds)
 
     def test_need_choices_failed_no_fix_model_dump(self):
         from openbot.router import need_choices

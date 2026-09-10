@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OttoBot operator surface v147 — Ask Cos → Cos desk, status+Fix-key is INDEX not Code.
-Last: Live click — Ask Cos hex-id on OpenCode; Cos status stolen by CODE regex `\bfix\b`.
-Next: Push v147 onto #105. Do not merge. Do not Accept parked restore.
+Now: OttoBot operator surface v148 — fail beats Continue, cron RESULT is one line, 130 is not needs-you.
+Last: Live — Fix key → Settings Keys. Continue hid Citation audit; Cos Next duplicated RESULT gore.
+Next: Push v148 onto #105. Do not merge. Do not Accept parked restore.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

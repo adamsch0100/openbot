@@ -403,13 +403,23 @@ function humanFailReason(blob) {
     return "Wallet empty";
   }
   if (/timed? ?out|timeout/.test(low)) return "Timed out";
+  if (/exited 130\b|\bsigint\b|cancelled by (the )?operator/.test(low)) return "Cancelled";
   const exitM = low.match(/(?:hermes\s+)?(?:chat\s+|think\s+)?exit(?:ed)?\s*(\d+)/);
   if (exitM || /hermes.*(exit|fail)|exit code/.test(low)) {
     return exitM ? `Hermes exited ${exitM[1]}` : "Hermes exited";
   }
+  const cronM = String(blob || "").match(/Cron Job:\s*([a-z0-9._-]+)/i);
+  if (cronM && /fail/i.test(low)) {
+    const title = (typeof cronTitle === "function") ? cronTitle(cronM[1]) : cronM[1];
+    return `${title} failed`;
+  }
   let cleaned = text
+    .replace(/\*\*Job ID:\*\*\s*\S+/gi, "")
+    .replace(/#\s*Cron Job:\s*\S+/gi, "")
+    .replace(/\bRESULT\b/g, "")
     .replace(/(?:~|\/|[A-Za-z]:[\\/])[^\s]{16,}/g, "…")
     .replace(/^Failed\.?\s*/i, "")
+    .replace(/\s+/g, " ")
     .trim();
   if (!cleaned || /^(?:\(no output\)|Failed\.?)$/i.test(cleaned)) {
     return "The last run did not finish";
@@ -420,6 +430,8 @@ function humanFailReason(blob) {
 function jobIsFailed(job) {
   if (!job) return false;
   if (job.stopped) return false;
+  const blob = `${job.blocker || ""} ${job.text || ""} ${job.status || ""}`;
+  if (/exited 130\b|\bsigint\b/i.test(blob)) return false;
   const blocker = String(job.blocker || "").trim();
   if (blocker && blocker !== "—" && blocker !== "ok") return true;
   return /fail|error/i.test(String(job.status || job.last_status || ""));
@@ -442,8 +454,20 @@ function gateLineKind(job) {
 }
 
 function failFingerprint(row) {
-  const reason = humanFailReason(cronFailBlob(row));
+  const reason = humanFailReason(failBlobOf(row) || cronFailBlob(row));
   return reason.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "failed";
+}
+
+function dedupeFailRows(rows) {
+  const seen = new Set();
+  return (rows || []).filter((row) => {
+    const id = String((row && (row.cron_id || row.id)) || "");
+    const fp = failFingerprint(row);
+    const key = id ? `id:${id}` : `fp:${fp}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function failClustersHtml(rows, want) {
@@ -497,6 +521,7 @@ function failKindFromBlob(blob) {
   if (/script[- ]?not[- ]?found|script[- ]?missing|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\/|missing.*scripts\//.test(low)) {
     return "script";
   }
+  if (/exited 130\b|\bsigint\b|cancelled by (the )?operator/.test(low)) return "cancelled";
   if (/gateway shutdown|gateway stopped mid-run/.test(low)) return "gateway";
   if (/insufficient balance|wallet.?empty|out of (?:quota|credit)|billing/.test(low)) return "wallet";
   if (/busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout/.test(low)) {
@@ -553,6 +578,7 @@ function failWhyLine(kind, reason) {
   if (kind === "key") return "Auth rejected — retries will keep failing until the key is fixed.";
   if (kind === "wallet") return "Spend/credits blocked — only Adam can top up.";
   if (kind === "transient") return "Transient stall — auto-retry should clear it.";
+  if (kind === "cancelled") return "Operator stopped this run — not a fail to retry.";
   return reason ? `Last run failed · ${reason}` : "Last run did not finish — needs a call.";
 }
 
@@ -674,6 +700,19 @@ function failOwnership(row) {
       outcome: `Failed · ${reason}`
     };
   }
+  if (kind === "cancelled") {
+    return {
+      owner: "auto",
+      rank: 4,
+      status: "Cancelled",
+      resultStatus: "Resolved",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Stopped. Nothing to retry.",
+      outcome: `Cancelled · ${reason}`
+    };
+  }
   if (kind === "hermes") {
     return {
       owner: "ceo",
@@ -723,6 +762,8 @@ function failChoices(row) {
     out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
     if (!gatewayRunning) out.push({ id: "restart_gateway", label: "Restart gateway" });
     else out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+  } else if (own.kind === "cancelled") {
+    out.push({ id: "open_detail", label: "Open detail", cron_id: cronId });
   } else if (own.kind === "wallet") {
     out.push({ id: "fix_key", label: "Open Settings", cron_id: cronId });
   } else if (own.owner === "auto") {
@@ -4347,13 +4388,16 @@ function honestWorkLine(line, counts) {
 
 function jobIsFailed(row) {
   if (!row) return false;
+  if (row.stopped) return false;
+  const blob = `${row.blocker || ""} ${row.text || ""} ${row.status || ""} ${row.last_error || ""}`;
+  if (/exited 130\b|\bsigint\b/i.test(blob)) return false;
   const status = String(row.status || row.last_status || "").trim();
   if (/^(ok|success|done|running|live|progress)$/i.test(status)) return false;
   if (/fail|error/i.test(status)) return true;
-  const blob = [
+  const body = [
     row.outcome, row.cron_outcome, row.text, row.summary, row.error, row.last_error
   ].map((x) => String(x || "")).join(" ");
-  return /fail|error|traceback|exception/i.test(blob);
+  return /fail|error|traceback|exception/i.test(body);
 }
 
 function cronIsFailed(row) {
@@ -4973,7 +5017,7 @@ function renderChatSchedule(rows, digest, focusId) {
     } else if (view === "schedule") {
       bits.push(`<p class="cron-empty">Pick a CEO to see the full enabled schedule roster.</p>`);
     } else {
-      const failJobs = jobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
+      const failJobs = dedupeFailRows(jobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort));
       const okJobs = jobs.filter((row) => !jobIsFailed(row));
       if (failJobs.length) {
         bits.push(`<h3 class="cron-section">Recovering · ${failJobs.length}</h3>`);
@@ -5053,8 +5097,8 @@ function renderChatSchedule(rows, digest, focusId) {
     }
     // HARD: ownership-sorted action queue — ALL fails (fresh + older), never Due-dump alone.
     // Fresh first; Older (>48h) bucketed like Results so Schedule N failed matches Action queue total.
-    const freshFails = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort);
-    const olderFails = failed.filter((row) => cronIsStaleFail(row)).slice().sort(ownershipSort);
+    const freshFails = dedupeFailRows(failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort));
+    const olderFails = dedupeFailRows(failed.filter((row) => cronIsStaleFail(row)).slice().sort(ownershipSort));
     const actionFails = freshFails.concat(olderFails);
     if (actionFails.length) {
       const autoN = actionFails.filter((row) => failOwnership(row).owner === "auto").length;
