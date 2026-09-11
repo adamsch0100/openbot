@@ -1001,7 +1001,9 @@ def need_choices(row: dict) -> list[dict]:
             {"id": "deny", "label": "Deny"},
         ]
     if kind == "facebook_approval":
+        url = str(row.get("url") or "").strip() or "https://www.facebook.com/groups/followupbosscommunity"
         return [
+            {"id": "open_page", "label": "Open Facebook", "url": url},
             {"id": "allow_facebook", "label": "Approve Facebook · ListLogic vault only"},
             {"id": "deny", "label": "Deny"},
         ]

@@ -3350,6 +3350,7 @@ function needChoices(row) {
   }
   if (kind === "facebook_approval") {
     return [
+      { id: "open_page", label: "Open Facebook", url: row.url || "https://www.facebook.com/groups/followupbosscommunity" },
       { id: "allow_facebook", label: "Approve Facebook · ListLogic vault only" },
       { id: "deny", label: "Deny" }
     ];
@@ -4276,7 +4277,8 @@ function cronIsPaused(row) {
 }
 
 function cronIsNeverRun(row) {
-  if (!row || cronIsPaused(row) || cronIsLive(row)) return false;
+  if (!row || cronIsPaused(row) || cronIsLive(row) || cronIsLiveWait(row)) return false;
+  if (String(row.next_run_at || "").trim()) return false;
   return !String(row.last_run_at || "").trim();
 }
 
@@ -4292,7 +4294,8 @@ function cronIsOverdue(row) {
 function cronRosterStatus(row) {
   if (cronIsPaused(row)) return "off";
   if (cronIsLive(row)) return "run";
-  if (cronIsFailed(row) || /error|fail/i.test(String(row.last_status || ""))) return "fail";
+  if (cronIsFailed(row)) return "fail";
+  if (cronIsLiveWait(row)) return "wait";
   if (cronIsNeverRun(row)) return "never";
   if (cronIsOverdue(row)) return "late";
   if (String(row.last_status || "").toLowerCase() === "ok") return "ok";
@@ -4303,6 +4306,8 @@ function prefersScheduleTrust(counts) {
   if (!counts || !counts.ready) return false;
   const trust = (counts.trustFailed || 0) + (counts.never || 0);
   if (trust > 0) return true;
+  if ((counts.waitingLive || 0) > 0) return true;
+  if (gatewayLiveOwns && overlayIsStale()) return false;
   const overdue = counts.overdue || 0;
   if (overdue >= 3 && overdue >= (counts.next || 0)) return true;
   return false;
@@ -4326,6 +4331,9 @@ function scheduleTrustNowLine(counts, project) {
   if (failed > 0 || never > 0) {
     return `${who} · ${failed} failed · ${never} never · Open Schedule`;
   }
+  if ((counts.waitingLive || 0) > 0) {
+    return `${who} · live Hermes · ${counts.waitingLive} waiting · Open Schedule`;
+  }
   if ((counts.overdue || 0) > 0) {
     return `${who} · ${counts.overdue} overdue · Open Schedule`;
   }
@@ -4338,6 +4346,7 @@ function scheduleRosterSort(a, b) {
     if (st === "fail") return 0;
     if (st === "late") return 1;
     if (st === "never") return 2;
+    if (st === "wait") return 3;
     if (st === "run") return 3;
     return 4;
   };
@@ -4348,6 +4357,9 @@ function scheduleRosterSort(a, b) {
 
 function rosterPrimaryChoice(row) {
   const status = cronRosterStatus(row);
+  if (status === "wait") {
+    return { id: "open_detail", label: "Open detail", cron_id: row.id || "" };
+  }
   if (status === "never") {
     return { id: "retry", label: "Run once", cron_id: row.id || "" };
   }
@@ -4368,8 +4380,7 @@ function scheduleRosterRowHtml(row, want) {
   const last = cronIsNeverRun(row)
     ? "never"
     : (row.last_run_at ? (cronFreshness(row) || cronWhen(row.last_run_at)) : "—");
-  const own = status === "fail" ? failOwnership(row) : null;
-  const headStatus = own ? own.status : status;
+  const headStatus = own ? own.status : (status === "wait" ? "Waiting live" : status);
   const primary = rosterPrimaryChoice(row);
   // Collapsed glance: one CTA inside <summary>. Expanded body is Outcome/Why/Next only — no button dump.
   const primaryCta = primary
@@ -4419,7 +4430,7 @@ function workCounts(forProjectId) {
   const failed = list.filter((row) => cronIsFailed(row));
   const gateway = failed.filter((row) => cronIsGatewayFail(row));
   const freshFail = failed.filter((row) => !cronIsGatewayFail(row) && !cronIsStaleFail(row));
-  // Action queue honesty: count ALL ownership fails (fresh + older), matching Schedule failed set.
+  // Action queue = process fails only. Gateway scars on live Hermes wait on Schedule.
   const actionFails = failed.slice();
   const done = list.filter((row) => String(row.last_status || "").toLowerCase() === "ok" && row.last_run_at && !cronIsLive(row));
   // Results badge = recover loop + recent resolved — not Done-only lie.
@@ -4442,9 +4453,10 @@ function workCounts(forProjectId) {
   // Live schedule trust — operator jobs only (grok/alerts are Board internals, not SEO overdue).
   const enabledRows = list.filter((row) => !cronIsPaused(row));
   const disabledRows = list.filter((row) => cronIsPaused(row));
-  const trustFailed = list.filter((row) => /error|fail/i.test(String(row.last_status || "")));
+  const trustFailed = list.filter((row) => cronIsFailed(row));
   const never = enabledRows.filter((row) => cronIsNeverRun(row));
   const overdue = enabledRows.filter((row) => cronIsOverdue(row));
+  const waitingLive = enabledRows.filter((row) => cronIsLiveWait(row));
   if (!aim) {
     const projects = ((cfg.org && cfg.org.projects) || []);
     const orgNext = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—").length;
@@ -4471,6 +4483,7 @@ function workCounts(forProjectId) {
       waitingCos: orgWaiting,
       never: 0,
       overdue: 0,
+      waitingLive: 0,
       enabled: 0,
       disabled: 0,
       total: 0,
@@ -4488,6 +4501,7 @@ function workCounts(forProjectId) {
     waitingCos,
     never: never.length,
     overdue: overdue.length,
+    waitingLive: waitingLive.length,
     enabled: enabledRows.length,
     disabled: disabledRows.length,
     total: all.length,
@@ -4620,9 +4634,32 @@ function jobIsFailed(row) {
   return /fail|error|traceback|exception/i.test(body);
 }
 
+function cronIsLiveWait(row) {
+  if (!row || cronIsPaused(row) || cronSkipRetry(row)) return false;
+  if (String(row.board_status || "") === "live-wait") return true;
+  return Boolean(gatewayLiveOwns && cronIsGatewayFail(row));
+}
+
+function overlayIsStale() {
+  const pack = digestCache.get(projectId) || {};
+  const at = Date.parse(pack.synced_at || "");
+  if (!Number.isFinite(at)) return Boolean(gatewayLiveOwns);
+  return (Date.now() - at) > 12 * 3600 * 1000;
+}
+
+function overlayAgeLine() {
+  const pack = digestCache.get(projectId) || {};
+  const at = Date.parse(pack.synced_at || "");
+  if (!Number.isFinite(at)) return "Board copy of the live box can lag. Telegram on live Hermes is current.";
+  const hrs = Math.max(1, Math.round((Date.now() - at) / 3600000));
+  if (hrs < 2) return "Board copy is fresh enough to trust counts.";
+  return `Board copy is ${hrs}h old. Telegram on the live box is current.`;
+}
+
 function cronIsFailed(row) {
-  if (!row || cronIsNoise(row) || cronIsLive(row)) return false;
+  if (!row || cronIsNoise(row) || cronIsLive(row) || cronIsPaused(row) || cronSkipRetry(row)) return false;
   if (row.enabled === false) return false;
+  if (cronIsLiveWait(row)) return false;
   return /error|fail/i.test(String(row.last_status || ""));
 }
 
@@ -5085,7 +5122,7 @@ function gatewayOffHtml() {
   if (gatewayLiveOwns || !gatewayRestartOk) {
     return `<article class="cron-card gateway-off">
     <div class="cron-head"><b>Live SAA Hermes</b><span>Owns schedule</span></div>
-    <p class="cron-outcome">Telegram + cron run on the live SAA box. This board is a copy — do not Restart the imported home.</p>
+    <p class="cron-outcome">OttoBot chat is the operator inbox. Cron still runs on the live SAA Hermes box, which also texts Telegram. Replies here do not post to Telegram. ${escapeHtml(overlayAgeLine())} Do not Restart the imported home.</p>
   </article>`;
   }
   return `<article class="cron-card gateway-off">
@@ -5161,15 +5198,23 @@ function cronFreshness(row) {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
+function scheduleOwnerBanner() {
+  if (gatewayLiveOwns || !gatewayRestartOk || !gatewayRunning) return gatewayOffHtml();
+  return "";
+}
+
 function gatewayFailClusterHtml(rows, want) {
   const list = rows || [];
-  const banner = !gatewayRunning ? gatewayOffHtml() : "";
+  const banner = scheduleOwnerBanner();
   if (!list.length) return banner;
   if (list.length === 1) return `${banner}${cronCardHtml(list[0], list[0].id === want, "result")}`;
   const inner = list.map((row) => cronCardHtml(row, row.id === want, "result")).join("");
+  const next = (gatewayLiveOwns || !gatewayRestartOk)
+    ? `A past cleanup hit ${list.length} jobs. Live Hermes owns the next fire — do not mass-retry.`
+    : `A past cleanup hit ${list.length} jobs. Restart the gateway once — do not mass-retry.`;
   return `${banner}<article class="cron-card cron-cluster">
     <div class="cron-head"><b>Old gateway stop scars</b><span>Stale</span></div>
-    <p class="cron-outcome">A past cleanup hit ${list.length} jobs. Restart the gateway once — do not mass-retry.</p>
+    <p class="cron-outcome">${escapeHtml(next)}</p>
     <details class="cron-stale" data-fold="gateway-jobs"><summary>Show ${list.length} jobs</summary>${inner}</details>
   </article>`;
 }
@@ -5317,7 +5362,8 @@ function renderChatSchedule(rows, digest, focusId, forPid) {
   const sections = [];
   const waitName = running.length ? (running[0].title || cronTitle(running[0].name)) : "";
   if (view === "doing") {
-    if (!gatewayRunning) sections.push(gatewayOffHtml());
+    const owner = scheduleOwnerBanner();
+    if (owner) sections.push(owner);
     if (boardRuns.length) sections.push(boardRuns.map((row) => liveRunCard(row)).join(""));
     sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : "");
     if (!boardRuns.length && !running.length) {
@@ -5388,7 +5434,8 @@ function renderChatSchedule(rows, digest, focusId, forPid) {
       sections.push(`<details class="cron-stale" data-fold="internal-roster"><summary>Board internals · ${noiseRoster.length}</summary>${noiseRoster.map((row) => scheduleRosterRowHtml(row, want)).join("")}</details>`);
     }
   } else {
-    if (!gatewayRunning) sections.push(gatewayOffHtml());
+    const owner = scheduleOwnerBanner();
+    if (owner) sections.push(owner);
     const actionFails = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort);
     const recovering = actionFails.filter((row) => {
       const st = failOwnership(row).resultStatus;
@@ -6224,7 +6271,7 @@ function mountLoginForm(el, job) {
       <button type="button" class="send" data-login-once>Use once</button>
       <button type="button" class="ghost-btn" data-login-save-go>Save and continue</button>
     </div>
-    <p class="muted">This does not go into chat. TOTP and CAPTCHA still stop on your screen.</p>
+    <p class="muted">Vault keeps the password on this board. Hermes fills the site in <em>its</em> browser — cookies stay in this CEO’s Hermes home, not this Cursor tab. Open page is your glass only. TOTP and CAPTCHA still stop on your screen.</p>
   `;
   async function postUse(payload) {
     const res = await fetch("/api/logins/use", {
@@ -6721,7 +6768,7 @@ function renderTurns(turns, extras) {
   if (telegramKeep.length) {
     const banner = document.createElement("p");
     banner.className = "channel-banner";
-    banner.textContent = "From Telegram. Replies stay on this board.";
+    banner.textContent = "From Telegram on live Hermes. This chat is the operator inbox — replies stay here, they do not post back to Telegram.";
     stream.appendChild(banner);
     telegramKeep.forEach((turn) => {
       const el = bubble(turn.role === "user" ? "user" : "bot", turn.text || "");

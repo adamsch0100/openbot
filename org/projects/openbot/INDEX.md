@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: OttoBot Chat live log shows engine steps (file, command, URL) while a job runs.
-Last: v156 painted the desk, but SAA still looked dead: Off banner, fake 401, Restart on the imported home.
-Next: Hard-refresh live. Do not Restart SAA imported home. Do not Accept parked restore. No stampede.
+Now: v160 — OttoBot chat is the operator inbox. SAA gateway scars wait on live Hermes; paused jobs stay paused.
+Last: Chat live log named engine steps. SAA still showed 11 failed / 11 never from a stale overlay.
+Next: Hard-refresh ?v=160. Do not Restart SAA imported home. Do not Accept parked restore.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
 

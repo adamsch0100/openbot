@@ -126,8 +126,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=159", html)
-        self.assertIn("styles.css?v=159", html)
+        self.assertIn("app.js?v=160", html)
+        self.assertIn("styles.css?v=160", html)
 
 
 
@@ -140,7 +140,7 @@ class HandledVisibleUiTests(unittest.TestCase):
         # workCounts counts ALL ownership fails (not 48h-only)
         wc = js[js.find("function workCounts") : js.find("function paintWorkTabs")]
         self.assertIn("actionFails = failed.slice()", wc)
-        self.assertIn("count ALL ownership fails", wc)
+        self.assertIn("process fails only", wc)
         # Next builds fresh + older before Due
         hard = js.find("HARD: ownership-sorted action queue")
         self.assertGreater(hard, 0)

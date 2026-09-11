@@ -1353,7 +1353,10 @@ def overlay_to_cron_rows(overlay: list[dict]) -> list[dict]:
     for row in overlay or []:
         if not isinstance(row, dict) or not row.get("id"):
             continue
-        out.append(_cron_row_payload(row, str(row.get("last_result") or "")))
+        payload = _cron_row_payload(row, str(row.get("last_result") or ""))
+        if payload.get("fail_kind") == "gateway" and payload.get("board_status") != "paused":
+            payload["board_status"] = "live-wait"
+        out.append(payload)
     return out
 
 
@@ -1973,7 +1976,10 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
                 next_up = item
                 next_up_when = nxt_when
         if on and re.search(r"error|fail", status) and not live:
-            failed.append(item)
+            if str(row.get("board_status") or "") == "live-wait":
+                stale.append(item)
+            else:
+                failed.append(item)
         elif fresh and re.search(r"healthy|\[silent\]", f"{row.get('outcome') or ''} {row.get('last_result') or ''}", re.I):
             healthy.append(item)
         elif fresh:
@@ -2104,6 +2110,7 @@ def _cron_row_payload(row: dict, result: str = "") -> dict:
     status = str(row.get("last_status") or "").strip()
     err = str(row.get("last_error") or "").strip()
     report = str(result or row.get("last_result") or "")
+    skip = jid in SAA_CRON_SKIP
     when = _parse_cron_when(str(row.get("last_run_at") or ""))
     fresh = bool(when and datetime.now(timezone.utc) - when <= timedelta(hours=48))
     if status or report or err:
@@ -2128,8 +2135,10 @@ def _cron_row_payload(row: dict, result: str = "") -> dict:
         "name": name,
         "title": cron_title(name),
         "schedule": schedule,
-        "enabled": row.get("enabled") is not False,
-        "state": str(row.get("state") or ""),
+        "enabled": False if skip else (row.get("enabled") is not False),
+        "state": "paused" if skip else str(row.get("state") or ""),
+        "fail_kind": fail_kind_from_blob(f"{err} {report} {status}"),
+        "board_status": "paused" if skip else "",
         "claimed": live_now,
         "live": live_now,
         "fire_claim": claim,

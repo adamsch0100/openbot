@@ -2,10 +2,11 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Board copy of live SAA schedule. 36 ok · 11 old gateway scars · 11 never. Live Hermes owns Telegram + cron — do not Restart this imported home.
-Last: Desk lied Fix key on citation because skill prompts contain X-API-KEY. Imported-home gateway Off is not the live box.
-Next: One-at-a-time only if a *new* fail appears after the live box fires. Do not stampede Run once / Restart.
-Blocker: GBP login = skip + note. Do not mass-retry old gateway-shutdown scars. Do not hermes cron run on imported home. Do not kill/redeploy live Hermes. No stampede.
+Now: Board copy vs live SAA. Gateway scars wait on the live box. conversion-surge / competitor-content-watch / city-audit-batch-4 stay paused on purpose.
+Last: Overlay painted 11 failed / 11 never. Those were stale last_status rows, not 22 broken processes.
+Next: Trust Telegram on live Hermes for today’s fire. One process fail at a time if a *new* error appears after a live run.
+Blocker: GBP login = skip + note. Do not mass-retry old gateway-shutdown scars. Do not Restart the imported home. No stampede.
+Blocker: —
 Goals: —
 
 ## Residual risks (honest)

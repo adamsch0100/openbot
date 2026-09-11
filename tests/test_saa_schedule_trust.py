@@ -15,7 +15,10 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
         self.assertIn('data-work="schedule"', html)
         self.assertIn("function scheduleTrustNowLine", js)
         self.assertIn("function prefersScheduleTrust", js)
-        self.assertIn("function cronIsNeverRun", js)
+        self.assertIn("function cronIsLiveWait", js)
+        self.assertIn("function overlayIsStale", js)
+        self.assertIn("Waiting live", js)
+        self.assertIn("cookies stay in this CEO", js)
         self.assertIn("function cronIsOverdue", js)
         self.assertIn("function cronRosterStatus", js)
         self.assertIn("function scheduleRosterSort", js)
@@ -37,8 +40,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=159", html)
-        self.assertIn("styles.css?v=159", html)
+        self.assertIn("app.js?v=160", html)
+        self.assertIn("styles.css?v=160", html)
 
     def test_roster_status_priority_in_sort(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

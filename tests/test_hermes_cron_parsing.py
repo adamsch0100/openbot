@@ -574,6 +574,40 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertFalse(any(row["id"] == "77bfe1c9f7a1" for row in pack["failed"]))
         self.assertEqual(saa_catchup_next(marked), "")
 
+    def test_overlay_skip_paused_and_gateway_live_wait(self):
+        from openbot.hermes import overlay_to_cron_rows
+
+        rows = overlay_to_cron_rows([
+            {
+                "id": "7bdaa3b6fb9e",
+                "name": "conversion-surge",
+                "last_status": "error",
+                "last_error": "Gateway shutdown (final-cleanup) killed the job",
+                "enabled": True,
+            },
+            {
+                "id": "38041c7a6501",
+                "name": "geo-citation-audit",
+                "last_status": "error",
+                "last_error": "Gateway shutdown (final-cleanup) killed the job",
+                "enabled": True,
+            },
+            {
+                "id": "deadbeef0001",
+                "name": "timnath-wellington-johnstown-fixes-batch",
+                "last_status": "error",
+                "last_error": "RuntimeError: No LLM provider configured.",
+                "enabled": True,
+            },
+        ])
+        by_id = {row["id"]: row for row in rows}
+        self.assertFalse(by_id["7bdaa3b6fb9e"]["enabled"])
+        self.assertEqual(by_id["7bdaa3b6fb9e"]["board_status"], "paused")
+        self.assertEqual(by_id["38041c7a6501"]["board_status"], "live-wait")
+        self.assertEqual(by_id["38041c7a6501"]["fail_kind"], "gateway")
+        self.assertEqual(by_id["deadbeef0001"]["fail_kind"], "unknown")
+        self.assertEqual(by_id["deadbeef0001"]["board_status"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

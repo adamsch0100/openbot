@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Chat live log shows engine steps (file, command, URL) while a job runs.
-Last: Chat live chip stayed up and named Hermes Agent / OpenCode / board.
-Next: Hard-refresh live (app.js v=159). Judge folder → change → diff card → INDEX. Do not Accept parked restore.
+Now: v160 — SAA desk: scars wait on live Hermes, paused jobs stay paused, chat is the operator inbox.
+Last: Saved search alerts immediate healthy on the live box. Board still painted 11 failed / 11 never from a stale copy.
+Next: Hard-refresh ?v=160. Facebook: Approve on ListLogic so Hermes keeps the cookies. Do not Restart SAA imported home.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault
