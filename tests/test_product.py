@@ -187,6 +187,7 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn('id="workHint"', html)
         self.assertNotIn('id="stopBtn"', html)
         self.assertIn("thinkingBubble", js)
+        self.assertIn("thinking-log", js)
         self.assertIn("function normalizeLiveProgress", js)
         self.assertIn("function paintLiveProgress", js)
         self.assertIn("function liveEngineName", js)
@@ -321,8 +322,57 @@ class EngineChipTests(unittest.TestCase):
     def test_hermes_progress_uses_full_engine_name(self):
         src = (ROOT / "openbot" / "hermes.py").read_text(encoding="utf-8")
         self.assertIn("Hermes Agent · working", src)
-        self.assertIn("Hermes Agent · {tool_match}", src)
+        self.assertIn("def hermes_progress_chip", src)
         self.assertNotIn('on_progress("Hermes · working")', src)
+
+    def test_live_chips_include_file_and_command(self):
+        from openbot.hermes import hermes_progress_chip
+        from openbot.usage import opencode_progress_chip
+
+        self.assertEqual(
+            hermes_progress_chip("run terminal: git diff"),
+            "Hermes Agent · terminal · git diff",
+        )
+        self.assertEqual(
+            hermes_progress_chip("file_write: output.txt"),
+            "Hermes Agent · write · output.txt",
+        )
+        self.assertEqual(
+            hermes_progress_chip("browser_navigate to https://example.com/path"),
+            "Hermes Agent · navigate · https://example.com/path",
+        )
+        self.assertIsNone(hermes_progress_chip("hello there"))
+        leaked = hermes_progress_chip("file_write: token=abc")
+        self.assertEqual(leaked, "Hermes Agent · write")
+        self.assertNotIn("abc", leaked)
+        self.assertEqual(
+            opencode_progress_chip({
+                "type": "tool_use",
+                "part": {
+                    "type": "tool",
+                    "name": "bash",
+                    "state": {"status": "running", "input": {"command": "pytest tests/test_product.py"}},
+                },
+            }),
+            "OpenCode · bash · pytest tests/test_product.py",
+        )
+        self.assertEqual(
+            opencode_progress_chip({
+                "type": "tool",
+                "part": {
+                    "type": "tool",
+                    "tool": "read",
+                    "state": {"input": {"filePath": "C:/Users/adamm/Projects/openbot/web/app.js"}},
+                },
+            }),
+            "OpenCode · read · C:/Users/adamm/Projects/openbot/web/app.js",
+        )
+        self.assertIsNone(opencode_progress_chip({"type": "text", "part": {"text": "hi"}}))
+        secret = opencode_progress_chip({
+            "type": "tool_use",
+            "part": {"name": "bash", "state": {"input": {"command": "export API_KEY=secret"}}},
+        })
+        self.assertEqual(secret, "OpenCode · bash")
 
 
 if __name__ == "__main__":

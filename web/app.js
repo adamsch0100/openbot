@@ -163,6 +163,19 @@ function paintLiveProgress(text, lane) {
   if (label) label.textContent = line;
   const think = el && el.querySelector(".thinking");
   if (think) think.classList.remove("hidden");
+  const wrap = el && (el.querySelector(".thinking-wrap") || think);
+  if (wrap) wrap.classList.remove("hidden");
+  const log = el && el.querySelector(".thinking-log");
+  if (log && line) {
+    const last = log.querySelector("li:last-child");
+    if (!last || last.textContent !== line) {
+      const item = document.createElement("li");
+      item.textContent = line;
+      log.appendChild(item);
+      while (log.children.length > 8) log.removeChild(log.firstChild);
+    }
+    log.hidden = log.children.length < 2;
+  }
   lockComposer(Boolean((cfg.activity && cfg.activity.has_key) || cfg.has_key));
   return line;
 }
@@ -6061,8 +6074,8 @@ function settleLive(live, job) {
   }
   if (isTalk(job)) {
     live.classList.remove("live");
-    const think = live.querySelector(".thinking");
-    if (think) think.remove();
+    const wrap = live.querySelector(".thinking-wrap") || live.querySelector(".thinking");
+    if (wrap) wrap.remove();
     const text = live.querySelector(".bubble-text");
     if (text) paintBotText(text, job.text || "");
     stampLane(live, job, true);
@@ -6084,13 +6097,20 @@ function thinkingBubble(lane) {
   const el = document.createElement("article");
   el.className = "bubble bot live";
   el.dataset.liveKey = aimKey();
+  const wrap = document.createElement("div");
+  wrap.className = "thinking-wrap";
   const think = document.createElement("div");
   think.className = "thinking";
   const engine = liveEngineName(lane);
   think.innerHTML = `<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="thinking-label">${escapeHtml(engine)}</span>`;
+  const log = document.createElement("ol");
+  log.className = "thinking-log";
+  log.hidden = true;
+  wrap.appendChild(think);
+  wrap.appendChild(log);
   const text = document.createElement("div");
   text.className = "bubble-text";
-  el.appendChild(think);
+  el.appendChild(wrap);
   el.appendChild(text);
   stream.appendChild(el);
   stream.scrollTop = stream.scrollHeight;

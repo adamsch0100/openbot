@@ -118,7 +118,7 @@ class TestHermesProgressChips(unittest.TestCase):
         
         # Verify progress chips were emitted for tool activity
         self.assertTrue(any("terminal" in msg.lower() or "command" in msg.lower() for msg in progress_log))
-        self.assertTrue(any("file" in msg.lower() for msg in progress_log))
+        self.assertTrue(any("write" in msg.lower() or "file" in msg.lower() for msg in progress_log))
 
     def test_progress_event_format(self):
         """Progress events follow expected format."""
@@ -132,10 +132,10 @@ class TestHermesProgressChips(unittest.TestCase):
         
         for event in test_events:
             self.assertIn("·", event)
-            parts = event.split("·")
-            self.assertEqual(len(parts), 2)
-            engine = parts[0].strip()
-            action = parts[1].strip()
+            parts = [bit.strip() for bit in event.split("·") if bit.strip()]
+            self.assertGreaterEqual(len(parts), 2)
+            engine = parts[0]
+            action = parts[1]
             self.assertTrue(engine in ["Hermes Agent", "OpenCode"])
             self.assertTrue(len(action) > 0)
 

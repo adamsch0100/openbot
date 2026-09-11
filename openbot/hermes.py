@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .detect import hermes_home, which
+from .usage import clip_live_detail, short_live_path
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 HERMES_TIMEOUT = 600
@@ -53,6 +54,55 @@ EVERY_N = re.compile(
 )
 EVERY_DAY = re.compile(r"\b(every day|each day|daily)\b", re.I)
 SESSION_ID_RE = re.compile(r"session_id:\s*([A-Za-z0-9._:-]+)", re.I)
+
+
+def hermes_progress_chip(line: str) -> str | None:
+    """One live line from Hermes stdout. Verb + file/command/URL, no tool dump."""
+    stripped = ANSI.sub("", str(line or "")).strip()
+    if not stripped or SESSION_ID_RE.search(stripped):
+        return None
+    if SESSION_NOISE.match(stripped):
+        return None
+
+    def rest_after(match: re.Match, group: int = 1) -> str:
+        return clip_live_detail(match.group(group) or "")
+
+    match = re.search(r"run\s+terminal[:\s]+(.+)$", stripped, re.I)
+    if match:
+        detail = rest_after(match)
+        return f"Hermes Agent · terminal · {detail}" if detail else "Hermes Agent · terminal"
+    match = re.search(r"command\s+is\s+(.+)$", stripped, re.I)
+    if match:
+        detail = rest_after(match)
+        return f"Hermes Agent · command · {detail}" if detail else "Hermes Agent · command"
+    match = re.search(r"file_(read|write|search|edit|delete)[:\s]+(.+)$", stripped, re.I)
+    if match:
+        detail = short_live_path(match.group(2)) or clip_live_detail(match.group(2))
+        verb = match.group(1).lower()
+        return f"Hermes Agent · {verb} · {detail}" if detail else f"Hermes Agent · {verb}"
+    match = re.search(
+        r"(?:browser|web)_(navigate|extract|click|type|screenshot)\b(.*)$",
+        stripped,
+        re.I,
+    )
+    if match:
+        tail = clip_live_detail(match.group(2) or "")
+        url = re.search(r"https?://\S+", tail)
+        detail = clip_live_detail(url.group(0).rstrip(".,)")) if url else tail
+        verb = match.group(1).lower()
+        return f"Hermes Agent · {verb} · {detail}" if detail else f"Hermes Agent · {verb}"
+    match = re.search(r"tool\s*call[:\s]+(.+)$", stripped, re.I)
+    if match:
+        detail = rest_after(match)
+        return f"Hermes Agent · tool · {detail}" if detail else "Hermes Agent · tool"
+    if re.search(r"tool\s*call", stripped, re.I):
+        return "Hermes Agent · tool"
+    match = re.search(r"\b(thinking|researching|analyzing|planning)\b", stripped, re.I)
+    if match:
+        return f"Hermes Agent · {match.group(1).lower()}"
+    return None
+
+
 SESSION_NOISE = re.compile(
     r"^[↻→•\s]*(Session\s+.+|Starting fresh\.?|Resumed session.*|"
     r"Model restored from session:.*|"
@@ -635,22 +685,10 @@ def chat(
                     # Detect tool activity and emit progress
                     stripped = ANSI.sub("", line).strip()
                     if on_progress and not talk and stripped:
-                        tool_match = None
-                        if re.search(r"run\s+terminal", stripped, re.I):
-                            tool_match = "terminal"
-                        elif re.search(r"command\s+is\b", stripped, re.I):
-                            tool_match = "command"
-                        elif re.search(r"tool\s*call", stripped, re.I):
-                            tool_match = "tool"
-                        elif re.search(r"(?:browser|web)_(?:navigate|extract|click|type|screenshot)", stripped, re.I):
-                            tool_match = "browser"
-                        elif re.search(r"file_(?:read|write|search)", stripped, re.I):
-                            tool_match = "file"
-                        elif re.search(r"\b(?:thinking|researching|analyzing|planning)\b", stripped, re.I):
-                            tool_match = stripped.split()[0] if stripped else "working"
-                        if tool_match:
+                        chip = hermes_progress_chip(stripped)
+                        if chip:
                             try:
-                                on_progress(f"Hermes Agent · {tool_match}")
+                                on_progress(chip)
                                 last_progress = now
                                 heartbeat_sent = False
                             except Exception:

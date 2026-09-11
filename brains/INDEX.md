@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Chat live chip stays up while a job runs and names the engine (Hermes Agent / OpenCode / board).
-Last: v157 — SAA desk trusts live Hermes; gateway scars are not Fix key; do not Restart the imported home.
-Next: Hard-refresh live. Judge folder → change → diff card → INDEX. Do not Restart SAA imported home. Do not Accept parked e2e. No stampede.
+Now: Chat live log shows engine steps (file, command, URL) while a job runs.
+Last: Chat live chip stayed up and named Hermes Agent / OpenCode / board.
+Next: Hard-refresh live (app.js v=159). Judge folder → change → diff card → INDEX. Do not Accept parked restore.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault

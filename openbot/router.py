@@ -81,7 +81,7 @@ from .store import (
     write_job,
     write_session_log,
 )
-from .usage import parse_opencode_events
+from .usage import opencode_progress_chip, parse_opencode_events
 
 STATUS = re.compile(
     r"\b("
@@ -681,18 +681,10 @@ def run_opencode(
                         if text:
                             on_delta(text)
                         if on_progress and isinstance(event, dict):
-                            etype = str(event.get("type") or "")
-                            part_type = str((part or {}).get("type") or "") if isinstance(part, dict) else ""
-                            name = ""
-                            if isinstance(part, dict):
-                                name = str(part.get("name") or part.get("tool") or "").strip()
-                            if etype in {"step_start", "tool_use"} or part_type in {"step-start", "tool-start", "tool"}:
+                            chip = opencode_progress_chip(event)
+                            if chip:
                                 try:
-                                    _call_progress(
-                                        on_progress,
-                                        f"OpenCode · {name or part_type or etype}",
-                                        "builder",
-                                    )
+                                    _call_progress(on_progress, chip, "builder")
                                 except Exception:
                                     pass
                     except json.JSONDecodeError:
