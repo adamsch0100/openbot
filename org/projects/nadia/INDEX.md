@@ -1,4 +1,4 @@
-# nadia (archived)
+# Nadia (archived)
 
 Now: Retired from this OpenBot board. Folder kept on disk.
 Last: Removed from routing.

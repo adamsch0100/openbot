@@ -800,14 +800,22 @@ function clusterFailRows(rows) {
   return [...groups.values()].map((list) => ({ row: list[0], extra: Math.max(0, list.length - 1) }));
 }
 
+function opaqueJobName(s) {
+  const t = String(s || "").trim();
+  if (!t) return true;
+  if (/^(ops|auto|job|failed job|last job|scheduled check|code|think|research)$/i.test(t)) return true;
+  if (/^[a-f0-9]{8,32}$/i.test(t)) return true;
+  return false;
+}
+
 function failCardTitle(row) {
   const named = (typeof failJobTitle === "function") ? failJobTitle(row) : "";
-  if (named && !/^(ops|auto|job|failed job|last job|scheduled check)$/i.test(named)) return named;
+  if (named && !opaqueJobName(named)) return named;
   const blob = failBlobOf(row);
   const cronM = String(blob || "").match(/Cron Job:\s*([a-z0-9._-]+)/i);
   if (cronM) return cronTitle(cronM[1]);
   const fromName = row && (row.title || (typeof cronTitle === "function" ? cronTitle(row.name || row.id) : row.name));
-  if (fromName && !/^(ops|auto)$/i.test(String(fromName))) return fromName;
+  if (fromName && !opaqueJobName(fromName)) return fromName;
   return "Scheduled job";
 }
 
@@ -3212,7 +3220,17 @@ function ceoWire(project) {
   const nxt = cleanBotText(project.index_next || "").trim();
   const blocker = cleanBotText(project.index_blocker || "").trim();
   const busy = lives.has(aimKey(project.id, ""));
-  if (blocker && blocker !== "—") return `Blocked · ${clipWire(blocker, 42)}`;
+  if (blocker && blocker !== "—") {
+    const human = humanFailReason(blocker);
+    if (/exited 130\b|cancelled/i.test(human) || /exited 130\b|\bsigint\b/i.test(blocker)) {
+      /* cancelled is not a wall — fall through to Now / Next */
+    } else if (/job id|cron job|run time/i.test(blocker)) {
+      const countsLine = scheduleTrustNowLine(workCounts(project.id), project);
+      return clipWire(countsLine || human || "Failed · Open Results", 64);
+    } else {
+      return `Blocked · ${clipWire(human || blocker, 42)}`;
+    }
+  }
   if (busy) {
     const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
     return `Running · ${clipWire(line, 42)}`;
@@ -5118,14 +5136,15 @@ function renderChatSchedule(rows, digest, focusId) {
       if (story) bits.push(story);
       const failJobs = allJobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
       if (failJobs.length) {
+        const clustered = clusterFailRows(failJobs);
         bits.push(`<h3 class="cron-section">Action queue · ${failJobs.length}</h3>`);
-        bits.push(failJobs.map((row) => failChromeHtml({
+        bits.push(clustered.map(({ row, extra }) => failChromeHtml({
           ...row,
           title: row.title || jobLabel(row.preset) || jobStoryTitle(row) || "Job",
           last_status: row.status || row.last_status || "error",
           last_error: row.last_error || row.error || row.blocker || row.text || row.summary || "",
           cron_id: row.cron_id || row.id || ""
-        }, false, "next")).join(""));
+        }, false, "next", extra)).join(""));
       }
       const next = projects.filter((row) => String(row.index_next || "").trim() && String(row.index_next || "").trim() !== "—");
       if (next.length) {

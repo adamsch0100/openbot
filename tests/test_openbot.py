@@ -1628,19 +1628,42 @@ class StreamAndErrorTests(unittest.TestCase):
 
 
 class ReattachCeoTests(unittest.TestCase):
-    def test_reattach_imported_ceos_skips_retired_and_tests(self):
-        from openbot.org import MANUAL_SEAT_CEO_IDS, reattach_imported_ceos
+    def test_reattach_live_index_keeps_archived_manual_seat_off(self):
+        import openbot.org as org_mod
 
-        saved = {"projects": [{"id": "openbot", "name": "openbot", "primary": True}]}
-        out = reattach_imported_ceos(saved)
-        ids = {str(row.get("id")) for row in out.get("projects") or []}
-        self.assertIn("openbot", ids)
-        self.assertIn("saa-homes", ids)
-        self.assertNotIn("nadia", ids)
-        self.assertNotIn("listlogic", ids)
-        self.assertIn("nadia", MANUAL_SEAT_CEO_IDS)
-        self.assertIn("listlogic", MANUAL_SEAT_CEO_IDS)
-        self.assertNotIn("opencode-test", ids)
+        old_root = org_mod.ROOT
+        old_org = org_mod.ORG
+        old_homes = org_mod.HERMES_HOMES
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            org_mod.ROOT = root
+            org_mod.ORG = root / "org"
+            org_mod.HERMES_HOMES = root / "hermes-homes"
+            try:
+                for pid, body in (
+                    ("saa-homes", "# SAA Homes\nNow: live\nFolder: /app\n"),
+                    ("nadia", "# nadia (archived)\nNow: Retired from this OpenBot board.\n"),
+                    ("listlogic", "# ListLogic\nNow: Seated\nFolder: /data/workspaces/listlogic\n"),
+                    ("opencode-test", "# opencode-test\nNow: live\n"),
+                ):
+                    (org_mod.HERMES_HOMES / pid).mkdir(parents=True)
+                    dest = org_mod.ORG / "projects" / pid
+                    dest.mkdir(parents=True)
+                    (dest / "INDEX.md").write_text(body, encoding="utf-8")
+                saved = {"projects": [{"id": "openbot", "name": "openbot", "primary": True}]}
+                out = org_mod.reattach_imported_ceos(saved)
+                ids = {str(row.get("id")) for row in out.get("projects") or []}
+                self.assertIn("openbot", ids)
+                self.assertIn("saa-homes", ids)
+                self.assertIn("listlogic", ids)
+                self.assertNotIn("nadia", ids)
+                self.assertNotIn("opencode-test", ids)
+                self.assertIn("nadia", org_mod.MANUAL_SEAT_CEO_IDS)
+                self.assertIn("listlogic", org_mod.MANUAL_SEAT_CEO_IDS)
+            finally:
+                org_mod.ROOT = old_root
+                org_mod.ORG = old_org
+                org_mod.HERMES_HOMES = old_homes
 
 
 class OrgTests(unittest.TestCase):

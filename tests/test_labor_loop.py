@@ -214,6 +214,24 @@ class RetiredOrgTests(LaborLoopIsolation):
         with self.assertRaises(ValueError):
             org_mod.add_project(str(self.home), "Nadia Marketing")
 
+    def test_add_project_unarchives_index(self):
+        dest = org_mod._project_dir("nadia")
+        dest.mkdir(parents=True)
+        (dest / "INDEX.md").write_text(
+            "# nadia (archived)\n\n"
+            "Now: Retired from this OpenBot board. Folder kept on disk.\n"
+            "Last: Removed from routing.\n"
+            "Next: Re-add as a CEO only if the operator brings this product back.\n"
+            "Blocker: —\n\n"
+            "This CEO is not in the live org. Keep Cos, OpenBot, SAA Homes, and Support.\n\n"
+            "# Nadia\n\nNow: Seated on OttoBot.\n",
+            encoding="utf-8",
+        )
+        org_mod.add_project(str(self.home), "Nadia")
+        text = (dest / "INDEX.md").read_text(encoding="utf-8")
+        self.assertNotIn("Retired from this OpenBot board", text)
+        self.assertIn("# Nadia", text)
+
     def test_add_project_pmill_seat_prefs(self):
         prefs = org_mod.seat_preset_for_name("Pmill")
         self.assertEqual(prefs.get("site_url"), "https://pmill.ai")

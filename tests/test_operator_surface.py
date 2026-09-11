@@ -12,7 +12,10 @@ class OperatorSurfaceUiTests(unittest.TestCase):
     def test_your_move_names_ceo(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("function failCardTitle", js)
+        self.assertIn("function opaqueJobName", js)
         self.assertIn("function clusterFailRows", js)
+        self.assertIn("const clustered = clusterFailRows(failJobs)", js)
+        self.assertIn("const startOpen = Boolean(open);", js)
         self.assertIn("function handlingInboxHtml", js)
         self.assertIn("cron-card failed handled compact", js)
         self.assertIn("class=\"org-inbox handling\"", js)
@@ -67,8 +70,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=152", html)
-        self.assertIn("styles.css?v=152", html)
+        self.assertIn("app.js?v=153", html)
+        self.assertIn("styles.css?v=153", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

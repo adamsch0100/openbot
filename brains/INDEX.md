@@ -14,8 +14,8 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Operator surface v152 live — rail In motion / Accept only; Results named jobs, one CTA, cards stay collapsed.
-Last: Merged #105 to master. Live v151 still opened every Recovering card from old session folds.
+Now: v153 — keep Nadia/ListLogic seated when INDEX is live; rail hides Job ID / exit-130 gore.
+Last: v152 live. Recovering cards collapsed. ListLogic/Nadia still dropped after volume restart.
 Next: Hard-refresh live. Do not Accept parked restore. No stampede.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 

@@ -14,11 +14,13 @@ from .config import load_config
 from .detect import hermes_home, which
 from .gitutil import git_status
 from .bus import ensure_bus, seed_file_contract, seed_org_contracts
-from .store import ROOT, clean_memory_text, now_iso, patch_index_line, read_index
+from .store import CODE_ROOT, ROOT, clean_memory_text, now_iso, patch_index_line, read_index
 
 SITE_BY_ID = {
     "saa-homes": "https://saahomes.com",
     "pmill": "https://pmill.ai",
+    "nadia": "https://e8solutions.ai",
+    "listlogic": "https://listlogic.homes",
 }
 
 # Prefill when seating a known CEO (Add CEO form). Operator can edit before submit.
@@ -48,8 +50,9 @@ RETIRED_CEO_IDS = frozenset({
     "app",
     "index",
 })
-# Eligible via Add CEO / add_project. Never auto-reattached from hermes-homes.
+# Eligible via Add CEO / add_project. Auto-reattach only when INDEX is not archived.
 MANUAL_SEAT_CEO_IDS = frozenset({"nadia", "listlogic"})
+ARCHIVED_INDEX_MARK = "Retired from this OpenBot board"
 HOSTED_FOLDER_SLUGS = frozenset({"app", "data", "workspace"})
 SUPPORT_CEO_ID = "support"
 SUPPORT_WORKER_ID = SUPPORT_CEO_ID
@@ -224,6 +227,118 @@ def _ensure_worker_brain(project_id: str, worker: dict, project_name: str) -> Pa
     return path
 
 
+def _index_is_archived(text: str) -> bool:
+    return ARCHIVED_INDEX_MARK in (text or "")
+
+
+def _unarchive_project_index(project_id: str) -> None:
+    """Strip the retired banner so Add CEO puts this company back on the board."""
+    path = _project_dir(project_id) / "INDEX.md"
+    if not path.is_file():
+        return
+    body = path.read_text(encoding="utf-8")
+    if not _index_is_archived(body):
+        return
+    rest = body
+    marker = "This CEO is not in the live org."
+    idx = rest.find(marker)
+    if idx >= 0:
+        rest = rest[idx:]
+        nl = rest.find("\n\n")
+        rest = rest[nl + 2 :] if nl >= 0 else rest.split("\n", 1)[-1]
+    rest = rest.lstrip()
+    if rest:
+        path.write_text(rest, encoding="utf-8")
+
+
+def _seed_live_index_from_code(project_id: str) -> None:
+    """On Railway, copy a live git INDEX onto /data if the volume still has the archive banner."""
+    if not os.environ.get("OPENBOT_DATA_DIR", "").strip():
+        return
+    if ROOT.resolve() == CODE_ROOT.resolve():
+        return
+    src = CODE_ROOT / "org" / "projects" / project_id / "INDEX.md"
+    if not src.is_file():
+        return
+    text = src.read_text(encoding="utf-8")
+    if _index_is_archived(text):
+        return
+    dest_dir = _project_dir(project_id)
+    dest = dest_dir / "INDEX.md"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    if dest.is_file() and not _index_is_archived(dest.read_text(encoding="utf-8")):
+        return
+    dest.write_text(text, encoding="utf-8")
+
+
+def _reattach_row(pid: str, text: str, home: Path | None) -> dict:
+    title = (text.splitlines()[0].lstrip("# ").strip() if text else "") or pid
+    if " (archived)" in title.lower():
+        title = title.rsplit(" (archived)", 1)[0].strip() or pid
+    folder = ""
+    for line in text.splitlines():
+        if line.startswith("Folder:"):
+            folder = line.split(":", 1)[1].strip()
+            break
+    row = {
+        "id": pid,
+        "name": title,
+        "role": "ceo",
+        "folder": folder,
+        "primary": False,
+        "workers": [],
+        "site_url": SITE_BY_ID.get(pid, ""),
+    }
+    if home is not None and home.is_dir():
+        row["hermes_home"] = str(home.resolve())
+    preset = CEO_SEAT_PRESETS.get(pid) or {}
+    for key in ("site_url", "github_repo", "railway"):
+        if preset.get(key) and not row.get(key):
+            row[key] = preset[key]
+    return row
+
+
+def reattach_imported_ceos(saved: dict) -> dict:
+    """Put imported CEOs back if profile.json was rewritten without them.
+
+    Hermes homes still drive SAA / Pmill. Nadia and ListLogic stay off while
+    their INDEX is archived. A live INDEX (Add CEO, or git copy on Railway)
+    puts them back even if the volume profile dropped them.
+    """
+    rows = [row for row in (saved.get("projects") or []) if isinstance(row, dict)]
+    have = {str(row.get("id") or "") for row in rows}
+    homes = HERMES_HOMES
+    projects = ORG / "projects"
+    for pid in MANUAL_SEAT_CEO_IDS:
+        _seed_live_index_from_code(pid)
+    skip = RETIRED_CEO_IDS | {SUPPORT_CEO_ID, "opencode-test", "staff"}
+    candidates: set[str] = set()
+    if homes.is_dir():
+        candidates.update(home.name for home in homes.iterdir() if home.is_dir())
+    for pid in MANUAL_SEAT_CEO_IDS:
+        if (projects / pid / "INDEX.md").is_file():
+            candidates.add(pid)
+    if not candidates:
+        return saved
+    changed = False
+    for pid in sorted(candidates):
+        if pid in have or pid in skip or pid.startswith("test"):
+            continue
+        index = projects / pid / "INDEX.md"
+        if not index.is_file():
+            continue
+        text = index.read_text(encoding="utf-8")
+        if _index_is_archived(text):
+            continue
+        home = homes / pid if homes.is_dir() else None
+        rows.append(_reattach_row(pid, text, home if home is not None and home.is_dir() else None))
+        have.add(pid)
+        changed = True
+    if changed:
+        saved["projects"] = rows
+    return saved
+
+
 def _archive_retired_index(project_id: str, title: str) -> None:
     dest = _project_dir(project_id)
     dest.mkdir(parents=True, exist_ok=True)
@@ -238,61 +353,11 @@ def _archive_retired_index(project_id: str, title: str) -> None:
     )
     if path.is_file():
         body = path.read_text(encoding="utf-8")
-        if "Retired from this OpenBot board" in body:
+        if ARCHIVED_INDEX_MARK in body:
             return
         path.write_text(banner + body, encoding="utf-8")
         return
     path.write_text(banner, encoding="utf-8")
-
-
-def reattach_imported_ceos(saved: dict) -> dict:
-    """Put imported CEOs back if profile.json was rewritten without them."""
-    rows = [row for row in (saved.get("projects") or []) if isinstance(row, dict)]
-    have = {str(row.get("id") or "") for row in rows}
-    homes = HERMES_HOMES
-    projects = ORG / "projects"
-    if not homes.is_dir() or not projects.is_dir():
-        return saved
-    changed = False
-    for home in homes.iterdir():
-        pid = home.name
-        if (
-            not home.is_dir()
-            or pid in have
-            or pid in RETIRED_CEO_IDS
-            or pid in MANUAL_SEAT_CEO_IDS
-            or pid == SUPPORT_CEO_ID
-            or pid in {"opencode-test", "staff"}
-            or pid.startswith("test")
-        ):
-            continue
-        index = projects / pid / "INDEX.md"
-        if not index.is_file():
-            continue
-        text = index.read_text(encoding="utf-8")
-        title = (text.splitlines()[0].lstrip("# ").strip() if text else "") or pid
-        folder = ""
-        for line in text.splitlines():
-            if line.startswith("Folder:"):
-                folder = line.split(":", 1)[1].strip()
-                break
-        rows.append(
-            {
-                "id": pid,
-                "name": title,
-                "role": "ceo",
-                "folder": folder,
-                "primary": False,
-                "workers": [],
-                "hermes_home": str(home.resolve()),
-                "site_url": SITE_BY_ID.get(pid, ""),
-            }
-        )
-        have.add(pid)
-        changed = True
-    if changed:
-        saved["projects"] = rows
-    return saved
 
 
 def retire_archived_ceos(saved: dict) -> dict:
@@ -1583,6 +1648,7 @@ def add_project(
     use_site = bool(authorize_site) if authorize_site is not None else bool(site)
     use_rail = bool(authorize_railway) if authorize_railway is not None else bool(rail)
     _ensure_project_index(slug, title, resolved)
+    _unarchive_project_index(slug)
     projects = list(data.get("projects") or [])
     row = {
         "id": slug,

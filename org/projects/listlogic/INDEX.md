@@ -1,4 +1,4 @@
-# listlogic (archived)
+# ListLogic (archived)
 
 Now: Retired from this OpenBot board. Folder kept on disk.
 Last: Removed from routing.
