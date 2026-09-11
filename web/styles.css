@@ -2161,6 +2161,7 @@ details.cron-card[open] > .need-actions { display: flex; }
   font-size: 13px;
   min-height: 22px;
   min-width: 0;
+  margin-bottom: 6px;
 }
 .thinking.hidden { display: none; }
 .thinking-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

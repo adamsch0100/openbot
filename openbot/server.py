@@ -1435,6 +1435,26 @@ class Handler(SimpleHTTPRequestHandler):
             
             status = gateway_status(hermes_home, timeout=3)
             status["project_id"] = project_id
+            if project_id == "saa-homes":
+                from datetime import datetime, timezone
+
+                from .hermes import load_saa_overlay_cache, saa_overlay_cache_path
+
+                overlay = load_saa_overlay_cache()
+                cache_path = saa_overlay_cache_path()
+                status["imported_running"] = bool(status.get("running"))
+                status["overlay_jobs"] = len(overlay)
+                status["overlay_synced_at"] = (
+                    datetime.fromtimestamp(cache_path.stat().st_mtime, tz=timezone.utc).isoformat()
+                    if cache_path.is_file()
+                    else ""
+                )
+                status["live_owns"] = True
+                status["restart_ok"] = False
+                status["source"] = "live-overlay" if overlay else "imported-home"
+                if overlay:
+                    # Live SAA Hermes owns Telegram + cron. Imported-home Off is not "schedule dead".
+                    status["running"] = True
             return self._json(200, status)
         if path == "/api/selfbuild/status":
             if self._require_owner():
@@ -2008,6 +2028,14 @@ class Handler(SimpleHTTPRequestHandler):
             project_id = str(data.get("project_id") or "").strip() or None
             if self._require_owner():
                 return None
+            if project_id == "saa-homes":
+                return self._json(400, {
+                    "ok": False,
+                    "error": "Live SAA Hermes owns Telegram + cron. Do not Restart this imported home.",
+                    "restart_ok": False,
+                    "live_owns": True,
+                    "project_id": project_id,
+                })
             wait = bool(data.get("wait", False))
             force = bool(data.get("force", False))
             timeout = int(data.get("timeout", 30))

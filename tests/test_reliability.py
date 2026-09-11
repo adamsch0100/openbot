@@ -380,6 +380,7 @@ class ProgressVisibilityTests(unittest.TestCase):
         self.assertTrue(progress_calls, "No progress calls made")
         progress_text = " ".join(text for text, _ in progress_calls)
         self.assertIn("Chat", progress_text)
+        self.assertIn("board ·", progress_text)
 
 
 class TimeoutHandlingTests(unittest.TestCase):

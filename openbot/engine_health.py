@@ -123,12 +123,20 @@ def engine_health(project_id: str | None = None) -> dict:
 
     warn = []
     next_steps = []
+    saa_live = pid == "saa-homes"
     if aimed and dash.get("running") and not dash_ok:
-        warn.append("Hermes dash home mismatch (possible Cos /root/.hermes orphan)")
-        next_steps.append("Open Tools → Hermes and Restart gateway for this CEO (kills stale Cos /root/.hermes dash).")
+        if saa_live:
+            warn.append("Hermes dash home mismatch — live SAA box owns schedule; do not Restart this imported home.")
+            next_steps.append("Leave the imported home off. Check the live SAA Hermes box if Telegram/cron is actually down.")
+        else:
+            warn.append("Hermes dash home mismatch (possible Cos /root/.hermes orphan)")
+            next_steps.append("Open Tools → Hermes and Restart gateway for this CEO (kills stale Cos /root/.hermes dash).")
     if aimed and not gateway.get("running"):
-        warn.append("Hermes gateway not running for this CEO")
-        next_steps.append("Tap Restart Hermes gateway below, or Tools → Hermes → Restart.")
+        if saa_live:
+            next_steps.append("Live SAA Hermes owns Telegram + cron. Imported home Off is expected.")
+        else:
+            warn.append("Hermes gateway not running for this CEO")
+            next_steps.append("Tap Restart Hermes gateway below, or Tools → Hermes → Restart.")
     if not engines["hermes"]["present"]:
         warn.append("Hermes binary missing")
         next_steps.append("Install Hermes on the board host, then Restart gateway.")
@@ -164,5 +172,13 @@ def engine_health(project_id: str | None = None) -> dict:
         },
         "warn": warn,
         "next": next_steps,
-        "action": "restart_gateway" if (aimed and not gateway.get("running")) or (aimed and dash.get("running") and not dash_ok) else None,
+        "action": (
+            None
+            if saa_live
+            else (
+                "restart_gateway"
+                if (aimed and not gateway.get("running")) or (aimed and dash.get("running") and not dash_ok)
+                else None
+            )
+        ),
     }

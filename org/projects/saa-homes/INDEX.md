@@ -2,9 +2,9 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Live SAA schedule green (operator check ~8:50am MT): ~48 jobs, 42 enabled, 41 last_status=ok.
-Last: local-events-quarterly null until Oct 1 — expected. Paused skips OK (conversion-surge, competitor-content-watch, city-audit-batch-4, etc.).
-Next: Keep gateway healthy. One-at-a-time retry only if a *new* fail appears. Board shows schedule via Chat Doing/Next/Results + Hermes live line.
+Now: Board copy of live SAA schedule. 36 ok · 11 old gateway scars · 11 never. Live Hermes owns Telegram + cron — do not Restart this imported home.
+Last: Desk lied Fix key on citation because skill prompts contain X-API-KEY. Imported-home gateway Off is not the live box.
+Next: One-at-a-time only if a *new* fail appears after the live box fires. Do not stampede Run once / Restart.
 Blocker: GBP login = skip + note. Do not mass-retry old gateway-shutdown scars. Do not hermes cron run on imported home. Do not kill/redeploy live Hermes. No stampede.
 Goals: —
 

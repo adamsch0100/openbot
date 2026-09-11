@@ -32,7 +32,13 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         self.assertIn("fetch(`/api/crons?project_id=", digest)
         self.assertNotIn("Promise.all", digest)
         self.assertIn("function renderChatSchedule(rows, digest, focusId, forPid)", js)
-        self.assertIn("lastSchedulePid = String(projectId || \"\");", js[js.find("async function setOrgNode") : js.find("function guessLane")])
+        self.assertIn("Live SAA Hermes", js)
+        self.assertIn("gatewayRestartOk", js)
+        self.assertIn("Do not Restart this imported home", (ROOT / "openbot" / "server.py").read_text(encoding="utf-8"))
+        choices = js[js.find("function failChoices") : js.find("function cronFailNext")]
+        self.assertIn("!gatewayRunning && gatewayRestartOk", choices)
+        restart = js[js.find("async function restartGateway") : js.find("function visibleNeedsYou")]
+        self.assertIn("!gatewayRestartOk || gatewayLiveOwns", restart)
         adam = js[js.find("function adamMustSee") : js.find("function operatorMoveRows")]
         self.assertIn('kind === "key"', adam)
         self.assertIn('kind === "wallet"', adam)
@@ -77,13 +83,13 @@ class OperatorSurfaceUiTests(unittest.TestCase):
     def test_hermes_exit_is_not_key(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         kind = js[js.find("function failKindFromBlob") : js.find("function ceoMoveName")]
-        self.assertIn("return \"hermes\"", kind)
+        self.assertLess(kind.index("return \"gateway\""), kind.index("return \"key\""))
         self.assertLess(kind.index("return \"key\""), kind.index("return \"hermes\""))
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=156", html)
-        self.assertIn("styles.css?v=156", html)
+        self.assertIn("app.js?v=157", html)
+        self.assertIn("styles.css?v=157", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -131,6 +137,13 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
         from openbot.hermes import fail_kind_from_blob
 
         self.assertEqual(fail_kind_from_blob("HTTP 401 unauthorized x-api-key"), "key")
+        self.assertEqual(
+            fail_kind_from_blob(
+                "Gateway shutdown (final-cleanup) killed the job's tool subprocess "
+                "before the run finished. # Cron Job: geo-citation-audit X-API-KEY"
+            ),
+            "gateway",
+        )
         self.assertEqual(fail_kind_from_blob("Script-not-found: scripts/alert-digest.sh"), "script")
         self.assertEqual(
             fail_kind_from_blob("Traceback File \"/usr/local/lib/hermes-agent/hermes\" Hermes chat exited 1"),
@@ -148,6 +161,12 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
         self.assertNotIn("RESULT", reason)
         self.assertIn("failed", reason.lower())
         self.assertEqual(human_fail_reason("opencode run exited 130"), "Cancelled")
+        self.assertEqual(
+            human_fail_reason(
+                "Gateway shutdown (final-cleanup) killed the job. headers={\"X-API-KEY\": key}"
+            ),
+            "Hermes gateway stopped mid-run",
+        )
 
     def test_pending_approvals_fail_beats_continue(self):
         from unittest.mock import patch

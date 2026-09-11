@@ -211,6 +211,26 @@ def route_plan(message: str, requested: str | None) -> list[str]:
     return [classify(message)]
 
 
+def engine_chip(preset: str, verb: str = "", extra: str = "") -> str:
+    """Live chip: engine · verb. Not the bot name."""
+    engines = {
+        "cos": "board",
+        "think": "Hermes Agent",
+        "research": "Hermes Agent",
+        "ops": "Hermes Agent",
+        "builder": "OpenCode",
+    }
+    head = engines.get(preset or "", "board")
+    parts = [head]
+    verb = (verb or "").strip()
+    extra = (extra or "").strip().lstrip("·").strip()
+    if verb:
+        parts.append(verb)
+    if extra:
+        parts.append(extra)
+    return " · ".join(parts)
+
+
 def _call_progress(on_progress, text: str, lane: str | None = None) -> None:
     if not on_progress:
         return
@@ -1388,12 +1408,9 @@ def handle(
         hermes_session = session_name(aimed, worker_id if project_id else None)
         if on_progress:
             lane_name = LANE_LABEL.get(step, step)
-            who = node_label(aimed if step != "cos" else project_id, worker_id if project_id else None)
-            if not project_id:
-                who = "Chief of Staff"
-            extra = " · resuming Telegram session" if resume_id and step in {"think", "research", "ops"} else ""
+            extra = "resuming Telegram session" if resume_id and step in {"think", "research", "ops"} else ""
             try:
-                _call_progress(on_progress, f"{who} · {lane_name}{extra}", step)
+                _call_progress(on_progress, engine_chip(step, lane_name, extra), step)
             except Exception:
                 pass
         jobs.append(
@@ -1644,7 +1661,7 @@ def _handle_preset(
             for idx, (account, model) in enumerate(attempts):
                 if idx > 0 and on_progress:
                     try:
-                        _call_progress(on_progress, f"Think · trying account {idx + 1}", "think")
+                        _call_progress(on_progress, engine_chip("think", f"trying account {idx + 1}"), "think")
                     except Exception:
                         pass
                 if account.get("id"):
@@ -1760,7 +1777,7 @@ def _handle_preset(
         who = node_label(project_id, worker_id) if project_id else "Chief of Staff"
         if on_progress:
             try:
-                _call_progress(on_progress, f"{who} · {'Chat' if use_llm else 'Brief'}", "cos")
+                _call_progress(on_progress, engine_chip("cos", "Chat" if use_llm else "Brief"), "cos")
             except Exception:
                 pass
         if skill_ask:
@@ -1816,14 +1833,18 @@ def _handle_preset(
                 attempts = [({}, chosen_model)] if chosen_model else []
             if on_progress:
                 try:
-                    _call_progress(on_progress, f"{who} · Chat", "cos")
+                    _call_progress(on_progress, engine_chip("cos", "Chat"), "cos")
                 except Exception:
                     pass
             for idx, (account, model) in enumerate(attempts):
                 # Emit progress for keyring fallback attempts
                 if idx > 0 and on_progress:
                     try:
-                        _call_progress(on_progress, f"{who} · Chat (trying account {idx + 1})", "cos")
+                        _call_progress(
+                            on_progress,
+                            engine_chip("cos", "Chat", f"trying account {idx + 1}"),
+                            "cos",
+                        )
                     except Exception:
                         pass
                 if account.get("id"):
@@ -2086,7 +2107,7 @@ def _handle_preset(
                 for idx, (account, model) in enumerate(attempts):
                     if idx > 0 and on_progress:
                         try:
-                            _call_progress(on_progress, f"Research · trying account {idx + 1}", "research")
+                            _call_progress(on_progress, engine_chip("research", f"trying account {idx + 1}"), "research")
                         except Exception:
                             pass
                     if account.get("id"):
@@ -2261,7 +2282,7 @@ def _handle_preset(
                 for idx, (account, model) in enumerate(attempts):
                     if idx > 0 and on_progress:
                         try:
-                            _call_progress(on_progress, f"Ops · trying account {idx + 1}", "ops")
+                            _call_progress(on_progress, engine_chip("ops", f"trying account {idx + 1}"), "ops")
                         except Exception:
                             pass
                     if account.get("id"):

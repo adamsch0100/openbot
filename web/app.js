@@ -18,6 +18,8 @@ let stage = "chat";
 let lastTool = "opencode";
 let lastCeoId = "";
 let gatewayRunning = true;
+let gatewayRestartOk = true;
+let gatewayLiveOwns = false;
 let brains = {};
 let cfg = {};
 let ocStarted = false;
@@ -26,6 +28,7 @@ let hermesFailed = false;
 let liveRunId = "";
 let liveLane = "";
 let liveAbort = null;
+let lastLiveProgress = "";
 /** @type {Map<string, { runId: string, abort: AbortController | null, lane: string, projectId: string, workerId: string }>} */
 const lives = new Map();
 /** @type {Map<string, Array<{ message: string, preset: string, quote: string }>>} */
@@ -127,6 +130,41 @@ function aimKey(pid, wid) {
 
 function liveFor(key) {
   return lives.get(key || aimKey()) || null;
+}
+
+function liveEngineName(lane) {
+  const key = lane || liveLane || preset || "cos";
+  if (key === "builder") return "OpenCode";
+  if (key === "think" || key === "ops" || key === "research") return "Hermes Agent";
+  const named = PRESET_ENGINE[key] || "";
+  if (named === "OpenCode") return "OpenCode";
+  if (/hermes/i.test(named)) return "Hermes Agent";
+  return "board";
+}
+
+function normalizeLiveProgress(text, lane) {
+  const engine = liveEngineName(lane);
+  const raw = String(text || "").trim();
+  if (!raw) return engine;
+  let line = raw.replace(/^Hermes\s*·/i, "Hermes Agent ·");
+  line = line.replace(/^fetch\s*\/\s*Hermes/i, "Hermes Agent");
+  if (/^(Hermes Agent|OpenCode|board)\s*·/i.test(line)) return line;
+  if (/^(Hermes Agent|OpenCode|board)$/i.test(line)) return line;
+  const parts = line.split("·").map((bit) => bit.trim()).filter(Boolean);
+  if (parts.length >= 2) return `${engine} · ${parts.slice(1).join(" · ")}`;
+  return `${engine} · ${line}`;
+}
+
+function paintLiveProgress(text, lane) {
+  const line = normalizeLiveProgress(text, lane);
+  lastLiveProgress = line;
+  const el = liveBubbleFor(aimKey());
+  const label = el && el.querySelector(".thinking-label");
+  if (label) label.textContent = line;
+  const think = el && el.querySelector(".thinking");
+  if (think) think.classList.remove("hidden");
+  lockComposer(Boolean((cfg.activity && cfg.activity.has_key) || cfg.has_key));
+  return line;
 }
 
 function queueFor(key) {
@@ -390,14 +428,14 @@ function humanFailReason(blob) {
   let text = String(blob || "").replace(/\s+/g, " ").trim();
   text = text.replace(/\b(?:THINK_OK|OPS_OK)\b/g, "").trim();
   const low = text.toLowerCase();
+  if (/gateway shutdown|gateway stopped mid-run/.test(low)) {
+    return "Hermes gateway stopped mid-run";
+  }
   if (/\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key/.test(low)) {
     return "API key rejected (401)";
   }
   if (/busy.?session|session.?busy|already running|locked by another/.test(low)) {
     return "Session busy";
-  }
-  if (/gateway shutdown|gateway stopped mid-run/.test(low)) {
-    return "Hermes gateway stopped mid-run";
   }
   if (/script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts\//.test(low)) {
     return "Script not found";
@@ -524,6 +562,7 @@ function failBlobOf(row) {
 
 function failKindFromBlob(blob) {
   const low = String(blob || "").toLowerCase();
+  if (/gateway shutdown|gateway stopped mid-run/.test(low)) return "gateway";
   if (/\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key/.test(low)) {
     return "key";
   }
@@ -531,7 +570,6 @@ function failKindFromBlob(blob) {
     return "script";
   }
   if (/exited 130\b|\bsigint\b|cancelled by (the )?operator/.test(low)) return "cancelled";
-  if (/gateway shutdown|gateway stopped mid-run/.test(low)) return "gateway";
   if (/insufficient balance|wallet.?empty|out of (?:quota|credit)|billing/.test(low)) return "wallet";
   if (/busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout/.test(low)) {
     return "transient";
@@ -618,7 +656,7 @@ function failOwnership(row) {
   const kind = failKindFromBlob(blob);
   const local = failHandlingStatus(id);
   const live = Boolean(row && typeof cronIsLive === "function" && cronIsLive(row));
-  // gatewayScar must NOT preempt 401/key (or script/wallet) — Fix key wins over Restart gateway.
+  // Real 401 still wins via kind === "key". Gateway scars beat skill-doc X-API-KEY dumps in failKindFromBlob.
   const gatewayScar = kind === "gateway" || (typeof cronIsGatewayFail === "function" && cronIsGatewayFail(row));
 
   if (local === "Waiting Cos") {
@@ -691,7 +729,7 @@ function failOwnership(row) {
   }
 
   if (gatewayScar) {
-    if (!gatewayRunning) {
+    if (!gatewayRunning && gatewayRestartOk) {
       return {
         owner: "ceo",
         rank: 1,
@@ -782,14 +820,14 @@ function failChoices(row) {
   const own = failOwnership(row);
   const cronId = (row && (row.cron_id || row.id)) || "";
   const out = [];
-  if (own.kind === "gateway" && !gatewayRunning) {
+  if (own.kind === "gateway" && !gatewayRunning && gatewayRestartOk) {
     out.push({ id: "restart_gateway", label: "Restart gateway" });
   } else if (own.kind === "script") {
     out.push({ id: "restore_script", label: "Restore", cron_id: cronId });
     out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
   } else if (own.kind === "key") {
     out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
-    if (!gatewayRunning) out.push({ id: "restart_gateway", label: "Restart gateway" });
+    if (!gatewayRunning && gatewayRestartOk) out.push({ id: "restart_gateway", label: "Restart gateway" });
     else out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
   } else if (own.kind === "cancelled") {
     out.push({ id: "open_detail", label: "Open detail", cron_id: cronId });
@@ -1662,9 +1700,9 @@ function lockComposer(hasKey) {
   }
   if (hint) {
     if (live) {
-      const lane = liveLane ? jobLabel(liveLane) : "";
+      const engineLine = lastLiveProgress || liveEngineName(liveLane || preset);
       const bits = [
-        `Running · ${talkName()}${lane ? ` · ${lane}` : ""}`,
+        engineLine,
         "Your line stays in the thread",
         queued ? "Send now delivers the waiting line" : "Enter adds another",
         "Stop cancels"
@@ -3559,6 +3597,10 @@ async function restartGateway() {
   const aim = currentAim();
   const retry = $("retryHermes");
   const healthBtn = $("ceoHealthRestartGw");
+  if (!gatewayRestartOk || gatewayLiveOwns) {
+    if ($("hermesStatus")) $("hermesStatus").textContent = "Live SAA Hermes owns the schedule — do not Restart the imported home.";
+    return;
+  }
   if (retry) retry.textContent = "Restarting…";
   if (healthBtn) healthBtn.textContent = "Restarting…";
   let data = {};
@@ -4962,6 +5004,8 @@ async function loadCeoDigest(refreshLive) {
   const cached = digestCache.get(projectId);
   if (cached) {
     if (typeof cached.gateway_running === "boolean") gatewayRunning = cached.gateway_running;
+    if (typeof cached.gateway_restart_ok === "boolean") gatewayRestartOk = cached.gateway_restart_ok;
+    if (typeof cached.gateway_live_owns === "boolean") gatewayLiveOwns = cached.gateway_live_owns;
     paintCeoBrief(cached.digest || cached);
     paintCeoLive(cached);
     renderBotMeta({ skipSpend: true });
@@ -4988,8 +5032,12 @@ async function loadCeoDigest(refreshLive) {
       .then((gw) => {
         if (!gw) return;
         gatewayRunning = gw.running !== false;
+        gatewayRestartOk = gw.restart_ok !== false;
+        gatewayLiveOwns = Boolean(gw.live_owns);
         const pack = digestCache.get(pid) || data;
         pack.gateway_running = gatewayRunning;
+        pack.gateway_restart_ok = gatewayRestartOk;
+        pack.gateway_live_owns = gatewayLiveOwns;
         digestCache.set(pid, pack);
         if (projectId === pid) {
           syncHermesHint();
@@ -5021,6 +5069,12 @@ function liveRunCard(row) {
 }
 
 function gatewayOffHtml() {
+  if (gatewayLiveOwns || !gatewayRestartOk) {
+    return `<article class="cron-card gateway-off">
+    <div class="cron-head"><b>Live SAA Hermes</b><span>Owns schedule</span></div>
+    <p class="cron-outcome">Telegram + cron run on the live SAA box. This board is a copy — do not Restart the imported home.</p>
+  </article>`;
+  }
   return `<article class="cron-card gateway-off">
     <div class="cron-head"><b>Hermes gateway</b><span>Off</span></div>
     <p class="cron-outcome">Gateway is off. Scheduled jobs wait. Restart it — do not fire the whole set.</p>
@@ -5057,7 +5111,10 @@ function emptyWorkCopy(view) {
 
 function whyIdleLine() {
   if (liveRunId || lives.size) return "";
-  if (!gatewayRunning && projectId) return "Why idle: Hermes gateway is off — Restart it.";
+  if (!gatewayRunning && projectId) {
+    if (gatewayLiveOwns || !gatewayRestartOk) return "Why idle: live SAA Hermes owns the schedule.";
+    return "Why idle: Hermes gateway is off — Restart it.";
+  }
   const pack = digestCache.get(projectId) || {};
   if (projectId && !digestKnown.has(projectId)) return "Why idle: still loading schedule…";
   const counts = workCounts();
@@ -5811,6 +5868,14 @@ async function setOrgNode(project, worker) {
   projectId = project || "";
   workerId = worker || "";
   lastSchedulePid = String(projectId || "");
+  gatewayRestartOk = true;
+  gatewayLiveOwns = false;
+  const deskCache = digestCache.get(projectId);
+  if (deskCache) {
+    if (typeof deskCache.gateway_running === "boolean") gatewayRunning = deskCache.gateway_running;
+    if (typeof deskCache.gateway_restart_ok === "boolean") gatewayRestartOk = deskCache.gateway_restart_ok;
+    if (typeof deskCache.gateway_live_owns === "boolean") gatewayLiveOwns = deskCache.gateway_live_owns;
+  }
   const desk = activityBody();
   if (desk && scheduleOpen) {
     const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Chief of Staff";
@@ -6015,13 +6080,14 @@ function settleLive(live, job) {
   scrollChatBottom();
 }
 
-function thinkingBubble() {
+function thinkingBubble(lane) {
   const el = document.createElement("article");
   el.className = "bubble bot live";
   el.dataset.liveKey = aimKey();
   const think = document.createElement("div");
   think.className = "thinking";
-  think.innerHTML = `<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="thinking-label">${escapeHtml(`Running · ${talkName()}`)}</span>`;
+  const engine = liveEngineName(lane);
+  think.innerHTML = `<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="thinking-label">${escapeHtml(engine)}</span>`;
   const text = document.createElement("div");
   text.className = "bubble-text";
   el.appendChild(think);
@@ -8758,10 +8824,11 @@ async function sendMessage(message, opts) {
     userEl.appendChild(attDiv);
   }
   clearAttachments();
-  let liveBubble = thinkingBubble();
+  const lane = (opts && opts.preset) || preset || "cos";
+  lastLiveProgress = liveEngineName(lane);
+  let liveBubble = thinkingBubble(lane);
   liveBubble.dataset.liveKey = aim;
   const ac = new AbortController();
-  const lane = (opts && opts.preset) || preset || "cos";
   const laneTag = (lane && lane !== "cos") ? lane : "";
   userEl.dataset.lane = laneTag || "cos";
   if (laneTag) liveBubble.dataset.lane = laneTag;
@@ -8888,14 +8955,7 @@ async function sendMessage(message, opts) {
             }
           }
           if (data.text && stillHere()) {
-            const el = activeBubble();
-            const label = el && el.querySelector(".thinking-label");
-            if (label) label.textContent = data.text;
-            const hint = $("workHint");
-            if (hint) {
-              hint.textContent = data.text;
-              hint.classList.remove("hidden");
-            }
+            paintLiveProgress(data.text, data.lane || laneTag || lane);
           }
         }
         if (event === "delta" && data.text) {
@@ -8906,7 +8966,7 @@ async function sendMessage(message, opts) {
             const textEl = el && el.querySelector(".bubble-text");
             const thinkEl = el && el.querySelector(".thinking");
             if (textEl) paintBotText(textEl, liveText);
-            if (thinkEl) thinkEl.classList.add("hidden");
+            if (thinkEl) thinkEl.classList.remove("hidden");
             stream.scrollTop = stream.scrollHeight;
           }
         }
@@ -8995,6 +9055,7 @@ async function sendMessage(message, opts) {
     }
     const cur = liveFor(aim);
     if (!cur || cur.abort === ac) {
+      if (stillHere()) lastLiveProgress = "";
       setLive("", { key: aim, projectId: sendProjectId, workerId: sendWorkerId });
     }
     if (stillHere()) {

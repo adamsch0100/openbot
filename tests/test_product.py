@@ -187,6 +187,14 @@ class SimpleBoardUiTests(unittest.TestCase):
         self.assertIn('id="workHint"', html)
         self.assertNotIn('id="stopBtn"', html)
         self.assertIn("thinkingBubble", js)
+        self.assertIn("function normalizeLiveProgress", js)
+        self.assertIn("function paintLiveProgress", js)
+        self.assertIn("function liveEngineName", js)
+        delta_at = js.find('if (event === "delta" && data.text)')
+        self.assertGreater(delta_at, 0)
+        delta_chunk = js[delta_at:delta_at + 700]
+        self.assertIn('thinkEl.classList.remove("hidden")', delta_chunk)
+        self.assertNotIn('thinkEl.classList.add("hidden")', delta_chunk)
         self.assertIn("event-stream", js)
         self.assertIn("if (job) break;", js)
         self.assertIn("progressWatchdog", js)
@@ -282,6 +290,7 @@ class SeamlessTogetherTests(unittest.TestCase):
         blob = " ".join(text for text, _lane in seen)
         self.assertNotIn("DeepSeek", blob)
         self.assertFalse(any("Chief of Staff ·" in text for text, _lane in seen))
+        self.assertTrue(any(str(text).startswith("board ·") for text, _lane in seen))
         src = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
         self.assertNotIn("elif preset in THREAD_PRESETS", src)
 
@@ -294,6 +303,26 @@ class SeamlessTogetherTests(unittest.TestCase):
         self.assertIn("OpenCode", engines["opencode"]["name"])
         self.assertIn("Nous Research", CREDIT)
         self.assertIn("Anomaly", CREDIT)
+
+
+class EngineChipTests(unittest.TestCase):
+    def test_engine_chip_names_engine_not_bot(self):
+        from openbot.router import engine_chip
+
+        self.assertEqual(engine_chip("cos", "Brief"), "board · Brief")
+        self.assertEqual(engine_chip("cos", "Chat"), "board · Chat")
+        self.assertEqual(engine_chip("think", "Think"), "Hermes Agent · Think")
+        self.assertEqual(engine_chip("builder", "Code"), "OpenCode · Code")
+        self.assertEqual(
+            engine_chip("think", "Think", "resuming Telegram session"),
+            "Hermes Agent · Think · resuming Telegram session",
+        )
+
+    def test_hermes_progress_uses_full_engine_name(self):
+        src = (ROOT / "openbot" / "hermes.py").read_text(encoding="utf-8")
+        self.assertIn("Hermes Agent · working", src)
+        self.assertIn("Hermes Agent · {tool_match}", src)
+        self.assertNotIn('on_progress("Hermes · working")', src)
 
 
 if __name__ == "__main__":

@@ -123,10 +123,10 @@ class TestHermesProgressChips(unittest.TestCase):
     def test_progress_event_format(self):
         """Progress events follow expected format."""
         test_events = [
-            "Hermes · terminal",
-            "Hermes · command",
-            "Hermes · file",
-            "Hermes · browser",
+            "Hermes Agent · terminal",
+            "Hermes Agent · command",
+            "Hermes Agent · file",
+            "Hermes Agent · browser",
             "OpenCode · edit",
         ]
         
@@ -136,7 +136,7 @@ class TestHermesProgressChips(unittest.TestCase):
             self.assertEqual(len(parts), 2)
             engine = parts[0].strip()
             action = parts[1].strip()
-            self.assertTrue(engine in ["Hermes", "OpenCode"])
+            self.assertTrue(engine in ["Hermes Agent", "OpenCode"])
             self.assertTrue(len(action) > 0)
 
 

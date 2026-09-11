@@ -607,7 +607,7 @@ def chat(
                 # Heartbeat: emit "working" chip if >5s without activity
                 if on_progress and not talk and (now - last_progress) > 5.0 and not heartbeat_sent:
                     try:
-                        on_progress("Hermes · working")
+                        on_progress("Hermes Agent · working")
                         heartbeat_sent = True
                     except Exception:
                         pass
@@ -650,7 +650,7 @@ def chat(
                             tool_match = stripped.split()[0] if stripped else "working"
                         if tool_match:
                             try:
-                                on_progress(f"Hermes · {tool_match}")
+                                on_progress(f"Hermes Agent · {tool_match}")
                                 last_progress = now
                                 heartbeat_sent = False
                             except Exception:
@@ -1675,8 +1675,10 @@ _HERMES_FAIL_NEXT = "Your move · Retry — Hermes exited. Not a key."
 
 
 def fail_kind_from_blob(blob: str) -> str:
-    """Ownership kind for a fail blob. Key/script beat Hermes-exit gore."""
+    """Ownership kind for a fail blob. Gateway scars beat skill-doc X-API-KEY dumps."""
     low = str(blob or "").lower()
+    if re.search(r"gateway shutdown|gateway stopped mid-run", low):
+        return "gateway"
     if re.search(
         r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key",
         low,
@@ -1689,8 +1691,6 @@ def fail_kind_from_blob(blob: str) -> str:
         return "script"
     if re.search(r"exited 130\b|\bsigint\b|cancelled by (?:the )?operator", low):
         return "cancelled"
-    if re.search(r"gateway shutdown|gateway stopped mid-run", low):
-        return "gateway"
     if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
         return "wallet"
     if re.search(r"busy.?session|session.?busy|already running|locked by another|timed? ?out|timeout", low):
@@ -1708,12 +1708,12 @@ def human_fail_reason(blob: str) -> str:
     text = re.sub(r"\s+", " ", str(blob or "")).strip()
     text = re.sub(r"\b(?:THINK_OK|OPS_OK)\b", "", text).strip()
     low = text.lower()
+    if re.search(r"gateway shutdown|gateway stopped mid-run", low):
+        return "Hermes gateway stopped mid-run"
     if re.search(r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key", low):
         return "API key rejected (401)"
     if re.search(r"busy.?session|session.?busy|already running|locked by another", low):
         return "Session busy"
-    if re.search(r"gateway shutdown|gateway stopped mid-run", low):
-        return "Hermes gateway stopped mid-run"
     if re.search(r"script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts/", low):
         return "Script not found"
     if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
