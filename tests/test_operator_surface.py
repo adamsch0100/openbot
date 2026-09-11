@@ -28,7 +28,9 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         self.assertLess(login.index("Approve"), login.index("Open page"))
         gw = js[js.find("function gatewayFailClusterHtml") : js.find("function paintWorkSurface")]
         self.assertIn("`${banner}${cronCardHtml", gw)
-        self.assertIn("const pid = String(projectId || \"\");", js[js.find("async function openSchedule") : js.find("function fillProfile")])
+        digest = js[js.find("async function loadCeoDigest") : js.find("function liveRunCard")]
+        self.assertIn("fetch(`/api/crons?project_id=", digest)
+        self.assertNotIn("Promise.all", digest)
         self.assertIn("function renderChatSchedule(rows, digest, focusId, forPid)", js)
         self.assertIn("lastSchedulePid = String(projectId || \"\");", js[js.find("async function setOrgNode") : js.find("function guessLane")])
         adam = js[js.find("function adamMustSee") : js.find("function operatorMoveRows")]
@@ -80,8 +82,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=155", html)
-        self.assertIn("styles.css?v=155", html)
+        self.assertIn("app.js?v=156", html)
+        self.assertIn("styles.css?v=156", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

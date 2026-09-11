@@ -14,8 +14,8 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v155 — desk follows the aimed CEO; Your move is one Adam gate.
-Last: v154 live. Switching CEO on Results could leave the previous CEO’s jobs on screen.
+Now: v156 — desk paints from cache before gateway status, so a hung Hermes probe cannot blank the list.
+Last: v155 live. Nadia Results stuck on Loading while waiting on gateway status.
 Next: Hard-refresh live. Do not Accept parked e2e restore. No stampede.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 

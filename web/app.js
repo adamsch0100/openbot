@@ -3543,7 +3543,10 @@ async function refreshGatewayStatus() {
   const pid = aim.projectId || projectId || "";
   if (!pid) return;
   try {
-    const res = await fetch(`/api/hermes/gateway/status?project_id=${encodeURIComponent(pid)}`);
+    const res = await Promise.race([
+      fetch(`/api/hermes/gateway/status?project_id=${encodeURIComponent(pid)}`),
+      new Promise((_, reject) => window.setTimeout(() => reject(new Error("gateway-status-timeout")), 2500))
+    ]);
     const data = await res.json();
     gatewayRunning = data.running !== false;
   } catch (_err) {
@@ -4965,33 +4968,37 @@ async function loadCeoDigest(refreshLive) {
   }
   try {
     const pid = projectId;
-    const [res, gwRes] = await Promise.all([
-      fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`),
-      fetch(`/api/hermes/gateway/status?project_id=${encodeURIComponent(pid)}`).catch(() => null)
-    ]);
+    const res = await fetch(`/api/crons?project_id=${encodeURIComponent(pid)}`);
     const data = await res.json();
-    if (gwRes && gwRes.ok) {
-      const gw = await gwRes.json().catch(() => ({}));
-      gatewayRunning = gw.running !== false;
-      data.gateway_running = gatewayRunning;
-    } else {
-      gatewayRunning = true;
-    }
     digestCache.set(pid, data);
     digestKnown.add(pid);
     if (projectId === pid) {
-      syncHermesHint();
       paintCeoBrief(data.digest);
       paintCeoLive(data);
       paintWorkTabs();
       paintEmbedLive();
       if (org && org.projects) renderOrg(org);
-      // Refresh indexSummary / chatFolder honesty now that digest failed counts are known.
       renderBotMeta({ skipSpend: true });
       if (scheduleOpen && String(lastSchedulePid || "") === String(pid || "")) {
         renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId, pid);
       }
     }
+    fetch(`/api/hermes/gateway/status?project_id=${encodeURIComponent(pid)}`)
+      .then((gwRes) => (gwRes && gwRes.ok ? gwRes.json() : null))
+      .then((gw) => {
+        if (!gw) return;
+        gatewayRunning = gw.running !== false;
+        const pack = digestCache.get(pid) || data;
+        pack.gateway_running = gatewayRunning;
+        digestCache.set(pid, pack);
+        if (projectId === pid) {
+          syncHermesHint();
+          if (scheduleOpen && String(lastSchedulePid || "") === String(pid || "")) {
+            renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId, pid);
+          }
+        }
+      })
+      .catch(() => {});
     return data;
   } catch (_err) {
     return null;
@@ -5370,6 +5377,7 @@ async function openSchedule(focusId) {
   const pid = String(projectId || "");
   scheduleOpen = true;
   scheduleFocusId = focusId || "";
+  lastSchedulePid = pid;
   writeWorkState({ open: true, view: scheduleView });
   paintWorkSurface();
   paintWorkTabs();
@@ -5377,19 +5385,16 @@ async function openSchedule(focusId) {
   const body = activityBody();
   const cached = pid ? digestCache.get(pid) : null;
   if (panel) panel.hidden = false;
-  if (body && lastSchedulePid !== pid) {
-    lastSchedulePid = pid;
-    const who = pid ? prettyCeoName(pid, (currentProject() || {}).name) : "Chief of Staff";
-    body.innerHTML = `<p class="cron-empty">Loading ${escapeHtml(who)}…</p>`;
-  }
-  await refreshGatewayStatus();
-  if (String(projectId || "") !== pid) return;
   if (!pid) {
     renderChatSchedule([], {}, focusId, "");
     paintWorkTabs();
     return;
   }
   if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId, pid);
+  else if (body) {
+    const who = prettyCeoName(pid, (currentProject() || {}).name);
+    body.innerHTML = `<p class="cron-empty">Loading ${escapeHtml(who)}…</p>`;
+  }
   const data = await loadCeoDigest(true);
   if (String(projectId || "") !== pid) return;
   if (data) renderChatSchedule(data.crons || [], data.digest || {}, focusId, pid);
