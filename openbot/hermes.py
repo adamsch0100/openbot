@@ -1229,6 +1229,16 @@ def saa_live_ssh(
             _reap_ssh_process_group(proc, pgid)
 
 
+def saa_live_python(script: str, timeout: int = 40) -> subprocess.CompletedProcess:
+    """Run one Python script on live SAA Hermes. One SSH hop — no tee tempfile."""
+    return saa_live_ssh(["python3", "-"], timeout=timeout, stdin=script)
+
+
+def saa_ssh_fail_text(proc: subprocess.CompletedProcess, fallback: str) -> str:
+    err = ((proc.stderr or "") + "\n" + (proc.stdout or "")).strip()
+    return (err[-400:] or fallback)
+
+
 def saa_overlay_cache_path() -> Path:
     from .store import ROOT
 
@@ -1309,36 +1319,17 @@ def dump_saa_live_cron_overlay(*, live: bool = False) -> list[dict]:
     overlay = cached
     if railway_cmd():
         try:
-            # Step 1: dump jobs.json and write overlay script
-            wrote = saa_live_ssh(["tee", "/tmp/saa-overlay-dump.py"], timeout=20, stdin=_SAA_OVERLAY_REMOTE)
-            if wrote.returncode != 0:
-                return cached
-            
-            # Step 2: run overlay dump and get running job IDs in one SSH session
-            # Coalesce both operations to reduce SSH calls
-            combined_script = (
-                "python3 /tmp/saa-overlay-dump.py && "
-                "echo '___RUNNING_JOBS___' && "
-                "hermes cron runs --limit 25"
-            )
-            ran = saa_live_ssh(["sh", "-c", combined_script], timeout=60)
-            
-            if ran.returncode == 0:
-                output = (ran.stdout or "") + "\n" + (ran.stderr or "")
-                
-                # Split output: overlay JSON before marker, running jobs after
-                parts = output.split("___RUNNING_JOBS___", 1)
-                overlay_text = parts[0]
-                running_text = parts[1] if len(parts) > 1 else ""
-                
-                dumped = _overlay_jobs_from_text(overlay_text)
-                if dumped:
-                    overlay = dumped
-                    # Mark live jobs from the same SSH session
-                    live_ids = set(parse_hermes_running_job_ids(running_text))
+            ran = saa_live_python(_SAA_OVERLAY_REMOTE, timeout=60)
+            dumped = _overlay_jobs_from_text((ran.stdout or "") + "\n" + (ran.stderr or ""))
+            if ran.returncode == 0 and dumped:
+                overlay = dumped
+                try:
+                    runs = saa_live_ssh(["hermes", "cron", "runs", "--limit", "25"], timeout=40)
+                    live_ids = set(parse_hermes_running_job_ids((runs.stdout or "") + "\n" + (runs.stderr or "")))
                     overlay = _mark_overlay_live(overlay, live_ids)
+                except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+                    overlay = _mark_overlay_live(overlay, set())
         except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-            # On any SSH failure, fall back to cache
             overlay = cached
         
         if overlay:
@@ -1615,14 +1606,24 @@ def saa_live_nudge_due(job_id: str) -> dict:
         "    open(path,'w',encoding='utf-8').write(json.dumps(data, indent=2)+'\\n')\n"
         "print('NUDGED' if ok else 'SKIP')\n"
     )
-    path = f"/tmp/nudge-{jid}.py"
     try:
-        wrote = saa_live_ssh(["tee", path], timeout=20, stdin=script)
-        if wrote.returncode != 0:
-            return {"ok": False, "code": wrote.returncode, "text": "tee failed", "id": jid}
-        ran = saa_live_ssh(["python3", path], timeout=40)
+        ran = saa_live_python(script, timeout=40)
+    except FileNotFoundError:
+        return {
+            "ok": False,
+            "code": 1,
+            "text": "railway CLI missing on this host — live SAA Hermes still owns the fire",
+            "id": jid,
+        }
     except (subprocess.TimeoutExpired, OSError) as err:
         return {"ok": False, "code": 1, "text": str(err)[:200], "id": jid}
+    if ran.returncode != 0:
+        return {
+            "ok": False,
+            "code": ran.returncode,
+            "text": saa_ssh_fail_text(ran, "live SSH failed — live SAA Hermes still owns the fire"),
+            "id": jid,
+        }
     out = ((ran.stdout or "") + "\n" + (ran.stderr or "")).strip()
     return {
         "ok": ran.returncode == 0 and "NUDGED" in out,

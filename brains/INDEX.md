@@ -14,10 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v160 — SAA desk: scars wait on live Hermes, paused jobs stay paused, chat is the operator inbox.
-Last: Saved search alerts immediate healthy on the live box. Board still painted 11 failed / 11 never from a stale copy.
-Next: Hard-refresh ?v=160. Facebook: Approve on ListLogic so Hermes keeps the cookies. Do not Restart SAA imported home.
-Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
+Now: v161 — SAA live is healthy (0 failed / 0 overdue). Goals tab is the 1w-5y board. Refresh live copy instead of Retrying scars.
+Last: SSH to live SAA: geo-citation-audit, citation-submission, keyword-opportunity, content-gap all ok. Overlay was a day-old photo. ListLogic Hermes Offline (deploys removed). Conversion Hermes Online.
+Next: Hard-refresh ?v=161. Open Goals. Refresh live copy on SAA Schedule. Do not Restart imported SAA home. ListLogic live Hermes needs Adam to redeploy.
+Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. Do not mass-retry. ListLogic live box is Offline — ask before redeploy.
 
 ## Vault
 

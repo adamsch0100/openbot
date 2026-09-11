@@ -3357,6 +3357,12 @@ function needChoices(row) {
   }
   if (kind === "diff") return [{ id: "accept", label: "Accept" }, { id: "reject", label: "Reject" }, { id: "open", label: "See diff" }];
   if (kind === "gate") return [{ id: "allow", label: "Allow" }, { id: "deny", label: "Deny" }];
+  if (kind === "horizon") {
+    return [
+      { id: "open_goals", label: "Open Goals" },
+      { id: "dismiss_horizon", label: "Dismiss" }
+    ];
+  }
   if (kind === "expired") return [{ id: "dismiss", label: "Dismiss" }];
   if (kind === "continue") return [{ id: "continue", label: "Continue" }];
   if (kind === "brief") return [{ id: "open", label: "Open chat" }];
@@ -3417,9 +3423,13 @@ async function runNeedChoice(btn) {
     window.open(url, "_blank", "noreferrer");
     return;
   }
-  if (act === "open" || act === "schedule" || act === "open_detail") {
+  if (act === "open" || act === "schedule" || act === "open_detail" || act === "open_goals") {
     if (pid) await setOrgNode(pid, "");
     if (presetLane && presetLane !== "cos") focusLane(presetLane);
+    if (act === "open_goals") {
+      openWork("goals", "");
+      return;
+    }
     if (act === "schedule" || act === "open_detail") openSchedule(cronId || id || "");
     return;
   }
@@ -3472,6 +3482,15 @@ async function runNeedChoice(btn) {
   if (act === "dismiss") {
     inboxSeen.add(id);
     renderOrg(org);
+    return;
+  }
+  if (act === "dismiss_horizon") {
+    inboxSeen.add(id);
+    try {
+      await fetch(`/api/horizons/${encodeURIComponent(id)}/dismiss`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    } catch (_err) { /* keep card gone locally */ }
+    const data = await (await fetch("/api/config")).json();
+    applyConfig(data);
     return;
   }
   if (act === "allow" || act === "deny" || act === "allow_cookie_export" || act === "allow_facebook") {
@@ -4192,13 +4211,33 @@ function paintActivityTitle() {
   if (!el) return;
   el.textContent = scheduleView === "next" ? "Next"
     : (scheduleView === "results" ? "Results"
-      : (scheduleView === "schedule" ? "Schedule" : "Doing"));
+      : (scheduleView === "schedule" ? "Schedule"
+        : (scheduleView === "goals" ? "Goals" : "Doing")));
 }
 
 function applySavedWork() {
   const saved = readWorkState();
   if (saved.view) scheduleView = saved.view;
   return Boolean(saved.open);
+}
+
+function horizonLabels() {
+  return [
+    ["week", "1 week"],
+    ["month", "1 month"],
+    ["quarter", "3 months"],
+    ["half", "6 months"],
+    ["year", "1 year"],
+    ["five", "5 years"]
+  ];
+}
+
+function horizonFilledCount(project) {
+  const h = (project && project.horizons) || {};
+  return horizonLabels().filter(([key]) => {
+    const raw = String(h[key] || "").trim();
+    return raw && raw !== "—" && raw !== "-";
+  }).length;
 }
 
 function cronTitle(name) {
@@ -4488,6 +4527,7 @@ function workCounts(forProjectId) {
       disabled: 0,
       total: 0,
       schedule: 0,
+      goals: ((cfg.org && cfg.org.projects) || []).reduce((n, row) => n + horizonFilledCount(row), 0),
       ready: Boolean(cfg.activity)
     };
   }
@@ -4505,7 +4545,8 @@ function workCounts(forProjectId) {
     enabled: enabledRows.length,
     disabled: disabledRows.length,
     total: all.length,
-    schedule: enabledRows.length,
+      schedule: enabledRows.length,
+      goals: horizonFilledCount(currentProject()),
     // Ready only after a finished digest fetch — avoids 0→N flash on CEO switch.
     ready: digestKnown.has(aim)
   };
@@ -4520,7 +4561,8 @@ function paintWorkTabs() {
       const n = counts[view] || 0;
       const label = view === "doing" ? "Doing"
         : (view === "next" ? "Next"
-          : (view === "schedule" ? "Schedule" : "Results"));
+          : (view === "schedule" ? "Schedule"
+            : (view === "goals" ? "Goals" : "Results")));
       btn.classList.toggle("on", scheduleOpen && scheduleView === view);
       btn.classList.toggle("hot", view === "doing" && n > 0);
       const scheduleNeed = prefersScheduleTrust(counts);
@@ -5103,6 +5145,78 @@ async function loadCeoDigest(refreshLive) {
   }
 }
 
+function goalsBoardHtml() {
+  const labels = horizonLabels();
+  if (!projectId) {
+    const projects = ((cfg.org && cfg.org.projects) || []);
+    if (!projects.length) return `<p class="cron-empty">${escapeHtml(emptyWorkCopy("goals"))}</p>`;
+    return `<p class="cron-story">Where each CEO is going. Open a CEO to edit its board — they notify you on change.</p>` + projects.map((row) => {
+      const h = row.horizons || {};
+      const bits = labels.map(([key, label]) => {
+        const val = String(h[key] || "").trim();
+        return `<p class="cron-outcome"><span class="cron-k">${escapeHtml(label)}</span> ${escapeHtml(val && val !== "—" ? val : "—")}</p>`;
+      }).join("");
+      return `<details class="cron-card" data-fold="goals-${escapeHtml(row.id || "")}">
+        <summary class="cron-head"><b>${escapeHtml(prettyCeoName(row.id, row.name))}</b><span>${horizonFilledCount(row)} / 6</span></summary>
+        ${bits}
+        <div class="need-actions">${choiceButtonsHtml([{ id: "open_goals", label: "Open Goals" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
+      </details>`;
+    }).join("");
+  }
+  const project = currentProject() || {};
+  const h = project.horizons || {};
+  const who = prettyCeoName(projectId, project.name);
+  const rows = labels.map(([key, label]) => `<div class="horizon-row">
+    <label for="horizon-${escapeHtml(key)}">${escapeHtml(label)}</label>
+    <textarea id="horizon-${escapeHtml(key)}" data-horizon="${escapeHtml(key)}" rows="2">${escapeHtml(h[key] && h[key] !== "—" ? h[key] : "")}</textarea>
+  </div>`).join("");
+  return `<article class="cron-card">
+    <div class="cron-head"><b>${escapeHtml(who)}</b><span>Goals</span></div>
+    <p class="cron-outcome">This CEO can update this board. You get a Needs-you when it changes.</p>
+    <form class="horizon-board" id="horizonForm">${rows}
+      <button type="submit" class="send">Save Goals</button>
+      <p class="cron-status" id="horizonSaveStatus"></p>
+    </form>
+  </article>`;
+}
+
+function bindGoalsBoard(root) {
+  const form = root && root.querySelector("#horizonForm");
+  if (!form || form.dataset.bound) return;
+  form.dataset.bound = "1";
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!projectId) return;
+    const horizons = {};
+    form.querySelectorAll("[data-horizon]").forEach((el) => {
+      horizons[el.getAttribute("data-horizon")] = el.value || "";
+    });
+    const status = $("horizonSaveStatus");
+    if (status) status.textContent = "Saving…";
+    try {
+      const res = await fetch(`/api/org/projects/${encodeURIComponent(projectId)}/horizons`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ horizons })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (status) status.textContent = data.error || "Save failed";
+        return;
+      }
+      if (status) status.textContent = "Saved. You’ll get a ping on this board.";
+      const cfgRes = await (await fetch("/api/config")).json();
+      applyConfig(cfgRes);
+      if (org && org.projects) {
+        const row = org.projects.find((item) => String(item.id || "") === String(projectId || ""));
+        if (row) row.horizons = (data.horizons || horizons);
+      }
+    } catch (_err) {
+      if (status) status.textContent = "Save failed";
+    }
+  });
+}
+
 function liveRunCard(row) {
   const who = currentProject() ? (currentProject().name || "This CEO") : "Chat";
   const engine = String(row.engine || PRESET_ENGINE[row.preset] || "board");
@@ -5123,6 +5237,7 @@ function gatewayOffHtml() {
     return `<article class="cron-card gateway-off">
     <div class="cron-head"><b>Live SAA Hermes</b><span>Owns schedule</span></div>
     <p class="cron-outcome">OttoBot chat is the operator inbox. Cron still runs on the live SAA Hermes box, which also texts Telegram. Replies here do not post to Telegram. ${escapeHtml(overlayAgeLine())} Do not Restart the imported home.</p>
+    ${overlayIsStale() ? `<button type="button" class="send overlay-refresh">Refresh live copy</button>` : ""}
   </article>`;
   }
   return `<article class="cron-card gateway-off">
@@ -5155,6 +5270,12 @@ function emptyWorkCopy(view) {
   }
   if (view === "next") {
     return `Nothing queued for ${who}. When this brief has a Next, or a job is due in the next day, it shows up here.${why ? ` ${why}` : ""}`;
+  }
+  if (view === "schedule") {
+    return `Pick a CEO to see the full enabled schedule roster.`;
+  }
+  if (view === "goals") {
+    return `Each CEO owns a 1 week → 5 year board. Updates notify you.`;
   }
   return `No finished jobs for ${who} yet. Results land here when work completes.${why ? ` ${why}` : ""}`;
 }
@@ -5255,6 +5376,15 @@ function renderChatSchedule(rows, digest, focusId, forPid) {
   paintActivityTitle();
   const want = String(focusId || scheduleFocusId || "");
   const view = scheduleView || "doing";
+  if (view === "goals") {
+    el.innerHTML = goalsBoardHtml();
+    bindGoalsBoard(el);
+    bindNeedActions(el);
+    bindWorkFolds(el);
+    paintWorkSurface();
+    paintWorkTabs();
+    return;
+  }
   if (!projectId) {
     const runs = ((cfg.activity || {}).live_runs) || [];
     const projects = ((cfg.org && cfg.org.projects) || []);
@@ -7697,6 +7827,30 @@ if ($("chatSchedule") && !$("chatSchedule").dataset.retryBound) {
   $("chatSchedule").dataset.retryBound = "1";
   $("chatSchedule").addEventListener("click", async (event) => {
     const btn = event.target.closest(".cron-retry");
+    const overlayBtn = event.target.closest(".overlay-refresh");
+    if (overlayBtn && projectId === "saa-homes") {
+      overlayBtn.disabled = true;
+      overlayBtn.textContent = "Refreshing…";
+      try {
+        const res = await fetch("/api/crons/overlay", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project_id: "saa-homes" })
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+          overlayBtn.textContent = data.error || data.text || "Refresh failed";
+          overlayBtn.disabled = false;
+          return;
+        }
+        overlayBtn.textContent = "Live copy updated";
+        await loadCeoDigest(true);
+      } catch (_err) {
+        overlayBtn.textContent = "Refresh failed";
+        overlayBtn.disabled = false;
+      }
+      return;
+    }
     if (!btn || !projectId) return;
     const jobId = btn.getAttribute("data-cron-id") || "";
     if (!jobId) return;

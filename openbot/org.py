@@ -68,6 +68,16 @@ CEO_PRETTY_NAMES = {
     "support": "Support",
 }
 
+HORIZON_KEYS = (
+    ("week", "1 week"),
+    ("month", "1 month"),
+    ("quarter", "3 months"),
+    ("half", "6 months"),
+    ("year", "1 year"),
+    ("five", "5 years"),
+)
+HORIZON_BLANK = frozenset({"", "—", "-", "–"})
+
 ORG = ROOT / "org"
 PROFILE_PATH = ORG / "profile.json"
 HERMES_HOMES = ROOT / "hermes-homes"
@@ -89,6 +99,13 @@ def _empty_index(title: str, folder: str) -> str:
         "Next: Chat, OpenCode, or Hermes — this CEO is wired.\n"
         "Blocker: —\n"
         "Goals: profitability · pay for itself first\n\n"
+        "## Horizons\n"
+        "Horizon-week: —\n"
+        "Horizon-month: —\n"
+        "Horizon-quarter: —\n"
+        "Horizon-half: —\n"
+        "Horizon-year: —\n"
+        "Horizon-five: —\n\n"
         f"Folder: {folder}\n"
         "Git: —\n"
         "Hermes: —\n\n"
@@ -674,6 +691,7 @@ def public_org(data: dict | None = None) -> dict:
                 "index_now": _now_line(index_text),
                 "index_next": index_field(index_text, "Next"),
                 "index_blocker": index_field(index_text, "Blocker"),
+                "horizons": parse_horizons(index_text),
                 "schedules": read_schedules(pid),
                 "crons": project_crons(pid, results=False),
                 "site_url": str(row.get("site_url") or "").strip(),
@@ -726,6 +744,133 @@ def _now_line(text: str) -> str:
 def index_field(text: str, label: str) -> str:
     match = re.search(rf"^{re.escape(label)}:\s*(.*)$", text or "", re.M)
     return clean_memory_text(match.group(1).strip() if match else "") or ""
+
+
+def parse_horizons(text: str) -> dict[str, str]:
+    """1 week / 1 month / 3 months / 6 months / 1 year / 5 years from INDEX."""
+    out = {key: "" for key, _label in HORIZON_KEYS}
+    blob = text or ""
+    for key, _label in HORIZON_KEYS:
+        match = re.search(rf"^Horizon-{re.escape(key)}:\s*(.*)$", blob, re.M)
+        if match:
+            out[key] = clean_memory_text(match.group(1).strip())
+    return out
+
+
+def horizon_filled(value: str) -> bool:
+    return str(value or "").strip() not in HORIZON_BLANK
+
+
+def horizons_equal(left: dict, right: dict) -> bool:
+    for key, _label in HORIZON_KEYS:
+        a = str((left or {}).get(key) or "").strip()
+        b = str((right or {}).get(key) or "").strip()
+        if a in HORIZON_BLANK:
+            a = ""
+        if b in HORIZON_BLANK:
+            b = ""
+        if a != b:
+            return False
+    return True
+
+
+def apply_horizons_to_text(text: str, horizons: dict) -> str:
+    blob = re.sub(r"^## Horizons\s*\n?", "", text or "", flags=re.M)
+    blob = re.sub(r"^Horizon-(?:week|month|quarter|half|year|five):.*\n?", "", blob, flags=re.M)
+    lines = []
+    for key, _label in HORIZON_KEYS:
+        raw = clean_memory_text(str((horizons or {}).get(key) or "").strip())[:280]
+        lines.append(f"Horizon-{key}: {raw or '—'}")
+    block = "## Horizons\n" + "\n".join(lines) + "\n"
+    if re.search(r"^Goals:\s*.*$", blob, flags=re.M):
+        return re.sub(
+            r"^(Goals:\s*.*)$",
+            lambda match: match.group(1) + "\n\n" + block,
+            blob,
+            count=1,
+            flags=re.M,
+        )
+    return blob.rstrip() + "\n\n" + block
+
+
+def _horizon_notices_path() -> Path:
+    return ORG / "horizon-notices.json"
+
+
+def _load_horizon_notices() -> list[dict]:
+    path = _horizon_notices_path()
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    rows = data if isinstance(data, list) else (data.get("notices") if isinstance(data, dict) else [])
+    return [row for row in (rows or []) if isinstance(row, dict) and row.get("id")]
+
+
+def _save_horizon_notices(rows: list[dict]) -> None:
+    ORG.mkdir(parents=True, exist_ok=True)
+    _horizon_notices_path().write_text(json.dumps(rows[:40], indent=2) + "\n", encoding="utf-8")
+
+
+def record_horizon_notice(project_id: str, old: dict, new: dict) -> dict | None:
+    pid = _slug(project_id)
+    if not pid or horizons_equal(old, new):
+        return None
+    changed = []
+    for key, label in HORIZON_KEYS:
+        if str((old or {}).get(key) or "").strip() != str((new or {}).get(key) or "").strip():
+            changed.append(label)
+    notice = {
+        "id": f"hz-{pid}-{now_iso().replace(':', '').replace('-', '').replace('T', '').replace('+', '')[:18]}-{os.urandom(2).hex()}",
+        "project_id": pid,
+        "at": now_iso(),
+        "changed": changed,
+        "horizons": {key: str((new or {}).get(key) or "") for key, _label in HORIZON_KEYS},
+        "dismissed": False,
+    }
+    rows = [row for row in _load_horizon_notices() if str(row.get("id") or "") != notice["id"]]
+    rows.insert(0, notice)
+    _save_horizon_notices(rows)
+    return notice
+
+
+def list_horizon_notices(*, include_dismissed: bool = False) -> list[dict]:
+    rows = _load_horizon_notices()
+    if include_dismissed:
+        return rows
+    return [row for row in rows if not row.get("dismissed")]
+
+
+def dismiss_horizon_notice(notice_id: str) -> dict:
+    nid = str(notice_id or "").strip()
+    if not nid:
+        raise ValueError("notice id required")
+    rows = _load_horizon_notices()
+    found = False
+    for row in rows:
+        if str(row.get("id") or "") == nid:
+            row["dismissed"] = True
+            found = True
+            break
+    if not found:
+        raise ValueError("notice not found")
+    _save_horizon_notices(rows)
+    return {"ok": True, "id": nid}
+
+
+def write_project_horizons(project_id: str, horizons: dict, *, notify: bool = True) -> dict:
+    pid = _slug(project_id)
+    path = _project_dir(pid) / "INDEX.md"
+    old_text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    old = parse_horizons(old_text)
+    text = apply_horizons_to_text(old_text, horizons)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(clean_memory_text(text), encoding="utf-8")
+    new = parse_horizons(path.read_text(encoding="utf-8"))
+    notice = record_horizon_notice(pid, old, new) if notify else None
+    return {"project_id": pid, "horizons": new, "notice": notice}
 
 
 def _public_tools(row: dict) -> dict:
@@ -1530,12 +1675,16 @@ def rename_worker(project_id: str, worker_id: str, name: str) -> dict:
     return public_org(data)
 
 
-def write_project_index(project_id: str, text: str) -> str:
+def write_project_index(project_id: str, text: str, *, notify_horizons: bool = True) -> str:
     pid = _slug(project_id)
     path = _project_dir(pid) / "INDEX.md"
     path.parent.mkdir(parents=True, exist_ok=True)
+    old = parse_horizons(path.read_text(encoding="utf-8") if path.is_file() else "")
     path.write_text(clean_memory_text(text), encoding="utf-8")
-    return path.read_text(encoding="utf-8")
+    written = path.read_text(encoding="utf-8")
+    if notify_horizons:
+        record_horizon_notice(pid, old, parse_horizons(written))
+    return written
 
 
 def write_worker_brain(project_id: str, worker_id: str, text: str) -> str:

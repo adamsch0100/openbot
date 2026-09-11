@@ -71,8 +71,8 @@ Own boring follow-up until it’s hot → Telegram `🔥 HANDOFF` + rich FUB Tas
 
 # Operator — SAA Conversion Hermes
 
-**Product:** FUB ISA for real estate teams  
-**This tenant:** Schwartz and Associates (SAA Homes)  
+**Product:** FUB ISA for real estate teams 
+**This tenant:** Schwartz and Associates (SAA Homes) 
 **FUB:** saahomes.followupboss.com
 
 ## Humans
@@ -139,3 +139,11 @@ SOURCES: This INDEX (doctrine + north-star), the Code folder, inbox, bus/handoff
 JUDGMENT: Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.
 OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.
 FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.
+
+## Horizons
+Horizon-week: SAA Conversion Hermes is Online. Nadia SMS never claims to be Adam. Facebook drafts stay Needs-you.
+Horizon-month: Paid seats (79/1, 149/5, 279/6+) that cover spend. SAA is the dogfood tenant.
+Horizon-quarter: ISA follow-up that books appointments without impersonating Adam/Mandi.
+Horizon-half: Nadia is the ISA layer SAA and other brokerages pay for.
+Horizon-year: Seats cover Hermes/OpenCode. Voice calling stays off until Adam says otherwise.
+Horizon-five: The ISA company that pays for itself.

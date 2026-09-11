@@ -29,6 +29,10 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
         self.assertIn("CEO handling · Restore script from bootstrap", js)
         self.assertIn("Script not found", js)
         self.assertIn("trustFailed", js)
+        self.assertIn("Refresh live copy", js)
+        self.assertIn("function goalsBoardHtml", js)
+        self.assertIn("/api/crons/overlay", js)
+        self.assertIn('saa_live_python', (ROOT / "openbot" / "hermes.py").read_text(encoding="utf-8"))
         self.assertIn("schedule: enabledRows.length", js)
         # live compute — no hardcoded snapshot totals
         self.assertNotIn("58 total / 51 enabled", js)
@@ -40,8 +44,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=160", html)
-        self.assertIn("styles.css?v=160", html)
+        self.assertIn("app.js?v=161", html)
+        self.assertIn("styles.css?v=161", html)
 
     def test_roster_status_priority_in_sort(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

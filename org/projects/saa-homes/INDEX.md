@@ -2,12 +2,20 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Board copy vs live SAA. Gateway scars wait on the live box. conversion-surge / competitor-content-watch / city-audit-batch-4 stay paused on purpose.
-Last: Overlay painted 11 failed / 11 never. Those were stale last_status rows, not 22 broken processes.
-Next: Trust Telegram on live Hermes for today’s fire. One process fail at a time if a *new* error appears after a live run.
+Now: Live Hermes healthy: 0 failed, 0 overdue. city-audit-wave-execute-09-11 due 06:00 UTC. Board copy refreshes on demand.
+Last: Live dump 2026-09-11: the 11 failed / 11 never on the board were a stale overlay. Citation + keyword jobs already succeeded yesterday.
+Next: Let 06:00 city-audit-wave fire on live. Refresh live copy. Paused jobs stay paused. Open Goals for the 1w-5y board.
 Blocker: GBP login = skip + note. Do not mass-retry old gateway-shutdown scars. Do not Restart the imported home. No stampede.
 Blocker: —
 Goals: —
+
+## Horizons
+Horizon-week: Live Hermes is healthy: 0 failed, 0 overdue. city-audit-wave-execute-09-11 due 06:00 UTC. Refresh the board copy; do not mass-retry scars.
+Horizon-month: Own NoCO city pages and the CHFA funnel. Ship SEO. GBP login stays skip + note. conversion-surge stays paused on purpose.
+Horizon-quarter: Compound Tier S city money queries. Qualified leads from /for-buyers/ and /for-sellers/.
+Horizon-half: Local pack + branded presence in the core 19 cities. Content authority feeding money pages.
+Horizon-year: Northern Colorado search ownership — top-3 for {city} realtor / homes for sale / sell home.
+Horizon-five: Schwartz and Associates is the obvious trusted local expert for anyone buying or selling in NoCO online.
 
 ## Residual risks (honest)
 
@@ -121,7 +129,7 @@ Adam wants Hermes to **run the program end-to-end**. Set it up correctly once; A
 
 **Master process:** `context/operator-playbook.md` — weekly rhythm, manual social checklist, lead capture, Browserbase scope.
 
-**Default:** Execute → notify → move on.  
+**Default:** Execute → notify → move on. 
 **Exceptions:** (1) Backlink outreach emails — draft → `approved` → send via SMTP. (2) GBP + social — Hermes emails a post pack; Adam publishes manually (no auto-post).
 
 ---

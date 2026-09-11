@@ -133,7 +133,7 @@ Pushes shortcuts when frustrated — hold ToS/CFAA line; verify output before sp
 
 # Workspace — ListLogic Growth Program
 
-**Scope:** https://listlogic.homes  
+**Scope:** https://listlogic.homes 
 **Goal:** Nationwide paid adoption among listing-active agents and brokerages.
 
 ## Read weekly
@@ -177,3 +177,11 @@ SOURCES: This INDEX (doctrine + north-star), the Code folder, inbox, bus/handoff
 JUDGMENT: Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.
 OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.
 FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.
+
+## Horizons
+Horizon-week: Live ListLogic Hermes has no replica (all deploys removed). Do not Restart the imported OpenBot home. Facebook drafts stay Needs-you.
+Horizon-month: Paid activations (trial to 39/mo). Adam gate to redeploy live Hermes if this CEO is back on.
+Horizon-quarter: A conversion path that covers Hermes/OpenCode spend.
+Horizon-half: ListLogic is the pricing story agents use with sellers.
+Horizon-year: Paid activations cover the seat first, then profit.
+Horizon-five: The listing-price company that pays for itself.

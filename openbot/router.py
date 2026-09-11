@@ -1012,6 +1012,11 @@ def need_choices(row: dict) -> list[dict]:
             {"id": "allow", "label": "Allow"},
             {"id": "deny", "label": "Deny"},
         ]
+    if kind == "horizon":
+        return [
+            {"id": "open_goals", "label": "Open Goals"},
+            {"id": "dismiss_horizon", "label": "Dismiss"},
+        ]
     if kind == "expired":
         return [{"id": "dismiss", "label": "Dismiss"}]
     if kind == "continue":
@@ -1187,6 +1192,37 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         if len(out) >= limit:
             break
     have = {str(row.get("project_id") or "") for row in out}
+    try:
+        from .org import list_horizon_notices
+
+        for row in list_horizon_notices():
+            if len(out) >= limit:
+                break
+            pid = str(row.get("project_id") or "")
+            if pid in RETIRED_CEO_IDS or (pid and pid not in live_ids and pid not in {"openbot", "support"}):
+                continue
+            who = names.get(pid) or pid
+            changed = ", ".join(str(item) for item in (row.get("changed") or []) if item)
+            horizon = {
+                "id": str(row.get("id") or ""),
+                "kind": "horizon",
+                "name": who,
+                "label": f"{who} updated Goals" + (f" ({changed})" if changed else ""),
+                "subject": f"{who} · Goals",
+                "why": changed or "Horizon board changed",
+                "project_id": pid,
+                "engine": "board",
+                "preset": "cos",
+                "url": "",
+                "at": str(row.get("at") or ""),
+            }
+            horizon["choices"] = need_choices(horizon)
+            primary = (horizon["choices"] or [{}])[0]
+            horizon["primary_action"] = str(primary.get("label") or primary.get("id") or "Open Goals")
+            out.insert(0, horizon)
+            have.add(pid)
+    except Exception:
+        pass
     for project in projects:
         if len(out) >= limit:
             break

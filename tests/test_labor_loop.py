@@ -203,6 +203,8 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertIn("No CFO/COO bots", text)
         self.assertIn("Never auto-post", text)
         self.assertIn("Run this company", text)
+        self.assertIn("Horizon-week:", text)
+        self.assertIn("Horizon-five:", text)
 
     def test_add_project_allows_nadia_and_listlogic(self):
         nadia = org_mod.add_project(str(self.home), "Nadia")

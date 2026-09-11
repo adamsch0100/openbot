@@ -2,11 +2,19 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v160 — OttoBot chat is the operator inbox. SAA gateway scars wait on live Hermes; paused jobs stay paused.
-Last: Chat live log named engine steps. SAA still showed 11 failed / 11 never from a stale overlay.
-Next: Hard-refresh ?v=160. Do not Restart SAA imported home. Do not Accept parked restore.
+Now: v161 — OttoBot Goals tab + honest SAA overlay refresh. Live SAA fires; board Retry no longer tees.
+Last: v160 desk isolation. Overlay was lying about 11 failed / 11 never.
+Next: Hard-refresh ?v=161. ListLogic live Hermes is Offline — Adam gate to redeploy. Do not Restart imported homes.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
+
+## Horizons
+Horizon-week: Honest SAA desk (live copy, not a day-old photo). Goals tab live. Do not Restart the imported SAA home.
+Horizon-month: Each seated CEO desk tells the truth (live vs imported). ListLogic Hermes is Offline with removed deploys — Adam gate to redeploy.
+Horizon-quarter: Delightful Doing / Next / Results / Schedule / Goals. Builder folder to change to diff to INDEX.
+Horizon-half: Other people can clone a delightful instance. Optional supporter, not a gate.
+Horizon-year: OttoBot is the board people actually run companies from. Engines stay theirs.
+Horizon-five: Fair, a little money. OpenCode and Hermes stay theirs.
 
 Folder: /tmp/tmp3cu0ad7k
 

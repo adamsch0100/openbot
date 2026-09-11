@@ -965,6 +965,19 @@ details.cron-card.compact[open] > .cron-glance {
   opacity: 0.35;
   font-weight: 400;
 }
+.horizon-board { display: grid; gap: 10px; }
+.horizon-row label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.horizon-row textarea {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+  font: inherit;
+}
 .wire-on { color: var(--mint, #8fbf9f); font-size: 11px; }
 .wire-off { color: var(--muted); font-size: 11px; }
 .wire-error {

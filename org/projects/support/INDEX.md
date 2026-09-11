@@ -8,6 +8,14 @@ Next: Classify and schedule
 Blocker: —
 Goals: Transparent Working-on board. Owner only at Accept / send / announce gates.
 
+## Horizons
+Horizon-week: File tickets. Owner only at Accept / send / announce.
+Horizon-month: Working-on board stays honest. No silent Support Accept.
+Horizon-quarter: Help surface that other people can clone.
+Horizon-half: Tickets stay files. Chat is not memory.
+Horizon-year: Support CEO pays for itself by making OttoBot delightful.
+Horizon-five: Help stays a CEO, not a chatbot.
+
 Folder: C:\Users\adamm\Projects\openbot\org\projects\support\work
 Git: local repo, no origin
 Hermes: C:\Users\adamm\Projects\openbot\hermes-homes\support

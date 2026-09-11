@@ -87,7 +87,11 @@ from .org import (
     rename_worker,
     set_project_folder,
     write_project_index,
+    write_project_horizons,
     write_worker_brain,
+    parse_horizons,
+    dismiss_horizon_notice,
+    read_project_index,
 )
 from .engine_proxy import inject_opencode_tree, maybe_proxy
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
@@ -141,6 +145,8 @@ KEY_ID = re.compile(r"^/api/keys/([a-zA-Z0-9_-]{4,32})$")
 LOGIN_ID = re.compile(r"^/api/logins/([a-zA-Z0-9_-]{4,32})$")
 PROJECT_ID = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})$")
 PROJECT_INDEX = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/index$")
+PROJECT_HORIZONS = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/horizons$")
+HORIZON_NOTICE = re.compile(r"^/api/horizons/([a-zA-Z0-9._:-]{6,80})/dismiss$")
 WORKER_ADD = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/workers$")
 ROUTINE_ID = re.compile(r"^/api/routines/([a-z0-9-]{8,32})$")
 ROUTINE_EXECUTE = re.compile(r"^/api/routines/([a-z0-9-]{8,32})/execute$")
@@ -1258,6 +1264,13 @@ class Handler(SimpleHTTPRequestHandler):
             if member:
                 org = filter_org(org, member_project_id(member))
             return self._json(200, org)
+        horizons = PROJECT_HORIZONS.match(path)
+        if horizons:
+            pid = horizons.group(1)
+            if self._require_perm("jobs_view", pid):
+                return None
+            text = read_project_index(pid)
+            return self._json(200, {"project_id": pid, "horizons": parse_horizons(text)})
         if path == "/api/crons":
             qs = parse_qs(urlparse(self.path).query)
             pid = (qs.get("project_id") or [""])[0].strip()
@@ -2099,13 +2112,37 @@ class Handler(SimpleHTTPRequestHandler):
             home = str(tools.get("hermes_home") or "").strip() or None
             if project_id == "saa-homes":
                 result = saa_live_nudge_due(job_id)
-                if home:
+                if result.get("ok") and home:
                     sync_saa_live_crons(home, live=True)
             else:
                 result = cron_run(job_id, home=home)
             result["project_id"] = project_id
             result["engine"] = "Hermes Agent"
             return self._json(200 if result.get("ok") else 400, result)
+
+        if path == "/api/crons/overlay":
+            project_id = str(data.get("project_id") or "").strip()
+            if self._require_perm("jobs_run", project_id or None):
+                return None
+            if project_id != "saa-homes":
+                return self._json(400, {"ok": False, "error": "live overlay is SAA Homes only"})
+            tools = project_tools(project_id) if project_id else {}
+            home = str(tools.get("hermes_home") or "").strip() or None
+            from .hermes import sync_saa_live_crons
+
+            result = sync_saa_live_crons(home, live=True)
+            result["project_id"] = project_id
+            result["engine"] = "Hermes Agent"
+            return self._json(200 if result.get("ok") else 400, result)
+
+        horizon_notice = HORIZON_NOTICE.match(path)
+        if horizon_notice and path.endswith("/dismiss"):
+            if self._require_perm("approve_needs_you"):
+                return None
+            try:
+                return self._json(200, dismiss_horizon_notice(horizon_notice.group(1)))
+            except ValueError as err:
+                return self._json(400, {"error": str(err)})
         
         if path == "/api/routines":
             if self._require_owner():
@@ -2482,6 +2519,14 @@ class Handler(SimpleHTTPRequestHandler):
                 if routine_data and routine_data.get("enabled"):
                     attach_routine_cron(routine_id, project_id)
             return self._json(200, {"ok": True})
+        horizons = PROJECT_HORIZONS.match(path)
+        if horizons:
+            pid = horizons.group(1)
+            if self._require_perm("index_edit", pid):
+                return None
+            blob = data.get("horizons") if isinstance(data.get("horizons"), dict) else data
+            result = write_project_horizons(pid, blob if isinstance(blob, dict) else {})
+            return self._json(200, result)
         self.send_error(404)
         return None
 
