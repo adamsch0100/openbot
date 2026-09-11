@@ -4953,7 +4953,7 @@ async function loadCeoDigest(refreshLive) {
     gatewayRunning = true;
     paintCeoBrief(null);
     paintCeoLive(null);
-    if (scheduleOpen) renderChatSchedule([], {}, scheduleFocusId);
+    if (scheduleOpen) renderChatSchedule([], {}, scheduleFocusId, "");
     return null;
   }
   const cached = digestCache.get(projectId);
@@ -4989,7 +4989,7 @@ async function loadCeoDigest(refreshLive) {
       // Refresh indexSummary / chatFolder honesty now that digest failed counts are known.
       renderBotMeta({ skipSpend: true });
       if (scheduleOpen && String(lastSchedulePid || "") === String(pid || "")) {
-        renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
+        renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId, pid);
       }
     }
     return data;
@@ -5118,7 +5118,10 @@ function closeSchedule() {
   paintWorkTabs();
 }
 
-function renderChatSchedule(rows, digest, focusId) {
+function renderChatSchedule(rows, digest, focusId, forPid) {
+  const expect = String(forPid !== undefined ? forPid : projectId || "");
+  if (expect !== String(projectId || "")) return;
+  if (String(lastSchedulePid || "") !== String(projectId || "")) return;
   const panel = $("chatSchedule");
   const el = activityBody();
   if (!el) return;
@@ -5382,14 +5385,14 @@ async function openSchedule(focusId) {
   await refreshGatewayStatus();
   if (String(projectId || "") !== pid) return;
   if (!pid) {
-    renderChatSchedule([], {}, focusId);
+    renderChatSchedule([], {}, focusId, "");
     paintWorkTabs();
     return;
   }
-  if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
+  if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId, pid);
   const data = await loadCeoDigest(true);
   if (String(projectId || "") !== pid) return;
-  if (data) renderChatSchedule(data.crons || [], data.digest || {}, focusId);
+  if (data) renderChatSchedule(data.crons || [], data.digest || {}, focusId, pid);
   else if (body && !cached) body.innerHTML = `<p class="cron-empty">Could not load the schedule.</p>`;
 }
 
@@ -5802,6 +5805,12 @@ function openWorkspace(name) {
 async function setOrgNode(project, worker) {
   projectId = project || "";
   workerId = worker || "";
+  lastSchedulePid = String(projectId || "");
+  const desk = activityBody();
+  if (desk && scheduleOpen) {
+    const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Chief of Staff";
+    desk.innerHTML = `<p class="cron-empty">Loading ${escapeHtml(who)}…</p>`;
+  }
   preset = "cos";
   focusedLane = "";
   unreadLanes = new Set();
@@ -7350,7 +7359,9 @@ function startLiveTick() {
       paintWorkTabs();
       if (scheduleOpen) {
         const pack = digestCache.get(projectId) || {};
-        renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId);
+        if (String(lastSchedulePid || "") === String(projectId || "")) {
+          renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId, projectId);
+        }
       }
     });
   } catch (_err) {
@@ -7476,7 +7487,7 @@ async function pollActivity() {
       paintCeoLive(digestCache.get(projectId));
       paintWorkTabs();
       if (scheduleOpen && String(lastSchedulePid || "") === String(projectId || "")) {
-        renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId);
+        renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId, projectId);
       }
     }
     if (!liveRunId) {
