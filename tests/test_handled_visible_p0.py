@@ -61,10 +61,12 @@ class HandledVisibleUiTests(unittest.TestCase):
         self.assertIn("Recovering · ${failJobs.length}", js)
         self.assertIn("failChromeHtml({", js)
 
-    def test_doing_shows_handling(self):
+    def test_doing_is_live_only(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("Handling · ${recover.length}", js)
-        self.assertIn("Handling · ${moving.length}", js)
+        self.assertNotIn("Handling · ${moving.length}", js)
+        self.assertNotIn("Handling · ${recover.length}", js)
+        self.assertIn('emptyWorkCopy("doing")', js)
+        self.assertIn("Nothing running on ${who}", js)
 
     def test_card_chrome_and_ctas(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -124,8 +126,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=153", html)
-        self.assertIn("styles.css?v=153", html)
+        self.assertIn("app.js?v=154", html)
+        self.assertIn("styles.css?v=154", html)
 
 
 

@@ -11,16 +11,24 @@ ROOT = Path(__file__).resolve().parent.parent
 class OperatorSurfaceUiTests(unittest.TestCase):
     def test_your_move_names_ceo(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("function failCardTitle", js)
-        self.assertIn("function opaqueJobName", js)
-        self.assertIn("function clusterFailRows", js)
-        self.assertIn("const clustered = clusterFailRows(failJobs)", js)
-        self.assertIn("const startOpen = Boolean(open);", js)
+        self.assertIn("function prettyCeoName", js)
+        self.assertIn("function isE2eNeed", js)
+        self.assertIn("function adamRailChoice", js)
+        self.assertIn(".slice(0, 1)", js[js.find("function operatorMoveRows") : js.find("function moveHeadLabel")])
+        self.assertIn("ms > -2 * 36e5", js[js.find("function cronIsDueSoon") : js.find("function isScheduleFluff")])
+        self.assertNotIn("ms > -7 * 864e5", js[js.find("function cronIsDueSoon") : js.find("function isScheduleFluff")])
+        self.assertIn("lastSchedulePid", js)
         self.assertIn("function handlingInboxHtml", js)
+        handling = js[js.find("function handlingInboxHtml") : js.find("function paintHelpPanel")]
+        self.assertIn('return "";', handling)
         self.assertIn("cron-card failed handled compact", js)
-        self.assertIn("class=\"org-inbox handling\"", js)
         self.assertIn("function ceoHandlingStoryHtml", js)
         self.assertIn("is handling", js)
+        login = js[js.find('if (kind === "login")') : js.find('if (kind === "cookie_export")')]
+        self.assertLess(login.index("Approve"), login.index("Open page"))
+        gw = js[js.find("function gatewayFailClusterHtml") : js.find("function paintWorkSurface")]
+        self.assertIn("`${banner}${cronCardHtml", gw)
+        self.assertIn("const pid = String(projectId || \"\");", js[js.find("async function openSchedule") : js.find("function fillProfile")])
         adam = js[js.find("function adamMustSee") : js.find("function operatorMoveRows")]
         self.assertIn('kind === "key"', adam)
         self.assertIn('kind === "wallet"', adam)
@@ -70,8 +78,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=153", html)
-        self.assertIn("styles.css?v=153", html)
+        self.assertIn("app.js?v=154", html)
+        self.assertIn("styles.css?v=154", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

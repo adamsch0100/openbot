@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v153 — keep Nadia/ListLogic seated when INDEX is live; rail hides Job ID / exit-130 gore.
-Last: v152 live. Recovering cards collapsed. ListLogic/Nadia still dropped after volume restart.
-Next: Hard-refresh live. Do not Accept parked restore. No stampede.
+Now: v154 — Your move is one Adam gate; Doing is live-only; Next is 24h due + fails; CEO switch clears the desk.
+Last: v153 seated Nadia/ListLogic. Tabs mixed CEOs, 7-day Due dump, Open page in the rail.
+Next: Hard-refresh live. Do not Accept parked e2e restore. No stampede.
 Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. No stampede.
 
 ## Vault

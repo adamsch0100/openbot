@@ -542,14 +542,34 @@ function failKindFromBlob(blob) {
   return "unknown";
 }
 
+const CEO_PRETTY = {
+  listlogic: "ListLogic",
+  nadia: "Nadia",
+  "saa-homes": "SAA Homes",
+  pmill: "Pmill.ai",
+  "pmill-ai": "Pmill.ai",
+  openbot: "OpenBot",
+  support: "Support"
+};
+
+function prettyCeoName(pid, fallback) {
+  const id = String(pid || "").toLowerCase();
+  if (CEO_PRETTY[id]) return CEO_PRETTY[id];
+  const raw = String(fallback || pid || "").trim();
+  if (CEO_PRETTY[raw.toLowerCase()]) return CEO_PRETTY[raw.toLowerCase()];
+  if (/^listlogic$/i.test(raw)) return "ListLogic";
+  if (/^nadia$/i.test(raw)) return "Nadia";
+  return raw;
+}
+
 function ceoMoveName(pidOrProject) {
   if (pidOrProject && typeof pidOrProject === "object") {
-    return String(pidOrProject.name || pidOrProject.id || "").trim() || talkName();
+    return prettyCeoName(pidOrProject.id, pidOrProject.name) || talkName();
   }
   const pid = String(pidOrProject || "");
   if (!pid) return "Chief of Staff";
   const project = ((cfg.org && cfg.org.projects) || []).find((row) => String(row.id) === pid);
-  return (project && project.name) || pid;
+  return prettyCeoName(pid, project && project.name) || pid;
 }
 
 function failMoveWho(row) {
@@ -1166,7 +1186,7 @@ function handlingAliveLine(counts) {
 }
 
 function ceoHandlingStoryHtml() {
-  const who = currentProject() ? (currentProject().name || "this CEO") : "Chief of Staff";
+  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Chief of Staff";
   const pack = digestCache.get(projectId) || {};
   const failed = ((pack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row))).slice().sort(ownershipSort);
   const top = failed[0];
@@ -3263,11 +3283,11 @@ function needChoices(row) {
   const kind = row && row.kind;
   if (kind === "login") {
     const out = [];
-    if (row.url) out.push({ id: "open_page", label: "Open page", url: row.url });
     (row.logins || []).forEach((login) => {
       out.push({ id: "use_login", label: `Approve ${login.label || login.username || "saved login"}`, login_id: login.id });
     });
     out.push({ id: "logged_in", label: "I already logged in" });
+    if (row.url) out.push({ id: "open_page", label: "Open page", url: row.url });
     out.push({ id: "open", label: "Type a login" });
     return out;
   }
@@ -3623,7 +3643,16 @@ function topDigestFailNeed(pid) {
   };
 }
 
+function isE2eNeed(row) {
+  const blob = [
+    row && row.subject, row && row.why, row && row.path, row && row.title,
+    row && row.file, row && row.id, row && row.diff
+  ].join(" ");
+  return typeof isE2ePing === "function" && isE2ePing(blob);
+}
+
 function adamMustSee(row) {
+  if (isE2eNeed(row)) return false;
   const k = String((row && row.kind) || "");
   if (k === "login" || k === "cookie_export" || k === "facebook_approval" || k === "diff" || k === "gate") return true;
   if (k === "failed") {
@@ -3634,16 +3663,33 @@ function adamMustSee(row) {
   return false;
 }
 
+function adamRailChoice(row) {
+  const choices = needChoices(row);
+  const preferred = choices.filter((c) => c && !/^(open_page|open|see_diff)$/i.test(String(c.id || "")));
+  return preferred[0] || choices[0] || null;
+}
+
+function adamNeedRank(row) {
+  const k = String((row && row.kind) || "");
+  if (k === "facebook_approval" || k === "login") return 0;
+  if (k === "cookie_export") return 1;
+  if (k === "key" || (k === "failed" && failKindFromBlob(row.last_error || row.why || "") === "key")) return 2;
+  if (k === "wallet") return 3;
+  if (k === "gate") return 4;
+  if (k === "diff") return 5;
+  return 9;
+}
+
 function operatorMoveRows() {
   const filtered = visibleNeedsYou()
     .filter((row) => {
       if (row.kind === "continue" || row.kind === "brief") return false;
-      // Cos staff crash is not the operator move when a CEO has real fails.
+      if (isE2eNeed(row)) return false;
       if (!row.project_id && row.kind === "failed" && anyCeoHasFailedWork()) return false;
       return adamMustSee(row);
     })
     .map((row) => {
-      const who = (row.name && row.name !== "this CEO") ? row.name : ceoMoveName(row.project_id);
+      const who = prettyCeoName(row.project_id, (row.name && row.name !== "this CEO") ? row.name : ceoMoveName(row.project_id));
       const subject = String(row.subject || "").replace(/^this CEO\b/i, who) || `${who} · ${row.why || row.kind || "Decide"}`;
       return Object.assign({}, row, { name: who, subject });
     });
@@ -3660,7 +3706,7 @@ function operatorMoveRows() {
     const need = topDigestFailNeed(pid);
     if (need && adamMustSee(need)) extra.push(need);
   });
-  return filtered.concat(extra);
+  return filtered.concat(extra).sort((a, b) => adamNeedRank(a) - adamNeedRank(b)).slice(0, 1);
 }
 
 function moveHeadLabel(rows) {
@@ -3672,51 +3718,26 @@ function moveHeadLabel(rows) {
 
 function inboxHtml() {
   const rows = operatorMoveRows();
-  if (rows.length) {
-    const items = rows.map((row) => {
-      const who = row.name || ceoMoveName(row.project_id);
-      const why = clipWire(row.why || row.label || "Needs you", 72);
-      const choices = needChoices(row).slice(0, 1);
-      return `<div class="org-inbox-item" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
+  if (!rows.length) return "";
+  const row = rows[0];
+  const who = row.name || ceoMoveName(row.project_id);
+  const why = clipWire(row.why || row.label || "Needs you", 72);
+  const choice = adamRailChoice(row);
+  const acts = choice
+    ? `<div class="org-inbox-actions need-actions">${choiceButtonsHtml([choice], row)}</div>`
+    : "";
+  return `<div class="org-inbox adam">
+    <div class="org-inbox-head">Your move</div>
+    <div class="org-inbox-item" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
       <b>${escapeHtml(who)}</b>
       <span>${escapeHtml(why)}</span>
-      <div class="org-inbox-actions need-actions">
-        ${choiceButtonsHtml(choices, row)}
-      </div>
-    </div>`;
-    }).join("");
-    return `<div class="org-inbox adam">
-    <div class="org-inbox-head">${escapeHtml(moveHeadLabel(rows))}</div>
-    ${items}
+      ${acts}
+    </div>
   </div>`;
-  }
-  return handlingInboxHtml();
 }
 
 function handlingInboxHtml() {
-  const projects = ((cfg.org && cfg.org.projects) || []).filter((row) => row && row.id);
-  const bits = [];
-  projects.forEach((project) => {
-    const counts = workCounts(project.id);
-    const n = Number(counts.failed || counts.trustFailed || 0);
-    if (!n) return;
-    const need = topDigestFailNeed(project.id);
-    const blob = need ? (need.last_error || need.why || "") : "";
-    const own = need ? failOwnership({ last_error: blob, project_id: project.id, id: need.cron_id }) : null;
-    const title = need ? failCardTitle({ last_error: blob, title: String(need.subject || "").replace(/^[^·]+ · /, ""), name: need.cron_id }) : "";
-    const line = own && own.owner === "adam"
-      ? `${title || "job"} · ${own.next}`
-      : `${n} failed · ${title || "CEO handling"}`;
-    bits.push(`<button type="button" class="org-inbox-item handling" data-open-desk="${escapeHtml(project.id)}">
-      <b>${escapeHtml(project.name)}</b>
-      <span>${escapeHtml(clipWire(line, 78))}</span>
-    </button>`);
-  });
-  if (!bits.length) return "";
-  return `<div class="org-inbox handling">
-    <div class="org-inbox-head">In motion</div>
-    ${bits.join("")}
-  </div>`;
+  return "";
 }
 
 function paintHelpPanel() {
@@ -3864,7 +3885,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     const wire = ceoWire(project);
     const busy = lives.has(aimKey(project.id, ""));
     const ping = (projectNeedsYou(project.id) || busy) ? " ping" : "";
-    const initials = ceoInitials(project.name);
+    const initials = ceoInitials(prettyCeoName(project.id, project.name));
     const hasBlocker = (project.index_blocker || "").trim() && (project.index_blocker || "").trim() !== "—";
     const queuedCount = queueByProject.get(project.id) || 0;
     const activeCount = activeByProject.get(project.id) || 0;
@@ -3889,11 +3910,11 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
     return `
       <div class="org-project${open ? " open" : ""}" data-project-wrap="${escapeHtml(project.id)}">
         <div class="org-row">
-          <button type="button" class="org-twist" data-toggle="${escapeHtml(project.id)}" aria-label="${open ? "Collapse" : "Expand"} ${escapeHtml(project.name)}">${open ? "▾" : "▸"}</button>
-          <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}${hasBlocker ? " has-blocker" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(project.name)}${busy ? " · working" : ""}">
+          <button type="button" class="org-twist" data-toggle="${escapeHtml(project.id)}" aria-label="${open ? "Collapse" : "Expand"} ${escapeHtml(prettyCeoName(project.id, project.name))}">${open ? "▾" : "▸"}</button>
+          <button type="button" class="org-btn${projectId === project.id && !workerId ? " on" : ""}${ping}${busy ? " working" : ""}${hasBlocker ? " has-blocker" : ""}" data-project="${escapeHtml(project.id)}" data-worker="" data-kind="ceo" title="${escapeHtml(prettyCeoName(project.id, project.name))}${busy ? " · working" : ""}">
             <span class="org-avatar" data-life="${busy ? "working" : (hasBlocker || projectNeedsYou(project.id) ? "blocked" : "idle")}" aria-hidden="true">${escapeHtml(initials)}</span>
             <span class="org-btn-text">
-              <b>${escapeHtml(project.name)}${statusChip}</b>
+              <b>${escapeHtml(prettyCeoName(project.id, project.name))}${statusChip}</b>
               ${wire ? `<span class="org-now">${escapeHtml(wire)}</span>` : ""}
             </span>
           </button>
@@ -4054,6 +4075,7 @@ function renderSchedules(project) {
 let scheduleOpen = false;
 let scheduleFocusId = "";
 let scheduleView = "doing";
+let lastSchedulePid = "";
 const digestKnown = new Set(); // projectIds whose cron digest finished loading
 
 function workStateKey() {
@@ -4182,7 +4204,8 @@ function paintScheduleButton() {
 }
 
 function ceoShortName(project) {
-  const raw = String((project && (project.name || project.id)) || "").trim();
+  const pretty = prettyCeoName(project && project.id, project && project.name);
+  const raw = String(pretty || "").trim();
   if (!raw) return "CEO";
   if (/^saa(\b|$|[\s-])/i.test(raw) || /saa.?homes/i.test(raw)) return "SAA";
   const words = raw.split(/\s+/).filter(Boolean);
@@ -4486,7 +4509,7 @@ function cronIsDueSoon(row) {
   const stamp = new Date(raw);
   if (Number.isNaN(stamp.getTime())) return false;
   const ms = stamp.getTime() - Date.now();
-  return ms <= 24 * 36e5 && ms > -7 * 864e5;
+  return ms <= 24 * 36e5 && ms > -2 * 36e5;
 }
 
 function isScheduleFluff(line) {
@@ -4965,7 +4988,9 @@ async function loadCeoDigest(refreshLive) {
       if (org && org.projects) renderOrg(org);
       // Refresh indexSummary / chatFolder honesty now that digest failed counts are known.
       renderBotMeta({ skipSpend: true });
-      if (scheduleOpen) renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
+      if (scheduleOpen && String(lastSchedulePid || "") === String(pid || "")) {
+        renderChatSchedule(data.crons || [], data.digest || {}, scheduleFocusId);
+      }
     }
     return data;
   } catch (_err) {
@@ -4997,7 +5022,7 @@ function gatewayOffHtml() {
 }
 
 function emptyWorkCopy(view) {
-  const who = currentProject() ? (currentProject().name || "this CEO") : "Chief of Staff";
+  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Chief of Staff";
   const why = whyIdleLine();
   if (view === "doing") {
     const counts = workCounts();
@@ -5060,13 +5085,14 @@ function cronFreshness(row) {
 }
 
 function gatewayFailClusterHtml(rows, want) {
-  if (!gatewayRunning) return gatewayOffHtml();
   const list = rows || [];
-  if (list.length === 1) return cronCardHtml(list[0], list[0].id === want, "result");
+  const banner = !gatewayRunning ? gatewayOffHtml() : "";
+  if (!list.length) return banner;
+  if (list.length === 1) return `${banner}${cronCardHtml(list[0], list[0].id === want, "result")}`;
   const inner = list.map((row) => cronCardHtml(row, row.id === want, "result")).join("");
-  return `<article class="cron-card cron-cluster">
+  return `${banner}<article class="cron-card cron-cluster">
     <div class="cron-head"><b>Old gateway stop scars</b><span>Stale</span></div>
-    <p class="cron-outcome">A past cleanup hit ${list.length} jobs. Live gateway is up — do not mass-retry. Open one job only if live Hermes still shows it red.</p>
+    <p class="cron-outcome">A past cleanup hit ${list.length} jobs. Restart the gateway once — do not mass-retry.</p>
     <details class="cron-stale" data-fold="gateway-jobs"><summary>Show ${list.length} jobs</summary>${inner}</details>
   </article>`;
 }
@@ -5113,22 +5139,7 @@ function renderChatSchedule(rows, digest, focusId) {
     if (view === "doing") {
       if (liveRunId) bits.push(liveRunCard({ preset: liveLane || preset, title: "This chat" }));
       bits.push(runs.length ? runs.map((row) => liveRunCard(row)).join("") : "");
-      const failJobs = allJobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort).slice(0, 6);
-      const moving = failJobs.filter((row) => {
-        const st = failOwnership(row).status;
-        return st === "Handling" || st === "Waiting Cos" || st === "Auto-retry" || st === "CEO";
-      });
-      if (moving.length) {
-        bits.push(`<h3 class="cron-section">Handling · ${moving.length}</h3>`);
-        bits.push(moving.map((row) => failChromeHtml({
-          ...row,
-          title: row.title || jobLabel(row.preset) || jobStoryTitle(row) || "Job",
-          last_status: row.status || row.last_status || "error",
-          last_error: row.last_error || row.error || row.blocker || row.text || row.summary || "",
-          cron_id: row.cron_id || row.id || ""
-        }, true, "live")).join(""));
-      }
-      if (!liveRunId && !runs.length && !moving.length) {
+      if (!liveRunId && !runs.length) {
         bits.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`);
       }
     } else if (view === "next") {
@@ -5150,7 +5161,7 @@ function renderChatSchedule(rows, digest, focusId) {
       if (next.length) {
         bits.push(`<h3 class="cron-section">CEO next · ${next.length}</h3>`);
         bits.push(next.map((row) => `<details class="cron-card" data-fold="ceo-${escapeHtml(row.id || "")}">
-          <summary class="cron-head"><b>${escapeHtml(row.name || row.id)}</b><span>Scheduled</span></summary>
+          <summary class="cron-head"><b>${escapeHtml(prettyCeoName(row.id, row.name))}</b><span>Scheduled</span></summary>
           <p class="cron-outcome">${escapeHtml(clipWire(cleanBotText(row.index_next), 180))}</p>
           <div class="need-actions">${choiceButtonsHtml([{ id: "continue", label: "Continue" }, { id: "open", label: "Open chat" }], { id: row.id, project_id: row.id, preset: "cos" })}</div>
         </details>`).join(""));
@@ -5218,19 +5229,18 @@ function renderChatSchedule(rows, digest, focusId) {
     .slice()
     .sort((a, b) => String(a.next_run_at || "").localeCompare(String(b.next_run_at || "")));
   const soon = scheduled.filter((row) => cronIsDueSoon(row));
-  const later = scheduled.filter((row) => !cronIsDueSoon(row));
+  const later = scheduled.filter((row) => {
+    const stamp = new Date(String(row.next_run_at || "").trim());
+    if (Number.isNaN(stamp.getTime())) return false;
+    return stamp.getTime() > Date.now() && !cronIsDueSoon(row);
+  });
   const sections = [];
   const waitName = running.length ? (running[0].title || cronTitle(running[0].name)) : "";
   if (view === "doing") {
     if (!gatewayRunning) sections.push(gatewayOffHtml());
     if (boardRuns.length) sections.push(boardRuns.map((row) => liveRunCard(row)).join(""));
     sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : "");
-    const recover = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort).slice(0, 8);
-    if (recover.length) {
-      sections.push(`<h3 class="cron-section">Handling · ${recover.length}</h3>`);
-      sections.push(recover.map((row) => failChromeHtml(row, row.id === want, "next")).join(""));
-    }
-    if (!boardRuns.length && !running.length && !recover.length) {
+    if (!boardRuns.length && !running.length) {
       sections.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`);
     }
   } else if (view === "next") {
@@ -5252,9 +5262,9 @@ function renderChatSchedule(rows, digest, focusId) {
       const bits = [`Auto ${autoN}`, `CEO ${ceoN}`, `Cos ${cosN}`, `Adam ${adamN}`].filter((x) => !x.endsWith(" 0"));
       const ageBit = olderFails.length ? ` · Fresh ${freshFails.length} · Older ${olderFails.length}` : "";
       sections.push(`<h3 class="cron-section">Action queue · ${actionFails.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}${ageBit}</h3>`);
-      sections.push(freshFails.map((row) => failChromeHtml(row, row.id === want, "next")).join(""));
+      sections.push(clusterFailRows(freshFails).map(({ row, extra }) => failChromeHtml(row, row.id === want, "next", extra)).join(""));
       if (olderFails.length) {
-        sections.push(`<details class="cron-stale" data-fold="older-action-fails" open><summary>Older fails · ${olderFails.length}</summary>${olderFails.map((row) => failChromeHtml(row, row.id === want, "next")).join("")}</details>`);
+        sections.push(`<details class="cron-stale" data-fold="older-action-fails"><summary>Older fails · ${olderFails.length}</summary>${olderFails.map((row) => failChromeHtml(row, row.id === want, "next")).join("")}</details>`);
       }
     }
     const dueShow = soon.slice(0, 6);
@@ -5298,20 +5308,6 @@ function renderChatSchedule(rows, digest, focusId) {
       sections.push(`<details class="cron-stale" data-fold="internal-roster"><summary>Board internals · ${noiseRoster.length}</summary>${noiseRoster.map((row) => scheduleRosterRowHtml(row, want)).join("")}</details>`);
     }
   } else {
-    const waitRecoverIds = new Set(failed.map((row) => String(row.id || "")));
-    const waits = operatorMoveRows().filter((row) => {
-      if (String(row.project_id || "") !== String(projectId || "")) return false;
-      if (row.kind === "failed" && (waitRecoverIds.has(String(row.cron_id || "")) || waitRecoverIds.has(String(row.id || "")))) return false;
-      return true;
-    });
-    if (waits.length) {
-      sections.push(`<h3 class="cron-section">${escapeHtml(moveHeadLabel(waits))} · ${waits.length}</h3>`);
-      sections.push(waits.map((row) => `<article class="cron-card">
-        <div class="cron-head"><b>${escapeHtml(row.subject || row.name || "CEO")}</b><span>${escapeHtml(row.kind || "")}</span></div>
-        <p class="cron-outcome">${escapeHtml(row.why || row.label || "")}</p>
-        <div class="need-actions">${choiceButtonsHtml(needChoices(row).slice(0, 2), row)}</div>
-      </article>`).join(""));
-    }
     if (!gatewayRunning) sections.push(gatewayOffHtml());
     const actionFails = failed.filter((row) => !cronIsStaleFail(row)).slice().sort(ownershipSort);
     const recovering = actionFails.filter((row) => {
@@ -5368,6 +5364,7 @@ async function openWork(view, focusId) {
 }
 
 async function openSchedule(focusId) {
+  const pid = String(projectId || "");
   scheduleOpen = true;
   scheduleFocusId = focusId || "";
   writeWorkState({ open: true, view: scheduleView });
@@ -5375,17 +5372,23 @@ async function openSchedule(focusId) {
   paintWorkTabs();
   const panel = $("chatSchedule");
   const body = activityBody();
-  const cached = projectId ? digestCache.get(projectId) : null;
+  const cached = pid ? digestCache.get(pid) : null;
   if (panel) panel.hidden = false;
+  if (body && lastSchedulePid !== pid) {
+    lastSchedulePid = pid;
+    const who = pid ? prettyCeoName(pid, (currentProject() || {}).name) : "Chief of Staff";
+    body.innerHTML = `<p class="cron-empty">Loading ${escapeHtml(who)}…</p>`;
+  }
   await refreshGatewayStatus();
-  if (!projectId) renderChatSchedule([], {}, focusId);
-  else if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
-  else if (body) body.innerHTML = `<p class="cron-empty">Loading what’s moving…</p>`;
-  if (!projectId) {
+  if (String(projectId || "") !== pid) return;
+  if (!pid) {
+    renderChatSchedule([], {}, focusId);
     paintWorkTabs();
     return;
   }
+  if (cached) renderChatSchedule(cached.crons || null, cached.digest || cached, focusId);
   const data = await loadCeoDigest(true);
+  if (String(projectId || "") !== pid) return;
   if (data) renderChatSchedule(data.crons || [], data.digest || {}, focusId);
   else if (body && !cached) body.innerHTML = `<p class="cron-empty">Could not load the schedule.</p>`;
 }
@@ -7472,7 +7475,9 @@ async function pollActivity() {
       digestCache.set(projectId, Object.assign({}, pack, { live_runs: data.live_runs }));
       paintCeoLive(digestCache.get(projectId));
       paintWorkTabs();
-      if (scheduleOpen) renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId);
+      if (scheduleOpen && String(lastSchedulePid || "") === String(projectId || "")) {
+        renderChatSchedule(pack.crons || [], pack.digest || pack, scheduleFocusId);
+      }
     }
     if (!liveRunId) {
       const fresh = (data.jobs || []).some((job) => {

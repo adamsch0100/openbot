@@ -58,6 +58,15 @@ SUPPORT_CEO_ID = "support"
 SUPPORT_WORKER_ID = SUPPORT_CEO_ID
 HOST_CEO_ID = "openbot"
 HOST_CEO_NAME = "OpenBot"
+CEO_PRETTY_NAMES = {
+    "listlogic": "ListLogic",
+    "nadia": "Nadia",
+    "saa-homes": "SAA Homes",
+    "pmill": "Pmill.ai",
+    "pmill-ai": "Pmill.ai",
+    "openbot": HOST_CEO_NAME,
+    "support": "Support",
+}
 
 ORG = ROOT / "org"
 PROFILE_PATH = ORG / "profile.json"
@@ -275,6 +284,7 @@ def _reattach_row(pid: str, text: str, home: Path | None) -> dict:
     title = (text.splitlines()[0].lstrip("# ").strip() if text else "") or pid
     if " (archived)" in title.lower():
         title = title.rsplit(" (archived)", 1)[0].strip() or pid
+    title = CEO_PRETTY_NAMES.get(pid) or title
     folder = ""
     for line in text.splitlines():
         if line.startswith("Folder:"):

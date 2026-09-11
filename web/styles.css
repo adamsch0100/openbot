@@ -513,8 +513,27 @@ body {
   font-size: 11px;
   color: var(--muted);
 }
-.org-inbox.adam .org-inbox-head {
-  color: var(--bronze);
+.org-inbox.adam {
+  gap: 6px;
+  padding: 8px 10px 10px;
+}
+.org-inbox.adam .org-inbox-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 4px 0 0;
+}
+.org-inbox.adam .org-inbox-item b {
+  font-size: 13px;
+}
+.org-inbox.adam .org-inbox-item span {
+  flex: 1 1 140px;
+  white-space: normal;
+  line-height: 1.35;
+}
+.org-inbox.adam .org-inbox-actions {
+  margin-left: auto;
 }
 .org-inbox-item.handling {
   width: 100%;
