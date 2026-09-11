@@ -41,8 +41,12 @@ FAILURE_NOTE = re.compile(
     re.I,
 )
 AUDIT_ASK = re.compile(
-    r"\b(audit (the )?(jobs|runs|week|log)|sample review|friday audit|"
-    r"action log)\b",
+    r"\b(audit (the )?(jobs|runs|week|log|memory)|sample review|friday audit|"
+    r"action log|what do (the )?bots remember|memory audit)\b",
+    re.I,
+)
+PRUNE_ASK = re.compile(
+    r"\b(prune (the )?(memory|index)|weekly review|delete stale memory)\b",
     re.I,
 )
 BUS_LANES = (
@@ -100,7 +104,7 @@ CONTRACTS = {
     },
     "ceo": {
         "job": "Run this company. Own P&L. Pay for this seat first, then profit. Spin Code/Think/Research/Ops or a named worker when a bottleneck repeats. No CFO/COO bots — you are the C-suite.",
-        "sources": "This INDEX (doctrine + north-star), the Code folder, inbox, bus/handoffs, live site/metrics.",
+        "sources": "Operator profile, this INDEX (doctrine + Horizons), DECISIONS, the Code folder, inbox, bus/handoffs, live site/metrics.",
         "judgment": "Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.",
         "output": "Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.",
         "forbidden": "Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.",
@@ -116,6 +120,8 @@ CONTRACTS = {
 
 MEMORY_POLICY = (
     "MEMORY POLICY: remember preferences, style, format, relationships, and durable rules. "
+    "OPERATOR.md is who the human is. DECISIONS.md is settled calls — do not reopen without flagging. "
+    "Horizons on this CEO INDEX are the Goals; labor serves them. "
     "Do not treat memory as truth for prices, balances, dates, inventory, campaign stats, "
     "customer/employee state, contracts, or live docs. Re-open the source. "
     "If the source is down, say SOURCE UNAVAILABLE. Never silently substitute."
@@ -216,6 +222,14 @@ def law_extra(preset: str, project_id: str | None = None, worker_id: str | None 
     rules = rules_excerpt(900)
     if rules:
         parts.append("RULES (scar tissue):\n" + rules)
+    try:
+        from .memory import decisions_excerpt
+
+        decided = decisions_excerpt(project_id)
+        if decided:
+            parts.append("DECISIONS (settled; do not reopen without flagging the operator):\n" + decided)
+    except Exception:
+        pass
     return "\n\n".join(parts)
 
 
@@ -699,8 +713,14 @@ def cos_file_reply(message: str) -> str | None:
         return marketplace_hire_reply()
     if FAILURE_NOTE.search(message or ""):
         return failure_rule_reply(message or "")
+    if PRUNE_ASK.search(message or ""):
+        from .memory import prune_reply
+
+        return prune_reply()
     if AUDIT_ASK.search(message or ""):
-        return sample_audit()
+        from .memory import memory_audit_text
+
+        return sample_audit() + "\n\n" + memory_audit_text()
     return None
 
 

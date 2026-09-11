@@ -24,9 +24,13 @@ org/cron_seen.json
 saa-live-overlay.json
 org/saa-live-overlay.json
 org/RULES.md
+org/OPERATOR.md
+org/DECISIONS.md
+org/projects/*/DECISIONS.md
 org/projects/opencode-test/
-org/RULES.md
 org/projects/*/bus/
+org/projects/*/founding.json
+org/horizon-notices.json
 hermes-homes/
 org/projects/workspace/
 mobile/node_modules/

@@ -2,19 +2,19 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v161 — OttoBot Goals tab + honest SAA overlay refresh. Live SAA fires; board Retry no longer tees.
-Last: v160 desk isolation. Overlay was lying about 11 failed / 11 never.
-Next: Hard-refresh ?v=161. ListLogic live Hermes is Offline — Adam gate to redeploy. Do not Restart imported homes.
+Now: v167 — Operator profile + DECISIONS in every job packet. Reject saves a rule. Labor serves Horizons.
+Last: v166 — OttoBot Goals are a paid multi-tenant wrapper. Add CEO Think proposes from the operator Goal.
+Next: Hard-refresh ?v=167. Aim Cos and say memory audit. Do not fire Ask CEO to propose against live SAA.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
-Goals: Fair, transparent, a little money. OpenCode and Hermes stay theirs. Users make the product better before anyone pays.
+Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons
-Horizon-week: Honest SAA desk (live copy, not a day-old photo). Goals tab live. Do not Restart the imported SAA home.
-Horizon-month: Each seated CEO desk tells the truth (live vs imported). ListLogic Hermes is Offline with removed deploys — Adam gate to redeploy.
-Horizon-quarter: Delightful Doing / Next / Results / Schedule / Goals. Builder folder to change to diff to INDEX.
-Horizon-half: Other people can clone a delightful instance. Optional supporter, not a gate.
-Horizon-year: OttoBot is the board people actually run companies from. Engines stay theirs.
-Horizon-five: Fair, a little money. OpenCode and Hermes stay theirs.
+Horizon-week: 1 paying tenant on a live CEO desk · operators who will pay · via hosted OttoBot wrapping Hermes + OpenCode · proof tenant login + isolated INDEX
+Horizon-month: Paid board seats (engines billed to the tenant) · companies who want CEOs without running glue · via signup · proof paid seats vs churn
+Horizon-quarter: Multi-tenant isolation — INDEX, Hermes home, OpenCode folder per company · tenants · via product · proof tenant A cannot see tenant B
+Horizon-half: Seat MRR covers OttoBot's own Hermes + OpenCode · tenants · via subscriptions · proof revenue vs token spend
+Horizon-year: OttoBot is the paid board companies run from · tenants · via CEOs + engines that stay theirs · proof paying tenants with live Horizons
+Horizon-five: The wrapper that gets paid for Hermes Agent + OpenCode · via multi-tenant seats · proof P&L
 
 Folder: /tmp/tmp3cu0ad7k
 
@@ -29,7 +29,7 @@ Folder: /tmp/tmp3cu0ad7k
 
 ## How this CEO operates
 
-You run OttoBot as a company. Pay for the instance first, then profit. Cos chairs the board. Each product CEO (SAA, ListLogic, Nadia, Pmill) owns that P&L. No CFO/COO bots — spin a worker only when the same bottleneck repeats.
+You run OttoBot as a company. Tenants pay for the hosted board. Hermes Agent and OpenCode stay theirs. Cos chairs the board. Each product CEO (SAA, ListLogic, Nadia, Pmill) owns that P&L. No CFO/COO bots — spin a worker only when the same bottleneck repeats.
 
 Escalate Auto → this CEO → Cos if stuck → Adam only for keys, money, login, publish, pay, delete, sign.
 
@@ -40,11 +40,11 @@ Escalate Auto → this CEO → Cos if stuck → Adam only for keys, money, login
 | Clone and run this repo | $0 | No. MIT. |
 | Supporter (help, update pings) | $7 / month | No. Stop paying, it still runs. |
 | Monthly access to download or run | never | That is a wrapper tax. |
-| Hosted multi-tenant | not v1 | — |
+| Hosted multi-tenant board | paid seat | Tenants pay OttoBot. Engines billed to them. |
 
 Engines and model tokens are never in that price. User pays OpenCode / Hermes / providers directly.
 
-Start: free open source. Charge only after other people can clone a delightful instance. First money is optional supporter, not a paywall.
+Start: operator instance first. Charge tenants for the hosted board. Hermes and OpenCode stay theirs.
 
 Give-back: 10% of supporter revenue, split GitHub Sponsors to Nous Research and OpenCode (anomalyco).
 

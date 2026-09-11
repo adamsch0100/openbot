@@ -333,7 +333,7 @@ function escapeHtml(s) {
   }[c]));
 }
 
-const PACKET_LINE = /^(You are the |You are Chief of Staff|You report to Chief of Staff|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in (OpenBot|OttoBot) Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |.+ CEO — reports to Chief of Staff)/i;
+const PACKET_LINE = /^(You are the |You are Chief of Staff|You report to Chief of Staff|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in (OpenBot|OttoBot) Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |OttoBot chat is the inbox|.+ CEO — reports to Chief of Staff)/i;
 
 function statusOnly(text) {
   const rows = String(text || "").split("\n").map((line) => line.trim()).filter(Boolean);
@@ -1127,6 +1127,12 @@ function briefHonestyLine(cleaned) {
   const project = currentProject();
   const trust = scheduleTrustNowLine(counts, project);
   if (trust) return trust;
+  if (!project) {
+    const glance = orgWeekGlance();
+    if (glance) return glance;
+  }
+  const week = weekGoal(project);
+  if (week && !(counts.failed > 0 && prefersScheduleTrust(counts))) return week;
   const fromNow = indexLineUseful(project && project.index_now)
     || indexLineUseful(indexField(cleaned, "Now"));
   const fromNext = indexLineUseful(project && project.index_next)
@@ -2172,7 +2178,16 @@ async function postProject(folder, name, extras) {
   if (res.ok) {
     hideNodeMenu();
     await applyOrg(data);
-    if (data.project_id) await setOrgNode(data.project_id, "");
+    if (data.project_id) {
+      await setOrgNode(data.project_id, "");
+      if (data.founding_prompt) {
+        sendMessage(data.founding_prompt, {
+          preset: "think",
+          display: data.founding_display || "Ask this CEO to propose Goals from what you want"
+        });
+        openWork("goals");
+      }
+    }
   }
 }
 
@@ -2247,7 +2262,7 @@ function applyCeoSeatPresetToForm(name) {
 function addCeoFormHtml() {
   const folderHint = escapeHtml((org && org.folder) || "default OpenCode folder");
   return `
-      <p class="menu-note">Name unlocks presets (Pmill, Nadia, ListLogic). Site / GitHub / Railway wire tools on seat.</p>
+      <p class="menu-note">Goal is what Think turns into six Horizons. You Accept before they go live. Name unlocks presets (Pmill, Nadia, ListLogic).</p>
       <div class="menu-field">
         <label for="menuCeoAddName">Name</label>
         <input id="menuCeoAddName" type="text" placeholder="Pmill" autocomplete="off" />
@@ -2272,8 +2287,8 @@ function addCeoFormHtml() {
           <input id="menuCeoRailway" type="text" placeholder="project or service name" autocomplete="off" />
         </div>
         <div class="menu-field">
-          <label for="menuCeoGoals">Goal</label>
-          <input id="menuCeoGoals" type="text" placeholder="profitability" autocomplete="off" />
+          <label for="menuCeoGoals">What you want this CEO to do</label>
+          <input id="menuCeoGoals" type="text" placeholder="paid tenants wrapping Hermes + OpenCode" autocomplete="off" />
         </div>
       </div>
       <fieldset class="menu-field menu-auth">
@@ -3272,6 +3287,21 @@ function jobStoryTitle(job) {
   return "last job";
 }
 
+function weekGoal(project) {
+  const week = String((project && project.horizons && project.horizons.week) || "").trim();
+  return (week && week !== "—") ? week : "";
+}
+
+function orgWeekGlance() {
+  const projects = ((org && org.projects) || (cfg.org && cfg.org.projects) || []);
+  return projects.map((row) => {
+    const name = prettyCeoName(row.id, row.name);
+    const week = weekGoal(row);
+    if (!week) return `${name}: Goals empty`;
+    return `${name}: ${week.split("·")[0].trim()}`;
+  }).join(" · ");
+}
+
 function ceoWire(project) {
   const pack = digestCache.get(project.id) || {};
   const counts = workCounts(project.id);
@@ -3310,12 +3340,17 @@ function ceoWire(project) {
   if (counts.ready && (counts.failed || 0) > 0) {
     return clipWire(`${counts.failed} failed — open Results`, 56);
   }
+  const week = weekGoal(project);
+  if (week) return clipWire(week, 56);
+  const founding = String((project.founding && project.founding.status) || "");
+  if (founding === "draft") return "Goals ready to Accept";
+  if (founding === "needed") return "Goals empty — Ask CEO to propose";
   let line = (now && now !== "source of truth" && now !== "—") ? now : ((nxt && nxt !== "—") ? nxt : "");
   line = honestWorkLine(line, counts) || line;
   if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
   else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Next`;
   if (line) return clipWire(line, 56);
-  return "";
+  return "Goals empty — Ask CEO to propose";
 }
 
 function ceoInitials(name) {
@@ -3357,6 +3392,19 @@ function needChoices(row) {
   }
   if (kind === "diff") return [{ id: "accept", label: "Accept" }, { id: "reject", label: "Reject" }, { id: "open", label: "See diff" }];
   if (kind === "gate") return [{ id: "allow", label: "Allow" }, { id: "deny", label: "Deny" }];
+  if (kind === "founding") {
+    if (row.status === "needed") {
+      return [
+        { id: "propose_founding", label: "Ask CEO to propose" },
+        { id: "open_goals", label: "Open Goals" }
+      ];
+    }
+    return [
+      { id: "accept_founding", label: "Accept Goals" },
+      { id: "open_goals", label: "Open Goals" },
+      { id: "reject_founding", label: "Reject" }
+    ];
+  }
   if (kind === "horizon") {
     return [
       { id: "open_goals", label: "Open Goals" },
@@ -3404,7 +3452,7 @@ function jobChoices(job) {
 
 function choiceButtonsHtml(choices, row) {
   return (choices || []).map((choice) => {
-    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue" || choice.id === "allow_cookie_export" || choice.id === "allow_facebook" || choice.id === "fix_model" || choice.id === "fix_key" || choice.id === "retry" || choice.id === "restore_script" || choice.id === "restart_gateway" || choice.id === "ask_cos";
+    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue" || choice.id === "allow_cookie_export" || choice.id === "allow_facebook" || choice.id === "fix_model" || choice.id === "fix_key" || choice.id === "retry" || choice.id === "restore_script" || choice.id === "restart_gateway" || choice.id === "ask_cos" || choice.id === "accept_founding" || choice.id === "open_goals" || choice.id === "propose_founding";
     const danger = choice.id === "reject" || choice.id === "deny";
     return `<button type="button" class="${primary ? "send" : "ghost-btn"}${danger ? " danger" : ""}" data-need-act="${escapeHtml(choice.id)}" data-need-id="${escapeHtml(row.id || "")}" data-need-project="${escapeHtml(row.project_id || "")}" data-need-preset="${escapeHtml(row.preset || "")}" data-need-approval="${escapeHtml(row.approval_id || row.id || "")}" data-need-login="${escapeHtml(choice.login_id || "")}" data-need-url="${escapeHtml(choice.url || row.url || "")}" data-need-cron="${escapeHtml(choice.cron_id || row.cron_id || "")}">${escapeHtml(choice.label || choice.id)}</button>`;
   }).join("");
@@ -3491,6 +3539,43 @@ async function runNeedChoice(btn) {
     } catch (_err) { /* keep card gone locally */ }
     const data = await (await fetch("/api/config")).json();
     applyConfig(data);
+    return;
+  }
+  if (act === "propose_founding") {
+    const target = pid || projectId || "";
+    if (!target) return;
+    await setOrgNode(target, "");
+    try {
+      const res = await fetch(`/api/org/projects/${encodeURIComponent(target)}/founding`);
+      const data = await res.json();
+      const prompt = (data && data.prompt) || "";
+      if (prompt) sendMessage(prompt, { preset: "think", display: (data && data.display) || "Ask this CEO to propose Goals from what you want" });
+    } catch (_err) { /* */ }
+    return;
+  }
+  if (act === "accept_founding" || act === "reject_founding") {
+    const target = pid || projectId || "";
+    if (!target) return;
+    let reason = "";
+    if (act === "reject_founding") {
+      const typed = window.prompt("Why reject these Goals? Saved as a decision so this CEO does not reopen them.");
+      if (typed === null) return;
+      reason = String(typed).trim();
+    }
+    try {
+      await fetch(`/api/org/projects/${encodeURIComponent(target)}/founding`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accept: act === "accept_founding", reason })
+      });
+    } catch (_err) { /* */ }
+    inboxSeen.add(id);
+    const data = await (await fetch("/api/config")).json();
+    applyConfig(data);
+    if (act === "accept_founding") {
+      if (target) await setOrgNode(target, "");
+      openWork("goals", "");
+    }
     return;
   }
   if (act === "allow" || act === "deny" || act === "allow_cookie_export" || act === "allow_facebook") {
@@ -4019,7 +4104,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
       <span class="org-avatar" data-life="${staffBusy ? "working" : "idle"}" aria-hidden="true">${escapeHtml(cosInitials)}</span>
       <span class="org-btn-text">
         <b>Chief of Staff${staffStatusChip}</b>
-        <span class="org-now">runs the CEOs</span>
+        <span class="org-now">${escapeHtml(clipWire(orgWeekGlance() || "runs the CEOs", 72))}</span>
       </span>
     </button>`}
     ${inboxHtml()}
@@ -4115,19 +4200,22 @@ function renderBotMeta(opts) {
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
     if (!project) {
-      $("chatFolder").textContent = "One chat. Cos routes. Open a CEO in the rail for that desk.";
+      $("chatFolder").textContent = orgWeekGlance() || "One chat. Cos routes. Open a CEO in the rail for that desk.";
     } else {
+      const week = weekGoal(project);
       const nxt = honestIndexNext(String(project.index_next || "").trim());
       const now = String(project.index_now || "").trim();
       const counts = workCounts();
-      let ask = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
-      ask = honestWorkLine(ask, counts) || ask;
-      const trustAsk = scheduleTrustNowLine(counts, project);
-      if (trustAsk && (!ask || isScheduleFluff(ask))) ask = trustAsk;
-      if (!ask && trustAsk) ask = trustAsk;
-      if (!ask && (counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
-      else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Next`;
-      $("chatFolder").textContent = ask || "This CEO is idle.";
+      let ask = week ? `This week: ${week}` : ((nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : ""));
+      if (!week) {
+        ask = honestWorkLine(ask, counts) || ask;
+        const trustAsk = scheduleTrustNowLine(counts, project);
+        if (trustAsk && (!ask || isScheduleFluff(ask))) ask = trustAsk;
+        if (!ask && trustAsk) ask = trustAsk;
+        if (!ask && (counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
+        else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Next`;
+      }
+      $("chatFolder").textContent = ask || "Goals are empty. Open Goals or Ask CEO to propose.";
     }
   }
   const folder = currentAim().folder || "";
@@ -4137,9 +4225,9 @@ function renderBotMeta(opts) {
   renderSchedules(project);
   paintScheduleButton();
   const cachedPack = digestCache.get(projectId) || {};
-  paintCeoBrief(cachedPack.digest || cachedPack);
   paintWorkStatus();
   paintCeoLive(cachedPack);
+  paintCeoBrief(cachedPack.digest || cachedPack);
   if (!opts || !opts.skipSpend) loadSpend();
 }
 
@@ -4692,10 +4780,10 @@ function overlayIsStale() {
 function overlayAgeLine() {
   const pack = digestCache.get(projectId) || {};
   const at = Date.parse(pack.synced_at || "");
-  if (!Number.isFinite(at)) return "Board copy of the live box can lag. Telegram on live Hermes is current.";
+  if (!Number.isFinite(at)) return "Board copy of the live box can lag. Live Hermes is current.";
   const hrs = Math.max(1, Math.round((Date.now() - at) / 3600000));
   if (hrs < 2) return "Board copy is fresh enough to trust counts.";
-  return `Board copy is ${hrs}h old. Telegram on the live box is current.`;
+  return `Board copy is ${hrs}h old. Live Hermes is current.`;
 }
 
 function cronIsFailed(row) {
@@ -4851,31 +4939,29 @@ function cronCardHtml(row, open, mark, extraCount) {
 function paintCeoBrief(digest) {
   const el = $("ceoBrief");
   if (!el) return;
-  if ($("ceoLive")) {
-    el.hidden = true;
-    el.innerHTML = "";
-    return;
-  }
-  if (!projectId) {
+  const live = $("ceoLive");
+  if (live && !live.hidden) {
     el.hidden = true;
     el.innerHTML = "";
     return;
   }
   const project = currentProject();
   const counts = workCounts();
-  const nxt = String((project && project.index_next) || "").trim();
-  const now = String((project && project.index_now) || "").trim();
-  const blocker = String((project && project.index_blocker) || "").trim();
   const bits = [];
-  if (digest && digest.story) bits.push(digest.story);
-  else if (blocker && blocker !== "—") bits.push(`Blocked: ${blocker}`);
-  else {
-    let line = (nxt && nxt !== "—") ? nxt : ((now && now !== "—") ? now : "");
-    line = honestWorkLine(line, counts) || line;
+  if (!project) {
+    const glance = orgWeekGlance();
+    if (glance) bits.push(glance);
+  } else {
+    const week = weekGoal(project);
+    if (week) bits.push(`This week: ${week}`);
+    else bits.push("Goals are empty. Open Goals or Ask CEO to propose.");
     const trust = scheduleTrustNowLine(counts, project);
-    if (!line && trust) line = trust;
-    if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
-    if (line && !isScheduleFluff(line)) bits.push(line);
+    const now = String(project.index_now || "").trim();
+    if (trust) bits.push(trust);
+    else if (now && now !== "—" && !isScheduleFluff(now) && now !== week) bits.push(`Now: ${now}`);
+    if (String(project.id || "") === "saa-homes" && (gatewayLiveOwns || !gatewayRestartOk)) {
+      bits.push("Live Railway Hermes still owns cron. This desk is a copy until cutover. OttoBot chat is the inbox — not Telegram.");
+    }
   }
   if (!bits.length) {
     el.hidden = true;
@@ -5088,8 +5174,8 @@ async function loadCeoDigest(refreshLive) {
   paintWorkTabs();
   if (!projectId) {
     gatewayRunning = true;
-    paintCeoBrief(null);
     paintCeoLive(null);
+    paintCeoBrief(null);
     if (scheduleOpen) renderChatSchedule([], {}, scheduleFocusId, "");
     return null;
   }
@@ -5098,8 +5184,8 @@ async function loadCeoDigest(refreshLive) {
     if (typeof cached.gateway_running === "boolean") gatewayRunning = cached.gateway_running;
     if (typeof cached.gateway_restart_ok === "boolean") gatewayRestartOk = cached.gateway_restart_ok;
     if (typeof cached.gateway_live_owns === "boolean") gatewayLiveOwns = cached.gateway_live_owns;
-    paintCeoBrief(cached.digest || cached);
     paintCeoLive(cached);
+    paintCeoBrief(cached.digest || cached);
     renderBotMeta({ skipSpend: true });
   }
   try {
@@ -5109,8 +5195,8 @@ async function loadCeoDigest(refreshLive) {
     digestCache.set(pid, data);
     digestKnown.add(pid);
     if (projectId === pid) {
-      paintCeoBrief(data.digest);
       paintCeoLive(data);
+      paintCeoBrief(data.digest);
       paintWorkTabs();
       paintEmbedLive();
       if (org && org.projects) renderOrg(org);
@@ -5150,7 +5236,7 @@ function goalsBoardHtml() {
   if (!projectId) {
     const projects = ((cfg.org && cfg.org.projects) || []);
     if (!projects.length) return `<p class="cron-empty">${escapeHtml(emptyWorkCopy("goals"))}</p>`;
-    return `<p class="cron-story">Where each CEO is going. Open a CEO to edit its board — they notify you on change.</p>` + projects.map((row) => {
+    return `<p class="cron-story">Scoreboard per CEO. Open one to edit. Cos: “tell SAA: …” routes to that inbox — Cos does not write their INDEX.</p>` + projects.map((row) => {
       const h = row.horizons || {};
       const bits = labels.map(([key, label]) => {
         const val = String(h[key] || "").trim();
@@ -5166,15 +5252,25 @@ function goalsBoardHtml() {
   const project = currentProject() || {};
   const h = project.horizons || {};
   const who = prettyCeoName(projectId, project.name);
+  const founding = project.founding || {};
+  const foundingNote = founding.status === "draft"
+    ? `<p class="cron-outcome">Founding RESULT is parked. Accept stamps INDEX. Reject keeps Horizons empty.</p>`
+    : (founding.status === "needed"
+      ? `<p class="cron-outcome">Horizons are not live until this CEO proposes and you Accept.</p>`
+      : "");
   const rows = labels.map(([key, label]) => `<div class="horizon-row">
     <label for="horizon-${escapeHtml(key)}">${escapeHtml(label)}</label>
     <textarea id="horizon-${escapeHtml(key)}" data-horizon="${escapeHtml(key)}" rows="2">${escapeHtml(h[key] && h[key] !== "—" ? h[key] : "")}</textarea>
   </div>`).join("");
   return `<article class="cron-card">
     <div class="cron-head"><b>${escapeHtml(who)}</b><span>Goals</span></div>
-    <p class="cron-outcome">This CEO can update this board. You get a Needs-you when it changes.</p>
+    <p class="cron-outcome">Each line: money or count · who pays · via how they arrive · proof metric. You, this CEO, or Cos (“tell ${escapeHtml(who)}: …”) can steer. INDEX is memory.</p>
+    ${foundingNote}
     <form class="horizon-board" id="horizonForm">${rows}
-      <button type="submit" class="send">Save Goals</button>
+      <div class="need-actions">
+        <button type="submit" class="send">Save Goals</button>
+        <button type="button" class="ghost-btn" id="horizonPropose">Ask CEO to propose</button>
+      </div>
       <p class="cron-status" id="horizonSaveStatus"></p>
     </form>
   </article>`;
@@ -5215,6 +5311,27 @@ function bindGoalsBoard(root) {
       if (status) status.textContent = "Save failed";
     }
   });
+  const propose = root.querySelector("#horizonPropose");
+  if (propose && !propose.dataset.bound) {
+    propose.dataset.bound = "1";
+    propose.addEventListener("click", async () => {
+      if (!projectId) return;
+      const status = $("horizonSaveStatus");
+      if (status) status.textContent = "Asking this CEO to propose…";
+      try {
+        const res = await fetch(`/api/org/projects/${encodeURIComponent(projectId)}/founding`);
+        const data = await res.json();
+        const prompt = (data && data.prompt) || "";
+        if (!prompt) {
+          if (status) status.textContent = "Could not load founding prompt.";
+          return;
+        }
+        sendMessage(prompt, { preset: "think", display: (data && data.display) || "Ask this CEO to propose Goals from what you want" });
+      } catch (_err) {
+        if (status) status.textContent = "Propose failed";
+      }
+    });
+  }
 }
 
 function liveRunCard(row) {
@@ -5236,8 +5353,8 @@ function gatewayOffHtml() {
   if (gatewayLiveOwns || !gatewayRestartOk) {
     return `<article class="cron-card gateway-off">
     <div class="cron-head"><b>Live SAA Hermes</b><span>Owns schedule</span></div>
-    <p class="cron-outcome">OttoBot chat is the operator inbox. Cron still runs on the live SAA Hermes box, which also texts Telegram. Replies here do not post to Telegram. ${escapeHtml(overlayAgeLine())} Do not Restart the imported home.</p>
-    ${overlayIsStale() ? `<button type="button" class="send overlay-refresh">Refresh live copy</button>` : ""}
+    <p class="cron-outcome">The Railway SAA box still owns cron. Leave it on until cutover. This OttoBot desk is the operator inbox — a live copy, not a second scheduler. OttoBot chat is the inbox. Starting the imported home here would run the same jobs twice. Cutover is an Accept: pause live cron the same minute the OttoBot-owned Hermes starts. ${escapeHtml(overlayAgeLine())}</p>
+    <button type="button" class="send overlay-refresh">Refresh live copy</button>
   </article>`;
   }
   return `<article class="cron-card gateway-off">
@@ -5458,7 +5575,7 @@ function renderChatSchedule(rows, digest, focusId, forPid) {
   }
   const list = (rows || []).filter((row) => !cronIsNoise(row));
   if (rows && !list.length) {
-    el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet. Telegram still gets the live report.</p>`;
+    el.innerHTML = `<p class="cron-story">No scheduled checks on this CEO yet.</p>`;
     return;
   }
   const cached = digestCache.get(projectId) || {};
@@ -6843,18 +6960,21 @@ function emptyStreamHtml() {
   const now = briefHonestyLine(text);
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
-  const title = worker ? worker.name : project ? project.name : "Chief of Staff";
-  // Chat-as-home: no Ready fluff, no duplicate kicker chrome.
+  const title = worker ? worker.name : project ? prettyCeoName(projectId, project.name) : "Chief of Staff";
   let lead = "Ask what’s going on, or open a CEO.";
   let showCTA = !project;
   if (worker && project) {
     lead = `${worker.name} on ${project.name}. Say what you need.`;
     showCTA = false;
   } else if (project) {
-    lead = "Say what you need.";
+    const week = weekGoal(project);
+    lead = week ? `This week: ${week}` : "Goals are empty. Open Goals or Ask CEO to propose.";
     showCTA = false;
+  } else {
+    const glance = orgWeekGlance();
+    lead = glance ? glance : "Ask what’s going on, or open a CEO.";
   }
-  const showNow = now && now !== "source of truth" && now !== "—" && !isScheduleFluff(now);
+  const showNow = project && now && now !== "source of truth" && now !== "—" && !isScheduleFluff(now) && now !== weekGoal(project);
   const nowLine = showNow ? `<p class="empty-now">${escapeHtml(now)}</p>` : "";
   const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
   return `
@@ -6987,11 +7107,17 @@ async function refreshThreadTail() {
 }
 
 async function decide(jobId, action, actionsEl, force = false, pushBranch = false, runTests = false) {
-  actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+  let reason = "";
+  if (action === "reject") {
+    const typed = window.prompt("Why reject? Saved as a standing rule so this CEO does not repeat it.");
+    if (typed === null) return;
+    reason = String(typed).trim();
+  }
+  if (actionsEl) actionsEl.querySelectorAll("button").forEach((b) => { b.disabled = true; });
   const res = await fetch(`/api/jobs/${jobId}/${action}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ force: force, push_branch: pushBranch, run_tests: runTests })
+    body: JSON.stringify({ force: force, push_branch: pushBranch, run_tests: runTests, reason })
   });
   const data = await res.json();
   
@@ -9001,6 +9127,7 @@ async function sendMessage(message, opts) {
   }
   // Strip leading @seat tokens (route already set, don't send junk to Hermes/OpenCode)
   const cleanMessage = message.replace(/^@(builder|think|research|ops|cos|[\w-]+)\s+/i, "");
+  const displayMessage = (opts && opts.display) || message || "(attachment)";
   const aim = aimKey();
   const sendProjectId = projectId || "";
   const sendWorkerId = workerId || "";
@@ -9009,7 +9136,6 @@ async function sendMessage(message, opts) {
   if (empty) empty.remove();
   const pendingQuote = (opts && opts.quote != null) ? opts.quote : replyQuote;
   clearReply();
-  const displayMessage = message || "(attachment)";
   let userEl = opts && opts.userEl;
   if (userEl) {
     userEl.classList.remove("queued");

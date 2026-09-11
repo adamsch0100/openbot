@@ -50,6 +50,7 @@ from .org import (
     ensure_ceo_engines,
     inbox_tail,
     index_field,
+    horizon_week,
     list_projects,
     node_label,
     patch_project_tools,
@@ -808,8 +809,17 @@ def _packet_extra(
     worker_id: str | None = None,
     hermes_home: str | None = None,
     attachments: list | None = None,
+    message: str = "",
 ) -> str:
     bits: list[str] = []
+    try:
+        from .memory import memory_packet_extra
+
+        mem = memory_packet_extra(project_id)
+        if mem:
+            bits.append(mem)
+    except Exception:
+        pass
     wire = wiring_brief(project_id)
     if wire:
         bits.append(f"CHIEF OF STAFF:\n{wire}")
@@ -831,6 +841,14 @@ def _packet_extra(
     ticket = inbox_tail(project_id)
     if ticket:
         bits.append(f"TICKET:\n{ticket}")
+    try:
+        from .founding import horizon_packet_extra
+
+        score = horizon_packet_extra(project_id, message)
+        if score:
+            bits.append(score)
+    except Exception:
+        pass
     if extra:
         bits.append(extra.strip())
     try:
@@ -876,6 +894,7 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
     last = index_field(index_text, "Last") or "—"
     nxt = index_field(index_text, "Next") or "—"
     blocker = index_field(index_text, "Blocker") or "—"
+    week = horizon_week(index_text)
     if greeting:
         if THANKS.search(message or ""):
             if name in {"OpenBot", "Chief of Staff"}:
@@ -885,7 +904,12 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
             return "Hello — I'm Chief of Staff. The CEOs report to me. You can also open any CEO and talk to them directly."
         return f"Hello — {name}. I report to Chief of Staff. How can I help?"
     if is_status:
-        lines: list[str] = [now]
+        lines: list[str] = []
+        if week:
+            lines.append(f"This week: {week}")
+        else:
+            lines.append("Goals are empty. Open Goals or Ask CEO to propose — I will not invent a board.")
+        lines.append(now)
         if live:
             lines.append(live)
         if nxt and nxt != "—":
@@ -1011,6 +1035,17 @@ def need_choices(row: dict) -> list[dict]:
         return [
             {"id": "allow", "label": "Allow"},
             {"id": "deny", "label": "Deny"},
+        ]
+    if kind == "founding":
+        if str(row.get("status") or "") == "needed":
+            return [
+                {"id": "propose_founding", "label": "Ask CEO to propose"},
+                {"id": "open_goals", "label": "Open Goals"},
+            ]
+        return [
+            {"id": "accept_founding", "label": "Accept Goals"},
+            {"id": "open_goals", "label": "Open Goals"},
+            {"id": "reject_founding", "label": "Reject"},
         ]
     if kind == "horizon":
         return [
@@ -1192,6 +1227,61 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         if len(out) >= limit:
             break
     have = {str(row.get("project_id") or "") for row in out}
+    try:
+        from .founding import load_founding
+
+        for project in projects:
+            if len(out) >= limit:
+                break
+            pid = str(project.get("id") or "")
+            if not pid:
+                continue
+            draft = load_founding(pid)
+            status = str(draft.get("status") or "")
+            who = names.get(pid) or str(project.get("name") or pid)
+            if status == "draft":
+                founding = {
+                    "id": f"founding-{pid}",
+                    "kind": "founding",
+                    "status": "draft",
+                    "name": who,
+                    "label": f"{who}: founding Horizons ready to Accept.",
+                    "subject": f"{who} · founding",
+                    "why": "Accept stamps INDEX. Reject keeps Horizons empty.",
+                    "project_id": pid,
+                    "engine": "Hermes Agent",
+                    "preset": "think",
+                    "url": "",
+                    "at": str(draft.get("at") or ""),
+                }
+                founding["choices"] = need_choices(founding)
+                primary = (founding["choices"] or [{}])[0]
+                founding["primary_action"] = str(primary.get("label") or "Accept Goals")
+                out.insert(0, founding)
+                continue
+            week = horizon_week(str(project.get("index") or ""))
+            if week or status == "accepted":
+                continue
+            needed = {
+                "id": f"founding-need-{pid}",
+                "kind": "founding",
+                "status": "needed",
+                "name": who,
+                "label": f"{who}: Goals are empty.",
+                "subject": f"{who} · Goals",
+                "why": "This CEO will not invent a board. Ask them to propose, or Save Goals yourself.",
+                "project_id": pid,
+                "engine": "board",
+                "preset": "think",
+                "url": "",
+                "at": str(draft.get("at") or ""),
+            }
+            needed["choices"] = need_choices(needed)
+            primary = (needed["choices"] or [{}])[0]
+            needed["primary_action"] = str(primary.get("label") or "Ask CEO to propose")
+            out.insert(0, needed)
+    except Exception:
+        pass
     try:
         from .org import list_horizon_notices
 
@@ -1402,6 +1492,14 @@ def handle(
         steps = route_for_node(message, node)
     else:
         steps = [preset]
+    try:
+        from .founding import is_founding_message, is_steer_message
+
+        if project_id and (is_founding_message(message) or is_steer_message(message)):
+            if (not preset or preset in {"cos", "ask"}) or steps == ["cos"]:
+                steps = ["think"]
+    except Exception:
+        pass
     quote = _clean_quote(quote) or (
         search_quote(thread_key(project_id, worker_id), message) if wants_quote(message) else ""
     )
@@ -1678,6 +1776,7 @@ def _handle_preset(
                         worker_id=worker_id,
                         hermes_home=hermes_home_dir,
                         attachments=attachments,
+                        message=message,
                     ),
                 )
             
@@ -1782,6 +1881,14 @@ def _handle_preset(
                     patch_index_line("Now", "Think finished")
                     patch_index_line("Next", "Ask Code to execute, or Chief of Staff for status")
                     patch_index_line("Blocker", "—")
+                    try:
+                        from .founding import ingest_ceo_result
+
+                        ingested = ingest_ceo_result(project_id, message, text)
+                        if ingested.get("status") == "draft":
+                            patch_index_line("Next", "Operator Accepts founding Horizons")
+                    except Exception:
+                        pass
     elif chosen == "cos":
         talk = True
         settings = load_settings()
@@ -1792,6 +1899,13 @@ def _handle_preset(
         file_reply = "" if skill_ask or status_ask else (cos_file_reply(message or "") or "")
         if not file_reply and wants_run_existing(message or ""):
             file_reply = cos_run_existing_reply(project_id)
+        if not file_reply and not project_id:
+            try:
+                from .founding import route_cos_to_ceo
+
+                file_reply = route_cos_to_ceo(message or "") or ""
+            except Exception:
+                file_reply = ""
         if not file_reply and BROWSER_LOGIN.search(message or ""):
             file_reply = cos_browser_login_reply()
         use_llm = (
@@ -1852,6 +1966,14 @@ def _handle_preset(
                     status = f"{status}\n\n{hint}"
             else:
                 status = staff_status_reply()
+            try:
+                from .memory import operator_packet
+
+                op = operator_packet(project_id)
+                if op:
+                    status = f"{status}\n\n{op}"
+            except Exception:
+                pass
             # Chat is a fresh oneshot. Do NOT --resume the Telegram Hermes
             # session here — that replays mid-tool / unrelated turns into this
             # reply. Recent Telegram is already in status via session_hint.
@@ -1954,7 +2076,7 @@ def _handle_preset(
             usage_model = "engine-default"
             git_snap = snapshot(work)
             model = seated_or_auto(load_settings(), "code", seats) or DEFAULT_CODE_MODEL
-            extra = _packet_extra(project_id, quote=quote, preset="builder", worker_id=worker_id, attachments=attachments)
+            extra = _packet_extra(project_id, quote=quote, preset="builder", worker_id=worker_id, attachments=attachments, message=message)
             prompt = (
                 "OpenBot Chat dispatched this to OpenCode for this CEO. "
                 "Edit the Code folder. Diffs come back to this chat for the operator.\n"
@@ -2124,6 +2246,7 @@ def _handle_preset(
                         worker_id=worker_id,
                         hermes_home=hermes_home_dir,
                         attachments=attachments,
+                        message=message,
                     ),
                 )
                 
@@ -2299,6 +2422,7 @@ def _handle_preset(
                         attachments=attachments,
                         worker_id=worker_id,
                         hermes_home=hermes_home_dir,
+                        message=message,
                     ),
                 )
                 
@@ -2506,7 +2630,7 @@ def public_job(receipt: dict | None) -> dict:
     return out
 
 
-def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: bool = False, branch_name: str | None = None, run_tests: bool = False) -> dict:
+def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: bool = False, branch_name: str | None = None, run_tests: bool = False, reason: str = "") -> dict:
     job = read_job(job_id)
     if job is None:
         return {"error": "job not found", "ok": False}
@@ -2697,6 +2821,12 @@ def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: boo
     patch_lines("Last", f"rejected diff {job_id}")
     patch_lines("Next", "Ask Builder again, or change the folder")
     patch_lines("Blocker", "—")
+    try:
+        from .memory import teach_from_reject
+
+        teach_from_reject(pid, job_id, str(job.get("message") or ""), reason)
+    except Exception:
+        pass
     rollup_staff(pid, wid, f"rejected diff {job_id}")
     log_approval(updated or job, False, force=False)
     try:

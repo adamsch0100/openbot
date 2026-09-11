@@ -85,7 +85,10 @@ from .org import (
     remove_worker,
     rename_project,
     rename_worker,
+    saa_desk_owns,
     set_project_folder,
+    set_saa_desk_owns,
+    take_saa_desk,
     write_project_index,
     write_project_horizons,
     write_worker_brain,
@@ -146,6 +149,7 @@ LOGIN_ID = re.compile(r"^/api/logins/([a-zA-Z0-9_-]{4,32})$")
 PROJECT_ID = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})$")
 PROJECT_INDEX = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/index$")
 PROJECT_HORIZONS = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/horizons$")
+PROJECT_FOUNDING = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/founding$")
 HORIZON_NOTICE = re.compile(r"^/api/horizons/([a-zA-Z0-9._:-]{6,80})/dismiss$")
 WORKER_ADD = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/workers$")
 ROUTINE_ID = re.compile(r"^/api/routines/([a-z0-9-]{8,32})$")
@@ -1271,6 +1275,26 @@ class Handler(SimpleHTTPRequestHandler):
                 return None
             text = read_project_index(pid)
             return self._json(200, {"project_id": pid, "horizons": parse_horizons(text)})
+        founding = PROJECT_FOUNDING.match(path)
+        if founding:
+            pid = founding.group(1)
+            if self._require_perm("jobs_view", pid):
+                return None
+            from .founding import founding_display, founding_intent, founding_prompt_for, load_founding
+            from .org import CEO_PRETTY_NAMES
+
+            blob = load_founding(pid)
+            name = CEO_PRETTY_NAMES.get(pid, pid)
+            intent = founding_intent(pid)
+            return self._json(
+                200,
+                {
+                    "project_id": pid,
+                    "founding": blob,
+                    "prompt": founding_prompt_for(pid),
+                    "display": founding_display(name, intent.get("idea") or ""),
+                },
+            )
         if path == "/api/crons":
             qs = parse_qs(urlparse(self.path).query)
             pid = (qs.get("project_id") or [""])[0].strip()
@@ -1453,20 +1477,22 @@ class Handler(SimpleHTTPRequestHandler):
 
                 from .hermes import load_saa_overlay_cache, saa_overlay_cache_path
 
-                overlay = load_saa_overlay_cache()
+                desk = saa_desk_owns()
+                overlay = [] if desk else load_saa_overlay_cache()
                 cache_path = saa_overlay_cache_path()
                 status["imported_running"] = bool(status.get("running"))
                 status["overlay_jobs"] = len(overlay)
                 status["overlay_synced_at"] = (
                     datetime.fromtimestamp(cache_path.stat().st_mtime, tz=timezone.utc).isoformat()
-                    if cache_path.is_file()
+                    if cache_path.is_file() and not desk
                     else ""
                 )
-                status["live_owns"] = True
-                status["restart_ok"] = False
-                status["source"] = "live-overlay" if overlay else "imported-home"
-                if overlay:
-                    # Live SAA Hermes owns Telegram + cron. Imported-home Off is not "schedule dead".
+                status["saa_desk_owns"] = desk
+                status["live_owns"] = not desk
+                status["restart_ok"] = desk
+                status["source"] = "this-desk" if desk else ("live-overlay" if overlay else "imported-home")
+                if overlay and not desk:
+                    # Live SAA Hermes still owns cron. Imported-home Off is not "schedule dead".
                     status["running"] = True
             return self._json(200, status)
         if path == "/api/selfbuild/status":
@@ -1928,6 +1954,17 @@ class Handler(SimpleHTTPRequestHandler):
                 return None
             result = open_hermes()
             return self._json(200 if result.get("ok") else 400, result)
+        if path == "/api/org/saa-desk":
+            if self._require_owner():
+                return None
+            own = data.get("own")
+            if own is False:
+                return self._json(200, set_saa_desk_owns(False))
+            result = take_saa_desk(
+                start_gateway=bool(data.get("start_gateway", True)),
+                sync_live=bool(data.get("sync_live", False)),
+            )
+            return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/org/projects":
             if self._require_owner():
                 return None
@@ -2041,7 +2078,7 @@ class Handler(SimpleHTTPRequestHandler):
             project_id = str(data.get("project_id") or "").strip() or None
             if self._require_owner():
                 return None
-            if project_id == "saa-homes":
+            if project_id == "saa-homes" and not saa_desk_owns():
                 return self._json(400, {
                     "ok": False,
                     "error": "Live SAA Hermes owns Telegram + cron. Do not Restart this imported home.",
@@ -2110,7 +2147,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(400, {"ok": False, "error": "skipped", "id": job_id})
             tools = project_tools(project_id) if project_id else {}
             home = str(tools.get("hermes_home") or "").strip() or None
-            if project_id == "saa-homes":
+            if project_id == "saa-homes" and not saa_desk_owns():
                 result = saa_live_nudge_due(job_id)
                 if result.get("ok") and home:
                     sync_saa_live_crons(home, live=True)
@@ -2126,6 +2163,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return None
             if project_id != "saa-homes":
                 return self._json(400, {"ok": False, "error": "live overlay is SAA Homes only"})
+            if saa_desk_owns():
+                return self._json(400, {
+                    "ok": False,
+                    "error": "This desk owns SAA cron. Schedule reads local jobs.json. Overlay is off.",
+                    "saa_desk_owns": True,
+                })
             tools = project_tools(project_id) if project_id else {}
             home = str(tools.get("hermes_home") or "").strip() or None
             from .hermes import sync_saa_live_crons
@@ -2143,6 +2186,21 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, dismiss_horizon_notice(horizon_notice.group(1)))
             except ValueError as err:
                 return self._json(400, {"error": str(err)})
+
+        founding = PROJECT_FOUNDING.match(path)
+        if founding:
+            pid = founding.group(1)
+            if self._require_perm("approve_needs_you", pid):
+                return None
+            from .founding import accept_founding, reject_founding
+
+            if data.get("accept"):
+                try:
+                    return self._json(200, accept_founding(pid))
+                except ValueError as err:
+                    return self._json(400, {"error": str(err)})
+            reason = str(data.get("reason") or "").strip()
+            return self._json(200, reject_founding(pid, reason=reason))
         
         if path == "/api/routines":
             if self._require_owner():
@@ -2460,7 +2518,8 @@ class Handler(SimpleHTTPRequestHandler):
             push_branch = bool(data.get("push_branch")) if isinstance(data, dict) else False
             branch_name = str(data.get("branch_name") or "") if isinstance(data, dict) else None
             run_tests = bool(data.get("run_tests")) if isinstance(data, dict) else False
-            result = decide_diff(job_id, accept=(action == "accept"), force=force, push_branch=push_branch, branch_name=branch_name, run_tests=run_tests)
+            reason = str(data.get("reason") or "").strip() if isinstance(data, dict) else ""
+            result = decide_diff(job_id, accept=(action == "accept"), force=force, push_branch=push_branch, branch_name=branch_name, run_tests=run_tests, reason=reason)
             code = 200 if result.get("ok") else 400
             # decide_diff already returns the correct INDEX (project or staff)
             if "index" not in result:

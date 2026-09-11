@@ -131,10 +131,10 @@ PACKET_LINE = re.compile(
     r"Report a short RESULT|Name the engine that ran|"
     r"Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|"
     r"Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
-    r"OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|"
+    r"OPEN HANDOFFS:|VAULT LOGINS|OPERATOR:|DECISIONS:|HORIZONS |The operator is talking|"
     r"The operator is in OpenBot Chat|The operator can also open|"
     r"Specialist lanes execute|Code: OpenCode in |Hermes: |"
-    r"Bus: org/projects/|Telegram: |"
+    r"Bus: org/projects/|Telegram: |OttoBot chat is the inbox|"
     r".+ CEO — reports to Chief of Staff)",
     re.I,
 )
@@ -273,7 +273,7 @@ def _human_hermes_text(text: str) -> str:
     for line in cleaned.splitlines():
         stripped = line.strip()
         if PACKET_LINE.match(stripped):
-            skipping = bool(re.match(r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):", stripped, re.I))
+            skipping = bool(re.match(r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS|OPERATOR|DECISIONS|HORIZONS|LAW|CHIEF OF STAFF):", stripped, re.I))
             continue
         if skipping:
             if not stripped:
@@ -2395,12 +2395,27 @@ def gateway_start(
     if not binary:
         return {"ok": False, "code": 127, "error": "Hermes Agent binary missing", "running": False}
 
-    # Always restore secrets + OpenCode Go pool before status/start — redeploy leaves
-    # OPENCODE_GO_API_KEYS missing until a manual wallet push otherwise (#83 follow-up).
+    # Restore OpenCode Go pool before status/start. Skip Telegram/Discord restore
+    # when this desk owns SAA cron — OttoBot chat is the inbox, not a poller.
     try:
         from .keyring import preserve_merge_hermes_env, sync_opencode_go_pool_env
 
-        preserve_merge_hermes_env(home)
+        restore_channels = True
+        try:
+            from .org import saa_desk_owns
+            from .launch import resolve_ceo_hermes_home
+
+            aimed = resolve_ceo_hermes_home("saa-homes", "")
+            if (
+                saa_desk_owns()
+                and home
+                and aimed
+                and Path(home).expanduser().resolve() == Path(aimed).expanduser().resolve()
+            ):
+                restore_channels = False
+        except Exception:
+            restore_channels = True
+        preserve_merge_hermes_env(home, restore_channels=restore_channels)
         sync_opencode_go_pool_env(home=home)
     except Exception:
         pass

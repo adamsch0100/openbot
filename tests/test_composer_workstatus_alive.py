@@ -56,8 +56,8 @@ class ComposerWorkStatusAliveTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=161", html)
-        self.assertIn("styles.css?v=161", html)
+        self.assertIn("app.js?v=167", html)
+        self.assertIn("styles.css?v=167", html)
 
 
 if __name__ == "__main__":

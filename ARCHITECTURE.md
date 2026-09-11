@@ -66,8 +66,10 @@ A **job packet**, not the archive:
 
 ```
 SYSTEM: agent law + preset (Cos / Builder / Research / Ops)
-INDEX:  brains/INDEX.md          (short, current)
-BRAIN:  brains/<bot>.md          (Now / Last / Next / Blocker)
+OPERATOR: org/OPERATOR.md + aimed CEO Horizon-week (Goals live here)
+INDEX:  CEO INDEX.md              (Now / Last / Next / Blocker + Horizons)
+DECISIONS: instance + this CEO   (settled calls; do not reopen)
+BRAIN:  brains/<bot>.md           (Now / Last / Next / Blocker)
 TICKET: inbox/<bot>.md           (if any)
 TASK:   this user message only
 HINTS:  last 3 job RESULT lines  (not the full chat)

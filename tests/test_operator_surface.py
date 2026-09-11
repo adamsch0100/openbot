@@ -11,8 +11,12 @@ ROOT = Path(__file__).resolve().parent.parent
 class OperatorSurfaceUiTests(unittest.TestCase):
     def test_your_move_names_ceo(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("function prettyCeoName", js)
-        self.assertIn("function isE2eNeed", js)
+        self.assertIn("function weekGoal", js)
+        self.assertIn("function orgWeekGlance", js)
+        self.assertIn("live && !live.hidden", js)
+        self.assertIn("propose_founding", js)
+        self.assertIn("opts.display", js)
+        self.assertIn("What you want this CEO to do", js)
         self.assertIn("function adamRailChoice", js)
         self.assertIn(".slice(0, 1)", js[js.find("function operatorMoveRows") : js.find("function moveHeadLabel")])
         self.assertIn("ms > -2 * 36e5", js[js.find("function cronIsDueSoon") : js.find("function isScheduleFluff")])
@@ -88,8 +92,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=161", html)
-        self.assertIn("styles.css?v=161", html)
+        self.assertIn("app.js?v=167", html)
+        self.assertIn("styles.css?v=167", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -206,7 +210,10 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
                 {"id": "saa-homes", "name": "SAA Homes"},
                 {"id": "openbot", "name": "OpenBot"},
             ],
-        ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"):
+        ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"), patch(
+            "openbot.org.list_horizon_notices",
+            return_value=[],
+        ), patch("openbot.founding.load_founding", return_value={"status": "accepted"}):
             rows = pending_approvals()
         kinds = {row["project_id"]: row["kind"] for row in rows}
         self.assertEqual(kinds["saa-homes"], "failed")

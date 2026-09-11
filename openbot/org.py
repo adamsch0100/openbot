@@ -118,7 +118,7 @@ def _empty_index(title: str, folder: str) -> str:
         "Public posts (Facebook, X, email blasts): draft in Adam's voice, park Needs-you. Never auto-post.\n\n"
         "## Contract\n\n"
         "JOB: Run this company. Own P&L. Pay for this seat first, then profit. Spin specialists when a bottleneck repeats. No CFO/COO bots.\n"
-        "SOURCES: This INDEX (doctrine + north-star), the Code folder, inbox tickets, bus/handoffs, live site/metrics.\n"
+        "SOURCES: Operator profile, this INDEX (doctrine + Horizons), DECISIONS, the Code folder, inbox tickets, bus/handoffs, live site/metrics.\n"
         "JUDGMENT: Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.\n"
         "OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.\n"
         "FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.\n"
@@ -156,6 +156,59 @@ def _load_saved() -> dict:
 def _save(data: dict) -> None:
     ORG.mkdir(exist_ok=True)
     PROFILE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def saa_desk_owns() -> bool:
+    """True when this OttoBot desk owns SAA cron. Telegram is not part of ownership."""
+    return bool(_load_saved().get("saa_desk_owns"))
+
+
+def set_saa_desk_owns(on: bool) -> dict:
+    data = _load_saved() or {}
+    data["saa_desk_owns"] = bool(on)
+    _save(data)
+    return {"ok": True, "saa_desk_owns": bool(on)}
+
+
+def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = False) -> dict:
+    """This desk owns SAA cron. OttoBot chat is the inbox. Do not restore Telegram."""
+    from .hermes import gateway_start, migrate_cron_delivery
+    from .launch import resolve_ceo_hermes_home
+
+    home = resolve_ceo_hermes_home("saa-homes", "") or ""
+    set_saa_desk_owns(True)
+    started = {"ok": False, "skipped": True}
+    if start_gateway and home:
+        started = gateway_start(home, wait=True, timeout=45, force=True)
+        started["skipped"] = False
+    migrated = {"ok": False, "skipped": True, "migrated": []}
+    if home:
+        try:
+            migrated = migrate_cron_delivery(home, dry_run=False)
+            migrated["skipped"] = False
+        except Exception as err:
+            migrated = {"ok": False, "error": str(err)[:200], "migrated": []}
+    synced = {"ok": False, "skipped": True}
+    if home and sync_live:
+        try:
+            from .hermes import sync_saa_live_crons
+
+            synced = sync_saa_live_crons(home, live=True)
+        except Exception as err:
+            synced = {"ok": False, "error": str(err)[:200]}
+    gateway_ok = bool(started.get("ok") or started.get("running") or not start_gateway)
+    return {
+        "ok": gateway_ok,
+        "saa_desk_owns": True,
+        "telegram": False,
+        "home": home,
+        "gateway": started,
+        "delivery": migrated,
+        "synced": synced,
+        "engine": "Hermes Agent",
+        "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
+        "pause_live": "Pause Railway SAA Homes Hermes so cron does not run twice.",
+    }
 
 
 def _carry_tools(row: dict) -> dict:
@@ -565,6 +618,12 @@ def ensure_org() -> dict:
     }
     _save(data)
     seed_org_contracts([primary_id, *[row["id"] for row in extras]])
+    try:
+        from .memory import ensure_memory_files
+
+        ensure_memory_files()
+    except Exception:
+        pass
     return public_org(data)
 
 
@@ -601,7 +660,8 @@ def project_cron_bundle(project_id: str) -> dict:
     home = str(tools.get("hermes_home") or "").strip()
     rows = read_home_crons(home, results=True) if home else []
     overlay: list[dict] = []
-    if pid == "saa-homes":
+    desk = pid == "saa-homes" and saa_desk_owns()
+    if pid == "saa-homes" and not desk:
         overlay = load_saa_overlay_cache()
         if overlay:
             rows = merge_saa_cron_rows(rows, overlay)
@@ -611,7 +671,7 @@ def project_cron_bundle(project_id: str) -> dict:
     path = Path(home) / "cron" / "jobs.json" if home else None
     if path and path.is_file():
         synced_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
-    if pid == "saa-homes":
+    if pid == "saa-homes" and not desk:
         cache_path = saa_overlay_cache_path()
         if cache_path.is_file():
             synced_at = datetime.fromtimestamp(cache_path.stat().st_mtime, tz=timezone.utc).isoformat()
@@ -677,6 +737,12 @@ def public_org(data: dict | None = None) -> dict:
         if hermes_live:
             tools = dict(tools)
             tools["hermes_home_live"] = hermes_live
+        try:
+            from .founding import founding_public
+
+            founding = founding_public(pid)
+        except Exception:
+            founding = {}
         projects.append(
             {
                 "id": pid,
@@ -692,6 +758,7 @@ def public_org(data: dict | None = None) -> dict:
                 "index_next": index_field(index_text, "Next"),
                 "index_blocker": index_field(index_text, "Blocker"),
                 "horizons": parse_horizons(index_text),
+                "founding": founding,
                 "schedules": read_schedules(pid),
                 "crons": project_crons(pid, results=False),
                 "site_url": str(row.get("site_url") or "").strip(),
@@ -715,6 +782,7 @@ def public_org(data: dict | None = None) -> dict:
         "staff": staff_briefing(),
         "projects": projects,
         "workers": [],
+        "saa_desk_owns": saa_desk_owns(),
     }
 
 
@@ -759,6 +827,12 @@ def parse_horizons(text: str) -> dict[str, str]:
 
 def horizon_filled(value: str) -> bool:
     return str(value or "").strip() not in HORIZON_BLANK
+
+
+def horizon_week(text: str) -> str:
+    """1-week goal from INDEX, or empty. This is the glanceable 'what's going on'."""
+    week = str(parse_horizons(text).get("week") or "").strip()
+    return week if horizon_filled(week) else ""
 
 
 def horizons_equal(left: dict, right: dict) -> bool:
@@ -870,6 +944,13 @@ def write_project_horizons(project_id: str, horizons: dict, *, notify: bool = Tr
     path.write_text(clean_memory_text(text), encoding="utf-8")
     new = parse_horizons(path.read_text(encoding="utf-8"))
     notice = record_horizon_notice(pid, old, new) if notify else None
+    if notify:
+        try:
+            from .memory import teach_from_horizons
+
+            teach_from_horizons(pid, horizon_week(path.read_text(encoding="utf-8")))
+        except Exception:
+            pass
     return {"project_id": pid, "horizons": new, "notice": notice}
 
 
@@ -1038,6 +1119,20 @@ def staff_briefing() -> str:
         f"Blocker: {index_field(inst, 'Blocker') or '—'}",
         "",
     ]
+    try:
+        from .memory import operator_packet, prune_candidates
+
+        op = operator_packet(None)
+        if op:
+            lines.append(op)
+            lines.append("")
+        flags = prune_candidates()
+        if flags:
+            lines.append("## Memory flags")
+            lines.extend(f"- {item}" for item in flags[:8])
+            lines.append("")
+    except Exception:
+        pass
     for row in (_load_saved().get("projects") or []):
         if not isinstance(row, dict) or not row.get("id"):
             continue
@@ -1045,6 +1140,11 @@ def staff_briefing() -> str:
         name = str(row.get("name") or pid)
         text = read_project_index(pid)
         lines.append(f"## {name} CEO")
+        week = horizon_week(text)
+        if week:
+            lines.append(f"This week: {week[:160]}")
+        else:
+            lines.append("This week: Goals empty — operator Accepts a founding RESULT or Save Goals.")
         lines.append(f"Now: {index_field(text, 'Now') or '—'}")
         lines.append(f"Last: {index_field(text, 'Last') or '—'}")
         lines.append(f"Next: {index_field(text, 'Next') or '—'}")
@@ -1091,10 +1191,10 @@ def wiring_brief(project_id: str | None = None) -> str:
     ]
     if tools.get("hermes_session_id"):
         lines.append(
-            "Telegram: Railway still owns the live bot. Think/Ops resume that session. Chat here does not post there."
+            "OttoBot chat is the inbox. Imported Telegram history is context only. If Telegram is connected later, it must be the same thread as this chat — not a second shop."
         )
     else:
-        lines.append("Telegram: no imported session yet. Chat is still the operator surface.")
+        lines.append("OttoBot chat is the inbox. Telegram is not required.")
     return "\n".join(lines)
 
 
@@ -1117,11 +1217,24 @@ def staff_status_reply() -> str:
         pid = str(row.get("id"))
         name = str(row.get("name") or pid)
         text = read_project_index(pid)
-        bit = f"{pid}: {name} — {index_field(text, 'Now') or '—'}"
+        week = horizon_week(text)
+        now_line = index_field(text, "Now") or "—"
+        if week:
+            bit = f"{pid}: {name} — this week: {week[:140]} · now: {now_line}"
+        else:
+            bit = f"{pid}: {name} — Goals empty · now: {now_line}"
         stuck = index_field(text, "Blocker")
         if stuck and stuck != "—":
             bit += f" · blocked {stuck}"
         lines.append(bit)
+    try:
+        from .memory import prune_candidates
+
+        flags = prune_candidates()
+        if flags:
+            lines.append("Memory: " + flags[0] + (" — say prune memory" if len(flags) > 1 else ""))
+    except Exception:
+        pass
     return "\n".join(lines).strip()
 
 
@@ -1856,9 +1969,27 @@ def add_project(
         patch_scope(slug, None, "Railway", rail)
     if site:
         patch_scope(slug, None, "Site", site)
+    org_extra_prompt = ""
+    org_extra_display = ""
+    try:
+        from .founding import founding_prompt, founding_display, mark_founding_accepted, mark_founding_needed
+
+        filled = any(horizon_filled(v) for v in parse_horizons(read_project_index(slug)).values())
+        if filled:
+            mark_founding_accepted(slug)
+        else:
+            mark_founding_needed(slug, idea=goal, site=site, goals=goal)
+            org_extra_prompt = founding_prompt(name=title, idea=goal, site=site, goals=goal)
+            org_extra_display = founding_display(title, goal)
+    except Exception:
+        org_extra_prompt = ""
     org = public_org(_load_saved())
     org["project_id"] = slug
     org["hermes_home"] = info["hermes_home"]
+    if org_extra_prompt:
+        org["founding_prompt"] = org_extra_prompt
+        org["founding_display"] = org_extra_display
+        org["founding_status"] = "needed"
     return org
 
 

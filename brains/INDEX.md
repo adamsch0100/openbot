@@ -14,10 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v161 — SAA live is healthy (0 failed / 0 overdue). Goals tab is the 1w-5y board. Refresh live copy instead of Retrying scars.
-Last: SSH to live SAA: geo-citation-audit, citation-submission, keyword-opportunity, content-gap all ok. Overlay was a day-old photo. ListLogic Hermes Offline (deploys removed). Conversion Hermes Online.
-Next: Hard-refresh ?v=161. Open Goals. Refresh live copy on SAA Schedule. Do not Restart imported SAA home. ListLogic live Hermes needs Adam to redeploy.
-Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. Do not mass-retry. ListLogic live box is Offline — ask before redeploy.
+Now: v167 — Operator profile, DECISIONS, Reject→rule, Cos memory audit. Labor serves Horizons.
+Last: v166 — OttoBot Goals are a paid multi-tenant wrapper. Add CEO Think proposes Horizons from the operator Goal. Seated CEOs stay seeded.
+Next: Hard-refresh ?v=167. Aim Cos → memory audit. Do not fire Ask CEO to propose against live SAA. Do not Accept parked restore.
+Blocker: Live Railway still owns the SAA scheduler until pause. Do not Accept parked restore cards. Do not mass-retry. ListLogic live box is Offline — ask before redeploy.
 
 ## Vault
 
@@ -29,7 +29,7 @@ Blocker: Do not Accept parked restore cards. Do not kill/redeploy SAA Hermes. Do
 - CEO pins: openbot + Support → shared pool. SAA Homes → SAA Go. Nadia + ListLogic eligible again (not in RETIRED_CEO_IDS); seat via Add CEO after unlock — do not auto-wire here.
 - Hermes native: Nous Portal subscription. Subscribe at portal.nousresearch.com/r/adam-schwartz. Connect with `hermes portal` or paste `NOUS_API_KEY`. Not in this vault yet, so Auto is Go then OpenRouter.
 - PAYG: OpenRouter after the three Go wallets are empty, plus OpenCode Zen after Go quota
-- Not imported: Telegram, SMTP, GitHub, Meta — those stay on Railway. TOTP and CAPTCHA still stop on this screen.
+- Not imported as the operator surface: Telegram, SMTP, GitHub, Meta. OttoBot chat is the inbox. Telegram, if connected later, must be the same thread as this chat.
 
 ## Railway Hermes (source)
 
