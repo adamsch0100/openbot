@@ -1062,21 +1062,35 @@ def warm_engines_background() -> None:
 
 
 def supervise_gateways_enabled() -> bool:
-    """Railway sets OPENBOT_DATA_DIR=/data. Local laptops stay off unless flagged."""
+    """Railway sets OPENBOT_DATA_DIR=/data. Local laptops stay off unless flagged or SAA desk owns."""
     flag = os.environ.get("OPENBOT_SUPERVISE_GATEWAYS", "").strip().lower()
     if flag in {"0", "false", "off", "no"}:
         return False
     if flag in {"1", "true", "on", "yes"}:
         return True
+    try:
+        from .org import saa_desk_owns
+
+        if saa_desk_owns():
+            return True
+    except Exception:
+        pass
     return bool(os.environ.get("OPENBOT_DATA_DIR", "").strip())
 
 
 def supervised_project_ids() -> list[str]:
-    """Empty by default. Live SAA Homes Hermes owns Telegram; this board only overlays status."""
+    """Empty by default. When this desk owns SAA cron, keep that gateway up."""
     raw = os.environ.get("OPENBOT_SUPERVISE_HOMES")
-    if raw is None:
-        return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
+    if raw is not None:
+        return [part.strip() for part in raw.split(",") if part.strip()]
+    try:
+        from .org import saa_desk_owns
+
+        if saa_desk_owns():
+            return ["saa-homes"]
+    except Exception:
+        pass
+    return []
 
 
 def _ceo_hermes_home(project_id: str) -> str:

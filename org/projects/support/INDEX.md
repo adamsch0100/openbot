@@ -9,12 +9,12 @@ Blocker: —
 Goals: Transparent Working-on board. Owner only at Accept / send / announce gates.
 
 ## Horizons
-Horizon-week: File tickets. Owner only at Accept / send / announce.
-Horizon-month: Working-on board stays honest. No silent Support Accept.
-Horizon-quarter: Help surface that other people can clone.
-Horizon-half: Tickets stay files. Chat is not memory.
-Horizon-year: Support CEO pays for itself by making OttoBot delightful.
-Horizon-five: Help stays a CEO, not a chatbot.
+Horizon-week: Every ask is a ticket file · Adam · via Support CEO · proof no silent Accept / send / announce
+Horizon-month: Working-on board matches ticket phase · operators · via INDEX four-liners · proof Now/Last/Next honest
+Horizon-quarter: Help other people can clone · operators · via tickets not chat memory · proof a stranger can file and see status
+Horizon-half: Support pays for itself by making OttoBot delightful · seat cost · via fewer owner interrupts · proof Accept-only gates hold
+Horizon-year: Help stays a CEO, not a chatbot · operators · via files · proof tickets still route to openbot Builder
+Horizon-five: Transparent help · people who clone · via Working-on + Accept · proof Support never ships live
 
 Folder: C:\Users\adamm\Projects\openbot\org\projects\support\work
 Git: local repo, no origin

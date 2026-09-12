@@ -156,6 +156,13 @@ def _ingest_home_files(project_id: str | None, hermes_home: str | None) -> list[
         known.add(key)
         if _cron_is_noise(str(row.get("name") or "")):
             continue
+        from .heartbeat import cron_is_heartbeat, fire_heartbeat
+
+        if project_id and cron_is_heartbeat(str(row.get("name") or row.get("id") or "")):
+            fire_heartbeat(str(project_id))
+            seen["lines"] = list(known)[-400:]
+            _save_seen(seen)
+            continue
         posted.append(_post_cron_card(project_id, row, hermes_home))
     if posted:
         seen["lines"] = list(known)[-400:]
@@ -164,6 +171,7 @@ def _ingest_home_files(project_id: str | None, hermes_home: str | None) -> list[
 
 
 def _ingest_overlay_rows(project_id: str) -> list[dict]:
+    """Railway overlay cards only. Never fire weekday Think from live SAA cron names."""
     from .hermes import load_saa_overlay_cache, overlay_to_cron_rows
 
     rows = overlay_to_cron_rows(load_saa_overlay_cache())

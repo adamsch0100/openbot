@@ -324,6 +324,18 @@ def chat_packet(name: str, status: str, task: str) -> str:
     return "\n".join(parts)
 
 
+def _index_block(index: str) -> str:
+    try:
+        from .org import index_for_packet
+
+        packed = index_for_packet(index)
+        if packed:
+            return packed
+    except Exception:
+        pass
+    return (index or "(empty INDEX)")[:8000] or "(empty INDEX)"
+
+
 def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") -> str:
     parts = [
         f"You are the {preset} engine on this CEO.",
@@ -334,7 +346,7 @@ def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") 
         "Name the engine that ran (Hermes Agent or OpenCode).",
         "",
         "INDEX:",
-        (index or "(empty INDEX)")[:2500],
+        _index_block(index),
         "",
         "BRAIN:",
         (brain or "(empty brain)")[:1200],

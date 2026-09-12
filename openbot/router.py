@@ -47,9 +47,11 @@ from .bus import (
 from .org import (
     RETIRED_CEO_IDS,
     add_schedule,
+    company_pulse,
     ensure_ceo_engines,
     inbox_tail,
     index_field,
+    index_for_packet,
     horizon_week,
     list_projects,
     node_label,
@@ -823,6 +825,21 @@ def _packet_extra(
     wire = wiring_brief(project_id)
     if wire:
         bits.append(f"CHIEF OF STAFF:\n{wire}")
+    if project_id and preset in {"think", "builder", "research", "ops"}:
+        try:
+            pulse = company_pulse(project_id)
+            if pulse:
+                bits.append(f"PULSE:\n{pulse}")
+        except Exception:
+            pass
+        try:
+            from .decide import proposal_packet_extra
+
+            decide = proposal_packet_extra(project_id, message)
+            if decide:
+                bits.append(decide)
+        except Exception:
+            pass
     if quote:
         bits.append(f"QUOTE (local thread, one snippet, not a replay):\n{quote}")
     if attachments:
@@ -874,6 +891,24 @@ def _packet_extra(
         if law:
             bits.append(f"LAW:\n{law}")
     return "\n\n".join(bits)
+
+
+def builder_prompt(message: str, extra: str = "", project_id: str | None = None) -> str:
+    """OpenCode job prompt: INDEX four-liners + doctrine, then the task, then packet extra (PULSE)."""
+    parts = [
+        "OpenBot Chat dispatched this to OpenCode for this CEO. "
+        "Edit the Code folder. Diffs come back to this chat for the operator.",
+        "Local edits only. Do not git push, publish, pay, or change production. "
+        "The operator Accepts or Rejects the diff — that is the action gate.",
+    ]
+    if project_id:
+        packed = index_for_packet(read_project_index(project_id))
+        if packed and packed != "(empty INDEX)":
+            parts.append("INDEX:\n" + packed)
+    parts.append((message or "").strip())
+    if extra:
+        parts.append(extra.strip())
+    return "\n\n".join(part for part in parts if part).strip()
 
 
 def _live_status_line(project_id: str | None) -> str:
@@ -1047,6 +1082,25 @@ def need_choices(row: dict) -> list[dict]:
             {"id": "open_goals", "label": "Open Goals"},
             {"id": "reject_founding", "label": "Reject"},
         ]
+    if kind == "heartbeat":
+        return [
+            {"id": "attach_heartbeat", "label": "Attach weekday Think"},
+            {"id": "run_heartbeat_now", "label": "Run Think now"},
+            {"id": "dismiss", "label": "Not now"},
+        ]
+    if kind == "proposal":
+        lane = str(row.get("lane") or "")
+        out = []
+        if lane and lane not in {"none", ""}:
+            out.append({"id": "do_proposal", "label": "Do it"})
+        out.extend(
+            [
+                {"id": "ask_cos_proposal", "label": "Ask Cos"},
+                {"id": "ask_me_proposal", "label": "Ask me"},
+                {"id": "skip_proposal", "label": "Skip"},
+            ]
+        )
+        return out
     if kind == "horizon":
         return [
             {"id": "open_goals", "label": "Open Goals"},
@@ -1104,6 +1158,9 @@ def job_choices(job: dict) -> list[dict]:
         )
     if job.get("diff_pending"):
         return need_choices({"kind": "diff"})
+    if job.get("proposal") and isinstance(job.get("proposal"), dict):
+        lane = str((job.get("proposal") or {}).get("lane") or "")
+        return need_choices({"kind": "proposal", "lane": lane, "project_id": job.get("project_id")})
     if job.get("keep_going") and not job.get("stopped") and not job.get("cron"):
         status = str(job.get("status") or job.get("last_status") or "").lower()
         failed = bool(job.get("blocker")) or ("error" in status or "fail" in status)
@@ -1197,6 +1254,13 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             label = f"{who}: failed — {reason}"
             subject = f"{who} · failed"
             why = reason
+        elif job.get("proposal") and isinstance(job.get("proposal"), dict):
+            kind = "proposal"
+            prop = job.get("proposal") or {}
+            nxt = str(prop.get("next") or "")[:80]
+            label = f"{who}: proposed Next" + (f" — {nxt}" if nxt else " with Why")
+            subject = f"{who} · proposal"
+            why = str(prop.get("why") or "Read Why before labor")
         elif job.get("keep_going") and not job.get("stopped") and not job.get("cron"):
             kind = "continue"
             label = f"{who}: ready for the next step."
@@ -1220,6 +1284,12 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         }
         if kind == "login":
             item["logins"] = public_logins(pid or None)
+        if kind == "proposal":
+            prop = job.get("proposal") if isinstance(job.get("proposal"), dict) else {}
+            item["lane"] = str(prop.get("lane") or "")
+            item["proposal"] = prop
+            item["next"] = str(prop.get("next") or "")
+            item["discuss"] = str(prop.get("discuss") or "")
         item["choices"] = need_choices(item)
         primary = (item["choices"] or [{}])[0]
         item["primary_action"] = str(primary.get("label") or primary.get("id") or "Open")
@@ -1280,6 +1350,71 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             primary = (needed["choices"] or [{}])[0]
             needed["primary_action"] = str(primary.get("label") or "Ask CEO to propose")
             out.insert(0, needed)
+    except Exception:
+        pass
+    try:
+        from .decide import load_open_proposal
+        from .heartbeat import heartbeat_enabled
+        from .org import project_tools as _tools
+
+        have_kinds = {(str(row.get("project_id") or ""), str(row.get("kind") or "")) for row in out}
+        for project in projects:
+            if len(out) >= limit:
+                break
+            pid = str(project.get("id") or "")
+            if not pid or pid in RETIRED_CEO_IDS or pid == "support":
+                continue
+            prop = load_open_proposal(pid)
+            if prop and str(prop.get("status") or "open") == "open" and (pid, "proposal") not in have_kinds:
+                who = names.get(pid) or str(project.get("name") or pid)
+                nxt = str(prop.get("next") or "")[:80]
+                waiting = {
+                    "id": f"proposal-{pid}",
+                    "kind": "proposal",
+                    "name": who,
+                    "label": f"{who}: proposed Next" + (f" — {nxt}" if nxt else " with Why"),
+                    "subject": f"{who} · proposal",
+                    "why": str(prop.get("why") or "Read Why before labor"),
+                    "next": str(prop.get("next") or ""),
+                    "discuss": str(prop.get("discuss") or ""),
+                    "lane": str(prop.get("lane") or ""),
+                    "proposal": prop,
+                    "project_id": pid,
+                    "engine": "Hermes Agent",
+                    "preset": "think",
+                    "url": "",
+                    "at": str(prop.get("at") or ""),
+                }
+                waiting["choices"] = need_choices(waiting)
+                primary = (waiting["choices"] or [{}])[0]
+                waiting["primary_action"] = str(primary.get("label") or "Ask Cos")
+                out.append(waiting)
+            week = horizon_week(str(project.get("index") or ""))
+            if not week:
+                continue
+            if heartbeat_enabled(pid):
+                continue
+            offer = str((_tools(pid) or {}).get("heartbeat_offer") or "")
+            if offer == "later":
+                continue
+            who = names.get(pid) or str(project.get("name") or pid)
+            beat = {
+                "id": f"heartbeat-{pid}",
+                "kind": "heartbeat",
+                "name": who,
+                "label": f"{who}: attach weekday Think? It proposes Next with Why, then you Do it / Ask Cos / Ask me.",
+                "subject": f"{who} · heartbeat",
+                "why": "Hermes is the timer. The board builds the packet. Not silent on a live desk.",
+                "project_id": pid,
+                "engine": "Hermes Agent",
+                "preset": "think",
+                "url": "",
+                "at": "",
+            }
+            beat["choices"] = need_choices(beat)
+            primary = (beat["choices"] or [{}])[0]
+            beat["primary_action"] = str(primary.get("label") or "Attach weekday Think")
+            out.append(beat)
     except Exception:
         pass
     try:
@@ -1632,6 +1767,7 @@ def _handle_preset(
     engine = "board"
     text = ""
     blocker = None
+    proposal_blob: dict = {}
     work = _work_folder(folder, project_id)
     usage_model = "none"
     prompt_tokens = 0
@@ -1690,45 +1826,61 @@ def _handle_preset(
             return public_job(receipt)
 
     if should_park_irreversible(chosen, message):
-        engine = "board"
-        approval = create_gate_approval(
-            job_id=job_id,
-            project_id=project_id,
-            kind="irreversible",
-            message=message,
-        )
-        draft = write_draft(
-            kind="outbound",
-            body=message,
-            project_id=project_id or "support",
-            title="Parked irreversible action",
-        )
-        blocker = "irreversible — parked for Needs-you"
-        text = (
-            "Parked. This looks like send/publish/pay/delete/push.\n"
-            f"Approval {approval['id']} expires {approval['expires_at']}. "
-            "It will not auto-approve.\n"
-            f"Draft: {draft.get('path')}"
-        )
-        patch_index_line("Blocker", blocker)
-        patch_index_line("Next", f"Approve {approval['id']} or let it expire")
-        receipt = _receipt_base(job_id, chosen, engine, message, work, actor=actor)
-        receipt.update(
-            {
-                "text": text,
-                "blocker": blocker,
-                "engine": engine,
-                "approval_id": approval["id"],
-                "approval_pending": True,
-                "draft_id": draft.get("id"),
-                "gate": classify_gate(chosen, message, ok=False, talk=False),
-            }
-        )
-        receipt["gate"]["action"] = "approval"
-        receipt["gate"]["label"] = "irreversible — Needs-you before send"
-        close_work_job(receipt, text)
-        write_job(receipt)
-        return public_job(receipt)
+        skip_park = False
+        try:
+            from .decide import ACCEPT_ONLY, FINANCIAL, policy_for_tools
+            from .org import project_tools
+
+            if (
+                project_id
+                and "Do the open proposal" in (message or "")
+                and not ACCEPT_ONLY.search(message or "")
+                and FINANCIAL.search(message or "")
+                and policy_for_tools(project_tools(project_id)).get("financial") == "auto"
+            ):
+                skip_park = True
+        except Exception:
+            skip_park = False
+        if not skip_park:
+            engine = "board"
+            approval = create_gate_approval(
+                job_id=job_id,
+                project_id=project_id,
+                kind="irreversible",
+                message=message,
+            )
+            draft = write_draft(
+                kind="outbound",
+                body=message,
+                project_id=project_id or "support",
+                title="Parked irreversible action",
+            )
+            blocker = "irreversible — parked for Needs-you"
+            text = (
+                "Parked. This looks like send/publish/delete/push.\n"
+                f"Approval {approval['id']} expires {approval['expires_at']}. "
+                "It will not auto-approve.\n"
+                f"Draft: {draft.get('path')}"
+            )
+            patch_index_line("Blocker", blocker)
+            patch_index_line("Next", f"Approve {approval['id']} or let it expire")
+            receipt = _receipt_base(job_id, chosen, engine, message, work, actor=actor)
+            receipt.update(
+                {
+                    "text": text,
+                    "blocker": blocker,
+                    "engine": engine,
+                    "approval_id": approval["id"],
+                    "approval_pending": True,
+                    "draft_id": draft.get("id"),
+                    "gate": classify_gate(chosen, message, ok=False, talk=False),
+                }
+            )
+            receipt["gate"]["action"] = "approval"
+            receipt["gate"]["label"] = "irreversible — Needs-you before send"
+            close_work_job(receipt, text)
+            write_job(receipt)
+            return public_job(receipt)
 
     if chosen == "ask":
         text = (
@@ -1889,6 +2041,14 @@ def _handle_preset(
                             patch_index_line("Next", "Operator Accepts founding Horizons")
                     except Exception:
                         pass
+                    try:
+                        from .decide import ingest_think_result
+
+                        decided = ingest_think_result(project_id, message, text, job_id=job_id)
+                        if decided.get("status") == "proposal":
+                            proposal_blob = decided.get("proposal") or {}
+                    except Exception:
+                        proposal_blob = {}
     elif chosen == "cos":
         talk = True
         settings = load_settings()
@@ -2077,15 +2237,7 @@ def _handle_preset(
             git_snap = snapshot(work)
             model = seated_or_auto(load_settings(), "code", seats) or DEFAULT_CODE_MODEL
             extra = _packet_extra(project_id, quote=quote, preset="builder", worker_id=worker_id, attachments=attachments, message=message)
-            prompt = (
-                "OpenBot Chat dispatched this to OpenCode for this CEO. "
-                "Edit the Code folder. Diffs come back to this chat for the operator.\n"
-                "Local edits only. Do not git push, publish, pay, or change production. "
-                "The operator Accepts or Rejects the diff — that is the action gate.\n\n"
-                f"{message}"
-            )
-            if extra:
-                prompt = f"{prompt}\n\n{extra}"
+            prompt = builder_prompt(message, extra=extra, project_id=project_id)
             attempts = _code_attempts(tools, model)
             if not attempts:
                 _activate("OpenCode", tools, model)
@@ -2577,6 +2729,7 @@ def _handle_preset(
                 login_wall=login_wall,
                 ok=blocker is None,
             ),
+            "proposal": proposal_blob or None,
         }
     )
     receipt["gate"] = classify_gate(
@@ -2590,6 +2743,32 @@ def _handle_preset(
     receipt["text"] = text
     close_work_job(receipt, text)
     write_job(receipt)
+    if proposal_blob and project_id and blocker is None:
+        try:
+            from .decide import auto_labor_allowed, labor_prompt
+
+            allowed, _reason = auto_labor_allowed(project_id, proposal_blob)
+            if allowed:
+                labor_msg, labor_preset = labor_prompt(project_id)
+                if labor_msg and labor_preset:
+
+                    def _auto() -> None:
+                        try:
+                            handle(
+                                labor_msg,
+                                folder=None,
+                                preset=labor_preset,
+                                project_id=project_id,
+                                worker_id=None,
+                            )
+                        except Exception:
+                            pass
+
+                    threading.Thread(target=_auto, daemon=True).start()
+                    receipt["auto_labor"] = True
+                    write_job(receipt)
+        except Exception:
+            pass
     try:
         from .tickets import on_job_linked
 

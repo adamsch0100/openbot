@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v167 — Operator profile, DECISIONS, Reject→rule, Cos memory audit. Labor serves Horizons.
-Last: v166 — OttoBot Goals are a paid multi-tenant wrapper. Add CEO Think proposes Horizons from the operator Goal. Seated CEOs stay seeded.
-Next: Hard-refresh ?v=167. Aim Cos → memory audit. Do not fire Ask CEO to propose against live SAA. Do not Accept parked restore.
+Now: v172 — Compressed month (22 weekdays, isolated desk-month) proves Think→proposal→auto/notify. Code+research auto; financial+ops notify; publish/delete Accept-gated; failed labor blocks the next tick.
+Last: v171 — Financial = pay + price + spend + wallet (one toggle). Publish/delete/sign still Accept-gated. Run Think now. Recommended: code+research auto, financial+ops notify.
+Next: Save This CEO mix. Run Think now on a desk you mean to prove — not silent on live SAA. `python -m openbot.brainmonth` to re-dogfood.
 Blocker: Live Railway still owns the SAA scheduler until pause. Do not Accept parked restore cards. Do not mass-retry. ListLogic live box is Offline — ask before redeploy.
 
 ## Vault

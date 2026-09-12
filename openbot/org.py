@@ -13,7 +13,7 @@ from .channel import home_summary, telegram_session_id
 from .config import load_config
 from .detect import hermes_home, which
 from .gitutil import git_status
-from .bus import ensure_bus, seed_file_contract, seed_org_contracts
+from .bus import ensure_bus, handoff_summary, seed_file_contract, seed_org_contracts
 from .store import CODE_ROOT, ROOT, clean_memory_text, now_iso, patch_index_line, read_index
 
 SITE_BY_ID = {
@@ -77,6 +77,16 @@ HORIZON_KEYS = (
     ("five", "5 years"),
 )
 HORIZON_BLANK = frozenset({"", "—", "-", "–"})
+INDEX_PACKET_CAP = 12000
+PULSE_CAP = 1800
+_INDEX_SKIP_HEADINGS = frozenset({
+    "engine changelog",
+    "vault",
+    "instance",
+    "engines",
+    "railway hermes",
+    "horizons",
+})
 
 ORG = ROOT / "org"
 PROFILE_PATH = ORG / "profile.json"
@@ -115,6 +125,10 @@ def _empty_index(title: str, folder: str) -> str:
         "Do not invent a CFO or COO bot.\n\n"
         "Escalate: Auto handles transient. You handle the rest. Ask Cos if stuck. "
         "Ping Adam only for keys, money, login walls, publish, pay, delete, sign.\n\n"
+        "Chat is not memory. INDEX, Horizons, and a compiled PULSE (schedule, last jobs, git) are situation awareness. "
+        "A weekday Think heartbeat proposes Next with Why and reviews whether last labor implemented it. "
+        "The operator Accepts attaching cron. Never auto-cron. "
+        "Auto vs notify is per-lane (code, research, ops, financial) and the operator sets it.\n\n"
         "Public posts (Facebook, X, email blasts): draft in Adam's voice, park Needs-you. Never auto-post.\n\n"
         "## Contract\n\n"
         "JOB: Run this company. Own P&L. Pay for this seat first, then profit. Spin specialists when a bottleneck repeats. No CFO/COO bots.\n"
@@ -232,6 +246,9 @@ def _carry_tools(row: dict) -> dict:
         "authorize_railway",
         "authorize_cookie_export",
         "authorize_facebook",
+        "auto_labor",
+        "auto_policy",
+        "heartbeat_offer",
     ):
         if key in row:
             out[key] = row[key]
@@ -835,6 +852,211 @@ def horizon_week(text: str) -> str:
     return week if horizon_filled(week) else ""
 
 
+def _heading_skip_key(title: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"\(.*?\)", "", title or "")).strip().lower()
+
+
+def _index_packet_rest(blob: str) -> str:
+    """INDEX body for packets: doctrine stays, steward changelogs do not."""
+    parts: list[str] = []
+    current_title = ""
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_title, current_lines
+        key = _heading_skip_key(current_title)
+        if current_title and any(key == skip or key.startswith(skip) for skip in _INDEX_SKIP_HEADINGS):
+            current_title = ""
+            current_lines = []
+            return
+        body = "\n".join(current_lines).strip()
+        if current_title:
+            block = f"## {current_title}"
+            if body:
+                block = f"{block}\n\n{body}"
+            parts.append(block)
+        elif body:
+            kept: list[str] = []
+            for line in body.splitlines():
+                if re.match(
+                    r"^(Now|Last|Next|Blocker|Goals|Horizon-\w+|Folder|Git|Hermes|Telegram|Site|Railway):\s*",
+                    line,
+                ):
+                    continue
+                if line.strip() == "## Horizons":
+                    continue
+                kept.append(line)
+            preamble = "\n".join(kept).strip()
+            if preamble:
+                parts.append(preamble)
+        current_title = ""
+        current_lines = []
+
+    for raw in (blob or "").splitlines():
+        match = re.match(r"^##\s+(.+)$", raw)
+        if match:
+            flush()
+            current_title = match.group(1).strip()
+            continue
+        current_lines.append(raw)
+    flush()
+    return "\n\n".join(part for part in parts if part).strip()
+
+
+def index_for_packet(text: str, *, cap: int = INDEX_PACKET_CAP) -> str:
+    """Four-liners and Horizons first, then doctrine. Never prefer a steward changelog."""
+    blob = (text or "").strip()
+    if not blob:
+        return "(empty INDEX)"
+    head: list[str] = []
+    for label in ("Now", "Last", "Next", "Blocker", "Goals"):
+        val = index_field(blob, label)
+        if val:
+            head.append(f"{label}: {val}")
+    parsed = parse_horizons(blob)
+    if any(horizon_filled(val) for val in parsed.values()):
+        if head:
+            head.append("")
+        head.append("## Horizons")
+        for key, _label in HORIZON_KEYS:
+            head.append(f"Horizon-{key}: {parsed.get(key) or '—'}")
+    head_block = "\n".join(head).strip()
+    rest = _index_packet_rest(blob)
+    if head_block and rest:
+        packed = f"{head_block}\n\n{rest}"
+    else:
+        packed = head_block or rest or blob
+    packed = packed.strip()
+    limit = max(1200, int(cap))
+    if len(packed) > limit:
+        packed = packed[:limit].rsplit("\n", 1)[0].rstrip()
+    return packed or "(empty INDEX)"
+
+
+def _project_folder(project_id: str) -> str:
+    pid = _slug(project_id)
+    for row in (_load_saved().get("projects") or []):
+        if isinstance(row, dict) and str(row.get("id") or "") == pid:
+            return str(row.get("folder") or "").strip()
+    return ""
+
+
+def _pulse_job_hints(project_id: str, limit: int = 3) -> list[str]:
+    from .store import list_jobs
+
+    jobs = sorted(list_jobs(), key=lambda job: str(job.get("at") or ""), reverse=True)
+    jobs = [job for job in jobs if str(job.get("project_id") or "") == project_id]
+    lines: list[str] = []
+    for job in jobs[: max(0, int(limit))]:
+        snippet = re.sub(r"\s+", " ", str(job.get("text") or "").strip())[:160]
+        if not snippet:
+            continue
+        who = job.get("worker_id") or job.get("preset") or "CEO"
+        engine = job.get("engine") or "board"
+        jid = job.get("id") or ""
+        lines.append(f"{who} · {engine} {jid}: {snippet}")
+    return lines
+
+
+def pulse_headline(project_id: str | None, digest: dict | None = None) -> str:
+    """One Cos line: due N · failed N · last outcome. Empty-honest when no cron."""
+    if not project_id:
+        return ""
+    pid = _slug(project_id)
+    blob = digest
+    job_count = None
+    if blob is None:
+        try:
+            bundle = project_cron_bundle(pid) or {}
+        except (TypeError, ValueError, OSError):
+            return "unavailable"
+        blob = bundle.get("digest") or {}
+        job_count = bundle.get("job_count")
+    if not isinstance(blob, dict):
+        blob = {}
+    due = blob.get("due") or []
+    failed = blob.get("failed") or []
+    running = blob.get("running") or []
+    latest = blob.get("result") or blob.get("latest") or {}
+    last_title = ""
+    if isinstance(latest, dict):
+        last_title = str(latest.get("title") or latest.get("outcome") or "").strip()[:80]
+    enabled = blob.get("enabled")
+    count = int(job_count) if job_count is not None else int(enabled or 0)
+    if count <= 0 and not due and not failed and not running and not last_title:
+        return "none attached"
+    bits = [f"due {len(due)}", f"failed {len(failed)}"]
+    if running:
+        names = [str(row.get("title") or "").strip() for row in running[:2] if isinstance(row, dict)]
+        names = [name for name in names if name]
+        if names:
+            bits.append("running " + ", ".join(names))
+    if last_title:
+        bits.append(f"last: {last_title}")
+    return " · ".join(bits)
+
+
+def company_pulse(project_id: str | None) -> str:
+    """Situation awareness for this CEO. Projection, not a second memory. Not live GSC/FUB."""
+    if not project_id:
+        return ""
+    pid = _slug(project_id)
+    lines: list[str] = []
+    text = read_project_index(pid)
+    now = index_field(text, "Now") or "—"
+    week = horizon_week(text)
+    if week:
+        lines.append(f"This week: {week[:160]}")
+    else:
+        lines.append("This week: Goals empty — operator Accepts founding or Save Goals.")
+    lines.append(f"Now: {now[:140]}")
+    digest: dict = {}
+    story = ""
+    try:
+        bundle = project_cron_bundle(pid) or {}
+        digest = bundle.get("digest") if isinstance(bundle.get("digest"), dict) else {}
+        story = str(digest.get("live_story") or digest.get("story") or "").strip()
+        lines.append("Schedule: " + (pulse_headline(pid, digest) or "none attached"))
+        if story:
+            lines.append(story[:280])
+    except (TypeError, ValueError, OSError):
+        lines.append("Schedule: unavailable")
+    jobs = _pulse_job_hints(pid)
+    if jobs:
+        lines.append("Last jobs:")
+        lines.extend(f"- {item}" for item in jobs)
+    try:
+        handoffs = handoff_summary(pid)
+        if handoffs:
+            lines.append("Handoffs: " + re.sub(r"\s+", " ", handoffs)[:220])
+    except Exception:
+        pass
+    ticket = inbox_tail(pid, 160)
+    if ticket:
+        lines.append("Inbox: " + re.sub(r"\s+", " ", ticket)[:160])
+    folder = _project_folder(pid)
+    if folder:
+        git = git_status(folder)
+        if git.get("is_repo"):
+            branch = str(git.get("branch") or "").strip() or "detached"
+            dirty = "dirty" if git.get("dirty") else "clean"
+            remote = str(git.get("remote") or "").strip()
+            git_line = f"Code: {branch} · {dirty}"
+            if remote:
+                git_line += f" · {remote[:80]}"
+            lines.append(git_line)
+        elif git.get("ok"):
+            lines.append("Code: folder attached, not a git repo")
+    tools = project_tools(pid)
+    site = str(tools.get("site_url") or "").strip() or SITE_BY_ID.get(pid, "")
+    if site:
+        lines.append(f"Site: {site} (pointer — Research re-opens; not live stats)")
+    packed = "\n".join(line for line in lines if line).strip()
+    if len(packed) > PULSE_CAP:
+        packed = packed[:PULSE_CAP].rsplit("\n", 1)[0].rstrip()
+    return packed
+
+
 def horizons_equal(left: dict, right: dict) -> bool:
     for key, _label in HORIZON_KEYS:
         a = str((left or {}).get(key) or "").strip()
@@ -954,6 +1176,21 @@ def write_project_horizons(project_id: str, horizons: dict, *, notify: bool = Tr
     return {"project_id": pid, "horizons": new, "notice": notice}
 
 
+def _auto_policy_set(row: dict) -> bool:
+    raw = row.get("auto_policy")
+    return isinstance(raw, dict) and any(key in raw for key in ("code", "research", "ops", "financial"))
+
+
+def _public_auto_policy(row: dict) -> dict:
+    from .decide import normalize_auto_policy, recommended_auto_policy
+
+    if _auto_policy_set(row):
+        return normalize_auto_policy(row.get("auto_policy"), legacy_auto_labor=bool(row.get("auto_labor")))
+    if row.get("auto_labor"):
+        return normalize_auto_policy(None, legacy_auto_labor=True)
+    return recommended_auto_policy()
+
+
 def _public_tools(row: dict) -> dict:
     seats = row.get("seats") if isinstance(row.get("seats"), dict) else {}
     cap = row.get("spend_cap_usd")
@@ -983,6 +1220,10 @@ def _public_tools(row: dict) -> dict:
         "authorize_railway": bool(row.get("authorize_railway")),
         "authorize_cookie_export": bool(row.get("authorize_cookie_export")),
         "authorize_facebook": bool(row.get("authorize_facebook")),
+        "auto_labor": bool(row.get("auto_labor")),
+        "auto_policy": _public_auto_policy(row),
+        "auto_policy_set": _auto_policy_set(row),
+        "heartbeat_offer": str(row.get("heartbeat_offer") or "").strip(),
         "connectors": {
             "skills": connectors.get("skills") if isinstance(connectors.get("skills"), dict) else {},
             "mcp": connectors.get("mcp") if isinstance(connectors.get("mcp"), dict) else {}
@@ -1149,6 +1390,12 @@ def staff_briefing() -> str:
         lines.append(f"Last: {index_field(text, 'Last') or '—'}")
         lines.append(f"Next: {index_field(text, 'Next') or '—'}")
         lines.append(f"Blocker: {index_field(text, 'Blocker') or '—'}")
+        try:
+            sched = pulse_headline(pid)
+            if sched:
+                lines.append(f"Schedule: {sched}")
+        except Exception:
+            pass
         ticket = inbox_tail(pid, 180)
         if ticket:
             lines.append("Inbox: " + re.sub(r"\s+", " ", ticket)[:180])
@@ -1226,6 +1473,12 @@ def staff_status_reply() -> str:
         stuck = index_field(text, "Blocker")
         if stuck and stuck != "—":
             bit += f" · blocked {stuck}"
+        try:
+            sched = pulse_headline(pid)
+            if sched:
+                bit += f" · {sched}"
+        except Exception:
+            pass
         lines.append(bit)
     try:
         from .memory import prune_candidates
@@ -1529,6 +1782,15 @@ def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = 
             row["authorize_cookie_export"] = bool(patch.get("authorize_cookie_export"))
         if "authorize_facebook" in patch:
             row["authorize_facebook"] = bool(patch.get("authorize_facebook"))
+        if "auto_labor" in patch:
+            row["auto_labor"] = bool(patch.get("auto_labor"))
+        if "auto_policy" in patch and isinstance(patch.get("auto_policy"), dict):
+            from .decide import normalize_auto_policy, POLICY_KEYS
+
+            row["auto_policy"] = normalize_auto_policy(patch.get("auto_policy"))
+            row["auto_labor"] = any(row["auto_policy"].get(key) == "auto" for key in POLICY_KEYS)
+        if "heartbeat_offer" in patch:
+            row["heartbeat_offer"] = str(patch.get("heartbeat_offer") or "").strip()
         if "skills" in patch:
             row["skills"] = str(patch.get("skills") or "").strip()
         if "connectors" in patch and isinstance(patch.get("connectors"), dict):

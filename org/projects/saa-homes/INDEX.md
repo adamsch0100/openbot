@@ -2,20 +2,19 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Live Hermes healthy: 0 failed, 0 overdue. city-audit-wave-execute-09-11 due 06:00 UTC. Board copy refreshes on demand.
-Last: Live dump 2026-09-11: the 11 failed / 11 never on the board were a stale overlay. Citation + keyword jobs already succeeded yesterday.
-Next: Let 06:00 city-audit-wave fire on live. Refresh live copy. Paused jobs stay paused. Open Goals for the 1w-5y board.
-Blocker: GBP login = skip + note. Do not mass-retry old gateway-shutdown scars. Do not Restart the imported home. No stampede.
+Now: OttoBot chat is the inbox. Telegram is not required. Live Railway still runs cron until pause.
+Last: Saved search alerts immediate · Healthy on the live box.
+Next: Cutover = this desk owns cron, deliver local to Schedule/Results. Pause live the same minute. No Telegram poller.
 Blocker: —
 Goals: —
 
 ## Horizons
-Horizon-week: Live Hermes is healthy: 0 failed, 0 overdue. city-audit-wave-execute-09-11 due 06:00 UTC. Refresh the board copy; do not mass-retry scars.
-Horizon-month: Own NoCO city pages and the CHFA funnel. Ship SEO. GBP login stays skip + note. conversion-surge stays paused on purpose.
-Horizon-quarter: Compound Tier S city money queries. Qualified leads from /for-buyers/ and /for-sellers/.
-Horizon-half: Local pack + branded presence in the core 19 cities. Content authority feeding money pages.
-Horizon-year: Northern Colorado search ownership — top-3 for {city} realtor / homes for sale / sell home.
-Horizon-five: Schwartz and Associates is the obvious trusted local expert for anyone buying or selling in NoCO online.
+Horizon-week: 1 live city or CHFA page that can take a lead · NoCO buyer/seller · via organic area + program URLs · proof live URL + contact form HTTP 200
+Horizon-month: 8+ qualified inquiries (form / CHFA / market report) · NoCO ready-to-act · via organic city + CHFA/Champions pages · proof form submits + GSC clicks on money URLs
+Horizon-quarter: Top-8 on named Tier S {city} realtor / homes for sale queries · NoCO searchers · via city pages + internal links · proof GSC position not paid ads
+Horizon-half: Organic + local pack covering Hermes/OpenCode spend · NoCO · via SEO (GBP login still skip+note) · proof Maps/GSC vs token spend
+Horizon-year: Organic covers the SAA Hermes seat then profit · NoCO buy/sell · via search ownership not paid · proof leads/week vs seat cost
+Horizon-five: Schwartz and Associates is the name NoCO already trusts to buy or sell · via compounding local search · proof branded queries + inbound
 
 ## Residual risks (honest)
 

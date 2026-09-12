@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v167 — Operator profile + DECISIONS in every job packet. Reject saves a rule. Labor serves Horizons.
-Last: v166 — OttoBot Goals are a paid multi-tenant wrapper. Add CEO Think proposes from the operator Goal.
-Next: Hard-refresh ?v=167. Aim Cos and say memory audit. Do not fire Ask CEO to propose against live SAA.
+Now: v172 — Month sim on isolated desk-month: 13 auto / 9 notify / 1 failed labor. Gates held. Run `python -m openbot.brainmonth`.
+Last: v171 — Financial toggle includes pay. Publish/delete/sign stay Accept-gated. Run Think now.
+Next: Save This CEO auto mix. Run Think now on a desk you mean to prove — not silent on live SAA.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

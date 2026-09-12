@@ -205,6 +205,8 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertIn("Run this company", text)
         self.assertIn("Horizon-week:", text)
         self.assertIn("Horizon-five:", text)
+        self.assertIn("compiled PULSE", text)
+        self.assertIn("Never auto-cron", text)
 
     def test_add_project_allows_nadia_and_listlogic(self):
         nadia = org_mod.add_project(str(self.home), "Nadia")
@@ -254,6 +256,29 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertIn("Goals: profitability · pay for itself first", index)
         self.assertIn("Site: https://pmill.ai", index)
         self.assertIn("Railway: victorious-presence", index)
+
+    def test_add_project_founding_uses_operator_goal(self):
+        data = org_mod.add_project(
+            str(self.home),
+            "Acme Co",
+            goals="paid tenants wrapping Hermes + OpenCode",
+            site_url="https://acme.example",
+        )
+        self.assertEqual(data.get("founding_status"), "needed")
+        prompt = data.get("founding_prompt") or ""
+        self.assertIn("FOUNDING_TASK", prompt)
+        self.assertIn("paid tenants wrapping Hermes + OpenCode", prompt)
+        self.assertIn("https://acme.example", prompt)
+        self.assertIn("multi-tenant", prompt)
+        self.assertIn("propose Goals from:", data.get("founding_display") or "")
+        from openbot.founding import founding_prompt_for, load_founding
+
+        blob = load_founding(data["project_id"])
+        self.assertEqual(blob.get("status"), "needed")
+        self.assertIn("paid tenants", blob.get("idea") or "")
+        again = founding_prompt_for(data["project_id"])
+        self.assertIn("paid tenants wrapping Hermes + OpenCode", again)
+        self.assertIn("https://acme.example", again)
 
     def test_clean_memory_strips_contributor_banner(self):
         raw = (

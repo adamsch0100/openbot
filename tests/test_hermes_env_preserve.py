@@ -39,6 +39,22 @@ class TestHermesEnvPreserve(unittest.TestCase):
             live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
             self.assertEqual(live["TELEGRAM_BOT_TOKEN"], "live-token")
 
+    def test_skips_telegram_when_restore_channels_false(self):
+        from openbot.keyring import preserve_merge_hermes_env, _parse_env_lines
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".env").write_text("OPENCODE_GO_API_KEY=go-live\n", encoding="utf-8")
+            (home / ".env.bak-openbot").write_text(
+                "TELEGRAM_BOT_TOKEN=123:ABC\n",
+                encoding="utf-8",
+            )
+            result = preserve_merge_hermes_env(home, restore_channels=False)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["restored"], [])
+            live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
+            self.assertNotIn("TELEGRAM_BOT_TOKEN", live)
+
     def test_write_keeps_telegram_when_updating_go_key(self):
         from openbot.keyring import _write_hermes_env, _parse_env_lines
 

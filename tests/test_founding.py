@@ -55,6 +55,8 @@ class FoundingDetectTests(unittest.TestCase):
         self.assertIn("paid tenants wrapping Hermes + OpenCode", prompt)
         self.assertIn("https://acme.example", prompt)
         self.assertIn("multi-tenant", prompt)
+        self.assertIn("PULSE", prompt)
+        self.assertIn("Never auto-attach cron", prompt)
         self.assertTrue(is_founding_message(prompt))
         self.assertFalse(is_steer_message(prompt))
 
