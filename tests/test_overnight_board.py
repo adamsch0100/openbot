@@ -78,8 +78,8 @@ class OvernightBoardUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=176", html)
-        self.assertIn("styles.css?v=176", html)
+        self.assertIn("app.js?v=177", html)
+        self.assertIn("styles.css?v=177", html)
 
     def test_pulse_failed_zero_is_not_a_failed_job(self):
         import re
@@ -103,8 +103,10 @@ class OvernightBoardUiTests(unittest.TestCase):
         self.assertTrue(body_failed("Failed - API key rejected (401)"))
         self.assertTrue(body_failed("Failed. Script not found"))
         org = (ROOT / "openbot" / "org.py").read_text(encoding="utf-8")
-        self.assertIn("keep going from Cos", org)
         self.assertNotIn("keep going from Chief of Staff", org)
+        from openbot.org import quiet_index_line
+
+        self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Cos")
         router = (ROOT / "openbot" / "router.py").read_text(encoding="utf-8")
         self.assertIn("or Cos for status", router)
         self.assertNotIn("or Chief of Staff for status", router)
@@ -155,6 +157,29 @@ class OvernightHostAliasTests(unittest.TestCase):
                 "**Cron smoke27-552014 result:** Routine `routine-e521843f` does not exist",
             )
             patched.assert_not_called()
+
+    def test_rollup_last_only_skips_terminal_dump(self):
+        from unittest.mock import patch
+
+        from openbot.org import rollup_staff
+
+        calls = []
+
+        def capture(label, value):
+            calls.append((label, value))
+
+        dump = "\x1b[0m > build · big-pickle \x1b[0m$ git status && git log --oneline -10 On branch master"
+        with patch("openbot.org.patch_index_line", side_effect=capture), patch(
+            "openbot.org._load_saved",
+            return_value={"projects": [{"id": "pmill-ai", "name": "Pmill.ai"}]},
+        ):
+            rollup_staff("pmill-ai", None, dump)
+        labels = [row[0] for row in calls]
+        self.assertEqual(labels, ["Last"])
+        self.assertIn("Pmill.ai", calls[0][1])
+        self.assertNotIn("git status", calls[0][1])
+        self.assertNotIn("Now", labels)
+        self.assertNotIn("Next", labels)
 
     def test_git_remote_strips_embedded_tokens(self):
         from openbot.gitutil import public_remote_url

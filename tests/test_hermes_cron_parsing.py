@@ -196,12 +196,13 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertIn("Healthy on the live box", ok_copy)
 
     def test_cron_digest_plain_story(self):
+        now = datetime.now(timezone.utc)
         rows = [
             {
                 "id": "a",
                 "name": "form-pipeline-health",
                 "enabled": True,
-                "last_run_at": "2026-09-10T00:05:01+00:00",
+                "last_run_at": (now - timedelta(hours=6)).isoformat(),
                 "last_status": "ok",
                 "outcome": "Healthy. Nothing new to report.",
             },
@@ -209,7 +210,7 @@ class TestJobIdValidation(unittest.TestCase):
                 "id": "b",
                 "name": "monthly-market-blog",
                 "enabled": True,
-                "last_run_at": "2026-09-09T14:05:01+00:00",
+                "last_run_at": (now - timedelta(hours=8)).isoformat(),
                 "last_status": "error",
                 "outcome": "Failed. The Hermes gateway stopped mid-run.",
             },
@@ -387,7 +388,24 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertEqual(pack["latest"]["name"], "daily-ranking-strike")
         self.assertTrue(any(row["name"] == "form-pipeline-health" for row in pack["upcoming"]))
 
-    def test_cron_digest_overdue_counts_as_due(self):
+    def test_cron_digest_overdue_recent_labor_counts_as_due(self):
+        now = datetime.now(timezone.utc)
+        rows = [
+            {
+                "id": "late1",
+                "name": "form-pipeline-health",
+                "enabled": True,
+                "state": "scheduled",
+                "last_status": "ok",
+                "last_run_at": (now - timedelta(hours=20)).isoformat(),
+                "next_run_at": (now - timedelta(minutes=10)).isoformat(),
+            }
+        ]
+        pack = cron_digest(rows, hours=48)
+        self.assertEqual(pack["due"][0]["name"], "form-pipeline-health")
+        self.assertIn("form-pipeline-health", pack["next_up"]["name"])
+
+    def test_cron_digest_days_old_copy_is_not_due_now(self):
         now = datetime.now(timezone.utc)
         rows = [
             {
@@ -401,7 +419,9 @@ class TestJobIdValidation(unittest.TestCase):
             }
         ]
         pack = cron_digest(rows, hours=48)
-        self.assertEqual(pack["due"][0]["name"], "form-pipeline-health")
+        self.assertEqual(pack["due"], [])
+        self.assertTrue(pack["copy_stale"])
+        self.assertNotIn("Due now", pack["live_story"])
         self.assertIn("form-pipeline-health", pack["next_up"]["name"])
 
     def test_parse_skill_list_skips_installed_chrome(self):

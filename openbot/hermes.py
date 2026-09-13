@@ -1983,7 +1983,10 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
             upcoming_rows.append((nxt_when, item))
         if on and not paused and not live and nxt_when:
             delta = nxt_when - now
-            if delta <= timedelta(minutes=30):
+            soon = timedelta(0) < delta <= timedelta(minutes=30)
+            overdue = timedelta(hours=-2) <= delta <= timedelta(0)
+            recently_ran = bool(when and now - when <= window)
+            if soon or (overdue and recently_ran):
                 due.append(item)
             if nxt_when > now and (next_up_when is None or nxt_when < next_up_when):
                 next_up_when = nxt_when

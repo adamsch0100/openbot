@@ -228,6 +228,19 @@ class PulseIsolationTests(unittest.TestCase):
         self.assertIn("due 1", headline)
         self.assertIn("failed 1", headline)
 
+    def test_pulse_headline_quiet_saa_copy(self):
+        digest = {
+            "due": [],
+            "failed": [],
+            "running": [],
+            "copy_stale": True,
+            "enabled": 48,
+        }
+        with patch("openbot.org.saa_desk_owns", return_value=False):
+            headline = pulse_headline("saa-homes", digest)
+        self.assertIn("live Hermes owns schedule", headline)
+        self.assertNotIn("due 0", headline)
+
     def test_packet_extra_and_builder_prompt_carry_pulse_and_index(self):
         with patch("openbot.org.project_cron_bundle", return_value=CRON_BUNDLE), patch(
             "openbot.org.git_status",

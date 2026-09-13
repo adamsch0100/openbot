@@ -2232,7 +2232,19 @@ async function postProject(folder, name, extras) {
 }
 
 const CEO_SEAT_PRESETS = {
+  "saa-homes": {
+    site_url: "https://saahomes.com",
+    github_repo: "adamsch0100/saahomes",
+    railway: "SAA Homes Hermes",
+    goals: "organic covers the SAA Hermes seat then profit · NoCO"
+  },
   pmill: {
+    site_url: "https://pmill.ai",
+    github_repo: "adamsch0100/pmillsports",
+    railway: "victorious-presence",
+    goals: "profitability · pay for itself first"
+  },
+  "pmill-ai": {
     site_url: "https://pmill.ai",
     github_repo: "adamsch0100/pmillsports",
     railway: "victorious-presence",

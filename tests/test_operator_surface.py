@@ -93,8 +93,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=176", html)
-        self.assertIn("styles.css?v=176", html)
+        self.assertIn("app.js?v=177", html)
+        self.assertIn("styles.css?v=177", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

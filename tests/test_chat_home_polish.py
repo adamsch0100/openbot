@@ -40,7 +40,7 @@ class ChatHomePolishTests(unittest.TestCase):
 
         with patch.object(org_mod, "project_tools", return_value=tools):
             with patch.object(org_mod, "patch_project_tools", side_effect=fake_patch):
-                org_mod.align_wire_auth_with_urls("saa-homes")
+                org_mod.align_wire_auth_with_urls("acme")
         self.assertTrue(patched.get("authorize_site"))
         self.assertTrue(patched.get("mcp_github"))
         self.assertNotIn("authorize_railway", patched)

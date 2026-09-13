@@ -196,6 +196,18 @@ class RetiredOrgTests(LaborLoopIsolation):
         self.assertEqual(listlogic.get("site_url"), "https://listlogic.homes")
         self.assertEqual(listlogic.get("github_repo"), "adamsch0100/saahomes")
         self.assertEqual(listlogic.get("goals"), "paid activations · pay for itself first")
+        saa = org_mod.seat_preset_for_name("SAA Homes")
+        self.assertEqual(saa.get("site_url"), "https://saahomes.com")
+        self.assertEqual(saa.get("github_repo"), "adamsch0100/saahomes")
+        self.assertEqual(saa.get("railway"), "SAA Homes Hermes")
+        pmill_ai = org_mod.seat_preset_for_name("pmill-ai")
+        self.assertEqual(pmill_ai.get("github_repo"), "adamsch0100/pmillsports")
+        saa_tools = org_mod._public_tools({"id": "saa-homes"})
+        self.assertEqual(saa_tools.get("github_repo"), "adamsch0100/saahomes")
+        self.assertEqual(saa_tools.get("site_url"), "https://saahomes.com")
+        self.assertEqual(saa_tools.get("railway"), "SAA Homes Hermes")
+        self.assertTrue(saa_tools.get("mcp_github"))
+        self.assertTrue(saa_tools.get("authorize_site"))
 
     def test_empty_ceo_index_is_p_and_l(self):
         text = org_mod._empty_index("Acme", "/tmp/acme")

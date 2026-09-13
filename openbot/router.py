@@ -2442,7 +2442,6 @@ def _handle_preset(
                 patch_index_line("Last", _index_last(text, failed=True))
             else:
                 patch_index_line("Last", _index_last(text))
-                patch_index_line("Now", f"Builder job {job_id} in {work}")
                 patch_index_line(
                     "Next",
                     "Review the diff card (Accept / Reject)" if diff_pending else "Ask for the next change",

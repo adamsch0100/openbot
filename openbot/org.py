@@ -19,13 +19,26 @@ from .store import CODE_ROOT, ROOT, clean_memory_text, now_iso, patch_index_line
 SITE_BY_ID = {
     "saa-homes": "https://saahomes.com",
     "pmill": "https://pmill.ai",
+    "pmill-ai": "https://pmill.ai",
     "nadia": "https://e8solutions.ai",
     "listlogic": "https://listlogic.homes",
 }
 
 # Prefill when seating a known CEO (Add CEO form). Operator can edit before submit.
 CEO_SEAT_PRESETS = {
+    "saa-homes": {
+        "site_url": "https://saahomes.com",
+        "github_repo": "adamsch0100/saahomes",
+        "railway": "SAA Homes Hermes",
+        "goals": "organic covers the SAA Hermes seat then profit · NoCO",
+    },
     "pmill": {
+        "site_url": "https://pmill.ai",
+        "github_repo": "adamsch0100/pmillsports",
+        "railway": "victorious-presence",
+        "goals": "profitability · pay for itself first",
+    },
+    "pmill-ai": {
         "site_url": "https://pmill.ai",
         "github_repo": "adamsch0100/pmillsports",
         "railway": "victorious-presence",
@@ -254,6 +267,20 @@ def _carry_tools(row: dict) -> dict:
     ):
         if key in row:
             out[key] = row[key]
+    pid = str(row.get("id") or "")
+    preset = seat_preset_for_name(pid) or seat_preset_for_name(row.get("name"))
+    if preset.get("site_url") and not str(out.get("site_url") or "").strip():
+        out["site_url"] = str(preset["site_url"]).strip()
+    if preset.get("github_repo") and not str(out.get("github_repo") or "").strip():
+        out["github_repo"] = str(preset["github_repo"]).strip()
+        if not out.get("mcp_github"):
+            out["mcp_github"] = True
+    if preset.get("railway") and not str(out.get("railway") or "").strip():
+        out["railway"] = str(preset["railway"]).strip()
+        if not out.get("authorize_railway"):
+            out["authorize_railway"] = True
+    if str(out.get("site_url") or "").strip() and not out.get("authorize_site"):
+        out["authorize_site"] = True
     return out
 
 
@@ -780,7 +807,7 @@ def public_org(data: dict | None = None) -> dict:
                 "founding": founding,
                 "schedules": read_schedules(pid),
                 "crons": project_crons(pid, results=False),
-                "site_url": str(row.get("site_url") or "").strip(),
+                "site_url": str(tools.get("site_url") or row.get("site_url") or "").strip() or SITE_BY_ID.get(pid, ""),
                 "git": {
                     "is_repo": bool(git.get("is_repo")),
                     "remote": str(git.get("remote") or ""),
@@ -991,6 +1018,10 @@ def pulse_headline(project_id: str | None, digest: dict | None = None) -> str:
     count = int(job_count) if job_count is not None else int(enabled or 0)
     if count <= 0 and not due and not failed and not running and not last_title:
         return "none attached"
+    if blob.get("copy_stale") and count > 0:
+        if pid == "saa-homes" and not saa_desk_owns():
+            return "live Hermes owns schedule · this copy is quiet"
+        return "schedule quiet · last labor older than two days"
     bits = [f"due {len(due)}", f"failed {len(failed)}"]
     if running:
         names = [str(row.get("title") or "").strip() for row in running[:2] if isinstance(row, dict)]
@@ -1225,8 +1256,13 @@ def _public_tools(row: dict) -> dict:
         cap_val = None
     summary = home_summary(row.get("hermes_home"))
     connectors = row.get("connectors") if isinstance(row.get("connectors"), dict) else {}
+    pid = str(row.get("id") or "")
+    preset = seat_preset_for_name(pid) or seat_preset_for_name(row.get("name"))
+    site = str(row.get("site_url") or "").strip() or str(preset.get("site_url") or "").strip() or SITE_BY_ID.get(pid, "")
+    repo = str(row.get("github_repo") or "").strip() or str(preset.get("github_repo") or "").strip()
+    rail = str(row.get("railway") or "").strip() or str(preset.get("railway") or "").strip()
     return {
-        "mcp_github": bool(row.get("mcp_github")),
+        "mcp_github": bool(row.get("mcp_github")) or bool(repo),
         "skills": str(row.get("skills") or ""),
         "spend_cap_usd": cap_val,
         "hermes_home": str(row.get("hermes_home") or ""),
@@ -1238,11 +1274,11 @@ def _public_tools(row: dict) -> dict:
         "session_source": str(summary.get("session_source") or ""),
         "account_id": str(row.get("account_id") or ""),
         "fallback": [str(item) for item in (row.get("fallback") or []) if str(item).strip()],
-        "site_url": str(row.get("site_url") or "").strip(),
-        "github_repo": str(row.get("github_repo") or "").strip(),
-        "railway": str(row.get("railway") or "").strip(),
-        "authorize_site": bool(row.get("authorize_site")),
-        "authorize_railway": bool(row.get("authorize_railway")),
+        "site_url": site,
+        "github_repo": repo,
+        "railway": rail,
+        "authorize_site": bool(row.get("authorize_site")) or bool(site),
+        "authorize_railway": bool(row.get("authorize_railway")) or bool(rail),
         "authorize_cookie_export": bool(row.get("authorize_cookie_export")),
         "authorize_facebook": bool(row.get("authorize_facebook")),
         "auto_labor": bool(row.get("auto_labor")),
@@ -1474,10 +1510,16 @@ INDEX_NOISE = re.compile(
     r"smoke\d+|SMOKE\d+_|e2e smoke|wc8_|(?:openbot\s+)?routine[\s\-]*e521843f|Cron smoke",
     re.I,
 )
+INDEX_DUMP = re.compile(
+    r"\x1b\[|git status|working tree clean|On branch |\bbig-pickle\b",
+    re.I,
+)
 
 
 def board_copy(text: str) -> str:
-    s = str(text or "")
+    from .store import ANSI_ESCAPE
+
+    s = ANSI_ESCAPE.sub("", str(text or ""))
     s = s.replace("Chief of Staff", "Cos")
     s = re.sub(r"\bOpenBot instance\b", "OttoBot instance", s)
     s = re.sub(r"\bOpenBot Builder\b", "OttoBot Builder", s)
@@ -1492,7 +1534,10 @@ def quiet_index_line(text: str, *, drop_if_noisy: bool = True) -> str:
     s = re.sub(r"^(Now|Last|Next|Blocker):\s*", "", s, flags=re.I).strip()
     if not s:
         return ""
-    if not INDEX_NOISE.search(s):
+    if INDEX_DUMP.search(s):
+        if drop_if_noisy:
+            return ""
+    if not INDEX_NOISE.search(s) and not INDEX_DUMP.search(s):
         return s
     if drop_if_noisy:
         return ""
@@ -1723,18 +1768,23 @@ def align_wire_auth_with_urls(project_id: str) -> dict:
     """
     pid = _slug(project_id)
     tools = project_tools(pid)
+    preset = seat_preset_for_name(pid)
     patch: dict = {}
-    site = str(tools.get("site_url") or "").strip() or SITE_BY_ID.get(pid, "")
-    repo = str(tools.get("github_repo") or "").strip()
-    rail = str(tools.get("railway") or "").strip()
+    site = str(tools.get("site_url") or "").strip() or str(preset.get("site_url") or "").strip() or SITE_BY_ID.get(pid, "")
+    repo = str(tools.get("github_repo") or "").strip() or str(preset.get("github_repo") or "").strip()
+    rail = str(tools.get("railway") or "").strip() or str(preset.get("railway") or "").strip()
     if site and not tools.get("authorize_site"):
         patch["authorize_site"] = True
         if not str(tools.get("site_url") or "").strip() and site:
             patch["site_url"] = site
     if repo and not tools.get("mcp_github"):
         patch["mcp_github"] = True
+        if not str(tools.get("github_repo") or "").strip() and repo:
+            patch["github_repo"] = repo
     if rail and not tools.get("authorize_railway"):
         patch["authorize_railway"] = True
+        if not str(tools.get("railway") or "").strip() and rail:
+            patch["railway"] = rail
     if patch:
         return patch_project_tools(pid, patch, create_if_missing=True)
     return tools
@@ -1977,6 +2027,7 @@ def patch_scope(project_id: str | None, worker_id: str | None, label: str, value
 
 
 def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> None:
+    """Cos Last only. Never stamp CEO terminal dumps onto instance Now/Next."""
     if not project_id:
         return
     if INDEX_NOISE.search(result or ""):
@@ -1986,12 +2037,13 @@ def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> 
         if isinstance(row, dict) and str(row.get("id") or "") == project_id:
             name = str(row.get("name") or project_id)
             break
+    name = CEO_PRETTY_NAMES.get(str(project_id), name)
     who = worker_id or "CEO"
     snippet = re.sub(r"[*_`#]+", "", clean_memory_text(result or ""))
     snippet = re.sub(r"\s+", " ", snippet).strip()[:160] or "—"
-    patch_index_line("Last", f"{name} · {who}: {snippet}")
-    patch_index_line("Now", f"{name} · {snippet[:140]}")
-    patch_index_line("Next", f"Open {name} if you want the report, or keep going from Cos")
+    if INDEX_DUMP.search(snippet):
+        snippet = f"{who} finished"
+    patch_index_line("Last", f"{name} · {snippet}"[:160])
 
 
 def write_project_inbox(project_id: str, message: str) -> Path:

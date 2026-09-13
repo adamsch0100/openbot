@@ -117,6 +117,34 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("Goals empty", text)
         self.assertNotIn("due 0 · failed 0", text)
 
+    def test_staff_status_drops_terminal_dump_and_names_saa_copy(self):
+        from unittest.mock import patch
+
+        from openbot.org import staff_status_reply
+
+        with patch(
+            "openbot.org.read_index",
+            return_value=(
+                "# INDEX\nNow: Pmill.ai · \x1b[0m > build · big-pickle $ git status\n"
+                "Next: Open Pmill.ai if you want the report, or keep going from Cos\nBlocker: —\n"
+            ),
+        ), patch(
+            "openbot.org._load_saved",
+            return_value={"projects": [{"id": "saa-homes", "name": "SAA Homes"}]},
+        ), patch(
+            "openbot.org.read_project_index",
+            return_value="Now: Live Railway Hermes still runs cron.\nHorizon-week: 1 live city\n",
+        ), patch(
+            "openbot.org.pulse_headline",
+            return_value="live Hermes owns schedule · this copy is quiet",
+        ), patch("openbot.org.saa_desk_owns", return_value=False):
+            text = staff_status_reply()
+        self.assertNotIn("git status", text)
+        self.assertNotIn("big-pickle", text)
+        self.assertIn("SAA Homes", text)
+        self.assertIn("live Hermes owns schedule", text)
+        self.assertIn("keep going from Cos", text)
+
     def test_aimed_status_hides_smoke_now(self):
         from openbot.router import status_reply
 
@@ -136,6 +164,7 @@ class CheapChatTests(unittest.TestCase):
 
         self.assertEqual(quiet_index_line("Next: Open OttoBot if you want the report"), "Open OttoBot if you want the report")
         self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Cos")
+        self.assertEqual(quiet_index_line("Pmill.ai · \x1b[0m > build · git status"), "")
         job = public_job(
             {
                 "id": "abc",

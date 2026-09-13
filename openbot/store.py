@@ -39,11 +39,12 @@ META_TRAIN_TAIL = re.compile(
     r"prompts\s+and\s+completions?\s+to\s+train\s+future\s+[^\n.]*\.?",
     re.I,
 )
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def clean_memory_text(text: str) -> str:
     """Strip Meta contributor banners so they never become INDEX memory."""
-    cleaned = text or ""
+    cleaned = ANSI_ESCAPE.sub("", text or "")
     cleaned = CONTRIBUTOR_BANNER.sub("", cleaned)
     cleaned = META_TIER_BANNER.sub("", cleaned)
     cleaned = CONTRIBUTOR_LABEL.sub("", cleaned)
