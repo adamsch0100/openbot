@@ -150,6 +150,66 @@ class CheapChatTests(unittest.TestCase):
         self.assertIn("horizon_week(read_project_index(pid))", router)
         self.assertNotIn('horizon_week(str(project.get("index")', router)
         self.assertIn("pid == SUPPORT_CEO_ID", router)
+        self.assertNotIn("founding-need-{pid}", router)
+        self.assertIn('offer != "ask"', router)
+        self.assertIn("def dismiss_need", router)
+        server = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
+        self.assertIn("patch_scope,", server)
+        self.assertIn("/dismiss$", server)
+
+    def test_pending_skips_empty_goals_login_and_parked_fails(self):
+        from unittest.mock import patch
+
+        from openbot.router import pending_approvals
+
+        jobs = [
+            {
+                "id": "login1",
+                "at": "2026-09-13T20:00:00",
+                "login_wall": True,
+                "project_id": "listlogic",
+                "engine": "Hermes Agent",
+                "url": "https://www.facebook.com/groups/followupbosscommunity",
+            },
+            {
+                "id": "fail1",
+                "at": "2026-09-13T19:00:00",
+                "status": "error",
+                "blocker": "Hermes chat exited 1",
+                "project_id": "openbot",
+                "engine": "Hermes Agent",
+                "preset": "think",
+            },
+            {
+                "id": "script1",
+                "at": "2026-09-13T18:00:00",
+                "status": "error",
+                "blocker": "Script-not-found: scripts/citation_audit.sh",
+                "project_id": "saa-homes",
+                "engine": "Hermes Agent",
+                "preset": "ops",
+            },
+        ]
+        with patch("openbot.router.list_jobs", return_value=jobs), patch(
+            "openbot.router.list_projects",
+            return_value=[
+                {"id": "listlogic", "name": "ListLogic"},
+                {"id": "openbot", "name": "OttoBot"},
+                {"id": "saa-homes", "name": "SAA Homes"},
+                {"id": "pmill-ai", "name": "Pmill.ai"},
+            ],
+        ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"), patch(
+            "openbot.org.list_horizon_notices", return_value=[]
+        ), patch("openbot.founding.load_founding", return_value={"status": "needed"}), patch(
+            "openbot.heartbeat.heartbeat_enabled", return_value=False
+        ), patch("openbot.org.project_tools", return_value={"heartbeat_offer": ""}):
+            rows = pending_approvals()
+        kinds = [row.get("kind") for row in rows]
+        self.assertNotIn("founding", kinds)
+        self.assertNotIn("login", kinds)
+        self.assertNotIn("failed", kinds)
+        self.assertNotIn("heartbeat", kinds)
+        self.assertFalse(any(str(row.get("id") or "").startswith("founding-need") for row in rows))
 
     def test_empty_cos_stays_on_the_board(self):
         from unittest.mock import patch

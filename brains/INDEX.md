@@ -14,10 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Live desk greened — INDEX without smoke, SAA Engines not fake-red, Your move stays on the aimed CEO.
-Last: v=173 honesty pass. Volume INDEX still had smoke cron; SAA Engines warned on the OttoBot dash; Cos Your move stuck on ListLogic Facebook.
-Next: Use Cos for status. Open a CEO to work. Do not attach weekday cron on live SAA.
-Blocker: Do not pause/redeploy Railway SAA Hermes. Do not Accept parked SAA restore or Facebook FUB login.
+Now: Desk in use — parked nags cancelled, Chat loop live.
+Last: Your move no longer nags empty Goals, Facebook login, weekday Think, or old Hermes fails.
+Next: Ask Cos what's going on, or open a CEO and work.
+Blocker: Do not pause/redeploy live SAA Hermes.
 
 ## Vault
 

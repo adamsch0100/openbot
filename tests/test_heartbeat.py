@@ -256,7 +256,7 @@ class DecideIsolationTests(unittest.TestCase):
         ):
             rows = pending_approvals()
         kinds = [row.get("kind") for row in rows]
-        self.assertIn("heartbeat", kinds)
+        self.assertNotIn("heartbeat", kinds)
 
     def test_pending_shows_open_proposal(self):
         write_proposal("saa-homes", parse_proposal_from_text(PROPOSAL_TEXT))

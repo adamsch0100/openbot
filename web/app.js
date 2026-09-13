@@ -3463,6 +3463,7 @@ function needChoices(row) {
     out.push({ id: "logged_in", label: "I already logged in" });
     if (row.url) out.push({ id: "open_page", label: "Open page", url: row.url });
     out.push({ id: "open", label: "Type a login" });
+    out.push({ id: "dismiss", label: "Not now" });
     return out;
   }
   if (kind === "cookie_export") {
@@ -3642,6 +3643,14 @@ async function runNeedChoice(btn) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ attach: false })
+        });
+      } catch (_err) { /* */ }
+    } else if (/^[a-f0-9]{6,32}$/i.test(String(id || ""))) {
+      try {
+        await fetch(`/api/jobs/${encodeURIComponent(id)}/dismiss`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "cancelled by operator" })
         });
       } catch (_err) { /* */ }
     }

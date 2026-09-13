@@ -1111,6 +1111,7 @@ def need_choices(row: dict) -> list[dict]:
             out.append({"id": "use_login", "label": f"Approve {name}", "login_id": lid})
         out.append({"id": "logged_in", "label": "I already logged in"})
         out.append({"id": "open", "label": "Type a login"})
+        out.append({"id": "dismiss", "label": "Not now"})
         return out
     if kind == "diff":
         return [
@@ -1206,6 +1207,27 @@ def need_choices(row: dict) -> list[dict]:
     return [{"id": "open", "label": "Open"}]
 
 
+def dismiss_need(job_id: str, reason: str = "") -> dict:
+    """Cancel a parked job so Your move and login walls stop asking."""
+    job = read_job(job_id)
+    if job is None:
+        return {"ok": False, "error": "job not found"}
+    note = (reason or "").strip() or "cancelled by operator"
+    updated = update_job(
+        job_id,
+        {
+            "stopped": True,
+            "keep_going": False,
+            "login_wall": False,
+            "diff_pending": False,
+            "dismissed": True,
+            "status": "cancelled",
+            "blocker": note,
+        },
+    )
+    return {"ok": True, "job": public_job(updated or job)}
+
+
 def job_choices(job: dict) -> list[dict]:
     """Same next clicks as the chat card for this result. Accept/Reject only for diffs."""
     if not isinstance(job, dict):
@@ -1268,16 +1290,23 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             )
         )
 
+    def _fail_kind(job: dict) -> str:
+        from .hermes import fail_kind_from_blob
+
+        return fail_kind_from_blob(
+            f"{job.get('blocker') or ''} {job.get('text') or ''} {job.get('message') or ''} {job.get('cron_outcome') or ''} {job.get('last_error') or ''}"
+        )
+
     def _need_rank(job: dict) -> int:
         if job.get("login_wall"):
-            return 0
+            return 9
         if job.get("diff_pending"):
             return 1
         status = str(job.get("status") or job.get("last_status") or "").lower()
         failed = bool(job.get("blocker") and str(job.get("blocker") or "").strip() not in {"", "—", "ok"}) or (
             "error" in status or "fail" in status
         )
-        if failed and not _cancelled(job):
+        if failed and not _cancelled(job) and _fail_kind(job) in {"key", "wallet"}:
             return 2
         if job.get("keep_going") and not job.get("stopped") and not job.get("cron"):
             return 8
@@ -1314,16 +1343,15 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             "error" in status or "fail" in status
         )
         if job.get("login_wall"):
-            kind = "login"
-            label = f"{who}: a site asked for a login."
-            subject = f"{who} · login"
-            why = "Login wall"
-        elif job.get("diff_pending"):
+            continue
+        if job.get("diff_pending"):
             kind = "diff"
             label = f"{who}: a code change is waiting."
             subject = f"{who} · diff ready"
             why = "Accept or Reject the diff"
         elif failed:
+            if _fail_kind(job) not in {"key", "wallet"}:
+                continue
             from .hermes import human_fail_reason
 
             kind = "failed"
@@ -1407,28 +1435,6 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 primary = (founding["choices"] or [{}])[0]
                 founding["primary_action"] = str(primary.get("label") or "Accept Goals")
                 out.insert(0, founding)
-                continue
-            week = horizon_week(read_project_index(pid))
-            if week or status == "accepted":
-                continue
-            needed = {
-                "id": f"founding-need-{pid}",
-                "kind": "founding",
-                "status": "needed",
-                "name": who,
-                "label": f"{who}: Goals are empty.",
-                "subject": f"{who} · Goals",
-                "why": "This CEO will not invent a board. Ask them to propose, or Save Goals yourself.",
-                "project_id": pid,
-                "engine": "board",
-                "preset": "think",
-                "url": "",
-                "at": str(draft.get("at") or ""),
-            }
-            needed["choices"] = need_choices(needed)
-            primary = (needed["choices"] or [{}])[0]
-            needed["primary_action"] = str(primary.get("label") or "Ask CEO to propose")
-            out.insert(0, needed)
     except Exception:
         pass
     try:
@@ -1526,7 +1532,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             if heartbeat_enabled(pid):
                 continue
             offer = str((_tools(pid) or {}).get("heartbeat_offer") or "")
-            if offer == "later":
+            if offer != "ask":
                 continue
             who = names.get(pid) or str(project.get("name") or pid)
             beat = {

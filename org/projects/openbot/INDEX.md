@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Live desk is green — Horizons on this CEO, Cos for status, engines honest.
-Last: Restored Horizons on the live volume INDEX and cleared smoke cron Now/Next.
-Next: Do not attach weekday cron. Open Builder for code. Do not Accept parked SAA restore.
-Blocker: Do not Accept parked SAA restore. Do not redeploy live SAA Hermes.
+Now: Desk in use — Horizons on this CEO, Cos for status, engines honest.
+Last: Parked nags cancelled. Empty Goals, Facebook login, weekday Think, and old fails are off Your move.
+Next: Ask Cos what's going on, or open Builder for a change.
+Blocker: —
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons

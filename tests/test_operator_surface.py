@@ -93,8 +93,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=174", html)
-        self.assertIn("styles.css?v=174", html)
+        self.assertIn("app.js?v=175", html)
+        self.assertIn("styles.css?v=175", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -235,6 +235,34 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
 
         key = need_choices({"kind": "failed", "why": "API key rejected (401)"})
         self.assertEqual(key[0]["id"], "fix_key")
+
+    def test_dismiss_need_stops_login_wall(self):
+        import tempfile
+
+        import openbot.store as store_mod
+        from openbot.router import dismiss_need
+        from openbot.store import write_job
+
+        old_jobs = store_mod.JOBS
+        with tempfile.TemporaryDirectory() as tmp:
+            store_mod.JOBS = Path(tmp)
+            write_job(
+                {
+                    "id": "abcdef123456",
+                    "login_wall": True,
+                    "keep_going": True,
+                    "project_id": "listlogic",
+                    "engine": "Hermes Agent",
+                    "status": "needs_you",
+                    "url": "https://www.facebook.com/groups/followupbosscommunity",
+                }
+            )
+            out = dismiss_need("abcdef123456")
+        store_mod.JOBS = old_jobs
+        self.assertTrue(out.get("ok"))
+        job = out.get("job") or {}
+        self.assertTrue(job.get("stopped"))
+        self.assertFalse(job.get("login_wall"))
 
     def test_cronwatch_does_not_keep_going_on_fail(self):
         src = (ROOT / "openbot" / "cronwatch.py").read_text(encoding="utf-8")

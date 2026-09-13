@@ -93,13 +93,14 @@ from .org import (
     write_project_horizons,
     write_worker_brain,
     parse_horizons,
+    patch_scope,
     dismiss_horizon_notice,
     read_project_index,
     quiet_index_line,
 )
 from .engine_proxy import inject_opencode_tree, maybe_proxy
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
-from .router import decide_diff, revert_accept, handle, need_choices, pending_approvals, public_job
+from .router import decide_diff, dismiss_need, revert_accept, handle, need_choices, pending_approvals, public_job
 from .share import (
     actor_stamp,
     allows_project,
@@ -141,7 +142,7 @@ from .store import (
 from .threadstore import append_turn, read_thread, thread_key
 
 WEB = CODE_ROOT / "web"
-JOB_ACTION = re.compile(r"^/api/jobs/([a-f0-9]{6,32})/(accept|reject)$")
+JOB_ACTION = re.compile(r"^/api/jobs/([a-f0-9]{6,32})/(accept|reject|dismiss)$")
 JOB_REVERT = re.compile(r"^/api/jobs/([a-f0-9]{6,32})/revert$")
 RUN_STOP = re.compile(r"^/api/runs/([a-zA-Z0-9-]{6,40})/stop$")
 BRAIN_PATH = re.compile(r"^/api/brains/(cos|builder|research|ops|think)$")
@@ -2565,7 +2566,10 @@ class Handler(SimpleHTTPRequestHandler):
             branch_name = str(data.get("branch_name") or "") if isinstance(data, dict) else None
             run_tests = bool(data.get("run_tests")) if isinstance(data, dict) else False
             reason = str(data.get("reason") or "").strip() if isinstance(data, dict) else ""
-            result = decide_diff(job_id, accept=(action == "accept"), force=force, push_branch=push_branch, branch_name=branch_name, run_tests=run_tests, reason=reason)
+            if action == "dismiss":
+                result = dismiss_need(job_id, reason=reason)
+            else:
+                result = decide_diff(job_id, accept=(action == "accept"), force=force, push_branch=push_branch, branch_name=branch_name, run_tests=run_tests, reason=reason)
             code = 200 if result.get("ok") else 400
             # decide_diff already returns the correct INDEX (project or staff)
             if "index" not in result:

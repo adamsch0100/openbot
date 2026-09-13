@@ -1547,10 +1547,10 @@ class KeyringTests(unittest.TestCase):
         ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"):
             rows = pending_approvals()
         kinds = {row["project_id"]: row["kind"] for row in rows}
-        self.assertEqual(kinds["saa-homes"], "login")
+        self.assertEqual(kinds["saa-homes"], "diff")
         self.assertEqual(kinds["openbot"], "diff")
-        self.assertIn("login", next(row["label"] for row in rows if row["kind"] == "login").lower())
-        diff = next(row for row in rows if row["kind"] == "diff")
+        self.assertFalse(any(row.get("kind") == "login" for row in rows))
+        diff = next(row for row in rows if row["kind"] == "diff" and row["project_id"] == "openbot")
         self.assertEqual([c["id"] for c in diff.get("choices") or []], ["accept", "reject", "open"])
 
     def test_need_choices_match_the_wait(self):
@@ -1563,7 +1563,7 @@ class KeyringTests(unittest.TestCase):
                 "logins": [{"id": "1", "label": "GBP"}],
             }
         )
-        self.assertEqual([c["id"] for c in login], ["open_page", "use_login", "logged_in", "open"])
+        self.assertEqual([c["id"] for c in login], ["open_page", "use_login", "logged_in", "open", "dismiss"])
         self.assertNotIn("accept", [c["id"] for c in login])
         self.assertEqual([c["id"] for c in need_choices({"kind": "diff"})], ["accept", "reject", "open"])
         self.assertEqual([c["id"] for c in need_choices({"kind": "gate"})], ["allow", "deny"])
