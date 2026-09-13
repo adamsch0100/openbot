@@ -179,9 +179,9 @@ OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wa
 FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.
 
 ## Horizons
-Horizon-week: Live ListLogic Hermes has no replica (all deploys removed). Do not Restart the imported OpenBot home. Facebook drafts stay Needs-you.
-Horizon-month: Paid activations (trial to 39/mo). Adam gate to redeploy live Hermes if this CEO is back on.
-Horizon-quarter: A conversion path that covers Hermes/OpenCode spend.
-Horizon-half: ListLogic is the pricing story agents use with sellers.
-Horizon-year: Paid activations cover the seat first, then profit.
-Horizon-five: The listing-price company that pays for itself.
+Horizon-week: Live ListLogic Hermes replica Online (today: deploys removed — Adam gate) · listing agents · via product not city SEO · proof Railway replica before labor
+Horizon-month: Paid activations (trial → $39/mo) covering Hermes/OpenCode · listing agents · via FUB-group help then one plug · proof activations vs spend
+Horizon-quarter: A conversion path that covers the seat · agents who price listings · via ListLogic.homes · proof paid activations
+Horizon-half: ListLogic is the pricing story agents use with sellers · via product + drafts (never auto-post) · proof parked Needs-you not browser posts
+Horizon-year: Paid activations cover the seat first, then profit · listing agents · via product · proof revenue vs token spend
+Horizon-five: The listing-price company that pays for itself · via one CEO not a C-suite · proof P&L on INDEX

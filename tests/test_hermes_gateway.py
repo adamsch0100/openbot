@@ -456,7 +456,19 @@ class TestGatewaySupervise(unittest.TestCase):
 
         with patch.dict("os.environ"):
             os.environ.pop("OPENBOT_SUPERVISE_HOMES", None)
-            self.assertEqual(supervised_project_ids(), [])
+            with patch("openbot.org.saa_desk_owns", return_value=False):
+                self.assertEqual(supervised_project_ids(), [])
+
+    def test_supervise_homes_when_desk_owns(self):
+        from openbot.launch import supervised_project_ids, supervise_gateways_enabled
+
+        with patch.dict("os.environ"):
+            os.environ.pop("OPENBOT_SUPERVISE_HOMES", None)
+            os.environ.pop("OPENBOT_SUPERVISE_GATEWAYS", None)
+            os.environ.pop("OPENBOT_DATA_DIR", None)
+            with patch("openbot.org.saa_desk_owns", return_value=True):
+                self.assertEqual(supervised_project_ids(), ["saa-homes"])
+                self.assertTrue(supervise_gateways_enabled())
 
     def test_supervise_on_with_data_dir(self):
         from openbot.launch import supervise_gateways_enabled

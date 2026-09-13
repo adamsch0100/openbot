@@ -123,17 +123,22 @@ def engine_health(project_id: str | None = None) -> dict:
 
     warn = []
     next_steps = []
-    saa_live = pid == "saa-homes"
+    try:
+        from .org import saa_desk_owns
+
+        saa_live = pid == "saa-homes" and not saa_desk_owns()
+    except Exception:
+        saa_live = pid == "saa-homes"
     if aimed and dash.get("running") and not dash_ok:
         if saa_live:
             warn.append("Hermes dash home mismatch — live SAA box owns schedule; do not Restart this imported home.")
-            next_steps.append("Leave the imported home off. Check the live SAA Hermes box if Telegram/cron is actually down.")
+            next_steps.append("Leave the imported home off. Check the live SAA Hermes box if cron is actually down.")
         else:
             warn.append("Hermes dash home mismatch (possible Cos /root/.hermes orphan)")
             next_steps.append("Open Tools → Hermes and Restart gateway for this CEO (kills stale Cos /root/.hermes dash).")
     if aimed and not gateway.get("running"):
         if saa_live:
-            next_steps.append("Live SAA Hermes owns Telegram + cron. Imported home Off is expected.")
+            next_steps.append("Live SAA Hermes owns cron. Imported home Off is expected. OttoBot chat is the inbox.")
         else:
             warn.append("Hermes gateway not running for this CEO")
             next_steps.append("Tap Restart Hermes gateway below, or Tools → Hermes → Restart.")

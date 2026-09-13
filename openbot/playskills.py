@@ -94,6 +94,28 @@ Never post. Needs-you before anything public.
 3. Park the draft. Wait for approval_id.
 """,
     },
+    "ceo-heartbeat": {
+        "description": "Weekday CEO Think: why, review last labor, propose Next",
+        "whenToUse": "When HEARTBEAT_TASK runs, or the operator asks what to do next from PULSE",
+        "body": """# CEO heartbeat
+
+## Owns
+Audit scar and last labor against Proof, then propose one next-best-action tied to Horizons. Write Why. Classify from Next, not Why.
+
+## Stopline
+Do not edit the repo. Do not browse unless Evidence needs a source and Research is the lane. Never publish, delete, or sign. Financial (pay, price, spend) follows AUTO POLICY. Never auto-post. Do not invent busywork when Horizon-week is a live page.
+
+## Steps
+1. Read SCAR and LAST LABOR REVIEW. Failed / drifted / unproven stays until matching lane echoes Proof, or Skip note clears the scar.
+2. Read PULSE (schedule, last jobs, git, week proof, repeats) and Horizons. Re-open live stats if the move depends on them.
+3. Name what you are not doing (Alternatives) so the operator can challenge the why.
+4. Output exactly: Why, Horizon, Evidence (VERIFIED|INFERRED|UNKNOWN), Alternatives, Review (implemented|drifted|failed|unproven|none), Lane (code|research|ops|none), Next, Auto (yes|no), Uncertainties, Discuss, Proof.
+5. Auto: no if Evidence is UNKNOWN, Review/Scar is drifted/failed/unproven, Next is off-horizon or week already proven, Next is publish/delete/sign, or AUTO POLICY for that class is notify. Financial includes pay, price, and spend.
+
+## What good looks like
+A stranger can read Why and know why this move serves this week's Horizon. Proof is checkable from files, not a receipt.
+""",
+    },
 }
 
 
@@ -185,6 +207,8 @@ def skill_packet(project_id: str | None, preset: str) -> str:
         names.extend(["support-triage", "support-status-update"])
         if preset == "ops":
             names.append("support-announce")
+    if preset == "think":
+        names.append("ceo-heartbeat")
     if pid in {"openbot", ""} and preset == "builder":
         names.append("openbot-builder-delight")
     bits = []

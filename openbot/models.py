@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from .pickers import hermes_picker_models, opencode_picker_models, ranking_citation, ranking_guides
 from .providers import connected_provider_ids, openrouter_models
 
@@ -29,7 +31,7 @@ SEATS = (
 
 SEAT_NOTES = {
     "chat": "Everyday talk. Cheap. No tools. On Nous Portal, Hermes-4 is Chat. Status questions still read INDEX for free.",
-    "think": "Hard reasoning. Use when Chat is not enough.",
+    "think": "Hard reasoning. Auto = live catalog value (cheap + capable). Go 401s Haiku; do not pin it.",
     "code": "Builder. OpenCode in the project folder.",
     "research": "Fetch a URL. Snapshot only if the page is an app.",
     "ops": "Schedules. Hermes cron, not a second scheduler.",
@@ -67,6 +69,96 @@ _SEAT_TO_MODEL = {
 }
 
 UNLOCKED = {"chat", "think", "code", "research", "ops"}
+GO_UNSUPPORTED_TOKENS = ("haiku", "muse-spark", "contributor")
+FALLBACK_GO_FLASH = "opencode/deepseek-v4.1-flash"
+
+
+def model_blob(row: dict | str | None) -> str:
+    if isinstance(row, dict):
+        return f"{row.get('id', '')} {row.get('label', '')} {row.get('author', '')}".lower()
+    return str(row or "").lower()
+
+
+def go_unsupported(row: dict | str | None) -> bool:
+    """OpenCode Go 401s Haiku; Muse contributor is a promo seat, not Auto."""
+    text = model_blob(row)
+    return any(token in text for token in GO_UNSUPPORTED_TOKENS)
+
+
+def version_key(row: dict | str | None) -> tuple[int, ...]:
+    best: tuple[int, ...] = (0,)
+    for match in re.finditer(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?", model_blob(row)):
+        parts = tuple(int(part) for part in match.groups() if part is not None)
+        if parts and parts[0] >= 2 and parts > best:
+            best = parts
+    return best
+
+
+def version_sort_key(row: dict | str | None) -> tuple[int, ...]:
+    padded = version_key(row) + (0, 0, 0)
+    return tuple(-n for n in padded[:3])
+
+
+def _go_auto_rows(models: list[dict] | None) -> list[dict]:
+    if models is not None:
+        source = models
+    else:
+        source = [
+            row
+            for row in all_models()
+            if row.get("connected") is not False
+            and model_provider(row) == "opencode"
+            and str(row.get("family") or "") != "zen"
+            and not str(row.get("id") or "").lower().startswith("openrouter/")
+        ]
+    return [row for row in source if row.get("id") and not go_unsupported(row)]
+
+
+def pick_go_auto_model(models: list[dict] | None = None, seat: str = "chat") -> str:
+    """Live Go Auto: cheapest capable row, subscription specials first. No pinned id.
+
+    Go lists every model at $0, so USD sales do not show. A Go-only flash (on
+    /zen/go/v1/models, missing from Zen PAYG) is the current special. Arena
+    scores, when present, still win for think/code/research in auto.py.
+    """
+    rows = _go_auto_rows(models)
+    if not rows:
+        return ""
+
+    def price(row: dict) -> float:
+        return float(row.get("in_usd") or 0) + float(row.get("out_usd") or 0)
+
+    def exclusive(row: dict) -> int:
+        return 0 if row.get("go_exclusive") else 1
+
+    def lite(row: dict) -> int:
+        text = model_blob(row)
+        return 1 if ("lite" in text or "vision" in text) else 0
+
+    flashes = [row for row in rows if "flash" in model_blob(row)]
+    specials = [
+        row
+        for row in flashes
+        if row.get("go_exclusive") and not lite(row)
+    ]
+    if specials:
+        pool = specials
+    elif flashes:
+        pool = [row for row in flashes if not lite(row)] or flashes
+    elif seat in {"think", "research", "code"}:
+        pool = [row for row in rows if "opus" not in model_blob(row)] or rows
+    else:
+        pool = rows
+    pool.sort(
+        key=lambda row: (
+            price(row),
+            exclusive(row),
+            lite(row),
+            version_sort_key(row),
+            str(row.get("id") or ""),
+        )
+    )
+    return str(pool[0]["id"])
 
 
 def model_provider(spec: str | dict | None) -> str:
@@ -219,9 +311,13 @@ def recommended_chat_id(models: list[dict] | None = None, provider: str | None =
         muse.sort(key=muse_version, reverse=True)
         return str(muse[0]["id"])
 
+    if provider == "opencode":
+        picked = pick_go_auto_model(rows, "chat")
+        if picked:
+            return picked
     flash = [row for row in rows if "deepseek" in blob(row) and "flash" in blob(row)]
     if flash:
-        flash.sort(key=lambda row: (price(row), str(row.get("id") or "")))
+        flash.sort(key=lambda row: (price(row), version_sort_key(row), str(row.get("id") or "")))
         return str(flash[0]["id"])
     if not rows:
         return ""
@@ -243,7 +339,11 @@ def cheap_chat_for_provider(provider: str, models: list[dict] | None = None) -> 
 
 
 def hermes_chat_model_for_provider(provider: str, models: list[dict] | None = None) -> str:
-    """Chat model Hermes CLI can actually run — skip OpenCode Muse promo seats."""
+    """Chat model Hermes CLI can actually run — skip OpenCode Muse promo seats.
+
+    OpenCode Go Auto follows the live catalog (Go-only flash specials first).
+    OpenCode Go 401s claude-haiku-4-5 — never pick it.
+    """
     source = models if models is not None else all_models()
     rows = [
         row
@@ -252,29 +352,46 @@ def hermes_chat_model_for_provider(provider: str, models: list[dict] | None = No
         and row.get("connected") is not False
         and model_provider(row) == provider
     ]
-    rows = [
-        row
-        for row in rows
-        if "muse-spark" not in f"{row.get('id', '')} {row.get('label', '')}".lower()
-        and "contributor-free" not in f"{row.get('id', '')} {row.get('label', '')}".lower()
-    ]
     if not rows:
         return ""
+    if provider == "opencode":
+        return pick_go_auto_model(rows, "chat")
 
     def blob(row: dict) -> str:
-        return f"{row.get('id', '')} {row.get('label', '')}".lower()
+        return model_blob(row)
 
     def price(row: dict) -> float:
         return float(row.get("in_usd") or 0) + float(row.get("out_usd") or 0)
+
+    def cheap_rank(row: dict) -> int:
+        text = blob(row)
+        if "flash" in text:
+            return 0
+        if "mini" in text or "small" in text:
+            return 1
+        if "lite" in text or "nano" in text:
+            return 2
+        if "haiku" in text:
+            return 3
+        return 4
 
     cheap = [
         row
         for row in rows
         if any(token in blob(row) for token in ("flash", "mini", "nano", "haiku", "lite", "small"))
+        and not go_unsupported(row)
     ]
-    pool = cheap or rows
-    pool.sort(key=lambda row: (price(row), str(row.get("id") or "")))
+    pool = cheap or [row for row in rows if not go_unsupported(row)] or rows
+    pool.sort(key=lambda row: (cheap_rank(row), price(row), version_sort_key(row), str(row.get("id") or "")))
     return str(pool[0]["id"])
+
+
+DEFAULT_THINK_MODEL = FALLBACK_GO_FLASH
+
+
+def pick_think_go_model(models: list[dict] | None = None) -> str:
+    """Think Auto on OpenCode Go from the live catalog. Never Haiku (Go 401s it)."""
+    return pick_go_auto_model(models, "think")
 
 
 def allowed_for_seat(seat_id: str, model_id: str) -> bool:

@@ -148,7 +148,7 @@ class EngineWireTests(unittest.TestCase):
             "Code: OpenCode in C:\\Users\\adamm\\Projects\\saahomes (local git)\n"
             "Hermes: C:\\Users\\adamm\\Projects\\openbot\\hermes-homes\\saa-homes\n"
             "Bus: org/projects/saa-homes/bus/handoffs — files, not chat.\n"
-            "Telegram: no imported session yet. Chat is still the operator surface."
+            "OttoBot chat is the inbox. Telegram is not required."
         )
         self.assertIn("Live gateway is up", dumped)
         self.assertIn("Next: Wait for 1099", dumped)

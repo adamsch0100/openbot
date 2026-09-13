@@ -141,9 +141,9 @@ OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wa
 FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.
 
 ## Horizons
-Horizon-week: SAA Conversion Hermes is Online. Nadia SMS never claims to be Adam. Facebook drafts stay Needs-you.
-Horizon-month: Paid seats (79/1, 149/5, 279/6+) that cover spend. SAA is the dogfood tenant.
-Horizon-quarter: ISA follow-up that books appointments without impersonating Adam/Mandi.
-Horizon-half: Nadia is the ISA layer SAA and other brokerages pay for.
-Horizon-year: Seats cover Hermes/OpenCode. Voice calling stays off until Adam says otherwise.
-Horizon-five: The ISA company that pays for itself.
+Horizon-week: Conversion Hermes stays Online; SMS never claims Adam · ISA tenants · via follow-up that books · proof no impersonation
+Horizon-month: Paid seats ($79/1, $149/5, $279/6+) covering spend · brokerages · via ISA outcomes, SAA as dogfood · proof seats vs token spend
+Horizon-quarter: ISA that books without sounding like a landing page · FUB users · via Adam-voice drafts in groups, Nadia-voice to leads · proof parked Needs-you
+Horizon-half: Nadia is the ISA layer brokerages pay for · via seats not ads · proof paid seats
+Horizon-year: Seats cover Hermes/OpenCode; voice calling still off until Adam says · via product · proof spend vs seats
+Horizon-five: The ISA company that pays for itself · via one CEO · proof P&L on INDEX

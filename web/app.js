@@ -2603,6 +2603,13 @@ async function saveCeoTools(pid) {
     authorize_railway: Boolean($("ceoAuthRailway") && $("ceoAuthRailway").checked),
     authorize_cookie_export: Boolean($("ceoAuthCookieExport") && $("ceoAuthCookieExport").checked),
     authorize_facebook: Boolean($("ceoAuthFacebook") && $("ceoAuthFacebook").checked),
+    auto_labor: Boolean($("ceoAutoCode") && $("ceoAutoCode").checked) || Boolean($("ceoAutoResearch") && $("ceoAutoResearch").checked) || Boolean($("ceoAutoOps") && $("ceoAutoOps").checked) || Boolean($("ceoAutoFinancial") && $("ceoAutoFinancial").checked),
+    auto_policy: {
+      code: $("ceoAutoCode") && $("ceoAutoCode").checked ? "auto" : "notify",
+      research: $("ceoAutoResearch") && $("ceoAutoResearch").checked ? "auto" : "notify",
+      ops: $("ceoAutoOps") && $("ceoAutoOps").checked ? "auto" : "notify",
+      financial: $("ceoAutoFinancial") && $("ceoAutoFinancial").checked ? "auto" : "notify"
+    },
     connectors,
     seats
   };
@@ -2792,6 +2799,11 @@ function fillCeoPanel() {
   const authRailway = Boolean(tools.authorize_railway);
   const authCookie = Boolean(tools.authorize_cookie_export);
   const authFacebook = Boolean(tools.authorize_facebook);
+  const policy = tools.auto_policy || { code: "auto", research: "auto", ops: "notify", financial: "notify" };
+  const codeAuto = policy.code === "auto";
+  const researchAuto = policy.research === "auto";
+  const opsAuto = policy.ops === "auto";
+  const financialAuto = policy.financial === "auto";
   const seats = tools.seats || {};
   const connectors = tools.connectors || { skills: {}, mcp: {} };
   const noOrigin = Boolean(git.is_repo) && !git.remote;
@@ -2926,6 +2938,16 @@ function fillCeoPanel() {
       <label class="check-line"><input id="ceoAuthSite" type="checkbox"${authSite ? " checked" : ""} /> Site research ${wireState(authSite)}</label>
       <label class="check-line"><input id="ceoAuthRailway" type="checkbox"${authRailway ? " checked" : ""} /> Railway ${wireState(authRailway)}</label>
     </fieldset>
+    <fieldset class="usage-card ceo-auth-wire">
+      <h4>After Think — keep pushing or ping me</h4>
+      <p class="muted">Checked = this CEO may Do it without asking. Unchecked = Needs-you. Financial is pay, price, spend, and wallet — one toggle. Publish, delete, and sign never auto.</p>
+      <label class="check-line"><input id="ceoAutoCode" type="checkbox"${codeAuto ? " checked" : ""} /> Code ${wireState(codeAuto, "Auto", "Notify")}</label>
+      <label class="check-line"><input id="ceoAutoResearch" type="checkbox"${researchAuto ? " checked" : ""} /> Research ${wireState(researchAuto, "Auto", "Notify")}</label>
+      <label class="check-line"><input id="ceoAutoOps" type="checkbox"${opsAuto ? " checked" : ""} /> Ops ${wireState(opsAuto, "Auto", "Notify")}</label>
+      <label class="check-line"><input id="ceoAutoFinancial" type="checkbox"${financialAuto ? " checked" : ""} /> Financial (pay, price, spend, wallet) ${wireState(financialAuto, "Auto", "Notify")}</label>
+      <p class="muted">${tools.auto_policy_set ? "Saved for this CEO." : "Recommended mix shown — Save to apply, or Attach weekday Think to seed it."}</p>
+      <div class="actions"><button type="button" class="ghost-btn" id="ceoRunHeartbeat">Run Think now</button></div>
+    </fieldset>
     ${riskCard}
     <div class="field">
       <label for="ceoSpendCap">Spend cap USD (per ${cfg.spend_cap_period || "week"})</label>
@@ -2972,6 +2994,16 @@ function fillCeoPanel() {
   // Set up event listeners
   const save = $("saveCeoTools");
   if (save) save.addEventListener("click", () => saveCeoTools(project.id));
+  const runBeat = $("ceoRunHeartbeat");
+  if (runBeat) runBeat.addEventListener("click", async () => {
+    try {
+      await fetch(`/api/org/projects/${encodeURIComponent(project.id)}/heartbeat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_now: true })
+      });
+    } catch (_err) { /* */ }
+  });
   const openGit = $("ceoOpenGitPanel");
   if (openGit) openGit.addEventListener("click", () => setSettings(true, "git"));
   const retryH = $("ceoRetryHermes");
@@ -3405,6 +3437,22 @@ function needChoices(row) {
       { id: "reject_founding", label: "Reject" }
     ];
   }
+  if (kind === "heartbeat") {
+    return [
+      { id: "attach_heartbeat", label: "Attach weekday Think" },
+      { id: "run_heartbeat_now", label: "Run Think now" },
+      { id: "dismiss", label: "Not now" }
+    ];
+  }
+  if (kind === "proposal") {
+    const lane = String(row.lane || "");
+    const out = [];
+    if (lane && lane !== "none") out.push({ id: "do_proposal", label: "Do it" });
+    out.push({ id: "ask_cos_proposal", label: "Ask Cos" });
+    out.push({ id: "ask_me_proposal", label: "Ask me" });
+    out.push({ id: "skip_proposal", label: "Skip" });
+    return out;
+  }
   if (kind === "horizon") {
     return [
       { id: "open_goals", label: "Open Goals" },
@@ -3435,6 +3483,9 @@ function jobChoices(job) {
     return needChoices(row);
   }
   if (job.diff_pending) return needChoices({ kind: "diff" });
+  if (job.proposal && typeof job.proposal === "object") {
+    return needChoices({ kind: "proposal", lane: job.proposal.lane || "", project_id: job.project_id || "" });
+  }
   if (job.keep_going && !job.stopped && !job.cron && !jobIsFailed(job)) {
     const n = job.step_count && job.total_steps ? `Keep going (${job.step_count}/${job.total_steps})` : "Continue";
     return [{ id: "continue", label: n }];
@@ -3452,9 +3503,9 @@ function jobChoices(job) {
 
 function choiceButtonsHtml(choices, row) {
   return (choices || []).map((choice) => {
-    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue" || choice.id === "allow_cookie_export" || choice.id === "allow_facebook" || choice.id === "fix_model" || choice.id === "fix_key" || choice.id === "retry" || choice.id === "restore_script" || choice.id === "restart_gateway" || choice.id === "ask_cos" || choice.id === "accept_founding" || choice.id === "open_goals" || choice.id === "propose_founding";
+    const primary = choice.id === "accept" || choice.id === "allow" || choice.id === "use_login" || choice.id === "logged_in" || choice.id === "continue" || choice.id === "allow_cookie_export" || choice.id === "allow_facebook" || choice.id === "fix_model" || choice.id === "fix_key" || choice.id === "retry" || choice.id === "restore_script" || choice.id === "restart_gateway" || choice.id === "ask_cos" || choice.id === "accept_founding" || choice.id === "open_goals" || choice.id === "propose_founding" || choice.id === "attach_heartbeat" || choice.id === "run_heartbeat_now" || choice.id === "do_proposal" || choice.id === "ask_cos_proposal" || choice.id === "ask_me_proposal";
     const danger = choice.id === "reject" || choice.id === "deny";
-    return `<button type="button" class="${primary ? "send" : "ghost-btn"}${danger ? " danger" : ""}" data-need-act="${escapeHtml(choice.id)}" data-need-id="${escapeHtml(row.id || "")}" data-need-project="${escapeHtml(row.project_id || "")}" data-need-preset="${escapeHtml(row.preset || "")}" data-need-approval="${escapeHtml(row.approval_id || row.id || "")}" data-need-login="${escapeHtml(choice.login_id || "")}" data-need-url="${escapeHtml(choice.url || row.url || "")}" data-need-cron="${escapeHtml(choice.cron_id || row.cron_id || "")}">${escapeHtml(choice.label || choice.id)}</button>`;
+    return `<button type="button" class="${primary ? "send" : "ghost-btn"}${danger ? " danger" : ""}" data-need-act="${escapeHtml(choice.id)}" data-need-id="${escapeHtml(row.id || "")}" data-need-project="${escapeHtml(row.project_id || "")}" data-need-preset="${escapeHtml(row.preset || "")}" data-need-approval="${escapeHtml(row.approval_id || row.id || "")}" data-need-login="${escapeHtml(choice.login_id || "")}" data-need-url="${escapeHtml(choice.url || row.url || "")}" data-need-cron="${escapeHtml(choice.cron_id || row.cron_id || "")}" data-need-lane="${escapeHtml((row.proposal && row.proposal.lane) || row.lane || "")}" data-need-next="${escapeHtml(((row.proposal && row.proposal.next) || row.next || "").slice(0, 200))}" data-need-why="${escapeHtml(((row.proposal && row.proposal.why) || row.why || "").slice(0, 200))}" data-need-discuss="${escapeHtml(((row.proposal && row.proposal.discuss) || "").slice(0, 200))}">${escapeHtml(choice.label || choice.id)}</button>`;
   }).join("");
 }
 
@@ -3529,6 +3580,15 @@ async function runNeedChoice(btn) {
   }
   if (act === "dismiss") {
     inboxSeen.add(id);
+    if (String(id).startsWith("heartbeat-") && pid) {
+      try {
+        await fetch(`/api/org/projects/${encodeURIComponent(pid)}/heartbeat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ attach: false })
+        });
+      } catch (_err) { /* */ }
+    }
     renderOrg(org);
     return;
   }
@@ -3575,6 +3635,83 @@ async function runNeedChoice(btn) {
     if (act === "accept_founding") {
       if (target) await setOrgNode(target, "");
       openWork("goals", "");
+    }
+    return;
+  }
+  if (act === "attach_heartbeat") {
+    const target = pid || projectId || "";
+    if (!target) return;
+    try {
+      await fetch(`/api/org/projects/${encodeURIComponent(target)}/heartbeat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attach: true })
+      });
+    } catch (_err) { /* */ }
+    inboxSeen.add(id);
+    const data = await (await fetch("/api/config")).json();
+    applyConfig(data);
+    return;
+  }
+  if (act === "run_heartbeat_now") {
+    const target = pid || projectId || "";
+    if (!target) return;
+    try {
+      await fetch(`/api/org/projects/${encodeURIComponent(target)}/heartbeat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_now: true })
+      });
+    } catch (_err) { /* */ }
+    inboxSeen.add(id);
+    const cfgData = await (await fetch("/api/config")).json();
+    applyConfig(cfgData);
+    return;
+  }
+  if (act === "do_proposal" || act === "ask_cos_proposal" || act === "ask_me_proposal" || act === "skip_proposal") {
+    const target = pid || projectId || "";
+    const why = (btn.dataset.needWhy || "").trim();
+    const nxt = (btn.dataset.needNext || "").trim();
+    const ask = (btn.dataset.needDiscuss || "").trim() || "What would make this the wrong move?";
+    const lane = String(btn.dataset.needLane || "").toLowerCase();
+    if (act === "skip_proposal") {
+      if (target) {
+        try {
+          await fetch(`/api/org/projects/${encodeURIComponent(target)}/proposal`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "skip", note: "skipped from Needs-you" })
+          });
+        } catch (_err) { /* */ }
+      }
+      inboxSeen.add(id);
+      return;
+    }
+    if (act === "ask_cos_proposal") {
+      await setOrgNode("", "");
+      if (typeof syncLiveFromAim === "function") syncLiveFromAim();
+      focusLane("cos");
+      sendMessage(
+        `Ask Cos: this CEO proposed Next: ${nxt || "Next on INDEX"} because ${why || "the open proposal"}. Challenge it: ${ask} Route Code/Think/Research/Ops or escalate to Adam only for keys, money, login, publish, pay, delete, sign.`,
+        { preset: "cos", forceNew: true }
+      );
+      return;
+    }
+    if (act === "ask_me_proposal") {
+      if (target) await setOrgNode(target, "");
+      focusLane("think");
+      sendMessage(
+        `Challenge this proposal before labor. Why: ${why || "the open proposal"}. Next: ${nxt || "Next on INDEX"}. ${ask} Keep the open proposal; do not invent a new board.`,
+        { preset: "think" }
+      );
+      return;
+    }
+    if (act === "do_proposal") {
+      if (target) await setOrgNode(target, "");
+      const preset = lane === "research" ? "research" : (lane === "ops" ? "ops" : "builder");
+      const task = nxt || "Do the open proposal";
+      sendMessage(why ? `Do the open proposal. Why: ${why}. Task: ${task}` : task, { preset });
+      return;
     }
     return;
   }
@@ -3818,6 +3955,7 @@ function adamMustSee(row) {
   if (isE2eNeed(row)) return false;
   const k = String((row && row.kind) || "");
   if (k === "login" || k === "cookie_export" || k === "facebook_approval" || k === "diff" || k === "gate") return true;
+  if (k === "proposal" || k === "heartbeat" || k === "founding") return true;
   if (k === "failed") {
     const blob = String((row && (row.last_error || row.why || row.last_result || "")) || "");
     const kind = typeof failKindFromBlob === "function" ? failKindFromBlob(blob) : "";
@@ -3840,6 +3978,9 @@ function adamNeedRank(row) {
   if (k === "wallet") return 3;
   if (k === "gate") return 4;
   if (k === "diff") return 5;
+  if (k === "proposal") return 6;
+  if (k === "founding") return 7;
+  if (k === "heartbeat") return 8;
   return 9;
 }
 

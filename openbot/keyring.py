@@ -848,11 +848,17 @@ def _env_backup_paths(env_path: Path) -> list[Path]:
     return found
 
 
-def preserve_merge_hermes_env(home: str | Path | None = None) -> dict:
+def preserve_merge_hermes_env(
+    home: str | Path | None = None,
+    *,
+    restore_channels: bool = True,
+) -> dict:
     """Restore missing channel secrets into HERMES_HOME/.env from sibling backups.
 
     Post-redeploy / OpenRouter strip has wiped TELEGRAM_BOT_TOKEN while leaving
     `.env.env.bak-openrouter`. Never overwrite a non-empty live value.
+    restore_channels=False skips Telegram/Discord/Slack so this desk can run
+    cron without standing up a second messaging poller.
     """
     root = Path(home) if home else Path(hermes_home())
     env_path = root / ".env"
@@ -866,6 +872,8 @@ def preserve_merge_hermes_env(home: str | Path | None = None) -> dict:
             continue
         for name, value in blob.items():
             if not _is_preserve_env_key(name):
+                continue
+            if not restore_channels:
                 continue
             if not str(value or "").strip():
                 continue

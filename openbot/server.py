@@ -150,6 +150,8 @@ PROJECT_ID = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})$")
 PROJECT_INDEX = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/index$")
 PROJECT_HORIZONS = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/horizons$")
 PROJECT_FOUNDING = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/founding$")
+PROJECT_HEARTBEAT = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/heartbeat$")
+PROJECT_PROPOSAL = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/proposal$")
 HORIZON_NOTICE = re.compile(r"^/api/horizons/([a-zA-Z0-9._:-]{6,80})/dismiss$")
 WORKER_ADD = re.compile(r"^/api/org/projects/([a-z0-9-]{1,40})/workers$")
 ROUTINE_ID = re.compile(r"^/api/routines/([a-z0-9-]{8,32})$")
@@ -2201,6 +2203,46 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json(400, {"error": str(err)})
             reason = str(data.get("reason") or "").strip()
             return self._json(200, reject_founding(pid, reason=reason))
+
+        heartbeat = PROJECT_HEARTBEAT.match(path)
+        if heartbeat:
+            pid = heartbeat.group(1)
+            if self._require_perm("approve_needs_you", pid):
+                return None
+            from .heartbeat import attach_heartbeat, detach_heartbeat
+            from .org import patch_project_tools
+
+            if data.get("run_now"):
+                from .heartbeat import run_heartbeat_now
+
+                result = run_heartbeat_now(pid)
+                return self._json(200 if result.get("ok") else 400, result)
+            if data.get("attach"):
+                result = attach_heartbeat(pid)
+                try:
+                    patch_project_tools(pid, {"heartbeat_offer": "on"})
+                except Exception:
+                    pass
+                return self._json(200 if result.get("ok") else 400, result)
+            detach_heartbeat(pid)
+            try:
+                patch_project_tools(pid, {"heartbeat_offer": "later"})
+            except Exception:
+                pass
+            return self._json(200, {"ok": True, "action": "later"})
+
+        proposal = PROJECT_PROPOSAL.match(path)
+        if proposal:
+            pid = proposal.group(1)
+            if self._require_perm("approve_needs_you", pid):
+                return None
+            from .decide import close_proposal
+
+            action = str(data.get("action") or "skip").strip().lower()
+            if action == "skip":
+                note = str(data.get("note") or "skipped from Needs-you")
+                return self._json(200, {"ok": True, "proposal": close_proposal(pid, "skipped", note)})
+            return self._json(400, {"error": "unknown action"})
         
         if path == "/api/routines":
             if self._require_owner():
@@ -2285,6 +2327,9 @@ class Handler(SimpleHTTPRequestHandler):
                         "authorize_railway",
                         "authorize_cookie_export",
                         "authorize_facebook",
+                        "auto_labor",
+                        "auto_policy",
+                        "heartbeat_offer",
                     )
                 ):
                     result = patch_project_tools(pid, data)

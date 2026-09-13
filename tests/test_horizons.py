@@ -35,6 +35,16 @@ class HorizonParseTests(unittest.TestCase):
         ids = [row.get("id") for row in choices]
         self.assertEqual(ids, ["open_goals", "dismiss_horizon"])
 
+    def test_founding_need_choices(self):
+        choices = need_choices({"kind": "founding"})
+        ids = [row.get("id") for row in choices]
+        self.assertEqual(ids, ["accept_founding", "open_goals", "reject_founding"])
+
+    def test_founding_needed_choices(self):
+        choices = need_choices({"kind": "founding", "status": "needed"})
+        ids = [row.get("id") for row in choices]
+        self.assertEqual(ids, ["propose_founding", "open_goals"])
+
 
 class HorizonNoticeTests(unittest.TestCase):
     def test_record_and_dismiss(self):

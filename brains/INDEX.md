@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v169 — SAA cutover live: OttoBot Hermes owns cron. Standalone Railway SAA Homes Hermes paused.
-Last: Paused Railway SAA Homes Hermes; Accept stuck ownership; OttoBot gateway running source=this-desk.
-Next: Hard-refresh. Aim SAA Homes → Doing/Results. Confirm next cron lands in chat, not Telegram.
+Now: v176 — SAA cutover live: OttoBot Hermes owns cron. Auto uses live Go catalog (Go-only flash). Standalone Railway SAA Homes Hermes paused.
+Last: v175 Auto/Go catalog split + Think Haiku fix; cutover Accept stuck ownership; OttoBot gateway running source=this-desk.
+Next: Hard-refresh. Aim SAA Homes → Doing/Results. Optional: one throwaway then SAA Run Think on Go flash. Do not restart old Railway Hermes. Do not Accept parked restore cards.
 Blocker: —
 
 ## Vault

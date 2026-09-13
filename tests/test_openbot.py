@@ -917,7 +917,7 @@ class AutoPickTests(unittest.TestCase):
             ],
             guides={},
         )
-        self.assertEqual(ops["id"], "opencode/claude-haiku-4-5")
+        self.assertEqual(ops["id"], "opencode/big-pickle")
 
     def test_chat_skips_openrouter_muse_even_when_catalog_tags_it_opencode(self):
         from openbot.auto import auto_model_for_seat
@@ -3140,6 +3140,122 @@ class HermesSessionPersistenceTests(unittest.TestCase):
             model_zen = _go_eligible_model(zen_account, None)
             # Should work (returns some model)
             self.assertTrue(model_zen)
+
+    def test_think_go_wallet_follows_live_catalog_not_haiku(self):
+        from unittest.mock import patch
+        from openbot.models import hermes_chat_model_for_provider, pick_go_auto_model, pick_think_go_model
+        from openbot.router import _go_eligible_model
+
+        go_rows = [
+            {
+                "id": "opencode/claude-haiku-4-5",
+                "label": "Haiku",
+                "provider": "opencode",
+                "family": "go",
+                "connected": True,
+                "in_usd": 0,
+                "out_usd": 0,
+            },
+            {
+                "id": "opencode/deepseek-v4-flash",
+                "label": "Flash",
+                "provider": "opencode",
+                "family": "go",
+                "connected": True,
+                "in_usd": 0,
+                "out_usd": 0,
+            },
+            {
+                "id": "opencode/deepseek-v4.1-flash",
+                "label": "V4.1 Flash",
+                "provider": "opencode",
+                "family": "go",
+                "go_exclusive": True,
+                "connected": True,
+                "in_usd": 0,
+                "out_usd": 0,
+            },
+            {
+                "id": "opencode/glm-4.6",
+                "label": "GLM 4.6",
+                "provider": "opencode",
+                "family": "go",
+                "connected": True,
+                "in_usd": 0,
+                "out_usd": 0,
+            },
+            {
+                "id": "opencode/glm-5.3-flash",
+                "label": "GLM 5.3 Flash",
+                "provider": "opencode",
+                "family": "go",
+                "go_exclusive": False,
+                "connected": True,
+                "in_usd": 0,
+                "out_usd": 0,
+            },
+        ]
+        self.assertEqual(pick_go_auto_model(go_rows, "chat"), "opencode/deepseek-v4.1-flash")
+        self.assertEqual(pick_think_go_model(go_rows), "opencode/deepseek-v4.1-flash")
+        self.assertEqual(hermes_chat_model_for_provider("opencode", go_rows), "opencode/deepseek-v4.1-flash")
+        with patch("openbot.models.all_models", return_value=go_rows):
+            go_account = {"id": "dd9a8b15", "provider": "opencode", "label": "Shared Go"}
+            self.assertEqual(
+                _go_eligible_model(go_account, "opencode/glm-4.6", seat="think"),
+                "opencode/glm-4.6",
+            )
+            self.assertEqual(
+                _go_eligible_model(go_account, "opencode/claude-haiku-4-5", seat="think"),
+                "opencode/deepseek-v4.1-flash",
+            )
+            self.assertEqual(
+                _go_eligible_model(go_account, None, seat="chat"),
+                "opencode/deepseek-v4.1-flash",
+            )
+
+    def test_go_catalog_marks_exclusive_specials_not_zen_haiku(self):
+        import openbot.providers as providers
+        from openbot.models import pick_go_auto_model
+
+        def fake_http(url, token):
+            if "zen/go/v1/models" in url:
+                return 200, {
+                    "data": [
+                        {"id": "deepseek-v4.1-flash", "object": "model", "name": "DeepSeek V4.1 Flash"},
+                        {"id": "deepseek-v4-flash", "object": "model", "name": "DeepSeek V4 Flash"},
+                        {"id": "glm-5.3-flash", "object": "model", "name": "GLM 5.3 Flash"},
+                    ]
+                }
+            return 200, {
+                "data": [
+                    {"id": "claude-haiku-4-5", "object": "model", "name": "Haiku"},
+                    {"id": "deepseek-v4-flash", "object": "model", "name": "DeepSeek V4 Flash"},
+                    {"id": "glm-5.3-flash", "object": "model", "name": "GLM 5.3 Flash"},
+                ]
+            }
+
+        with providers._ZEN_LOCK:
+            providers._ZEN_CACHE["at"] = 0.0
+            providers._ZEN_CACHE["models"] = []
+            providers._ZEN_FETCHING = False
+        try:
+            with unittest.mock.patch.object(providers, "_http_json", side_effect=fake_http), unittest.mock.patch.object(
+                providers, "_opencode_key", return_value="test-key"
+            ):
+                providers._refresh_zen_models()
+            rows = list(providers._ZEN_CACHE["models"])
+            by_id = {row["id"]: row for row in rows}
+            self.assertEqual(by_id["opencode/deepseek-v4.1-flash"]["family"], "go")
+            self.assertTrue(by_id["opencode/deepseek-v4.1-flash"]["go_exclusive"])
+            self.assertEqual(by_id["opencode/claude-haiku-4-5"]["family"], "zen")
+            self.assertFalse(by_id["opencode/glm-5.3-flash"]["go_exclusive"])
+            self.assertEqual(pick_go_auto_model(rows, "chat"), "opencode/deepseek-v4.1-flash")
+            self.assertEqual(pick_go_auto_model(rows, "think"), "opencode/deepseek-v4.1-flash")
+        finally:
+            with providers._ZEN_LOCK:
+                providers._ZEN_CACHE["at"] = 0.0
+                providers._ZEN_CACHE["models"] = []
+                providers._ZEN_FETCHING = False
 
 
 class ProjectNotFoundTests(unittest.TestCase):
