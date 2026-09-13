@@ -14,8 +14,8 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Desk in use — parked nags cancelled, Chat loop live.
-Last: Your move no longer nags empty Goals, Facebook login, weekday Think, or old Hermes fails.
+Now: Desk in use. Your move is clear.
+Last: Cos status from INDEX. OttoBot Think ready. Builder diff rejected.
 Next: Ask Cos what's going on, or open a CEO and work.
 Blocker: Do not pause/redeploy live SAA Hermes.
 
