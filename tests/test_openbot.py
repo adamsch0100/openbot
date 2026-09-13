@@ -1547,7 +1547,7 @@ class KeyringTests(unittest.TestCase):
         ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"):
             rows = pending_approvals()
         kinds = {row["project_id"]: row["kind"] for row in rows}
-        self.assertEqual(kinds["saa-homes"], "diff")
+        self.assertNotIn("saa-homes", kinds)
         self.assertEqual(kinds["openbot"], "diff")
         self.assertFalse(any(row.get("kind") == "login" for row in rows))
         diff = next(row for row in rows if row["kind"] == "diff" and row["project_id"] == "openbot")

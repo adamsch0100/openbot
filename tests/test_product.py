@@ -209,6 +209,7 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("login", kinds)
         self.assertNotIn("failed", kinds)
         self.assertNotIn("heartbeat", kinds)
+        self.assertFalse(any(row.get("kind") == "continue" for row in rows))
         self.assertFalse(any(str(row.get("id") or "").startswith("founding-need") for row in rows))
 
     def test_empty_cos_stays_on_the_board(self):

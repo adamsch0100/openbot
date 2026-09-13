@@ -1308,8 +1308,6 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         )
         if failed and not _cancelled(job) and _fail_kind(job) in {"key", "wallet"}:
             return 2
-        if job.get("keep_going") and not job.get("stopped") and not job.get("cron"):
-            return 8
         return 9
 
     for job in jobs:
@@ -1319,12 +1317,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             continue
         if _e2e_job(job):
             continue
-        rank = _need_rank(job)
-        if rank >= 9:
-            continue
         key = str(job.get("project_id") or "") or "_staff"
-        prev = latest.get(key)
-        if prev is not None and _need_rank(prev) <= rank:
+        if key in latest:
             continue
         latest[key] = job
     projects = list_projects()
@@ -1343,6 +1337,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             "error" in status or "fail" in status
         )
         if job.get("login_wall"):
+            continue
+        if _need_rank(job) >= 9:
             continue
         if job.get("diff_pending"):
             kind = "diff"

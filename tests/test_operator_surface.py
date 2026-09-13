@@ -216,9 +216,43 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
             return_value=[],
         ), patch("openbot.founding.load_founding", return_value={"status": "accepted"}):
             rows = pending_approvals()
-        kinds = {row["project_id"]: row["kind"] for row in rows}
-        self.assertEqual(kinds["saa-homes"], "failed")
+        kinds = {row["project_id"]: row["kind"] for row in rows if row.get("project_id")}
+        self.assertNotIn("saa-homes", kinds)
         self.assertNotIn("openbot", kinds)
+
+    def test_pending_latest_key_fail_still_shows(self):
+        from unittest.mock import patch
+
+        from openbot.router import pending_approvals
+
+        jobs = [
+            {
+                "id": "failnow",
+                "at": "2026-09-13T22:00:00",
+                "status": "error",
+                "blocker": "API key rejected (401)",
+                "project_id": "openbot",
+                "engine": "Hermes Agent",
+                "preset": "think",
+            },
+            {
+                "id": "oldok",
+                "at": "2026-09-13T21:00:00",
+                "keep_going": True,
+                "project_id": "openbot",
+                "engine": "Hermes Agent",
+                "preset": "think",
+            },
+        ]
+        with patch("openbot.router.list_jobs", return_value=jobs), patch(
+            "openbot.router.list_projects",
+            return_value=[{"id": "openbot", "name": "OttoBot"}],
+        ), patch("openbot.router.read_project_index", return_value="Now: —\nLast: —\nNext: —\nBlocker: —\n"), patch(
+            "openbot.org.list_horizon_notices", return_value=[]
+        ), patch("openbot.founding.load_founding", return_value={"status": "accepted"}):
+            rows = pending_approvals()
+        kinds = {row["project_id"]: row["kind"] for row in rows}
+        self.assertEqual(kinds["openbot"], "failed")
 
     def test_need_choices_failed_no_fix_model_dump(self):
         from openbot.router import need_choices
