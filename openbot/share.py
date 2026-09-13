@@ -554,7 +554,7 @@ def check_job_run(row: dict, project_id: str | None, preset: str | None) -> str 
     if not allows_project(row, project_id):
         return "this share is for a different CEO"
     if not project_id:
-        return "collaborators cannot use Chief of Staff"
+        return "collaborators cannot use Cos"
     chosen = str(preset or "cos")
     seats_mode = str(row.get("seats_mode") or "inherit")
     if seats_mode == "chat_only" and chosen in WORK_PRESETS:

@@ -1747,7 +1747,7 @@ class OrgTests(unittest.TestCase):
                 )
                 data = org_mod.public_org()
                 self.assertEqual(data["role"], "cos")
-                self.assertEqual(data["title"], "Chief of Staff")
+                self.assertEqual(data["title"], "Cos")
                 self.assertTrue(data["projects"])
                 self.assertEqual(data["projects"][0]["workers"], [])
         finally:
@@ -2037,7 +2037,7 @@ class StaffBusTests(unittest.TestCase):
         org = org_mod.public_org()
         self.assertEqual(org["role"], "cos")
         self.assertEqual(org.get("hermes_home"), "")
-        self.assertIn("# Chief of Staff", org.get("staff") or "")
+        self.assertIn("# Cos", org.get("staff") or "")
         self.assertNotIn("## Vault", org.get("staff") or "")
 
     def test_work_target_rides_ceo_not_cos(self):

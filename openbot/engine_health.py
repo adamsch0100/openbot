@@ -22,6 +22,16 @@ _VERSION_CACHE: dict[str, tuple[float, str]] = {}
 _VERSION_TTL = 90.0
 
 
+def _hermes_homes_id(path: str) -> str:
+    parts = [part for part in str(path or "").replace("\\", "/").split("/") if part]
+    if "hermes-homes" not in parts:
+        return ""
+    idx = parts.index("hermes-homes")
+    if idx + 1 >= len(parts):
+        return ""
+    return parts[idx + 1]
+
+
 def _run_version(binary: str) -> str:
     path = which(binary)
     if not path:
@@ -134,9 +144,16 @@ def engine_health(project_id: str | None = None) -> dict:
     except Exception:
         saa_live = pid == "saa-homes"
     if aimed and dash.get("running") and not dash_ok and not board_wide:
+        dash_leaf = _hermes_homes_id(live_home or dash.get("home"))
+        aimed_leaf = _hermes_homes_id(aimed)
+        shared_hosted_dash = bool(dash_leaf and aimed_leaf)
         if saa_live:
             warn.append("Hermes dash home mismatch — live SAA box owns schedule; do not Restart this imported home.")
             next_steps.append("Leave the imported home off. Check the live SAA Hermes box if cron is actually down.")
+        elif gateway.get("running") and shared_hosted_dash:
+            next_steps.append(
+                f"Dash is on {dash_leaf}. Tools → Hermes aims this CEO's pane. Gateway is already up."
+            )
         elif gateway.get("running"):
             warn.append("Hermes dash is on another home. Open Tools → Hermes to aim this CEO's pane.")
             next_steps.append("Gateway is up. Tools → Hermes retargets the dashboard. Do not Restart gateway for a dash mismatch.")

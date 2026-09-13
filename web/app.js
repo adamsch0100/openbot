@@ -1353,7 +1353,7 @@ function defaultModelOptionLabel(seat, inheritFromStaff) {
   }
   const row = defaultModelRow(seat, inheritFromStaff);
   if (row && (row.label || row.id)) return `${row.label || modelName(row.id)} (default)`;
-  return inheritFromStaff ? "inherit Chief of Staff" : "Auto";
+  return inheritFromStaff ? "inherit Cos" : "Auto";
 }
 
 function defaultKeyAccount(inheritFromStaff) {
@@ -1575,7 +1575,7 @@ function renderProfileSeats(rootId, chosen, inheritLabel) {
   const groups = (catalog.seats || []).filter((seat) => !seat.locked);
   const models = catalog.models || [];
   const seats = chosen || {};
-  const blank = inheritLabel || "inherit Chief of Staff";
+  const blank = inheritLabel || "inherit Cos";
   root.innerHTML = groups.map((seat) => {
     const current = (seats[seat.id] || {}).model || "";
     const options = seat.options && seat.options.length ? seat.options : modelsForSeat(seat, models);
@@ -1593,7 +1593,7 @@ function renderProfileSeats(rootId, chosen, inheritLabel) {
 
 function renderCeoSeats(rootId) {
   const seats = (currentProject() && currentProject().tools && currentProject().tools.seats) || {};
-  renderProfileSeats(rootId || "menuCeoSeatList", seats, "inherit Chief of Staff");
+  renderProfileSeats(rootId || "menuCeoSeatList", seats, "inherit Cos");
 }
 
 function renderStaffSeats() {
@@ -1849,8 +1849,7 @@ function receiptLine(job) {
   const tokCount = prompt + output + cached;
   const tokens = tokCount ? `${prompt + cached}→${output} tok` : "";
   const cost = Number(job.usd_estimate || 0);
-  const ran = engine !== "board" && engine !== "";
-  const money = ran || cost ? `$${cost.toFixed(4)}` : "";
+  const money = (tokCount || cost) ? `$${cost.toFixed(4)}` : "";
   const named = engine === "board" ? "" : engine;
   return [status, named, model, tokens, money].filter(Boolean).join(" · ");
 }
@@ -2693,7 +2692,7 @@ function accountSelectOptions(selected, blank) {
   const rows = (cfg.keyring && cfg.keyring.accounts) || [];
   const inheritFromStaff = /inherit/i.test(blank || "");
   const def = defaultKeyAccount(inheritFromStaff);
-  const blankLabel = def ? `${def.label} (first in keyring)` : (blank || "inherit Chief of Staff");
+  const blankLabel = def ? `${def.label} (first in keyring)` : (blank || "inherit Cos");
   return [`<option value="">${escapeHtml(blankLabel)}</option>`].concat(rows.map((row) => (
     `<option value="${escapeHtml(row.id)}"${row.id === selected ? " selected" : ""}>${escapeHtml(row.label)}</option>`
   ))).join("");
@@ -2761,7 +2760,7 @@ function paintEngineHealthCard(data) {
   const warns = Array.isArray(data.warn) ? data.warn : [];
   const hermesLine = [
     h.present ? (h.version || "found") : "missing",
-    h.dash_running ? (h.dash_home_ok ? `dash · ${shortHomeLeaf(h.home || h.dash_home)}` : "dash · wrong home") : "dash off",
+    h.dash_running ? `dash · ${shortHomeLeaf(h.dash_home || h.home)}` : "dash off",
     h.home ? (h.gateway_running ? "gateway up" : "gateway off") : null
   ].filter(Boolean).join(" · ");
   const ocLine = [
@@ -2779,12 +2778,14 @@ function paintEngineHealthCard(data) {
   ].filter(Boolean).join(" · ") || "pins unset";
   const nexts = Array.isArray(data.next) ? data.next : [];
   const action = data.action || "";
-  const hermesBad = Boolean(warns.length) || (h.dash_running && !h.dash_home_ok) || (h.home && !h.gateway_running) || !h.present;
+  const hermesBad = Boolean(warns.length) || !h.present;
   const footer = warns.length
     ? `<p class="wire-error">${escapeHtml(warns[0])}</p>
        ${nexts[0] ? `<p class="muted">Next: ${escapeHtml(nexts[0])}</p>` : ""}
        ${action === "restart_gateway" ? `<div class="actions"><button type="button" class="ghost-btn ceo-health-restart">Restart Hermes gateway</button></div>` : ""}`
-    : `<p class="muted">Engines look aligned for this CEO.</p>`;
+    : nexts[0]
+      ? `<p class="muted">Next: ${escapeHtml(nexts[0])}</p>`
+      : `<p class="muted">Engines look aligned for this CEO.</p>`;
   const html = `
     <div class="kv">
       <div><dt>Hermes</dt><dd class="${hermesBad ? "wire-bad" : ""}">${escapeHtml(hermesLine)}</dd></div>

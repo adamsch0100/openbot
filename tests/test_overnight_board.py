@@ -36,6 +36,8 @@ class OvernightBoardUiTests(unittest.TestCase):
         self.assertIn("output_tokens", rec)
         self.assertIn("tok", rec)
         self.assertIn("toFixed(4)", rec)
+        self.assertIn("tokCount || cost", rec)
+        self.assertNotIn("ran || cost", rec)
 
     def test_settings_order_and_labels(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
@@ -60,6 +62,8 @@ class OvernightBoardUiTests(unittest.TestCase):
         self.assertIn("Talking to Cos", html)
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn('return "Cos"', js)
+        self.assertIn('return inheritFromStaff ? "inherit Cos" : "Auto"', js)
+        self.assertNotIn("inherit Chief of Staff", js)
         self.assertIn('classList.add("wall")', js)
         org = (ROOT / "openbot" / "org.py").read_text(encoding="utf-8")
         self.assertIn('return "Cos"', org)
@@ -74,8 +78,8 @@ class OvernightBoardUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=172", html)
-        self.assertIn("styles.css?v=172", html)
+        self.assertIn("app.js?v=173", html)
+        self.assertIn("styles.css?v=173", html)
 
     def test_pulse_failed_zero_is_not_a_failed_job(self):
         import re

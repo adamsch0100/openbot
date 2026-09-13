@@ -77,6 +77,7 @@ from .org import (
     wiring_brief,
     work_target,
     write_project_inbox,
+    quiet_index_line,
 )
 from .threadstore import search_quote, thread_key, wants_quote
 from .research import fetch_page, first_url
@@ -978,25 +979,19 @@ def _live_status_line(project_id: str | None) -> str:
 STAFF_WHO = frozenset({"OpenBot", "Chief of Staff", "Cos", "Staff"})
 
 
-def _board_copy(text: str) -> str:
-    s = str(text or "")
-    s = s.replace("Chief of Staff", "Cos")
-    s = re.sub(r"\bOpenBot instance\b", "OttoBot instance", s)
-    return s
-
-
 def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "", live: str = "") -> str:
     name = (who or "Cos").strip() or "Cos"
     if name.casefold() in {"openbot", "ottobot", "otto-bot"}:
         name = "OttoBot"
     is_status = bool(STATUS.search(message or ""))
     greeting = bool(GREET.search(message or "")) and not is_status
-    now = _board_copy(index_field(index_text, "Now") or "—")
-    last = _board_copy(index_field(index_text, "Last") or "—")
-    nxt = _board_copy(index_field(index_text, "Next") or "—")
-    blocker = _board_copy(index_field(index_text, "Blocker") or "—")
+    now = quiet_index_line(index_field(index_text, "Now") or "—") or "—"
+    last = quiet_index_line(index_field(index_text, "Last") or "—") or "—"
+    nxt = quiet_index_line(index_field(index_text, "Next") or "—") or "—"
+    blocker = quiet_index_line(index_field(index_text, "Blocker") or "—") or "—"
     week = horizon_week(index_text)
     staff = name in STAFF_WHO
+    live = quiet_index_line(live)
     if greeting:
         if THANKS.search(message or ""):
             if staff:
@@ -1287,7 +1282,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             continue
         latest[key] = job
     projects = list_projects()
-    names = {str(row.get("id") or ""): str(row.get("name") or row.get("id") or "Chief of Staff") for row in projects}
+    names = {str(row.get("id") or ""): str(row.get("name") or row.get("id") or "Cos") for row in projects}
     out: list[dict] = []
     live_ids = {str(row.get("id") or "") for row in projects}
     for job in latest.values():

@@ -258,7 +258,7 @@ def gate(preset: str, summary: dict) -> dict:
         return {
             "allow": False,
             "reason": (
-                f"{bind} cap reached. Chief of Staff can still read the brief. "
+                f"{bind} cap reached. Cos can still read the brief. "
                 "Raise the cap in Usage or wait for the period to reset."
             ),
         }

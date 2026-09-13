@@ -59,8 +59,8 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("OttoBot uses Hermes Agent (MIT, Nous Research)", html)
         self.assertIn("and OpenCode (MIT, Anomaly).", html)
         self.assertIn("id=\"aboutCredit\"", html)
-        self.assertIn("app.js?v=172", html)
-        self.assertIn("styles.css?v=172", html)
+        self.assertIn("app.js?v=173", html)
+        self.assertIn("styles.css?v=173", html)
         self.assertIn("activity-sheet", html)
         self.assertIn("route-hatch", html)
         self.assertIn("id=\"closeActivity\"", html)
@@ -238,7 +238,7 @@ class LiveBoardTests(unittest.TestCase):
         self.assertEqual(org.get("role"), "cos")
         self.assertEqual(org.get("hermes_home"), "")
         self.assertTrue(
-            "# Chief of Staff" in (org.get("staff") or "") or "# Staff" in (org.get("staff") or "")
+            "# Cos" in (org.get("staff") or "") or "# Staff" in (org.get("staff") or "") or "# Chief of Staff" in (org.get("staff") or "")
         )
         homes = {row["id"]: bool((row.get("tools") or {}).get("hermes_home")) for row in org["projects"]}
         ids = {row["id"] for row in org["projects"]}

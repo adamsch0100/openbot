@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: World-class Chat loop — honest Engines, Cos board for status, INDEX without smoke gore, engine named on cards.
-Last: Cos Engines / OttoBot gateway / Think meta shipped on live.
-Next: Deploy v=172. Confirm OttoBot Engines is not Restart-for-dash-mismatch. Do not attach weekday cron.
+Now: World-class Chat loop — Cos status hides smoke, Support Engines not fake-red, receipts omit empty $0.0000.
+Last: v=172 live Engines honesty. Cos status still leaked volume INDEX smoke27 / Chief of Staff.
+Next: Deploy v=173. Confirm Cos status and Support Engines on live. Do not attach weekday cron.
 Blocker: Do not Accept parked SAA restore. Do not redeploy live SAA Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

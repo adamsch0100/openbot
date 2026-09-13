@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: World-class live pass — Cos dash must not fake-red OttoBot Engines; empty Cos stays board; smoke cron must not smash INDEX.
-Last: Cos Engines honest, OttoBot gateway supervised, Think names Hermes Agent.
-Next: Deploy v=172. Confirm OttoBot Engines does not offer Restart when gateway is up. Do not attach weekday cron on live SAA.
+Now: World-class desk — Cos status hides smoke/Chief of Staff; Support Engines must not fake-red a shared OttoBot dash; receipts omit $0.0000 with no usage.
+Last: v=172 live Engines/Cos/INDEX honesty. Cos status still leaked smoke27 and Chief of Staff from the volume INDEX.
+Next: Deploy v=173. Confirm Cos status has no smoke/Chief of Staff; Support Engines ok with dash on OttoBot. Do not attach weekday cron on live SAA.
 Blocker: Do not pause/redeploy Railway SAA Hermes. Do not Accept parked SAA restore cards.
 
 ## Vault

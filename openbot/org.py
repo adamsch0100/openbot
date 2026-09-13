@@ -488,7 +488,7 @@ def support_charter(folder: str) -> str:
         "Helper on openbot. Owns help tickets and suggestions. Reports to the openbot CEO, Cos, and the operator.\n\n"
         "Now: Ready for suggestions and help tickets.\n"
         "Last: —\n"
-        "Next: Triage inbox tickets. Escalate bugs/features to Chief of Staff → openbot Builder.\n"
+        "Next: Triage inbox tickets. Escalate bugs/features to Cos → OttoBot Builder.\n"
         "Blocker: —\n"
         "Goals: File every request. Auto-handoff code work. Owner only at Accept / send / announce.\n\n"
         f"Folder: {folder}\n"
@@ -630,7 +630,7 @@ def ensure_org() -> dict:
     }
     data = {
         "name": primary_name,
-        "title": "Chief of Staff",
+        "title": "Cos",
         "role": "cos",
         "folder": work,
         "projects": [primary, *extras],
@@ -792,7 +792,7 @@ def public_org(data: dict | None = None) -> dict:
         )
     return {
         "name": blob.get("name") or "OPENBOT",
-        "title": "Chief of Staff",
+        "title": "Cos",
         "role": "cos",
         "folder": blob.get("folder") or str(ROOT),
         "hermes_home": "",
@@ -825,7 +825,9 @@ def bind_telegram_sessions(data: dict | None = None) -> dict:
 
 def _now_line(text: str) -> str:
     match = re.search(r"^Now:\s*(.*)$", text or "", re.M)
-    return clean_memory_text(match.group(1).strip() if match else "") or "source of truth"
+    raw = clean_memory_text(match.group(1).strip() if match else "")
+    quiet = quiet_index_line(raw)
+    return quiet or "—"
 
 
 def index_field(text: str, label: str) -> str:
@@ -983,6 +985,8 @@ def pulse_headline(project_id: str | None, digest: dict | None = None) -> str:
     last_title = ""
     if isinstance(latest, dict):
         last_title = str(latest.get("title") or latest.get("outcome") or "").strip()[:80]
+    if last_title and INDEX_NOISE.search(last_title):
+        last_title = ""
     enabled = blob.get("enabled")
     count = int(job_count) if job_count is not None else int(enabled or 0)
     if count <= 0 and not due and not failed and not running and not last_title:
@@ -1005,7 +1009,7 @@ def company_pulse(project_id: str | None) -> str:
     pid = _slug(project_id)
     lines: list[str] = []
     text = read_project_index(pid)
-    now = index_field(text, "Now") or "—"
+    now = quiet_index_line(index_field(text, "Now") or "—") or "—"
     week = horizon_week(text)
     if week:
         lines.append(f"This week: {week[:160]}")
@@ -1370,15 +1374,15 @@ def ensure_ceo_engines(project_id: str) -> dict:
 
 
 def staff_briefing() -> str:
-    """Chief of Staff memory: four-line INDEX per CEO and worker. No tools. No vault dump."""
+    """Cos memory: four-line INDEX per CEO and worker. No tools. No vault dump."""
     inst = read_index()
     lines = [
-        "# Chief of Staff",
+        "# Cos",
         "You report to the operator. Every CEO reports to you.",
-        f"Now: {index_field(inst, 'Now') or '—'}",
-        f"Last: {index_field(inst, 'Last') or '—'}",
-        f"Next: {index_field(inst, 'Next') or '—'}",
-        f"Blocker: {index_field(inst, 'Blocker') or '—'}",
+        f"Now: {quiet_index_line(index_field(inst, 'Now')) or '—'}",
+        f"Last: {quiet_index_line(index_field(inst, 'Last')) or '—'}",
+        f"Next: {quiet_index_line(index_field(inst, 'Next')) or '—'}",
+        f"Blocker: {quiet_index_line(index_field(inst, 'Blocker')) or '—'}",
         "",
     ]
     try:
@@ -1407,10 +1411,10 @@ def staff_briefing() -> str:
             lines.append(f"This week: {week[:160]}")
         else:
             lines.append("This week: Goals empty — operator Accepts a founding RESULT or Save Goals.")
-        lines.append(f"Now: {index_field(text, 'Now') or '—'}")
-        lines.append(f"Last: {index_field(text, 'Last') or '—'}")
-        lines.append(f"Next: {index_field(text, 'Next') or '—'}")
-        lines.append(f"Blocker: {index_field(text, 'Blocker') or '—'}")
+        lines.append(f"Now: {quiet_index_line(index_field(text, 'Now') or '—') or '—'}")
+        lines.append(f"Last: {quiet_index_line(index_field(text, 'Last') or '—') or '—'}")
+        lines.append(f"Next: {quiet_index_line(index_field(text, 'Next') or '—') or '—'}")
+        lines.append(f"Blocker: {quiet_index_line(index_field(text, 'Blocker') or '—') or '—'}")
         try:
             sched = pulse_headline(pid)
             if sched:
@@ -1466,17 +1470,38 @@ def wiring_brief(project_id: str | None = None) -> str:
     return "\n".join(lines)
 
 
+INDEX_NOISE = re.compile(
+    r"smoke\d+|SMOKE\d+_|e2e smoke|wc8_|routine-e521843f|Cron smoke",
+    re.I,
+)
+
+
+def board_copy(text: str) -> str:
+    s = str(text or "")
+    s = s.replace("Chief of Staff", "Cos")
+    s = re.sub(r"\bOpenBot instance\b", "OttoBot instance", s)
+    return s
+
+
+def quiet_index_line(text: str) -> str:
+    """INDEX line for Cos / rail / status. Hide smoke cron gore. Name Cos."""
+    s = board_copy(text)
+    if s and INDEX_NOISE.search(s):
+        return ""
+    return s
+
+
 def staff_status_reply() -> str:
     """Status from files across the org. Cos has no Hermes home."""
     inst = read_index()
     lines: list[str] = []
-    now = index_field(inst, "Now")
+    now = quiet_index_line(index_field(inst, "Now"))
     if now:
         lines.append(now)
-    nxt = index_field(inst, "Next")
+    nxt = quiet_index_line(index_field(inst, "Next"))
     if nxt and nxt != "—":
         lines.append(f"Next: {nxt}")
-    blocker = index_field(inst, "Blocker")
+    blocker = quiet_index_line(index_field(inst, "Blocker"))
     if blocker and blocker != "—":
         lines.append(f"Blocked: {blocker}")
     for row in (_load_saved().get("projects") or []):
@@ -1486,12 +1511,12 @@ def staff_status_reply() -> str:
         name = str(row.get("name") or pid)
         text = read_project_index(pid)
         week = horizon_week(text)
-        now_line = index_field(text, "Now") or "—"
+        now_line = quiet_index_line(index_field(text, "Now") or "—") or "—"
         if week:
             bit = f"{pid}: {name} — this week: {week[:140]} · now: {now_line}"
         else:
             bit = f"{pid}: {name} — Goals empty · now: {now_line}"
-        stuck = index_field(text, "Blocker")
+        stuck = quiet_index_line(index_field(text, "Blocker"))
         if stuck and stuck != "—":
             bit += f" · blocked {stuck}"
         try:
@@ -1937,16 +1962,10 @@ def patch_scope(project_id: str | None, worker_id: str | None, label: str, value
     patch_index_line(label, value)
 
 
-_INDEX_NOISE = re.compile(
-    r"smoke\d+|SMOKE\d+_|e2e smoke|wc8_|routine-e521843f|Cron smoke",
-    re.I,
-)
-
-
 def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> None:
     if not project_id:
         return
-    if _INDEX_NOISE.search(result or ""):
+    if INDEX_NOISE.search(result or ""):
         return
     name = project_id
     for row in (_load_saved().get("projects") or []):

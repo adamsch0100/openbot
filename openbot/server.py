@@ -502,7 +502,7 @@ def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> di
         row = dict(item)
         row["name"] = (
             names.get(row.get("project_id") or "")
-            or ("Help" if str(row.get("project_id") or "") == "support" else "Chief of Staff")
+            or ("Help" if str(row.get("project_id") or "") == "support" else "Cos")
         )
         needs.append(row)
     
@@ -1375,7 +1375,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if staff_open:
                     queue_status.append({
                         "project_id": None,
-                        "name": "Chief of Staff",
+                        "name": "Cos",
                         "queued_count": len(staff_open),
                         "handoffs": staff_open[:5],
                     })

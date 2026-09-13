@@ -118,7 +118,7 @@ def people_rows(org: dict, activity: dict) -> list[dict]:
     out = [
         {
             "id": "",
-            "name": "Chief of Staff",
+            "name": "Cos",
             "kind": "staff",
             "state": _state("", "", need_ids, busy_ids, engines_up, ""),
             "last": str(activity.get("now") or "").strip()[:80],

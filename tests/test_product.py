@@ -78,6 +78,36 @@ class CheapChatTests(unittest.TestCase):
         self.assertIn("keep going from Cos", staff_next)
         self.assertNotIn("Chief of Staff", staff_next)
 
+    def test_staff_status_hides_smoke_and_says_cos(self):
+        from unittest.mock import patch
+
+        from openbot.org import staff_status_reply
+
+        fake = (
+            "# INDEX\nNow: OttoBot · **Cron smoke27-552014 result:** gone\n"
+            "Next: keep going from Chief of Staff\nBlocker: —\n"
+        )
+        with patch("openbot.org.read_index", return_value=fake), patch(
+            "openbot.org._load_saved", return_value={"projects": []}
+        ):
+            text = staff_status_reply()
+        self.assertNotIn("Chief of Staff", text)
+        self.assertIn("keep going from Cos", text)
+        self.assertNotIn("smoke27", text.lower())
+
+    def test_aimed_status_hides_smoke_now(self):
+        from openbot.router import status_reply
+
+        text = status_reply(
+            "Now: OttoBot · **Cron smoke27-552014 result:** gone\n"
+            "Last: builder\nNext: folder then diff\nBlocker: —",
+            "What is going on?",
+            "OttoBot",
+        )
+        self.assertNotIn("smoke27", text.lower())
+        self.assertIn("folder then diff", text)
+        self.assertIn("Last: builder", text)
+
     def test_empty_cos_stays_on_the_board(self):
         from unittest.mock import patch
 
