@@ -1431,7 +1431,7 @@ def wiring_brief(project_id: str | None = None) -> str:
     """How Chat, OpenCode, and Hermes share this CEO. Shown in status and packets."""
     if not project_id:
         return (
-            "You are Chief of Staff. The operator is above you. CEOs report to you. "
+            "You are Cos. The operator is above you. CEOs report to you. "
             "Ask, and you dispatch: Code → OpenCode in that CEO's folder; "
             "Think / Research / Ops → that CEO's Hermes home. Results come back in this chat. "
             "The operator can also open any CEO and talk to that CEO directly."
@@ -1452,7 +1452,7 @@ def wiring_brief(project_id: str | None = None) -> str:
         "local git, no origin" if git.get("is_repo") else "not a git folder"
     )
     lines = [
-        f"{node_label(pid)} CEO — reports to Chief of Staff. The operator is in this chat with you.",
+        f"{node_label(pid)} CEO — reports to Cos. The operator is in this chat with you.",
         f"Code: OpenCode in {folder or '—'} ({remote})",
         f"Hermes: {tools.get('hermes_home') or 'not attached'}",
         f"Bus: org/projects/{pid}/bus/handoffs — files, not chat.",

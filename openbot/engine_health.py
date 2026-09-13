@@ -84,6 +84,7 @@ def engine_health(project_id: str | None = None) -> dict:
             tools = project_tools(pid) or {}
         except Exception:
             tools = {}
+    board_wide = not pid
     aimed = resolve_ceo_hermes_home(pid, str(tools.get("hermes_home") or ""))
     if not aimed and not pid:
         aimed = str(hermes_home())
@@ -97,6 +98,9 @@ def engine_health(project_id: str | None = None) -> dict:
     dash_ok = bool(aimed) and _homes_match(live_home or dash.get("home"), aimed)
     if not aimed:
         dash_ok = bool(dash.get("running"))
+    # Cos / Settings with no CEO aimed: a dash on a CEO home is not a Cos orphan.
+    if board_wide:
+        dash_ok = bool(dash.get("running") or live_home or dash.get("home"))
 
     gateway = {"running": False, "ok": False}
     if aimed:
@@ -129,14 +133,14 @@ def engine_health(project_id: str | None = None) -> dict:
         saa_live = pid == "saa-homes" and not saa_desk_owns()
     except Exception:
         saa_live = pid == "saa-homes"
-    if aimed and dash.get("running") and not dash_ok:
+    if aimed and dash.get("running") and not dash_ok and not board_wide:
         if saa_live:
             warn.append("Hermes dash home mismatch — live SAA box owns schedule; do not Restart this imported home.")
             next_steps.append("Leave the imported home off. Check the live SAA Hermes box if cron is actually down.")
         else:
             warn.append("Hermes dash home mismatch (possible Cos /root/.hermes orphan)")
             next_steps.append("Open Tools → Hermes and Restart gateway for this CEO (kills stale Cos /root/.hermes dash).")
-    if aimed and not gateway.get("running"):
+    if aimed and not gateway.get("running") and not board_wide:
         if saa_live:
             next_steps.append("Live SAA Hermes owns cron. Imported home Off is expected. OttoBot chat is the inbox.")
         else:
@@ -179,7 +183,7 @@ def engine_health(project_id: str | None = None) -> dict:
         "next": next_steps,
         "action": (
             None
-            if saa_live
+            if saa_live or board_wide
             else (
                 "restart_gateway"
                 if (aimed and not gateway.get("running")) or (aimed and dash.get("running") and not dash_ok)

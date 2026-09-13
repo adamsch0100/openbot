@@ -504,7 +504,7 @@ def _cos_chat_fallback(project_id: str | None, worker_id: str | None, message: s
         brief = status_reply(
             read_project_index(project_id) if project_id else read_index(),
             message,
-            node_label(project_id, worker_id) or "Chief of Staff",
+            node_label(project_id, worker_id) or "Cos",
             live=_live_status_line(project_id),
         )
     else:
@@ -979,7 +979,7 @@ STAFF_WHO = frozenset({"OpenBot", "Chief of Staff", "Cos", "Staff"})
 
 
 def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "", live: str = "") -> str:
-    name = (who or "Chief of Staff").strip() or "Chief of Staff"
+    name = (who or "Cos").strip() or "Cos"
     if name.casefold() in {"openbot", "ottobot", "otto-bot"}:
         name = "OttoBot"
     is_status = bool(STATUS.search(message or ""))
@@ -1049,7 +1049,7 @@ def keep_going_for(
 
 
 def cos_run_existing_reply(project_id: str | None = None) -> str:
-    who = node_label(project_id, None) if project_id else "Chief of Staff"
+    who = node_label(project_id, None) if project_id else "Cos"
     story = ""
     enabled = 0
     if project_id:
@@ -1287,7 +1287,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         pid = str(job.get("project_id") or "")
         if pid in RETIRED_CEO_IDS or (pid and pid not in live_ids):
             continue
-        who = names.get(pid) or ("Chief of Staff" if not pid else pid)
+        who = names.get(pid) or ("Cos" if not pid else pid)
         subject = ""
         why = ""
         status = str(job.get("status") or job.get("last_status") or "").lower()
@@ -2026,7 +2026,7 @@ def _handle_preset(
                 )
                 if project_id:
                     status = f"{status}\n{wiring_brief(project_id)}"
-                packet = chat_packet(who if project_id else "Chief of Staff", status, message)
+                packet = chat_packet(who if project_id else "Cos", status, message)
             else:
                 packet = job_packet(
                     "worker" if worker_id else "think",
@@ -2190,7 +2190,7 @@ def _handle_preset(
             and bool(engines["hermes"]["present"])
         )
         # Emit progress for all Cos paths (even board-only) so UI never hangs silent
-        who = node_label(project_id, worker_id) if project_id else "Chief of Staff"
+        who = node_label(project_id, worker_id) if project_id else "Cos"
         if on_progress:
             try:
                 _call_progress(on_progress, engine_chip("cos", "Chat" if use_llm else "Brief"), "cos")
@@ -2224,7 +2224,7 @@ def _handle_preset(
         if use_llm:
             engine = "Hermes Agent"
             usage_model = chosen_model or "engine-default"
-            who = node_label(project_id, worker_id) if project_id else "Chief of Staff"
+            who = node_label(project_id, worker_id) if project_id else "Cos"
             if project_id:
                 status = "\n".join(
                     f"{label}: {index_field(index_text, label) or '—'}"
@@ -2331,7 +2331,7 @@ def _handle_preset(
                 text = status_reply(
                     index_text,
                     message,
-                    node_label(project_id, worker_id) or "Chief of Staff",
+                    node_label(project_id, worker_id) or "Cos",
                     live=_live_status_line(project_id),
                 )
     elif chosen == "builder":

@@ -6609,6 +6609,9 @@ function jobMeta(job) {
   }
   const hasDiff = Boolean((job.diff && String(job.diff).trim()) || (job.untracked && job.untracked.length) || job.diff_pending);
   if (hasDiff) return "A code change is ready. Accept to keep it or Reject to undo.";
+  const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board").trim() || "board";
+  const model = job.model && job.model !== "none" ? (modelName(job.model) || job.model) : "";
+  if (engine !== "board") return [engine, model].filter(Boolean).join(" · ");
   if (job.blocker && String(job.blocker) !== "ok") return String(job.blocker);
   return "";
 }

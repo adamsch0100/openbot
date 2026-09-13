@@ -72,8 +72,8 @@ class OvernightBoardUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=170", html)
-        self.assertIn("styles.css?v=170", html)
+        self.assertIn("app.js?v=171", html)
+        self.assertIn("styles.css?v=171", html)
 
     def test_pulse_failed_zero_is_not_a_failed_job(self):
         import re
@@ -102,6 +102,18 @@ class OvernightBoardUiTests(unittest.TestCase):
         router = (ROOT / "openbot" / "router.py").read_text(encoding="utf-8")
         self.assertIn("or Cos for status", router)
         self.assertNotIn("or Chief of Staff for status", router)
+
+    def test_job_card_names_the_engine(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        meta = js[js.find("function jobMeta") : js.find("function isTalk")]
+        self.assertIn("job.engine", meta)
+        self.assertIn("PRESET_ENGINE[job.preset]", meta)
+        self.assertIn('engine !== "board"', meta)
+        org = (ROOT / "openbot" / "org.py").read_text(encoding="utf-8")
+        self.assertIn("You are Cos.", org)
+        self.assertIn("reports to Cos.", org)
+        self.assertNotIn("You are Chief of Staff.", org)
+        self.assertNotIn("reports to Chief of Staff.", org)
 
 
 class OvernightHostAliasTests(unittest.TestCase):

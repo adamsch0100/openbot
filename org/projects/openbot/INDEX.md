@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Live overnight board on Railway. Chat must not paint PULSE "failed 0" as a Failed Think card.
-Last: Live Cos board + Think 4e9130b6d0 Hermes Agent · glm-5.3-flash. False Failed paint on that card.
-Next: Deploy this glue. Reload live. Confirm Continue not Retry. Do not attach weekday cron.
+Now: Live desk honesty — Cos Engines, OttoBot gateway after deploy, engine name on Think cards.
+Last: PULSE failed-0 paint shipped. Live Think was Hermes Agent · glm-5.3-flash.
+Next: Deploy. Confirm Cos Engines is not fake-red and OttoBot gateway stays up. Do not attach weekday cron.
 Blocker: Do not Accept parked SAA restore. Do not redeploy live SAA Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

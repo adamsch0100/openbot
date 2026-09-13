@@ -1132,18 +1132,21 @@ def supervise_gateways_enabled() -> bool:
 
 
 def supervised_project_ids() -> list[str]:
-    """Empty by default. When this desk owns SAA cron, keep that gateway up."""
+    """Hosted board keeps OttoBot's own gateway up after deploy. SAA only when this desk owns cron."""
     raw = os.environ.get("OPENBOT_SUPERVISE_HOMES")
     if raw is not None:
         return [part.strip() for part in raw.split(",") if part.strip()]
+    ids: list[str] = []
     try:
         from .org import saa_desk_owns
 
         if saa_desk_owns():
-            return ["saa-homes"]
+            ids.append("saa-homes")
     except Exception:
         pass
-    return []
+    if not ids and os.environ.get("OPENBOT_DATA_DIR", "").strip():
+        ids.append("openbot")
+    return ids
 
 
 def _ceo_hermes_home(project_id: str) -> str:
