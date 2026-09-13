@@ -1246,6 +1246,40 @@ def stop_saa_live_box(*, wait: int = 28) -> dict:
     }
 
 
+def saa_desk_marker_path(home: str | Path | None = None) -> Path | None:
+    if not home:
+        return None
+    return Path(home) / "openbot-saa-desk-owns.json"
+
+
+def write_saa_desk_marker(home: str | Path | None, owns: bool = True) -> dict:
+    """Durable cutover flag on the Hermes home. Survives ensure_org profile rebuilds."""
+    path = saa_desk_marker_path(home)
+    if path is None:
+        return {"ok": False, "error": "no hermes home"}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if owns:
+        path.write_text(
+            json.dumps({"saa_desk_owns": True, "inbox": "OttoBot chat", "telegram": False}, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
+    elif path.is_file():
+        path.unlink()
+    return {"ok": True, "path": str(path), "saa_desk_owns": bool(owns)}
+
+
+def read_saa_desk_marker(home: str | Path | None = None) -> bool:
+    path = saa_desk_marker_path(home)
+    if path is None or not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    return bool(data.get("saa_desk_owns", True))
+
+
 def saa_ssh_payload(remote: list[str]) -> str:
     """Quote argv so Railway's `bash -c <joined>` keeps python -c / redirects intact."""
     return " ".join(shlex.quote(part) for part in remote)

@@ -189,13 +189,28 @@ def _save(data: dict) -> None:
 
 def saa_desk_owns() -> bool:
     """True when this OttoBot desk owns SAA cron. Telegram is not part of ownership."""
-    return bool(_load_saved().get("saa_desk_owns"))
+    if bool(_load_saved().get("saa_desk_owns")):
+        return True
+    try:
+        from .hermes import read_saa_desk_marker
+        from .launch import resolve_ceo_hermes_home
+
+        return bool(read_saa_desk_marker(resolve_ceo_hermes_home("saa-homes", "") or ""))
+    except Exception:
+        return False
 
 
 def set_saa_desk_owns(on: bool) -> dict:
     data = _load_saved() or {}
     data["saa_desk_owns"] = bool(on)
     _save(data)
+    try:
+        from .hermes import write_saa_desk_marker
+        from .launch import resolve_ceo_hermes_home
+
+        write_saa_desk_marker(resolve_ceo_hermes_home("saa-homes", "") or "", owns=bool(on))
+    except Exception:
+        pass
     return {"ok": True, "saa_desk_owns": bool(on)}
 
 
@@ -230,14 +245,21 @@ def stamp_saa_desk_owns_index() -> None:
 def take_saa_desk(
     *,
     start_gateway: bool = True,
-    sync_live: bool = False,
+    sync_live: bool = True,
     stop_live: bool = True,
 ) -> dict:
-    """Stop live Railway SAA Hermes first, then this desk owns cron. Do not restore Telegram."""
-    from .hermes import gateway_start, migrate_cron_delivery, stop_saa_live_box
+    """Copy last live results, stop Railway SAA Hermes, then this desk owns cron. No Telegram."""
+    from .hermes import gateway_start, migrate_cron_delivery, stop_saa_live_box, sync_saa_live_crons
     from .launch import resolve_ceo_hermes_home
 
     home = resolve_ceo_hermes_home("saa-homes", "") or ""
+    synced = {"ok": False, "skipped": True}
+    if home and (sync_live or stop_live):
+        try:
+            synced = sync_saa_live_crons(home, live=True)
+            synced["skipped"] = False
+        except Exception as err:
+            synced = {"ok": False, "error": str(err)[:200], "skipped": False}
     stopped = {"ok": False, "skipped": True}
     if stop_live:
         stopped = stop_saa_live_box()
@@ -249,6 +271,7 @@ def take_saa_desk(
                 "telegram": False,
                 "home": home,
                 "live": stopped,
+                "synced": synced,
                 "error": str(stopped.get("error") or "Live SAA Hermes is still up. Did not take the desk."),
                 "engine": "board",
                 "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
@@ -269,14 +292,6 @@ def take_saa_desk(
             migrated["skipped"] = False
         except Exception as err:
             migrated = {"ok": False, "error": str(err)[:200], "migrated": []}
-    synced = {"ok": False, "skipped": True}
-    if home and sync_live and not stop_live:
-        try:
-            from .hermes import sync_saa_live_crons
-
-            synced = sync_saa_live_crons(home, live=True)
-        except Exception as err:
-            synced = {"ok": False, "error": str(err)[:200]}
     gateway_ok = bool(started.get("ok") or started.get("running") or not start_gateway)
     return {
         "ok": gateway_ok,
@@ -714,6 +729,18 @@ def ensure_org() -> dict:
         "folder": work,
         "projects": [primary, *extras],
     }
+    # Keep desk-ownership. ensure_org rebuilds projects but must not wipe cutover.
+    if saved.get("saa_desk_owns"):
+        data["saa_desk_owns"] = True
+    else:
+        try:
+            from .hermes import read_saa_desk_marker
+            from .launch import resolve_ceo_hermes_home
+
+            if read_saa_desk_marker(resolve_ceo_hermes_home("saa-homes", "") or ""):
+                data["saa_desk_owns"] = True
+        except Exception:
+            pass
     _save(data)
     seed_org_contracts([primary_id, *[row["id"] for row in extras]])
     try:

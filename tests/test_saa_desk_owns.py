@@ -20,7 +20,8 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertIn("stop_live", server)
         self.assertIn("def take_saa_desk", org)
         self.assertIn("def stop_saa_live_box", hermes)
-        self.assertIn("def stamp_saa_desk_owns_index", org)
+        self.assertIn("def write_saa_desk_marker", hermes)
+        self.assertIn("must not wipe cutover", org)
         self.assertIn('"telegram": False', org)
         self.assertIn("OttoBot chat is the inbox", js)
         self.assertIn("This desk owns SAA cron", js)
@@ -31,7 +32,37 @@ class SaaDeskOwnsTests(unittest.TestCase):
         from openbot import org
 
         with patch.object(org, "_load_saved", return_value={}):
-            self.assertFalse(org.saa_desk_owns())
+            with patch("openbot.launch.resolve_ceo_hermes_home", return_value=""):
+                self.assertFalse(org.saa_desk_owns())
+
+    def test_ensure_org_keeps_saa_desk_owns(self):
+        from openbot import org
+
+        saved = {
+            "saa_desk_owns": True,
+            "projects": [{"id": "openbot", "name": "OttoBot", "primary": True, "folder": "/tmp/ob"}],
+        }
+
+        def load():
+            return dict(saved)
+
+        def save(data):
+            blob = dict(data)
+            saved.clear()
+            saved.update(blob)
+
+        with patch.object(org, "_load_saved", side_effect=load):
+            with patch.object(org, "_save", side_effect=save):
+                with patch.object(org, "load_config", return_value={"work_dir": "/tmp/ob"}):
+                    with patch.object(org, "retire_archived_ceos", side_effect=lambda data: data):
+                        with patch.object(org, "reattach_imported_ceos", side_effect=lambda data: data):
+                            with patch.object(org, "ensure_support_project", side_effect=lambda data, work: data):
+                                with patch.object(org, "_ensure_project_index"):
+                                    with patch.object(org, "seed_org_contracts"):
+                                        with patch.object(org, "public_org", side_effect=lambda data: data):
+                                            with patch("openbot.memory.ensure_memory_files"):
+                                                org.ensure_org()
+        self.assertTrue(saved.get("saa_desk_owns"))
 
     def test_bundle_skips_overlay_when_desk_owns(self):
         from openbot.org import project_cron_bundle
@@ -63,6 +94,10 @@ class SaaDeskOwnsTests(unittest.TestCase):
             saved.clear()
             saved.update(blob)
 
+        def sync(*_args, **_kwargs):
+            order.append("sync")
+            return {"ok": True, "updated": 1, "live": True}
+
         def stop():
             order.append("stop")
             return {"ok": True, "already_down": True, "running": False}
@@ -74,26 +109,29 @@ class SaaDeskOwnsTests(unittest.TestCase):
         with patch.object(org, "_load_saved", side_effect=load):
             with patch.object(org, "_save", side_effect=save):
                 with patch.object(org, "stamp_saa_desk_owns_index"):
-                    with patch("openbot.launch.resolve_ceo_hermes_home", return_value="/tmp/saa"):
-                        with patch("openbot.hermes.stop_saa_live_box", side_effect=stop) as stopper:
-                            with patch("openbot.hermes.gateway_start", side_effect=start) as start_gw:
-                                with patch(
-                                    "openbot.hermes.migrate_cron_delivery",
-                                    return_value={"ok": True, "migrated": ["abc"]},
-                                ) as migrate:
-                                    with patch("openbot.keyring.preserve_merge_hermes_env") as preserve:
-                                        result = org.take_saa_desk(
-                                            start_gateway=True, sync_live=False, stop_live=True
-                                        )
-                                        owns = org.saa_desk_owns()
+                    with patch("openbot.hermes.write_saa_desk_marker"):
+                        with patch("openbot.launch.resolve_ceo_hermes_home", return_value="/tmp/saa"):
+                            with patch("openbot.hermes.sync_saa_live_crons", side_effect=sync) as syncer:
+                                with patch("openbot.hermes.stop_saa_live_box", side_effect=stop) as stopper:
+                                    with patch("openbot.hermes.gateway_start", side_effect=start) as start_gw:
+                                        with patch(
+                                            "openbot.hermes.migrate_cron_delivery",
+                                            return_value={"ok": True, "migrated": ["abc"]},
+                                        ) as migrate:
+                                            with patch("openbot.keyring.preserve_merge_hermes_env") as preserve:
+                                                result = org.take_saa_desk(
+                                                    start_gateway=True, sync_live=True, stop_live=True
+                                                )
+                                                owns = org.saa_desk_owns()
         self.assertTrue(result["ok"])
         self.assertFalse(result["telegram"])
         self.assertTrue(owns)
+        syncer.assert_called_once()
         stopper.assert_called_once()
         start_gw.assert_called_once()
         migrate.assert_called_once()
         preserve.assert_not_called()
-        self.assertEqual(order, ["stop", "start"])
+        self.assertEqual(order, ["sync", "stop", "start"])
         self.assertIn("OttoBot chat", result["inbox"])
         self.assertTrue(result.get("live", {}).get("ok"))
 
@@ -113,14 +151,16 @@ class SaaDeskOwnsTests(unittest.TestCase):
         with patch.object(org, "_load_saved", side_effect=load):
             with patch.object(org, "_save", side_effect=save):
                 with patch.object(org, "stamp_saa_desk_owns_index") as stamp:
-                    with patch("openbot.launch.resolve_ceo_hermes_home", return_value="/tmp/saa"):
-                        with patch(
-                            "openbot.hermes.stop_saa_live_box",
-                            return_value={"ok": False, "error": "still answers SSH", "running": True},
-                        ):
-                            with patch("openbot.hermes.gateway_start") as start:
-                                result = org.take_saa_desk(start_gateway=True, stop_live=True)
-                                owns = org.saa_desk_owns()
+                    with patch("openbot.hermes.read_saa_desk_marker", return_value=False):
+                        with patch("openbot.launch.resolve_ceo_hermes_home", return_value="/tmp/saa"):
+                        with patch("openbot.hermes.sync_saa_live_crons", return_value={"ok": True}):
+                            with patch(
+                                "openbot.hermes.stop_saa_live_box",
+                                return_value={"ok": False, "error": "still answers SSH", "running": True},
+                            ):
+                                with patch("openbot.hermes.gateway_start") as start:
+                                    result = org.take_saa_desk(start_gateway=True, stop_live=True)
+                                    owns = org.saa_desk_owns()
         self.assertFalse(result["ok"])
         self.assertFalse(owns)
         start.assert_not_called()
