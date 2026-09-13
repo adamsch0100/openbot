@@ -5353,8 +5353,11 @@ function gatewayOffHtml() {
   if (gatewayLiveOwns || !gatewayRestartOk) {
     return `<article class="cron-card gateway-off">
     <div class="cron-head"><b>Live SAA Hermes</b><span>Owns schedule</span></div>
-    <p class="cron-outcome">The Railway SAA box still owns cron. Leave it on until cutover. This OttoBot desk is the operator inbox — a live copy, not a second scheduler. OttoBot chat is the inbox. Starting the imported home here would run the same jobs twice. Cutover is an Accept: pause live cron the same minute the OttoBot-owned Hermes starts. ${escapeHtml(overlayAgeLine())}</p>
-    <button type="button" class="send overlay-refresh">Refresh live copy</button>
+    <p class="cron-outcome">Standalone Railway Hermes still owns SAA cron. This OttoBot desk is the operator inbox — a live copy until Accept, not a second scheduler. OttoBot chat is the inbox, not Telegram. Cutover is an Accept: sync the newest job results onto OttoBot Hermes, pause the standalone gateway, and start the OttoBot-owned home so jobs do not run twice. ${escapeHtml(overlayAgeLine())}</p>
+    <div class="need-actions">
+      <button type="button" class="send saa-cutover-accept">Accept cutover to OttoBot</button>
+      <button type="button" class="ghost-btn overlay-refresh">Refresh live copy</button>
+    </div>
   </article>`;
   }
   return `<article class="cron-card gateway-off">
@@ -7953,6 +7956,35 @@ if ($("chatSchedule") && !$("chatSchedule").dataset.retryBound) {
   $("chatSchedule").dataset.retryBound = "1";
   $("chatSchedule").addEventListener("click", async (event) => {
     const btn = event.target.closest(".cron-retry");
+    const cutoverBtn = event.target.closest(".saa-cutover-accept");
+    if (cutoverBtn && projectId === "saa-homes") {
+      if (!window.confirm("Accept SAA cutover to OttoBot? This syncs latest results, pauses standalone Railway Hermes, and starts OttoBot Hermes.")) {
+        return;
+      }
+      cutoverBtn.disabled = true;
+      cutoverBtn.textContent = "Cutting over…";
+      try {
+        const res = await fetch("/api/org/saa-desk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ own: true, sync_live: true, start_gateway: true })
+        });
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+          cutoverBtn.textContent = data.error || data.pause_live || data.text || "Cutover failed";
+          cutoverBtn.disabled = false;
+          return;
+        }
+        cutoverBtn.textContent = "OttoBot owns SAA";
+        gatewayLiveOwns = false;
+        await loadCeoDigest(true);
+        await loadConfig();
+      } catch (_err) {
+        cutoverBtn.textContent = "Cutover failed";
+        cutoverBtn.disabled = false;
+      }
+      return;
+    }
     const overlayBtn = event.target.closest(".overlay-refresh");
     if (overlayBtn && projectId === "saa-homes") {
       overlayBtn.disabled = true;

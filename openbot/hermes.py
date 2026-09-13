@@ -1035,9 +1035,9 @@ for job in data.get("jobs") or []:
         "provider": job.get("provider"),
         "schedule": str(job.get("schedule_display") or sched.get("display") or sched.get("expr") or ""),
     }
-    need = fresh or ("error" in status.lower()) or ("fail" in status.lower())
+    # Always bring the newest result markdown when present so cutover keeps recent work.
     folder = "/opt/data/cron/output/" + jid
-    files = sorted(glob.glob(folder + "/*.md"), reverse=True) if need else []
+    files = sorted(glob.glob(folder + "/*.md"), reverse=True)
     if files:
         row["last_result"] = open(files[0], encoding="utf-8", errors="replace").read()[:4000]
         row["result_file"] = os.path.basename(files[0])
@@ -1062,6 +1062,38 @@ def railway_ssh_identity() -> str:
             os.chmod(path, 0o600)
         return str(path)
     return str(Path.home() / ".ssh" / "id_ed25519_railway")
+
+
+def write_overlay_result_files(home: str | Path | None, overlay: list[dict]) -> int:
+    """Persist live last_result markdown into OttoBot Hermes cron/output so Results stay local."""
+    if not home:
+        return 0
+    root = Path(home)
+    written = 0
+    for row in overlay or []:
+        if not isinstance(row, dict):
+            continue
+        jid = str(row.get("id") or "").strip()
+        body = str(row.get("last_result") or "").strip()
+        if not jid or not body:
+            continue
+        folder = root / "cron" / "output" / jid
+        folder.mkdir(parents=True, exist_ok=True)
+        name = Path(str(row.get("result_file") or "cutover-last.md")).name
+        if not name.endswith(".md"):
+            name = f"{name}.md"
+        target = folder / name
+        existing = ""
+        if target.is_file():
+            try:
+                existing = target.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                existing = ""
+        if existing == body:
+            continue
+        target.write_text(body, encoding="utf-8")
+        written += 1
+    return written
 
 
 def apply_cron_status_overlay(home: str | Path | None, overlay: list[dict]) -> int:
@@ -1095,6 +1127,7 @@ def apply_cron_status_overlay(home: str | Path | None, overlay: list[dict]) -> i
                 job[key] = src.get(key)
         updated += 1
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    write_overlay_result_files(home, overlay)
     return updated
 
 
@@ -1379,13 +1412,39 @@ def merge_saa_cron_rows(local: list[dict], overlay: list[dict]) -> list[dict]:
     return out
 
 
+
+def stop_saa_live_gateway(timeout: int = 45) -> dict:
+    """Stop the standalone Railway SAA Hermes gateway so OttoBot can own cron."""
+    try:
+        ran = saa_live_ssh(["hermes", "gateway", "stop"], timeout=timeout)
+    except FileNotFoundError:
+        return {"ok": False, "error": "railway CLI missing", "live": True}
+    except (OSError, subprocess.TimeoutExpired) as err:
+        return {"ok": False, "error": str(err)[:200], "live": True}
+    text = ((ran.stdout or "") + "\n" + (ran.stderr or "")).strip()
+    return {
+        "ok": ran.returncode == 0,
+        "code": ran.returncode,
+        "text": text[-400:],
+        "live": True,
+        "engine": "Hermes Agent",
+    }
+
+
 def sync_saa_live_crons(home: str | Path | None, *, live: bool = False) -> dict:
     """Apply overlay onto a board home. SSH only when live=True."""
     overlay = dump_saa_live_cron_overlay(live=live)
     if not overlay:
-        return {"ok": False, "updated": 0, "error": "live overlay empty", "live": False}
+        return {"ok": False, "updated": 0, "results_written": 0, "error": "live overlay empty", "live": False}
     updated = apply_cron_status_overlay(home, overlay) if home else 0
-    return {"ok": True, "updated": updated, "live": bool(live), "jobs": len(overlay)}
+    results_written = write_overlay_result_files(home, overlay) if home else 0
+    return {
+        "ok": True,
+        "updated": updated,
+        "results_written": results_written,
+        "live": bool(live),
+        "jobs": len(overlay),
+    }
 
 
 # Single-flight lock to prevent overlapping SSH overlay refreshes

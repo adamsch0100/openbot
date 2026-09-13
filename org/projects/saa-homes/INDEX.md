@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Live Hermes healthy: 0 failed, 0 overdue. city-audit-wave-execute-09-11 due 06:00 UTC. Board copy refreshes on demand.
-Last: Live dump 2026-09-11: the 11 failed / 11 never on the board were a stale overlay. Citation + keyword jobs already succeeded yesterday.
-Next: Let 06:00 city-audit-wave fire on live. Refresh live copy. Paused jobs stay paused. Open Goals for the 1w-5y board.
-Blocker: GBP login = skip + note. Do not mass-retry old gateway-shutdown scars. Do not Restart the imported home. No stampede.
+Now: Cutover ready: Accept moves cron from standalone Railway Hermes onto OttoBot Hermes with latest results.
+Last: Standalone Railway still owned schedule until Accept. Board showed live copy only.
+Next: Accept cutover on Schedule. Watch Doing / Results on OttoBot. Do not restart Railway Hermes.
+Blocker: GBP login = skip + note. After Accept, standalone Railway must stay paused.
 Blocker: —
 Goals: —
 

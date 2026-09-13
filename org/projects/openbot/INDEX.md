@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v167 — Operator profile + DECISIONS in every job packet. Reject saves a rule. Labor serves Horizons.
-Last: v166 — OttoBot Goals are a paid multi-tenant wrapper. Add CEO Think proposes from the operator Goal.
-Next: Hard-refresh ?v=167. Aim Cos and say memory audit. Do not fire Ask CEO to propose against live SAA.
-Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
+Now: v168 — SAA Accept cutover ships: sync live results onto OttoBot Hermes, pause standalone, start desk.
+Last: Operator profile + DECISIONS + Reject→rule on job packets.
+Next: Hard-refresh ?v=168. Aim SAA Homes and Accept cutover. Do not mass-retry.
+Blocker: SAA cutover needs operator Accept. Do not Accept parked restore cards.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons
