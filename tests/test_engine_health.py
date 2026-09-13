@@ -17,7 +17,7 @@ class EngineHealthTests(unittest.TestCase):
         self.assertIn("ceoEngineHealth", js)
         self.assertIn("/api/engines/health", js)
         self.assertIn("Accept only", js)
-        self.assertIn("ceoHealthRestartGw", js)
+        self.assertIn("ceo-health-restart", js)
         self.assertIn("Next:", js)
         src = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
         self.assertIn("/api/engines/health", src)

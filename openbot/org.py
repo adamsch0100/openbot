@@ -57,7 +57,8 @@ HOSTED_FOLDER_SLUGS = frozenset({"app", "data", "workspace"})
 SUPPORT_CEO_ID = "support"
 SUPPORT_WORKER_ID = SUPPORT_CEO_ID
 HOST_CEO_ID = "openbot"
-HOST_CEO_NAME = "OpenBot"
+HOST_CEO_NAME = "OttoBot"
+HOST_NAME_ALIASES = frozenset({"openbot", "ottobot", "otto-bot"})
 CEO_PRETTY_NAMES = {
     "listlogic": "ListLogic",
     "nadia": "Nadia",
@@ -65,6 +66,7 @@ CEO_PRETTY_NAMES = {
     "pmill": "Pmill.ai",
     "pmill-ai": "Pmill.ai",
     "openbot": HOST_CEO_NAME,
+    "ottobot": HOST_CEO_NAME,
     "support": "Support",
 }
 
@@ -568,7 +570,7 @@ def _host_identity(work: str, saved: dict) -> tuple[str, str]:
             continue
         if str(row.get("id") or "") == HOST_CEO_ID:
             raw = str(row.get("name") or HOST_CEO_NAME).strip()
-            if raw.upper() in {"INDEX", "APP", "OPENBOT", HOST_CEO_ID.upper()}:
+            if raw.upper() in {"INDEX", "APP", "OPENBOT", "OTTOBOT", HOST_CEO_ID.upper()}:
                 return HOST_CEO_ID, HOST_CEO_NAME
             return HOST_CEO_ID, raw
     if folder_slug == HOST_CEO_ID:
@@ -598,7 +600,7 @@ def ensure_org() -> dict:
             if pid == HOST_CEO_ID:
                 primary_id = HOST_CEO_ID
                 raw = str(row.get("name") or primary_name).strip()
-                if raw.upper() not in {"INDEX", "APP", "OPENBOT"}:
+                if raw.upper() not in {"INDEX", "APP", "OPENBOT", "OTTOBOT"}:
                     primary_name = raw
                 else:
                     primary_name = HOST_CEO_NAME
@@ -734,7 +736,7 @@ def public_org(data: dict | None = None) -> dict:
         name = str(row.get("name") or pid)
         if not pid or pid in RETIRED_CEO_IDS:
             continue
-        if pid == HOST_CEO_ID and name.strip().upper() in {"INDEX", "APP", "OPENBOT"}:
+        if pid == HOST_CEO_ID and name.strip().upper() in {"INDEX", "APP", "OPENBOT", "OTTOBOT"}:
             name = HOST_CEO_NAME
         if pid == SUPPORT_CEO_ID:
             name = "Support"
@@ -1762,7 +1764,7 @@ def project_tools(project_id: str | None) -> dict:
 
 def node_label(project_id: str | None = None, worker_id: str | None = None) -> str:
     if not project_id:
-        return "OpenBot"
+        return "Cos"
     pid = _slug(project_id)
     for row in (_load_saved().get("projects") or []):
         if not isinstance(row, dict):
@@ -2176,11 +2178,29 @@ def add_project(
     if not resolved:
         raise ValueError("set a default folder first, or pass a project folder")
     slug = _slug(title)
+    if slug in HOST_NAME_ALIASES:
+        slug = HOST_CEO_ID
+        if not title or _slug(title) in HOST_NAME_ALIASES:
+            title = HOST_CEO_NAME
     if slug == SUPPORT_WORKER_ID:
         raise ValueError("Support is a helper on openbot, not a CEO")
     if slug in RETIRED_CEO_IDS:
         raise ValueError(f"{slug} is retired from this board")
     existing = {str(row.get("id")) for row in (data.get("projects") or []) if isinstance(row, dict)}
+    if slug == HOST_CEO_ID and HOST_CEO_ID in existing:
+        projects = list(data.get("projects") or [])
+        for row in projects:
+            if isinstance(row, dict) and str(row.get("id") or "") == HOST_CEO_ID:
+                row["name"] = title or HOST_CEO_NAME
+                if resolved:
+                    row["folder"] = resolved
+                if github_repo:
+                    row["github_repo"] = str(github_repo).strip()
+                    row["mcp_github"] = True if mcp_github is None else bool(mcp_github)
+                break
+        data["projects"] = projects
+        _save(data)
+        return public_org(data)
     if slug in existing:
         n = 2
         while f"{slug}-{n}" in existing:

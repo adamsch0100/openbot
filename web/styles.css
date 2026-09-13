@@ -2409,6 +2409,16 @@ input, textarea, select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.embed-aim.wall {
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line));
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
 .embed-live {
   margin: 4px 0 0;
   font-size: 12px;
@@ -2788,9 +2798,41 @@ footer {
   font-size: 11px;
   border-top: 1px solid var(--line);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   max-width: 100%;
+}
+.footer-lockup {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+#boardMark { font-weight: 600; letter-spacing: 0.04em; }
+.engines-chip {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.engines-chip.warn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.engines-chip.ok { color: var(--muted); }
+.footer-credit, .credit-lines {
+  margin: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 footer a { color: var(--bronze); }
 /* Mobile-first layout: phone ≤480px, usable ≤860px */
@@ -2809,6 +2851,11 @@ footer a { color: var(--bronze); }
   }
   .bar-left { flex: 0 0 auto; }
   .bar-right { flex: 1 1 0; min-width: 0; margin-left: auto; }
+  .bar-right .engines-chip {
+    max-width: min(28vw, 120px);
+    font-size: 10px;
+    padding: 5px 8px;
+  }
   
   /* Compact header: hide "On it." sub, keep Otto + ottobot */
   .sub { display: none; }
@@ -3329,6 +3376,7 @@ footer a { color: var(--bronze); }
   .engine-hint { display: none; } /* Hide on mobile */
   .pulse { max-width: min(48vw, 200px); }
   .pulse small { display: none; }
+  .bar-right .engines-chip { max-width: 76px; }
   
   /* Wizard/first-run panels: phone-friendly */
   .overlay {

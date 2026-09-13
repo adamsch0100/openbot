@@ -151,11 +151,11 @@ class RetiredOrgTests(LaborLoopIsolation):
         }
         pid, name = _host_identity("/app", saved)
         self.assertEqual(pid, "openbot")
-        self.assertEqual(name, "OpenBot")
+        self.assertEqual(name, "OttoBot")
         org_mod.PROFILE_PATH.write_text(json.dumps({"projects": saved["projects"], "folder": "/app"}), encoding="utf-8")
         with patch("openbot.org.load_config", return_value={"work_dir": "/app"}):
             listed = {str(row.get("id")): str(row.get("name")) for row in ensure_org()["projects"]}
-        self.assertEqual(listed.get("openbot"), "OpenBot")
+        self.assertEqual(listed.get("openbot"), "OttoBot")
         self.assertIn("saa-homes", listed)
         self.assertIn("support", listed)
         self.assertNotIn("app", listed)

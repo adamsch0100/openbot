@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v177 — Go session header wired (Hermes extra_headers + OpenCode CLI). Auto skips Qwen/MiniMax. Cron off. SAA Think not run.
-Last: v176 — Throwaway Think 400d missing x-opencode-session.
-Next: Retry throwaway Think, then one SAA Homes Run Think now. Do not attach weekday cron.
-Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
+Now: Overnight board — Chat is the company desk. Cos chairs. OttoBot CEO disk id stays openbot. Engines chip + three-line credit live.
+Last: Host display OpenBot→OttoBot. Add CEO aliases so OttoBot does not mint a second company. Overnight Probe throwaway removed.
+Next: Run Think now from Chat when Nous/Go exist. One Builder (OpenCode) self-diff on this checkout. Do not attach weekday cron.
+Blocker: Adam — vault keys, Nous Portal login, Railway. Do not Accept parked SAA restore. Do not redeploy live Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons

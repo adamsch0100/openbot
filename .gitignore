@@ -38,3 +38,5 @@ mobile/.expo/
 mobile/ios/
 mobile/android/
 mobile/dist/
+openbot-opencode-web.log
+openbot-hermes-dash.log

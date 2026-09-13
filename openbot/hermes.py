@@ -120,7 +120,8 @@ TOOL_MARKUP = re.compile(
     re.I,
 )
 PACKET_LINE = re.compile(
-    r"^(You are the |You are Chief of Staff|You report to Chief of Staff|"
+    r"^(You are the |You are Chief of Staff|You are Cos on a local|"
+    r"You report to (Chief of Staff|Cos)|"
     r"The (human )?operator |You dispatch |Ask, and you dispatch|"
     r"Your job is triage|Before doing substantial|"
     r"Do not hire a Bot|Reply like a person|You do not edit files|"
@@ -132,10 +133,10 @@ PACKET_LINE = re.compile(
     r"Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|"
     r"Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
     r"OPEN HANDOFFS:|VAULT LOGINS|OPERATOR:|DECISIONS:|HORIZONS |The operator is talking|"
-    r"The operator is in OpenBot Chat|The operator can also open|"
+    r"The operator is in (OpenBot|OttoBot) Chat|The operator can also open|"
     r"Specialist lanes execute|Code: OpenCode in |Hermes: |"
     r"Bus: org/projects/|Telegram: |OttoBot chat is the inbox|"
-    r".+ CEO — reports to Chief of Staff)",
+    r".+ CEO — reports to (Chief of Staff|Cos))",
     re.I,
 )
 META_JUNK = re.compile(
@@ -286,8 +287,10 @@ def _human_hermes_text(text: str) -> str:
 
 
 def chat_packet(name: str, status: str, task: str) -> str:
-    who = (name or "Chief of Staff").strip() or "Chief of Staff"
-    as_staff = who in {"Chief of Staff", "OpenBot"}
+    who = (name or "Cos").strip() or "Cos"
+    if who.casefold() in {"openbot", "ottobot", "otto-bot"}:
+        who = "OttoBot"
+    as_staff = who in {"Chief of Staff", "Cos", "Staff"}
     parts = [
         "Reply like a person in chat. Short. Direct. Answer what they asked.",
         "You do not edit files yourself. If the board already routed work to an engine, do not invent diffs or pretend you ran tools.",
@@ -300,7 +303,7 @@ def chat_packet(name: str, status: str, task: str) -> str:
     ]
     if as_staff:
         parts = [
-            "You are Chief of Staff on a local OpenBot board.",
+            "You are Cos on a local OttoBot board.",
             "The human operator is above you. CEOs report to you.",
             "The operator can also open any CEO and talk to that CEO directly.",
             "You dispatch OpenCode (code) and Hermes Agent (Think, Research, Ops).",
@@ -311,9 +314,9 @@ def chat_packet(name: str, status: str, task: str) -> str:
     else:
         title = who if who.lower().endswith("ceo") else f"{who} CEO"
         parts = [
-            f"You are the {title} on a local OpenBot board.",
+            f"You are the {title} on a local OttoBot board.",
             "The operator is talking to you directly in this chat.",
-            "You report to Chief of Staff, who runs the org above you.",
+            "You report to Cos, who runs the org above you.",
             "OpenCode edits your Code folder. Hermes Think / Research / Ops use your Hermes home.",
             "You own the outcome. Specialist lanes execute. Chat is not memory.",
         ] + parts
@@ -339,7 +342,7 @@ def _index_block(index: str) -> str:
 def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") -> str:
     parts = [
         f"You are the {preset} engine on this CEO.",
-        "The operator is in OpenBot Chat — with this CEO, or with Chief of Staff above them.",
+        "The operator is in OttoBot Chat — with this CEO, or with Cos above them.",
         "Report a short RESULT back to this chat. Do not skip the operator.",
         "Chat is not memory. INDEX and this packet are the source of truth.",
         "Never print passwords, TOTP, or API keys in RESULT, chat, or INDEX.",
