@@ -15,8 +15,8 @@
 Source of truth for this OttoBot instance. Status questions read this file only.
 
 Now: World-class desk — Cos status hides smoke/Chief of Staff; Support Engines must not fake-red a shared OttoBot dash; receipts omit $0.0000 with no usage.
-Last: v=173 live — Cos status has no smoke/Chief of Staff; Support Engines ok with OttoBot dash.
-Next: Confirm activity jobs rewrite Chief of Staff on read; OttoBot live line does not say e521843f. Do not attach weekday cron on live SAA.
+Last: v=173 live Cos/Support Engines honesty. Follow-up sanitizes historical job JSON on read.
+Next: Confirm activity jobs have no smoke27/Chief of Staff. Do not attach weekday cron on live SAA.
 Blocker: Do not pause/redeploy Railway SAA Hermes. Do not Accept parked SAA restore cards.
 
 ## Vault

@@ -1497,6 +1497,8 @@ def quiet_index_line(text: str, *, drop_if_noisy: bool = True) -> str:
         kept = [line for line in s.splitlines() if not INDEX_NOISE.search(line)]
         return "\n".join(kept).strip()
     s = INDEX_NOISE.sub("", s)
+    s = re.sub(r"\bopenbot\s+routine\b\.?", "", s, flags=re.I)
+    s = re.sub(r"Next up:\s*(?:\.|$)", "", s, flags=re.I)
     s = re.sub(r"\s+", " ", s)
     s = re.sub(r"\s*·\s*", " · ", s).strip(" ·-;:")
     return s

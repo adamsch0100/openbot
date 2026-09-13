@@ -129,6 +129,17 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("smoke27", (job.get("text") or "").lower())
         self.assertIn("keep going from Cos", job.get("text") or "")
         self.assertFalse(job.get("index_now"))
+        smoke_card = public_job(
+            {
+                "id": "cron1",
+                "preset": "ops",
+                "engine": "Hermes Agent",
+                "cron_outcome": "**Cron smoke27-552014 result:** Routine `routine-e521843f` does not exist",
+                "name": "Openbot routine openbot routine e521843f",
+            }
+        )
+        self.assertFalse(smoke_card.get("cron_outcome"))
+        self.assertFalse(smoke_card.get("name"))
 
     def test_empty_cos_stays_on_the_board(self):
         from unittest.mock import patch

@@ -2905,8 +2905,22 @@ def public_job(receipt: dict | None) -> dict:
     if "text" in out:
         out["text"] = quiet_index_line(sanitize_job_text(out.get("text")), drop_if_noisy=False)
     if "message" in out:
-        out["message"] = redact_chat_login(out.get("message") or "")
-    for key in ("next", "index_now", "index_last", "index_blocker"):
+        out["message"] = redact_chat_login(
+            quiet_index_line(out.get("message") or "", drop_if_noisy=False)
+        )
+    for key in (
+        "next",
+        "index_now",
+        "index_last",
+        "index_blocker",
+        "cron_outcome",
+        "summary",
+        "last_result",
+        "last_error",
+        "outcome",
+        "name",
+        "title",
+    ):
         if isinstance(out.get(key), str):
             out[key] = quiet_index_line(out[key])
     if isinstance(out.get("blocker"), str):

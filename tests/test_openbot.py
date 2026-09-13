@@ -2283,6 +2283,7 @@ class CronWatchTests(unittest.TestCase):
 
         self.assertTrue(_cron_is_noise("grok-finish-notify"))
         self.assertTrue(_cron_is_noise("grok-heartbeat"))
+        self.assertTrue(_cron_is_noise("Openbot routine openbot routine e521843f"))
         self.assertFalse(_cron_is_noise("form-pipeline-health"))
         self.assertFalse(_cron_is_noise("indexation-patrol"))
 

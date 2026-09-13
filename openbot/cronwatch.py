@@ -22,7 +22,12 @@ CRON_INDEX_NOISE = re.compile(
 
 
 def _cron_is_noise(name: str) -> bool:
-    return bool(CRON_INDEX_NOISE.match(str(name or "").strip()))
+    raw = str(name or "").strip()
+    if CRON_INDEX_NOISE.match(raw):
+        return True
+    from .org import INDEX_NOISE
+
+    return bool(INDEX_NOISE.search(raw))
 
 
 def _cron_enabled(row: dict) -> bool:
