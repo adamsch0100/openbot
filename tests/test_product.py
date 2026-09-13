@@ -135,11 +135,15 @@ class CheapChatTests(unittest.TestCase):
                 "preset": "ops",
                 "engine": "Hermes Agent",
                 "cron_outcome": "**Cron smoke27-552014 result:** Routine `routine-e521843f` does not exist",
+                "cron_name": "Openbot routine openbot routine e521843f",
+                "cron_report": "**Cron smoke27-552014 result:** gone",
                 "name": "Openbot routine openbot routine e521843f",
             }
         )
         self.assertFalse(smoke_card.get("cron_outcome"))
         self.assertFalse(smoke_card.get("name"))
+        self.assertFalse(smoke_card.get("cron_name"))
+        self.assertFalse(smoke_card.get("cron_report"))
 
     def test_empty_cos_stays_on_the_board(self):
         from unittest.mock import patch
