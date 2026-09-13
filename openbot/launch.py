@@ -214,6 +214,18 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
             files_root = root
     if files_root is not None:
         env["HERMES_DASHBOARD_FILES_ROOT"] = str(files_root)
+    try:
+        from .go_session import bind_go_session_env, resolve_go_session_id, sync_hermes_go_session
+        from .org import project_id_for_hermes_home, project_tools
+
+        pid = project_id_for_hermes_home(str(root))
+        tools = project_tools(pid) if pid else {}
+        session_id = resolve_go_session_id(tools, env)
+        if session_id:
+            env = bind_go_session_env(env, session_id)
+            sync_hermes_go_session(root, session_id)
+    except Exception:
+        pass
     return env
 
 
@@ -240,6 +252,17 @@ def _opencode_env(folder: str | None = None) -> dict[str, str]:
         path = (root / "opencode-xdg" / ceo / name) if ceo else (root / name)
         path.mkdir(parents=True, exist_ok=True)
         env[key] = str(path)
+    try:
+        from .go_session import bind_go_session_env, resolve_go_session_id
+        from .org import project_id_for_folder, project_tools
+
+        pid = project_id_for_folder(folder) if folder else ""
+        tools = project_tools(pid) if pid else {}
+        session_id = resolve_go_session_id(tools, env)
+        if session_id:
+            env = bind_go_session_env(env, session_id)
+    except Exception:
+        pass
     return env
 
 

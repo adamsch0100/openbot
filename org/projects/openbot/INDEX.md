@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v175 — Auto follows live Go catalog specials (Go-only flash). OttoBrain v2 file-month green. Cron not attached.
-Last: v174 — Think Haiku swap fixed in code; live Think still 401'd before Go vs Zen split.
-Next: One throwaway then one SAA Homes Run Think now. Do not attach weekday cron on live SAA.
+Now: v177 — Go session header wired (Hermes extra_headers + OpenCode CLI). Auto skips Qwen/MiniMax. Cron off. SAA Think not run.
+Last: v176 — Throwaway Think 400d missing x-opencode-session.
+Next: Retry throwaway Think, then one SAA Homes Run Think now. Do not attach weekday cron.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

@@ -407,21 +407,21 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
     env.pop("ANTHROPIC_API_KEY", None)
     env.pop("ANTHROPIC_TOKEN", None)
     
-    # Attach OpenCode session ID for Hermes OpenCode Go provider affinity headers
-    # Hermes agent/opencode_affinity.py uses this for x-opencode-session binding
-    if not env.get("OPENCODE_SESSION_ID"):
-        try:
-            from .org import project_id_for_hermes_home, project_tools
-            
-            pid = project_id_for_hermes_home(str(root))
-            if pid:
-                tools = project_tools(pid)
-                session_id = str(tools.get("opencode_session_id") or "").strip()
-                if session_id:
-                    env["OPENCODE_SESSION_ID"] = session_id
-        except Exception:
-            pass
-    
+    # OpenCode Go needs x-opencode-session on the HTTP client. Hermes reads
+    # providers.*.extra_headers from config.yaml, not OPENCODE_SESSION_ID.
+    try:
+        from .go_session import bind_go_session_env, resolve_go_session_id, sync_hermes_go_session
+        from .org import project_id_for_hermes_home, project_tools
+
+        pid = project_id_for_hermes_home(str(root))
+        tools = project_tools(pid) if pid else {}
+        session_id = resolve_go_session_id(tools, env)
+        if session_id:
+            env = bind_go_session_env(env, session_id)
+            sync_hermes_go_session(root, session_id)
+    except Exception:
+        pass
+
     return env
 
 

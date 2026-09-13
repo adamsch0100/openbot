@@ -33,6 +33,7 @@ from .models import (
     cheap_chat_for_provider,
     DEFAULT_THINK_MODEL,
     FALLBACK_GO_FLASH,
+    go_unsupported,
     hermes_chat_model_for_provider,
     model_provider,
     pick_go_auto_model,
@@ -406,6 +407,30 @@ def _thin_think_id(model: str | None) -> bool:
     return any(token in low for token in ("haiku", "nano", "lite", "muse-spark", "contributor"))
 
 
+def _ensure_opencode_go_session(project_id: str | None, tools: dict | None, work: str | None) -> dict:
+    """Persist an OpenCode session and bind x-opencode-session for Hermes + CLI."""
+    blob = dict(tools) if isinstance(tools, dict) else {}
+    sid = str(blob.get("opencode_session_id") or "").strip()
+    if not sid and project_id and work:
+        from .launch import _open_opencode_session
+
+        sid = str(_open_opencode_session(str(work), Path(str(work)).name) or "").strip()
+        if sid:
+            try:
+                patch_project_tools(project_id, {"opencode_session_id": sid})
+                blob = project_tools(project_id) or {**blob, "opencode_session_id": sid}
+            except (ValueError, TypeError):
+                blob["opencode_session_id"] = sid
+    sid = str(blob.get("opencode_session_id") or sid or "").strip()
+    if sid:
+        from .go_session import sync_hermes_go_session
+
+        home = str(blob.get("hermes_home") or "").strip()
+        if home:
+            sync_hermes_go_session(home, sid)
+    return blob
+
+
 def _go_eligible_model(account: dict, seated_model: str | None, seat: str = "chat") -> str | None:
     """Go wallet model for this seat. Auto follows the live catalog. Never Haiku."""
     provider = str(account.get("provider") or "")
@@ -424,7 +449,12 @@ def _go_eligible_model(account: dict, seated_model: str | None, seat: str = "cha
         ]
         go_ids = {str(row.get("id") or "") for row in go_models}
         if seat in {"think", "research", "code"}:
-            if seated_model and seated_model in go_ids and not _thin_think_id(seated_model):
+            if (
+                seated_model
+                and seated_model in go_ids
+                and not _thin_think_id(seated_model)
+                and not go_unsupported(seated_model)
+            ):
                 return seated_model
             return pick_go_auto_model(go_models, seat) or DEFAULT_THINK_MODEL
         picked = pick_go_auto_model(go_models, "chat") or hermes_chat_model_for_provider(
@@ -654,23 +684,14 @@ def run_opencode(
                 "oauth": True,
             }
         }
-    
-    # Attach x-opencode-session header for Go/Zen session affinity (deepseek-v4-flash, etc)
+    from .go_session import bind_go_session_env, merge_opencode_cli_config
+
     sid = str(session_id or "").strip()
-    if sid:
-        # Inject header for ALL providers so OpenCode Go models route correctly
-        if "providers" not in config:
-            config["providers"] = {}
-        # OpenCode Go requires x-opencode-session for some models (deepseek-v4-flash)
-        for provider_id in ("opencode", "opencode-go", "zen"):
-            if provider_id not in config["providers"]:
-                config["providers"][provider_id] = {}
-            if "headers" not in config["providers"][provider_id]:
-                config["providers"][provider_id]["headers"] = {}
-            config["providers"][provider_id]["headers"]["x-opencode-session"] = sid
-    
+    config = merge_opencode_cli_config(config, sid)
     if config:
         env["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
+    if sid:
+        env = bind_go_session_env(env, sid)
     kwargs: dict = {
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
@@ -1990,6 +2011,7 @@ def _handle_preset(
             patch_index_line("Blocker", blocker)
         else:
             engine = "Hermes Agent"
+            tools = _ensure_opencode_go_session(project_id, tools, work)
             if talk:
                 who = node_label(project_id, worker_id) if project_id else (worker_id or "Think")
                 status = "\n".join(
@@ -2223,6 +2245,7 @@ def _handle_preset(
             # reply. Recent Telegram is already in status via session_hint.
             packet = chat_packet(who, status, message if not quote else f"{message}\n\nReplying to this earlier turn:\n{quote}")
             ran: dict = {}
+            tools = _ensure_opencode_go_session(project_id, tools, work)
             attempts = _chat_attempts(tools, chosen_model)
             if not attempts:
                 _activate("Hermes Agent", tools, chosen_model)
@@ -2330,14 +2353,8 @@ def _handle_preset(
             parsed = parse_opencode_events("")
             from .usage import error_message_from_raw
 
-            # Ensure OpenCode session exists and is persisted before first job run
+            tools = _ensure_opencode_go_session(project_id, tools, work)
             opencode_session = str(tools.get("opencode_session_id") or "").strip()
-            if not opencode_session:
-                from .launch import _open_opencode_session
-                
-                opencode_session = _open_opencode_session(work, Path(work).name)
-                if opencode_session and project_id:
-                    patch_project_tools(project_id, {"opencode_session_id": opencode_session})
 
             for account, attempt_model in attempts:
                 if account.get("id"):
@@ -2487,6 +2504,7 @@ def _handle_preset(
                 )
                 
                 # Wallet rotation for Research — same capable Go seat as Think, not Chat Haiku.
+                tools = _ensure_opencode_go_session(project_id, tools, work)
                 attempts = _chat_attempts(tools, chosen_model, seat="research")
                 if not attempts:
                     _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
@@ -2610,16 +2628,7 @@ def _handle_preset(
             schedule = parse_schedule(message)
             if schedule:
                 _activate("Hermes Agent", tools, chosen_model, force_go=force_go_wallet)
-                
-                # Ensure OpenCode session exists for Hermes cron jobs that use OpenCode Go
-                # Hermes agent/opencode_affinity.py needs OPENCODE_SESSION_ID env var
-                if project_id and not tools.get("opencode_session_id"):
-                    from .launch import _open_opencode_session
-                    
-                    opencode_session = _open_opencode_session(work, Path(work).name)
-                    if opencode_session:
-                        patch_project_tools(project_id, {"opencode_session_id": opencode_session})
-                        tools = project_tools(project_id)  # Reload
+                tools = _ensure_opencode_go_session(project_id, tools, work)
                 
                 created = cron_create(
                     schedule,
@@ -2643,6 +2652,7 @@ def _handle_preset(
                     patch_index_line("Blocker", "—")
                     add_schedule(project_id, schedule, message, job_id, worker_id)
             else:
+                tools = _ensure_opencode_go_session(project_id, tools, work)
                 packet = job_packet(
                     "ops",
                     index_text,

@@ -69,7 +69,7 @@ _SEAT_TO_MODEL = {
 }
 
 UNLOCKED = {"chat", "think", "code", "research", "ops"}
-GO_UNSUPPORTED_TOKENS = ("haiku", "muse-spark", "contributor")
+GO_UNSUPPORTED_TOKENS = ("haiku", "muse-spark", "contributor", "qwen", "minimax")
 FALLBACK_GO_FLASH = "opencode/deepseek-v4.1-flash"
 
 
@@ -80,7 +80,7 @@ def model_blob(row: dict | str | None) -> str:
 
 
 def go_unsupported(row: dict | str | None) -> bool:
-    """OpenCode Go 401s Haiku; Muse contributor is a promo seat, not Auto."""
+    """Haiku 401s on Go. Qwen/MiniMax use Hermes Anthropic mode, which drops extra_headers."""
     text = model_blob(row)
     return any(token in text for token in GO_UNSUPPORTED_TOKENS)
 

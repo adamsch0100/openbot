@@ -141,7 +141,9 @@ def _value_pick(rows: list[dict], seat_id: str) -> dict | None:
 def _cheap_pick(rows: list[dict], seat_id: str) -> dict | None:
     if not rows:
         return None
-    pool = [row for row in rows if not go_unsupported(row)] or list(rows)
+    pool = [row for row in rows if not go_unsupported(row)]
+    if not pool:
+        return None
     if seat_id in {"chat", "ops"}:
         flashes = [row for row in pool if "flash" in _blob(row)]
         specials = [
@@ -193,7 +195,7 @@ def auto_model_for_seat(
         return {"id": "", "why": "unknown seat"}
     rows = [_annotate(row, _scores_for(seat_id, guides)[0]) for row in _for_seat(seat_id, models)]
     as_of = _scores_for(seat_id, guides)[1]
-    rows = [row for row in rows if not go_unsupported(row)] or rows
+    rows = [row for row in rows if not go_unsupported(row)]
     if not rows:
         return {"id": "", "label": "Auto", "why": "no connected model for this seat", "as_of": as_of}
     scored = any(row.get("_quality") for row in rows)

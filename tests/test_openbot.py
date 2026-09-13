@@ -919,6 +919,53 @@ class AutoPickTests(unittest.TestCase):
         )
         self.assertEqual(ops["id"], "opencode/big-pickle")
 
+    def test_think_skips_qwen_even_with_top_arena(self):
+        from openbot.auto import auto_model_for_seat
+
+        models = [
+            {
+                "id": "opencode/qwen3.8-max",
+                "label": "Qwen 3.8 Max",
+                "provider": "opencode",
+                "family": "go",
+                "in_usd": 0,
+                "out_usd": 0,
+                "connected": True,
+                "tools": True,
+                "code": True,
+                "reasoning": True,
+                "engines": ("OpenCode", "Hermes Agent"),
+            },
+            {
+                "id": "opencode/glm-5.3",
+                "label": "GLM 5.3",
+                "provider": "opencode",
+                "family": "go",
+                "in_usd": 0,
+                "out_usd": 0,
+                "connected": True,
+                "tools": True,
+                "code": True,
+                "reasoning": True,
+                "engines": ("OpenCode", "Hermes Agent"),
+            },
+        ]
+        think = auto_model_for_seat(
+            "think",
+            models=models,
+            guides={
+                "think": {
+                    "scores": [
+                        {"id": "qwen3.8-max", "rating": 1600, "key": "qwen38max", "rank": 1},
+                        {"id": "glm-5.3", "rating": 1400, "key": "glm53", "rank": 2},
+                    ],
+                    "as_of": "2026-09-12",
+                }
+            },
+        )
+        self.assertEqual(think["id"], "opencode/glm-5.3")
+        self.assertNotEqual(think["id"], "opencode/qwen3.8-max")
+
     def test_chat_skips_openrouter_muse_even_when_catalog_tags_it_opencode(self):
         from openbot.auto import auto_model_for_seat
         from openbot.models import recommended_chat_id
@@ -3194,9 +3241,20 @@ class HermesSessionPersistenceTests(unittest.TestCase):
                 "in_usd": 0,
                 "out_usd": 0,
             },
+            {
+                "id": "opencode/qwen3.8-max",
+                "label": "Qwen 3.8 Max",
+                "provider": "opencode",
+                "family": "go",
+                "go_exclusive": True,
+                "connected": True,
+                "in_usd": 0,
+                "out_usd": 0,
+            },
         ]
         self.assertEqual(pick_go_auto_model(go_rows, "chat"), "opencode/deepseek-v4.1-flash")
         self.assertEqual(pick_think_go_model(go_rows), "opencode/deepseek-v4.1-flash")
+        self.assertNotEqual(pick_think_go_model(go_rows), "opencode/qwen3.8-max")
         self.assertEqual(hermes_chat_model_for_provider("opencode", go_rows), "opencode/deepseek-v4.1-flash")
         with patch("openbot.models.all_models", return_value=go_rows):
             go_account = {"id": "dd9a8b15", "provider": "opencode", "label": "Shared Go"}
@@ -3210,6 +3268,10 @@ class HermesSessionPersistenceTests(unittest.TestCase):
             )
             self.assertEqual(
                 _go_eligible_model(go_account, None, seat="chat"),
+                "opencode/deepseek-v4.1-flash",
+            )
+            self.assertEqual(
+                _go_eligible_model(go_account, "opencode/qwen3.8-max", seat="think"),
                 "opencode/deepseek-v4.1-flash",
             )
 
@@ -3489,8 +3551,7 @@ class EngineProxyTests(unittest.TestCase):
             self.assertEqual(project_id_for_folder(r"C:\Users\adamm\Projects\saahomes"), "saa-homes")
 
 
-class OpenCodeSessionTests(unittest.TestCase):
-    """Tests for OpenCode session creation, persistence, and job binding."""
+class OpenCodeGoSessionBindTests(unittest.TestCase):
     
     def test_hermes_env_injects_opencode_session(self):
         """_hermes_env injects OPENCODE_SESSION_ID for Hermes OpenCode Go provider."""
@@ -3540,6 +3601,15 @@ class OpenCodeSessionTests(unittest.TestCase):
                 
                 # Verify OPENCODE_SESSION_ID is injected
                 self.assertEqual(env.get("OPENCODE_SESSION_ID"), "ses_test_hermes_xyz")
+                config = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}")
+                self.assertEqual(
+                    config["providers"]["opencode-go"]["headers"]["x-opencode-session"],
+                    "ses_test_hermes_xyz",
+                )
+                yaml_text = (hermes_home_path / "config.yaml").read_text(encoding="utf-8")
+                self.assertIn("x-opencode-session: ses_test_hermes_xyz", yaml_text)
+                self.assertIn("ottobot-go-session:", yaml_text)
+                self.assertIn("https://opencode.ai/zen/go/v1", yaml_text)
             
             finally:
                 store_mod.ROOT = old_root
@@ -3818,6 +3888,84 @@ class OpenCodeSessionTests(unittest.TestCase):
                 org_mod.ROOT = old_org_root
                 org_mod.ORG = old_org_path
                 org_mod.PROFILE_PATH = old_profile_path
+
+    def test_ensure_opencode_go_session_creates_when_missing(self):
+        from unittest.mock import patch
+        from openbot.router import _ensure_opencode_go_session
+
+        tools = {"hermes_home": "C:\\tmp\\home"}
+        with patch("openbot.launch._open_opencode_session", return_value="ses_think_go"), patch(
+            "openbot.router.patch_project_tools"
+        ) as mock_patch, patch(
+            "openbot.router.project_tools",
+            return_value={"hermes_home": "C:\\tmp\\home", "opencode_session_id": "ses_think_go"},
+        ), patch("openbot.go_session.sync_hermes_go_session"):
+            out = _ensure_opencode_go_session("desk-throwaway", tools, "C:\\tmp\\work")
+        mock_patch.assert_called_once_with("desk-throwaway", {"opencode_session_id": "ses_think_go"})
+        self.assertEqual(out.get("opencode_session_id"), "ses_think_go")
+        kept = _ensure_opencode_go_session("desk-throwaway", {"opencode_session_id": "ses_existing"}, "C:\\tmp\\work")
+        self.assertEqual(kept.get("opencode_session_id"), "ses_existing")
+
+
+class GoSessionTests(unittest.TestCase):
+    def test_cli_overlay_and_hermes_yaml(self):
+        import tempfile
+        from pathlib import Path
+        from openbot.go_session import (
+            bind_go_session_env,
+            merge_opencode_cli_config,
+            sync_hermes_go_session,
+        )
+
+        merged = merge_opencode_cli_config({"mcp": {"github": {"enabled": True}}}, "ses_abc")
+        self.assertTrue(merged["mcp"]["github"]["enabled"])
+        self.assertEqual(merged["providers"]["opencode-go"]["headers"]["x-opencode-session"], "ses_abc")
+        env = bind_go_session_env({}, "ses_abc")
+        self.assertEqual(env["OPENCODE_SESSION_ID"], "ses_abc")
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "config.yaml").write_text("runtime:\n  nofile_soft_limit: 4096\n", encoding="utf-8")
+            self.assertTrue(sync_hermes_go_session(home, "ses_abc"))
+            text = (home / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("x-opencode-session: ses_abc", text)
+            self.assertIn("ottobot-go-session:", text)
+            self.assertNotIn("  opencode-go:\n", text)
+            self.assertTrue(sync_hermes_go_session(home, "ses_def"))
+            text = (home / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("x-opencode-session: ses_def", text)
+            self.assertNotIn("ses_abc", text)
+            self.assertIn("runtime:", text)
+            self.assertEqual(text.count("providers:"), 1)
+
+    def test_hermes_overlay_merges_under_existing_providers(self):
+        import tempfile
+        from pathlib import Path
+        from openbot.go_session import HERMES_OVERLAY_GO, sync_hermes_go_session
+
+        existing = (
+            "model:\n"
+            "  provider: opencode-go\n"
+            "providers:\n"
+            "  opencode-go:\n"
+            "    base_url: https://opencode.ai/zen/go/v1\n"
+            "credential_pool_strategies:\n"
+            "  opencode-go: fill_first\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "config.yaml").write_text(existing, encoding="utf-8")
+            self.assertTrue(sync_hermes_go_session(home, "ses_saa"))
+            text = (home / "config.yaml").read_text(encoding="utf-8")
+            self.assertEqual(text.count("providers:"), 1)
+            self.assertIn(f"{HERMES_OVERLAY_GO}:", text)
+            self.assertIn("x-opencode-session: ses_saa", text)
+            self.assertIn("credential_pool_strategies:", text)
+            self.assertRegex(text, r"(?m)^  opencode-go:\n    base_url:")
+            self.assertTrue(sync_hermes_go_session(home, "ses_saa2"))
+            text = (home / "config.yaml").read_text(encoding="utf-8")
+            self.assertEqual(text.count("ottobot-go-session:"), 1)
+            self.assertIn("x-opencode-session: ses_saa2", text)
+            self.assertNotIn("ses_saa\n", text.replace("ses_saa2", ""))
 
 
 if __name__ == "__main__":
