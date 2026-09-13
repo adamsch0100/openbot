@@ -97,13 +97,12 @@ function paintEnginesChip() {
   if (o.present) found.push("OpenCode");
   el.classList.toggle("warn", missing.length > 0 || found.length < 2);
   el.classList.toggle("ok", missing.length === 0 && found.length === 2);
-  if (missing.length) {
-    el.textContent = `Engines: ${missing.join(" + ")} missing`;
-  } else if (found.length) {
-    el.textContent = `Engines: ${found.join(" · ")}`;
-  } else {
-    el.textContent = "Engines: board only";
-  }
+  let full = "Engines: board only";
+  if (missing.length) full = `Engines: ${missing.join(" + ")} missing`;
+  else if (found.length) full = `Engines: ${found.join(" · ")}`;
+  el.title = full;
+  const narrow = window.matchMedia && window.matchMedia("(max-width: 480px)").matches;
+  el.textContent = narrow ? "Engines" : full;
 }
 
 function sharePerm(name) {

@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Live desk honesty — Cos Engines, OttoBot gateway after deploy, engine name on Think cards.
-Last: PULSE failed-0 paint shipped. Live Think was Hermes Agent · glm-5.3-flash.
-Next: Deploy. Confirm Cos Engines is not fake-red and OttoBot gateway stays up. Do not attach weekday cron.
+Now: World-class Chat loop — honest Engines, Cos board for status, INDEX without smoke gore, engine named on cards.
+Last: Cos Engines / OttoBot gateway / Think meta shipped on live.
+Next: Deploy v=172. Confirm OttoBot Engines is not Restart-for-dash-mismatch. Do not attach weekday cron.
 Blocker: Do not Accept parked SAA restore. Do not redeploy live SAA Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

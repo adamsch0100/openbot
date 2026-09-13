@@ -137,6 +137,9 @@ def engine_health(project_id: str | None = None) -> dict:
         if saa_live:
             warn.append("Hermes dash home mismatch — live SAA box owns schedule; do not Restart this imported home.")
             next_steps.append("Leave the imported home off. Check the live SAA Hermes box if cron is actually down.")
+        elif gateway.get("running"):
+            warn.append("Hermes dash is on another home. Open Tools → Hermes to aim this CEO's pane.")
+            next_steps.append("Gateway is up. Tools → Hermes retargets the dashboard. Do not Restart gateway for a dash mismatch.")
         else:
             warn.append("Hermes dash home mismatch (possible Cos /root/.hermes orphan)")
             next_steps.append("Open Tools → Hermes and Restart gateway for this CEO (kills stale Cos /root/.hermes dash).")
@@ -186,7 +189,7 @@ def engine_health(project_id: str | None = None) -> dict:
             if saa_live or board_wide
             else (
                 "restart_gateway"
-                if (aimed and not gateway.get("running")) or (aimed and dash.get("running") and not dash_ok)
+                if aimed and not gateway.get("running")
                 else None
             )
         ),

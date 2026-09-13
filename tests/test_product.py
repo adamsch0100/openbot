@@ -70,6 +70,26 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("What would you like to do?", talk)
         self.assertTrue(SKILL.search("how do I add a skill"))
         self.assertIn("Settings → Models", skills_reply())
+        staff_next = status_reply(
+            "Now: ready\nLast: ok\nNext: keep going from Chief of Staff\nBlocker: —",
+            "What is going on?",
+            "Cos",
+        )
+        self.assertIn("keep going from Cos", staff_next)
+        self.assertNotIn("Chief of Staff", staff_next)
+
+    def test_empty_cos_stays_on_the_board(self):
+        from unittest.mock import patch
+
+        from openbot.router import handle
+
+        with patch("openbot.router.seated_or_auto", return_value="opencode/glm-5.3-flash"), patch(
+            "openbot.router.recommended_chat_id", return_value="opencode/glm-5.3-flash"
+        ), patch("openbot.router.hermes_chat") as chat:
+            job = handle("", project_id=None)
+        chat.assert_not_called()
+        self.assertEqual(job.get("engine"), "board")
+        self.assertEqual(job.get("preset"), "cos")
 
 
 class EngineWireTests(unittest.TestCase):

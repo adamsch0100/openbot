@@ -144,6 +144,27 @@ class EngineHealthTests(unittest.TestCase):
         self.assertIsNone(row.get("action"))
         self.assertFalse(any("wrong" in w.lower() or "mismatch" in w.lower() for w in row.get("warn") or []))
 
+    def test_dash_mismatch_with_gateway_up_is_not_restart(self):
+        from openbot import engine_health as eh
+
+        with patch.object(eh, "detect", return_value={
+            "hermes": {"present": True, "path": "hermes", "install": ""},
+            "opencode": {"present": True, "path": "opencode", "install": ""},
+        }):
+            with patch.object(eh, "_run_version", return_value="0.21.1"):
+                with patch.object(eh, "hermes_dash_status", return_value={"running": True, "home": "/root/.hermes"}):
+                    with patch.object(eh, "opencode_web_status", return_value={"running": True, "folder": "/app"}):
+                        with patch.object(eh, "_port_open", return_value=True):
+                            with patch.object(eh, "_live_dash_home", return_value="/root/.hermes"):
+                                with patch.object(eh, "resolve_ceo_hermes_home", return_value="/data/hermes-homes/openbot"):
+                                    with patch("openbot.org.project_tools", return_value={"hermes_home": "/data/hermes-homes/openbot"}):
+                                        with patch("openbot.hermes.gateway_status", return_value={"running": True, "ok": True}):
+                                            row = eh.engine_health("openbot")
+        self.assertNotEqual(row.get("action"), "restart_gateway")
+        self.assertTrue(row["hermes"]["gateway_running"])
+        self.assertFalse(row["hermes"]["dash_home_ok"])
+        self.assertTrue(any("Tools" in n for n in row.get("next") or []))
+
 
 if __name__ == "__main__":
     unittest.main()

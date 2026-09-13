@@ -22,10 +22,12 @@ class OvernightBoardUiTests(unittest.TestCase):
     def test_engines_chip_never_fakes_green(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("function paintEnginesChip", js)
-        chip = js[js.find("function paintEnginesChip") : js.find("function paintEnginesChip") + 1200]
+        chip = js[js.find("function paintEnginesChip") : js.find("function paintEnginesChip") + 1600]
         self.assertIn("missing", chip)
         self.assertIn("classList.toggle(\"warn\"", chip)
         self.assertIn("found.length === 2", chip)
+        self.assertIn("matchMedia", chip)
+        self.assertIn('el.textContent = narrow ? "Engines" : full', chip)
 
     def test_receipt_shows_tokens_and_dollars(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -72,8 +74,8 @@ class OvernightBoardUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=171", html)
-        self.assertIn("styles.css?v=171", html)
+        self.assertIn("app.js?v=172", html)
+        self.assertIn("styles.css?v=172", html)
 
     def test_pulse_failed_zero_is_not_a_failed_job(self):
         import re
@@ -136,6 +138,19 @@ class OvernightHostAliasTests(unittest.TestCase):
         job = job_packet("think", "Now: ok", "", "plan")
         self.assertIn("OttoBot Chat", job)
         self.assertIn("Cos above them", job)
+
+    def test_rollup_skips_smoke_cron(self):
+        from unittest.mock import patch
+
+        from openbot.org import rollup_staff
+
+        with patch("openbot.org.patch_index_line") as patched:
+            rollup_staff(
+                "openbot",
+                None,
+                "**Cron smoke27-552014 result:** Routine `routine-e521843f` does not exist",
+            )
+            patched.assert_not_called()
 
     def test_git_remote_strips_embedded_tokens(self):
         from openbot.gitutil import public_remote_url

@@ -366,6 +366,7 @@ class TestGatewaySupervise(unittest.TestCase):
         self.assertNotIn("ensure_supervised_gateway", body)
         self.assertIn("start_opencode_web", body)
         self.assertIn("start_hermes_dashboard", body)
+        self.assertIn("supervised_project_ids", body)
 
     def test_warm_engines_keep_running(self):
         src = (Path(__file__).resolve().parent.parent / "openbot" / "launch.py").read_text(encoding="utf-8")

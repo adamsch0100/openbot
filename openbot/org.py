@@ -1937,8 +1937,16 @@ def patch_scope(project_id: str | None, worker_id: str | None, label: str, value
     patch_index_line(label, value)
 
 
+_INDEX_NOISE = re.compile(
+    r"smoke\d+|SMOKE\d+_|e2e smoke|wc8_|routine-e521843f|Cron smoke",
+    re.I,
+)
+
+
 def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> None:
     if not project_id:
+        return
+    if _INDEX_NOISE.search(result or ""):
         return
     name = project_id
     for row in (_load_saved().get("projects") or []):
@@ -1946,7 +1954,8 @@ def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> 
             name = str(row.get("name") or project_id)
             break
     who = worker_id or "CEO"
-    snippet = re.sub(r"\s+", " ", clean_memory_text(result or "").strip())[:160] or "—"
+    snippet = re.sub(r"[*_`#]+", "", clean_memory_text(result or ""))
+    snippet = re.sub(r"\s+", " ", snippet).strip()[:160] or "—"
     patch_index_line("Last", f"{name} · {who}: {snippet}")
     patch_index_line("Now", f"{name} · {snippet[:140]}")
     patch_index_line("Next", f"Open {name} if you want the report, or keep going from Cos")

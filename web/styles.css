@@ -2828,7 +2828,7 @@ footer {
   text-overflow: ellipsis;
 }
 .engines-chip.warn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
-.engines-chip.ok { color: var(--muted); }
+.engines-chip.ok { color: color-mix(in srgb, var(--ink) 72%, var(--muted)); }
 .footer-credit, .credit-lines {
   margin: 0;
   line-height: 1.35;

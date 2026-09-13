@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Live board — Cos Engines was a false red; OttoBot gateway dies on Railway deploy; Think cards hid the engine in a Done fold.
-Last: PULSE Think no longer paints Failed. Live keys work. Did not Accept parked cards.
-Next: Deploy this glue. Confirm Cos Engines is not fake-red, OttoBot gateway comes up after deploy, Think card names Hermes Agent. Do not attach weekday cron on live SAA.
+Now: World-class live pass — Cos dash must not fake-red OttoBot Engines; empty Cos stays board; smoke cron must not smash INDEX.
+Last: Cos Engines honest, OttoBot gateway supervised, Think names Hermes Agent.
+Next: Deploy v=172. Confirm OttoBot Engines does not offer Restart when gateway is up. Do not attach weekday cron on live SAA.
 Blocker: Do not pause/redeploy Railway SAA Hermes. Do not Accept parked SAA restore cards.
 
 ## Vault

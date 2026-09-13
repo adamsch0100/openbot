@@ -978,16 +978,23 @@ def _live_status_line(project_id: str | None) -> str:
 STAFF_WHO = frozenset({"OpenBot", "Chief of Staff", "Cos", "Staff"})
 
 
+def _board_copy(text: str) -> str:
+    s = str(text or "")
+    s = s.replace("Chief of Staff", "Cos")
+    s = re.sub(r"\bOpenBot instance\b", "OttoBot instance", s)
+    return s
+
+
 def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "", live: str = "") -> str:
     name = (who or "Cos").strip() or "Cos"
     if name.casefold() in {"openbot", "ottobot", "otto-bot"}:
         name = "OttoBot"
     is_status = bool(STATUS.search(message or ""))
     greeting = bool(GREET.search(message or "")) and not is_status
-    now = index_field(index_text, "Now") or "—"
-    last = index_field(index_text, "Last") or "—"
-    nxt = index_field(index_text, "Next") or "—"
-    blocker = index_field(index_text, "Blocker") or "—"
+    now = _board_copy(index_field(index_text, "Now") or "—")
+    last = _board_copy(index_field(index_text, "Last") or "—")
+    nxt = _board_copy(index_field(index_text, "Next") or "—")
+    blocker = _board_copy(index_field(index_text, "Blocker") or "—")
     week = horizon_week(index_text)
     staff = name in STAFF_WHO
     if greeting:
@@ -2166,7 +2173,7 @@ def _handle_preset(
         settings = load_settings()
         chosen_model = seated_or_auto(settings, "chat", seats) or recommended_chat_id() or None
         provider, model_id = split_model(chosen_model)
-        status_ask = bool(STATUS.search(message or ""))
+        status_ask = bool(STATUS.search(message or "")) or not str(message or "").strip()
         skill_ask = bool(SKILL.search(message or ""))
         file_reply = "" if skill_ask or status_ask else (cos_file_reply(message or "") or "")
         if not file_reply and wants_run_existing(message or ""):
@@ -2187,6 +2194,7 @@ def _handle_preset(
             and not status_ask
             and not skill_ask
             and not file_reply
+            and bool(str(message or "").strip())
             and bool(engines["hermes"]["present"])
         )
         # Emit progress for all Cos paths (even board-only) so UI never hangs silent

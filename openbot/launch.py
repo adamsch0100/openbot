@@ -1087,7 +1087,15 @@ def warm_engines() -> dict:
         except Exception as err:
             print(f"[openbot] key push skipped: {err}", flush=True)
         opencode = start_opencode_web(_opencode_cwd)
-        hermes = start_hermes_dashboard(_hermes_dash_home)
+        dash_pid = ""
+        dash_home = _hermes_dash_home
+        for pid in supervised_project_ids():
+            home = _ceo_hermes_home(pid)
+            if home:
+                dash_pid = pid
+                dash_home = home
+                break
+        hermes = start_hermes_dashboard(dash_home, project_id=dash_pid or None)
         _warmed = True
         return {"opencode": opencode, "hermes": hermes}
 
