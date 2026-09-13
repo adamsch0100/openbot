@@ -15,8 +15,8 @@
 Source of truth for this OttoBot instance. Status questions read this file only.
 
 Now: Overnight board on fix/overnight-board — Chat names OttoBot/Cos, engines chip + three-line credit, settings IA, receipt tokens.
-Last: Local board 8787 with official OpenCode 1.18.30 + Hermes found. Overnight Probe Add CEO path proven then removed. Think hit Nous login wall.
-Next: Run Think now on OttoBot CEO when Nous/Go keys exist. Builder dogfood through OpenCode when a wallet is in the vault. Do not attach weekday cron on live SAA.
+Last: Run Think now + Builder both 401 Invalid API key. Rejected the wander INDEX diff. Official OpenCode web started after local data-dir fallback.
+Next: Adam pastes Go/Nous keys. Then Run Think now from Chat and one Builder self-diff. Do not attach weekday cron on live SAA.
 Blocker: Adam — vault keys, Nous Portal login (`hermes model`), Railway token. Do not pause/redeploy Railway. Do not Accept parked SAA restore cards.
 
 ## Vault

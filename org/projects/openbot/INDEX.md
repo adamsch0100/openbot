@@ -3,7 +3,7 @@
 CEO brief. Status on this project reads this file only.
 
 Now: Overnight board — Chat is the company desk. Cos chairs. OttoBot CEO disk id stays openbot. Engines chip + three-line credit live.
-Last: Host display OpenBot→OttoBot. Add CEO aliases so OttoBot does not mint a second company. Overnight Probe throwaway removed.
+Last: Think 401 + Builder 401 on this VM. Rejected the OpenCode INDEX wander. Cursor glue already on the branch.
 Next: Run Think now from Chat when Nous/Go exist. One Builder (OpenCode) self-diff on this checkout. Do not attach weekday cron.
 Blocker: Adam — vault keys, Nous Portal login, Railway. Do not Accept parked SAA restore. Do not redeploy live Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
@@ -16,7 +16,7 @@ Horizon-half: Seat MRR covers OttoBot's own Hermes + OpenCode · tenants · via 
 Horizon-year: OttoBot is the paid board companies run from · tenants · via CEOs + engines that stay theirs · proof paying tenants with live Horizons
 Horizon-five: The wrapper that gets paid for Hermes Agent + OpenCode · via multi-tenant seats · proof P&L
 
-Folder: /tmp/tmp3cu0ad7k
+Folder: /workspace
 
 ## Law (every job)
 
@@ -78,7 +78,7 @@ Ask Builder when Next is code.
 Ask Research only for public pages or the courtesy draft.
 Ask Ops only to save a later reminder, not to email anyone.
 After each job: Now / Last / Next / Blocker on this file.
-Git: local repo, no origin
+Git: fix/overnight-board · https://github.com/adamsch0100/openbot
 Hermes: /workspace/hermes-homes/openbot
 
 ## Contract

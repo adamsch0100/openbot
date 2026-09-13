@@ -97,6 +97,19 @@ class OvernightHostAliasTests(unittest.TestCase):
         self.assertIn("OttoBot Chat", job)
         self.assertIn("Cos above them", job)
 
+    def test_git_remote_strips_embedded_tokens(self):
+        from openbot.gitutil import public_remote_url
+
+        self.assertEqual(
+            public_remote_url("https://bot:s3cret@example.invalid/repo.git"),
+            "https://example.invalid/repo.git",
+        )
+        self.assertEqual(
+            public_remote_url("https://github.com/adamsch0100/openbot.git"),
+            "https://github.com/adamsch0100/openbot.git",
+        )
+        self.assertEqual(public_remote_url(""), "")
+
 
 if __name__ == "__main__":
     unittest.main()
