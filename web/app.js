@@ -20,6 +20,7 @@ let lastCeoId = "";
 let gatewayRunning = true;
 let gatewayRestartOk = true;
 let gatewayLiveOwns = false;
+let saaDeskOwns = false;
 let brains = {};
 let cfg = {};
 let ocStarted = false;
@@ -4201,6 +4202,7 @@ function paintOrgSelection() {
 
 function renderOrg(data) {
   org = data || {};
+  if (typeof org.saa_desk_owns === "boolean") saaDeskOwns = org.saa_desk_owns;
   const tree = $("orgTree");
   if (!tree) return;
   const projects = org.projects || [];
@@ -5166,6 +5168,8 @@ function paintCeoBrief(digest) {
     else if (now && now !== "—" && !isScheduleFluff(now) && now !== week) bits.push(`Now: ${now}`);
     if (String(project.id || "") === "saa-homes" && (gatewayLiveOwns || !gatewayRestartOk)) {
       bits.push("Live Railway Hermes still owns cron. This desk is a copy until cutover. OttoBot chat is the inbox — not Telegram.");
+    } else if (String(project.id || "") === "saa-homes" && saaDeskOwns) {
+      bits.push("This desk owns SAA cron. OttoBot chat is the inbox — not Telegram.");
     }
   }
   if (!bits.length) {
@@ -5389,6 +5393,7 @@ async function loadCeoDigest(refreshLive) {
     if (typeof cached.gateway_running === "boolean") gatewayRunning = cached.gateway_running;
     if (typeof cached.gateway_restart_ok === "boolean") gatewayRestartOk = cached.gateway_restart_ok;
     if (typeof cached.gateway_live_owns === "boolean") gatewayLiveOwns = cached.gateway_live_owns;
+    if (typeof cached.saa_desk_owns === "boolean") saaDeskOwns = cached.saa_desk_owns;
     paintCeoLive(cached);
     paintCeoBrief(cached.digest || cached);
     renderBotMeta({ skipSpend: true });
@@ -5417,10 +5422,12 @@ async function loadCeoDigest(refreshLive) {
         gatewayRunning = gw.running !== false;
         gatewayRestartOk = gw.restart_ok !== false;
         gatewayLiveOwns = Boolean(gw.live_owns);
+        if (typeof gw.saa_desk_owns === "boolean") saaDeskOwns = gw.saa_desk_owns;
         const pack = digestCache.get(pid) || data;
         pack.gateway_running = gatewayRunning;
         pack.gateway_restart_ok = gatewayRestartOk;
         pack.gateway_live_owns = gatewayLiveOwns;
+        pack.saa_desk_owns = saaDeskOwns;
         digestCache.set(pid, pack);
         if (projectId === pid) {
           syncHermesHint();
@@ -6389,6 +6396,7 @@ async function setOrgNode(project, worker) {
     if (typeof deskCache.gateway_running === "boolean") gatewayRunning = deskCache.gateway_running;
     if (typeof deskCache.gateway_restart_ok === "boolean") gatewayRestartOk = deskCache.gateway_restart_ok;
     if (typeof deskCache.gateway_live_owns === "boolean") gatewayLiveOwns = deskCache.gateway_live_owns;
+    if (typeof deskCache.saa_desk_owns === "boolean") saaDeskOwns = deskCache.saa_desk_owns;
   }
   const desk = activityBody();
   if (desk && scheduleOpen) {

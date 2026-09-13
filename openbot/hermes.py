@@ -299,7 +299,7 @@ def chat_packet(name: str, status: str, task: str) -> str:
         "Do not print session_id or Resumed session.",
         "If RECENT TELEGRAM is included, it is background only — answer the new board message, not an old thread.",
         "Never ask the operator to paste passwords, TOTP, API keys, or browser cookies into chat. Site logins go through the board vault (Keys → Site logins).",
-        "If they ask to run all existing crons or get everything working, do not claim you fired the schedule. The live Hermes box already runs those jobs. This board will not stampede every cron from chat.",
+        "If they ask to run all existing crons or get everything working, do not claim you fired the schedule. Cron runs on the aimed CEO Hermes home. This board will not stampede every cron from chat.",
     ]
     if as_staff:
         parts = [
@@ -1123,9 +1123,127 @@ def railway_cmd() -> list[str]:
     linux = Path("/usr/local/bin/railway")
     if linux.is_file():
         return [str(linux)]
+    home_linux = Path.home() / ".railway" / "bin" / "railway"
+    if home_linux.is_file():
+        return [str(home_linux)]
     if found:
         return [found]
     return []
+
+
+def saa_live_cli_args() -> list[str]:
+    return [
+        "--project",
+        SAA_LIVE_PROJECT,
+        "--environment",
+        SAA_LIVE_ENV,
+        "--service",
+        SAA_LIVE_SERVICE,
+    ]
+
+
+def saa_live_target_error() -> str:
+    """Refuse to touch OttoBot's own Railway box or a non-SAA service."""
+    service = str(SAA_LIVE_SERVICE or "").strip()
+    if not service:
+        return "refusing: empty SAA live service name"
+    if "saa" not in service.lower():
+        return "refusing: live service name is not SAA"
+    board = str(
+        os.environ.get("RAILWAY_PROJECT_ID")
+        or os.environ.get("OPENBOT_RAILWAY_PROJECT")
+        or ""
+    ).strip()
+    if board and board == str(SAA_LIVE_PROJECT or "").strip():
+        return "refusing: SAA live project id is this OttoBot Railway project"
+    return ""
+
+
+def _run_saa_live_cli(argv: list[str], timeout: int = 90) -> subprocess.CompletedProcess:
+    binary = railway_cmd()
+    if not binary:
+        raise FileNotFoundError("railway")
+    cmd = [*binary, *argv, *saa_live_cli_args()]
+    return subprocess.run(cmd, capture_output=True, timeout=timeout, **_text_kwargs())
+
+
+def saa_live_box_reachable(timeout: int = 12) -> bool:
+    """True when Railway SAA Homes Hermes still answers SSH (cron can still fire)."""
+    try:
+        ran = saa_live_ssh(["echo", "ping"], timeout=timeout)
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return False
+    except Exception:
+        return False
+    out = ((ran.stdout or "") + "\n" + (ran.stderr or "")).lower()
+    if ran.returncode != 0:
+        return False
+    if "unauthorized" in out or "not found" in out or "no deployment" in out:
+        return False
+    return True
+
+
+def stop_saa_live_box(*, wait: int = 28) -> dict:
+    """Remove the running SAA Homes Hermes deployment so this desk can own cron.
+
+    Does not delete the Railway service. Does not touch the OttoBot board project.
+    """
+    bad = saa_live_target_error()
+    if bad:
+        return {"ok": False, "error": bad, "running": None}
+    if not railway_cmd():
+        return {"ok": False, "error": "railway CLI missing on this board host", "running": None}
+    reachable = saa_live_box_reachable()
+    if not reachable:
+        return {"ok": True, "already_down": True, "running": False, "engine": "board"}
+    try:
+        ran = _run_saa_live_cli(["down", "-y"], timeout=90)
+    except FileNotFoundError:
+        return {"ok": False, "error": "railway CLI missing", "running": True}
+    except subprocess.TimeoutExpired:
+        still = saa_live_box_reachable()
+        return {
+            "ok": not still,
+            "error": None if not still else "railway down timed out; SAA box still answers SSH",
+            "running": still,
+            "timed_out": True,
+        }
+    text = ((ran.stdout or "") + "\n" + (ran.stderr or "")).strip()
+    lowered = text.lower()
+    already = ran.returncode != 0 and any(
+        bit in lowered for bit in ("no deployment", "not found", "already", "no service")
+    )
+    if ran.returncode != 0 and not already:
+        still = saa_live_box_reachable()
+        if not still:
+            return {"ok": True, "already_down": True, "running": False, "down": text[-400:]}
+        return {
+            "ok": False,
+            "error": text[-400:] or "railway down failed",
+            "running": True,
+            "code": ran.returncode,
+        }
+    deadline = time.time() + max(8, int(wait))
+    still = True
+    while time.time() < deadline:
+        still = saa_live_box_reachable(timeout=10)
+        if not still:
+            break
+        time.sleep(2)
+    if still:
+        return {
+            "ok": False,
+            "error": "SAA Homes Hermes still answers SSH after railway down",
+            "running": True,
+            "down": text[-400:],
+        }
+    return {
+        "ok": True,
+        "already_down": False,
+        "running": False,
+        "down": text[-400:],
+        "engine": "board",
+    }
 
 
 def saa_ssh_payload(remote: list[str]) -> str:
@@ -1426,10 +1544,11 @@ def overlay_saa_live_background(interval: int | None = None) -> None:
             continue
         
         try:
-            from .org import project_tools
+            from .org import project_tools, saa_desk_owns
 
-            home = str((project_tools("saa-homes") or {}).get("hermes_home") or "").strip()
-            sync_saa_live_crons(home, live=True)
+            if not saa_desk_owns():
+                home = str((project_tools("saa-homes") or {}).get("hermes_home") or "").strip()
+                sync_saa_live_crons(home, live=True)
         except FileNotFoundError:
             if not _overlay_miss_logged:
                 print("[openbot] saa live overlay: railway CLI missing; using cached live jobs", flush=True)
@@ -1941,7 +2060,14 @@ def _cron_is_running(row: dict) -> bool:
     return bool(row.get("claimed"))
 
 
-def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_runs: list[dict] | None = None) -> dict:
+def cron_digest(
+    rows: list[dict],
+    *,
+    hours: int = 48,
+    next_ask: str = "",
+    live_runs: list[dict] | None = None,
+    local_owner: bool = False,
+) -> dict:
     """Last two days plus what is running / due now. No click-through required."""
     now = datetime.now(timezone.utc)
     window = timedelta(hours=max(6, int(hours)))
@@ -2013,10 +2139,15 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
         names = [row["title"] for row in (healthy + recent)[:3]]
         bits.append("Recently: " + ", ".join(names) + ".")
     else:
-        bits.append(
-            "This board’s schedule copy is older than two days. "
-            "The live Hermes box still runs the jobs — Telegram gets today’s work."
-        )
+        if local_owner:
+            bits.append(
+                "This desk owns the schedule. Last labor on this Hermes home is older than two days."
+            )
+        else:
+            bits.append(
+                "This board’s schedule copy is older than two days. "
+                "The live Hermes box still runs the jobs — Telegram gets today’s work."
+            )
     if failed:
         bits.append("Last copy still failed: " + ", ".join(row["title"] for row in failed[:3]) + ".")
     upcoming_rows.sort(key=lambda pair: pair[0])
@@ -2052,11 +2183,17 @@ def cron_digest(rows: list[dict], *, hours: int = 48, next_ask: str = "", live_r
         live_bits.append("Just finished: " + ", ".join(row["title"] for row in just_finished[:3]) + ".")
     if not live_bits:
         if next_up:
-            live_bits.append(f"Nothing running on this copy. Next up: {next_up['title']}.")
+            if local_owner:
+                live_bits.append(f"Nothing running. Next up: {next_up['title']}.")
+            else:
+                live_bits.append(f"Nothing running on this copy. Next up: {next_up['title']}.")
         else:
-            live_bits.append("Nothing running on this copy.")
+            live_bits.append("Nothing running." if local_owner else "Nothing running on this copy.")
         if not (healthy or recent):
-            live_bits.append("Live Hermes + Telegram still own today’s jobs.")
+            if local_owner:
+                live_bits.append("This desk owns today’s jobs. OttoBot chat is the inbox.")
+            else:
+                live_bits.append("Live Hermes + Telegram still own today’s jobs.")
         else:
             live_bits.append("A finished job will land in this chat and in What’s happening.")
     return {

@@ -199,13 +199,65 @@ def set_saa_desk_owns(on: bool) -> dict:
     return {"ok": True, "saa_desk_owns": bool(on)}
 
 
-def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = False) -> dict:
-    """This desk owns SAA cron. OttoBot chat is the inbox. Do not restore Telegram."""
-    from .hermes import gateway_start, migrate_cron_delivery
+def stamp_saa_desk_owns_index() -> None:
+    """Four-liners after this desk owns SAA cron. No send/pay words in Next."""
+    patch_scope(
+        "saa-homes",
+        None,
+        "Now",
+        "This desk owns SAA cron. OttoBot chat is the inbox. Not Telegram.",
+    )
+    patch_scope(
+        "saa-homes",
+        None,
+        "Last",
+        "Cut over from live Railway SAA Homes Hermes.",
+    )
+    patch_scope(
+        "saa-homes",
+        None,
+        "Next",
+        "Keep the SAA Hermes gateway up. Schedule reads this home. OttoBot chat is the inbox.",
+    )
+    patch_scope("saa-homes", None, "Blocker", "—")
+    patch_scope("saa-homes", None, "Telegram", "Off — OttoBot chat is the inbox.")
+    patch_index_line("Now", "Cos names CEOs. This desk owns SAA cron.")
+    patch_index_line("Last", "SAA cut over: live Railway Hermes stopped, this desk owns schedule.")
+    patch_index_line("Next", "Cos routes work to CEOs. SAA schedule runs here.")
+    patch_index_line("Blocker", "—")
+
+
+def take_saa_desk(
+    *,
+    start_gateway: bool = True,
+    sync_live: bool = False,
+    stop_live: bool = True,
+) -> dict:
+    """Stop live Railway SAA Hermes first, then this desk owns cron. Do not restore Telegram."""
+    from .hermes import gateway_start, migrate_cron_delivery, stop_saa_live_box
     from .launch import resolve_ceo_hermes_home
 
     home = resolve_ceo_hermes_home("saa-homes", "") or ""
+    stopped = {"ok": False, "skipped": True}
+    if stop_live:
+        stopped = stop_saa_live_box()
+        stopped["skipped"] = False
+        if not stopped.get("ok"):
+            return {
+                "ok": False,
+                "saa_desk_owns": saa_desk_owns(),
+                "telegram": False,
+                "home": home,
+                "live": stopped,
+                "error": str(stopped.get("error") or "Live SAA Hermes is still up. Did not take the desk."),
+                "engine": "board",
+                "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
+            }
     set_saa_desk_owns(True)
+    try:
+        stamp_saa_desk_owns_index()
+    except Exception:
+        pass
     started = {"ok": False, "skipped": True}
     if start_gateway and home:
         started = gateway_start(home, wait=True, timeout=45, force=True)
@@ -218,7 +270,7 @@ def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = False) -> dic
         except Exception as err:
             migrated = {"ok": False, "error": str(err)[:200], "migrated": []}
     synced = {"ok": False, "skipped": True}
-    if home and sync_live:
+    if home and sync_live and not stop_live:
         try:
             from .hermes import sync_saa_live_crons
 
@@ -234,9 +286,9 @@ def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = False) -> dic
         "gateway": started,
         "delivery": migrated,
         "synced": synced,
+        "live": stopped,
         "engine": "Hermes Agent",
         "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
-        "pause_live": "Pause Railway SAA Homes Hermes so cron does not run twice.",
     }
 
 
@@ -721,7 +773,7 @@ def project_cron_bundle(project_id: str) -> dict:
         cache_path = saa_overlay_cache_path()
         if cache_path.is_file():
             synced_at = datetime.fromtimestamp(cache_path.stat().st_mtime, tz=timezone.utc).isoformat()
-    digest = cron_digest(rows, next_ask=nxt, live_runs=live_runs)
+    digest = cron_digest(rows, next_ask=nxt, live_runs=live_runs, local_owner=desk)
     digest["synced_at"] = synced_at
     digest["job_count"] = len(rows)
     return {

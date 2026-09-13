@@ -2,9 +2,9 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: OttoBot chat is the inbox. Telegram is not required. Live Railway still runs cron until pause.
-Last: Saved search alerts immediate · Healthy on the live box.
-Next: Cutover = this desk owns cron, deliver local to Schedule/Results. Pause live the same minute. No Telegram poller.
+Now: OttoBot chat is the inbox. Telegram is not required. This desk owns cron once live Railway is down.
+Last: Saved search alerts immediate · Healthy on the previous live box.
+Next: Keep the SAA Hermes gateway up on this desk. Schedule reads this home.
 Blocker: —
 Goals: —
 
@@ -18,7 +18,7 @@ Horizon-five: Schwartz and Associates is the name NoCO already trusts to buy or 
 
 ## Residual risks (honest)
 
-- Board `saa-live-overlay.json` can lag live Railway — trust live Hermes for green/red, not a stale cache alone.
+- This desk’s `jobs.json` is the schedule after cutover — overlay SSH is off.
 - Old `Gateway shutdown (final-cleanup)` last_status rows may still show in Results as scars while gateway is up — fold them; do not stampede retries.
 - Paused jobs stay paused on purpose (conversion-surge, competitor-content-watch, city-audit-batch-4, …).
 - GBP / login walls: skip + note; never auto-fill secrets.
@@ -144,7 +144,7 @@ Adam wants Hermes to **run the program end-to-end**. Set it up correctly once; A
 | Local citations / directory NAP fixes | ✅ Auto where possible | ✅ With list of changes |
 Git: main · https://github.com/adamsch0100/saahomes.git
 Hermes: C:\Users\adamm\Projects\openbot\hermes-homes\saa-homes
-Telegram: Railway still live · Think/Ops resume this session
+Telegram: Off — OttoBot chat is the inbox
 
 ## Contract
 

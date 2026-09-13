@@ -37,6 +37,7 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         self.assertNotIn("Promise.all", digest)
         self.assertIn("function renderChatSchedule(rows, digest, focusId, forPid)", js)
         self.assertIn("Live SAA Hermes", js)
+        self.assertIn("This desk owns SAA cron", js)
         self.assertIn("gatewayRestartOk", js)
         self.assertIn("Do not Restart this imported home", (ROOT / "openbot" / "server.py").read_text(encoding="utf-8"))
         choices = js[js.find("function failChoices") : js.find("function cronFailNext")]
@@ -93,8 +94,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=177", html)
-        self.assertIn("styles.css?v=177", html)
+        self.assertIn("app.js?v=178", html)
+        self.assertIn("styles.css?v=178", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

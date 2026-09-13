@@ -205,19 +205,15 @@ class TestOverlayCoalescedSSH(unittest.TestCase):
             result = MagicMock()
             result.returncode = 0
             
-            if "tee" in remote:
-                # First call: write script
-                result.stdout = ""
-                result.stderr = ""
-            else:
-                # Second call: combined dump + running jobs
+            if remote[:1] == ["python3"] or (remote and remote[0] == "python3"):
                 result.stdout = (
                     "OVERLAY_JSON_START\n"
                     '{"jobs": [{"id": "test123", "name": "test-job"}]}\n'
                     "OVERLAY_JSON_END\n"
-                    "___RUNNING_JOBS___\n"
-                    "job=test123 running\n"
                 )
+                result.stderr = ""
+            else:
+                result.stdout = "job=test123 running\n"
                 result.stderr = ""
             
             return result
@@ -229,14 +225,14 @@ class TestOverlayCoalescedSSH(unittest.TestCase):
         # Should have made exactly 2 SSH calls (not 3)
         self.assertEqual(mock_ssh.call_count, 2)
         
-        # First call: tee script
+        # First call: python overlay dump (stdin script, no tee tempfile)
         first_call = mock_ssh.call_args_list[0]
-        self.assertIn("tee", first_call[0][0])
+        self.assertIn("python3", first_call[0][0])
         
-        # Second call: combined sh -c with dump + running check
+        # Second call: live running job ids
         second_call = mock_ssh.call_args_list[1]
-        self.assertIn("sh", second_call[0][0])
-        self.assertIn("-c", second_call[0][0])
+        self.assertIn("hermes", second_call[0][0])
+        self.assertIn("cron", second_call[0][0])
         
         # Verify overlay was parsed correctly
         self.assertEqual(len(overlay), 1)

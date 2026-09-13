@@ -1065,8 +1065,22 @@ def cos_run_existing_reply(project_id: str | None = None) -> str:
             story = ""
     bits = [
         f"{who} will not fire every scheduled job from this chat. That stampede is how the board used to break things.",
-        "The live Hermes box already runs the schedule. Telegram gets today’s checks.",
     ]
+    saa_owns = False
+    saa_copy = str(project_id or "") == "saa-homes"
+    try:
+        from .org import saa_desk_owns
+
+        saa_owns = saa_copy and saa_desk_owns()
+        saa_copy = saa_copy and not saa_owns
+    except Exception:
+        pass
+    if saa_owns:
+        bits.append("This desk owns the SAA schedule. OttoBot chat is the inbox.")
+    elif saa_copy:
+        bits.append("The live Hermes box already runs the schedule. Telegram gets today’s checks.")
+    else:
+        bits.append("Scheduled jobs run on this CEO’s Hermes home. Watch Now running — do not stampede the set from chat.")
     if enabled:
         bits.append(f"This board’s copy lists {enabled} enabled jobs.")
     if story:
