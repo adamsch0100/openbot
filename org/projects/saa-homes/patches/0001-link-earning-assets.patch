@@ -1,0 +1,1405 @@
+From 72c3bb290393b1e4f5fd5c63a19df376f56ccc9d Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sun, 13 Sep 2026 06:34:02 +0000
+Subject: [PATCH 1/2] Add CHFA citation hub and buyer glossary for passive
+ backlinks.
+
+Real routes for /housing-statistics/ and /glossary/ (replacing SPA homepage fallback), sourced stats, one-term URLs, footer and llms.txt discovery. Live publish stays Accept-gated.
+---
+ context/market-dominance-strategy.md          |   9 +-
+ .../seed/skills/link-earning-assets/SKILL.md  |  78 +++++
+ public/llms.txt                               |   4 +-
+ src/App.jsx                                   |  13 +
+ src/components/Breadcrumbs.jsx                |  35 ++-
+ src/components/ChfaResourceHub.jsx            |  12 +
+ src/components/Footer.jsx                     |   2 +
+ src/data/citationStats.js                     | 214 +++++++++++++
+ src/data/glossaryTerms.js                     | 295 ++++++++++++++++++
+ src/data/siteRoutes.js                        |  37 +++
+ src/pages/GlossaryIndexPage.jsx               | 105 +++++++
+ src/pages/GlossaryTermPage.jsx                | 125 ++++++++
+ src/pages/HousingStatisticsPage.jsx           | 196 ++++++++++++
+ 13 files changed, 1116 insertions(+), 9 deletions(-)
+ create mode 100644 hermes/seed/skills/link-earning-assets/SKILL.md
+ create mode 100644 src/data/citationStats.js
+ create mode 100644 src/data/glossaryTerms.js
+ create mode 100644 src/pages/GlossaryIndexPage.jsx
+ create mode 100644 src/pages/GlossaryTermPage.jsx
+ create mode 100644 src/pages/HousingStatisticsPage.jsx
+
+diff --git a/context/market-dominance-strategy.md b/context/market-dominance-strategy.md
+index 0d9d030..6208ab3 100644
+--- a/context/market-dominance-strategy.md
++++ b/context/market-dominance-strategy.md
+@@ -8,7 +8,7 @@ Not "rank for some keywords." **Own the full demand capture system** for Larimer
+ 
+ ---
+ 
+-## Four pillars
++## Four pillars + citable assets
+ 
+ ### Pillar 1 — Local organic search (primary)
+ - **27 city/region hub pages** at `/northern-colorado-areas/{slug}/` (core 19 + corridor expansion) — each must rank for buyer AND seller intent in that city
+@@ -37,6 +37,13 @@ Not "rank for some keywords." **Own the full demand capture system** for Larimer
+ - Consistent brand: "Schwartz and Associates" + "SAA Homes" + local phone
+ - No anonymous AI content — expert local voice, dated updates, cite CHFA/HUD for programs
+ 
++### Pillar 5 — Citable assets (passive backlinks)
++
++- **Citation hub** at `/housing-statistics/` (alias `/northern-colorado-housing-statistics/`) — dated CHFA / local DPA figures, first publisher + URL + as-of. Writers and AI cite it. No outreach.
++- **CHFA glossary** at `/glossary/` + `/glossary/{term}/` — one entity per URL, definition in the first 50 words, internal links to CHFA / G-HOPE / Champions money pages.
++- **Do not** buy links, PBNs, or revive Web 2.0 directory spam. Refresh stats when CHFA publishes a new year-end highlight.
++- Discoverability: footer, `llms.txt`, sitemap/prerender. Live publish stays Accept-gated.
++
+ ---
+ 
+ ## Query tiers (prioritize effort)
+diff --git a/hermes/seed/skills/link-earning-assets/SKILL.md b/hermes/seed/skills/link-earning-assets/SKILL.md
+new file mode 100644
+index 0000000..cd75255
+--- /dev/null
++++ b/hermes/seed/skills/link-earning-assets/SKILL.md
+@@ -0,0 +1,78 @@
++---
++name: link-earning-assets
++description: Citation hub + topical glossary that earn links without outreach
++whenToUse: When SAA Homes (or another product CEO) needs passive backlinks, a statistics page writers and AI can cite, or a niche glossary that feeds money pages
++---
++
++# Link-earning assets
++
++OttoBot original playbook. Inspired by the public idea that the easiest page to cite wins links — not by copying anyone’s paid Claude Code pack. Do not unzip, vendor, or redistribute third-party skill files.
++
++## Owns
++
++Ship two citable assets on the aimed CEO’s site, then keep them fresh:
++
++1. **Citation hub** — dated statistics, each traced to the organization that first published the number, with a live URL.
++2. **Topical glossary** — one entity per URL, definition in the first 50 words, related-term links, byline, date, sources.
++
++Both exist to earn referring domains and AI citations **without outreach or buying links**. Internal links must still flow to money pages.
++
++## Stopline
++
++- Do not invent, round-up, or “about” a statistic. If the URL 404s or the figure is undated, drop the row.
++- Do not mass-generate thin glossary terms to hit a vanity count. Quality over spam. YMYL + Fair Housing always.
++- Do not buy links, PBNs, Web 2.0 spam, or send backlink emails. Outreach stays draft → Adam `approved`.
++- Do not auto-post to Facebook / GBP / X. Do not attach weekday Think cron on live SAA Railway Hermes.
++- Do not treat SAA as the first publisher of a CHFA, HUD, city, or MLS number. Cite the origin.
++- Publish, merge, and deploy wait for Accept. Name the engine on the job card (board / OpenCode / Hermes Agent).
++
++## SAA Homes (better than a generic hub)
++
++Horizon-week is a live city or CHFA page that can take a lead. These assets serve that:
++
++| Asset | Live path | Who cites it | Money pages it must feed |
++| --- | --- | --- | --- |
++| Citation hub | `/housing-statistics/` (alias `/northern-colorado-housing-statistics/`) | Journalists, bloggers, AI agents needing a Colorado / CHFA / NoCO number | `/chfa-down-payment-assistance/`, `/for-buyers/`, `/contact/` |
++| Glossary | `/glossary/` + `/glossary/{term}/` | Search + AI answers on CHFA and buyer terms | Same cluster + city hubs where the term is local |
++
++Do **not** start with 100 unverified rows or 300 doorway definitions. Start with every figure already proven on CHFA.org, City of Greeley, or this site’s CHFA cluster — then add rows only after the citation gate.
++
++## Citation gate (every number)
++
++A row ships only when all of these are true:
++
++1. **Figure** — exact number or range as published (not a paraphrase that changes the math).
++2. **First publisher** — CHFA, City of Greeley, HUD, Census, IRES, etc. Never “SAA Homes research” unless we originated the dataset.
++3. **Source URL** — fetched, HTTP 200, same claim visible on the page (or official PDF).
++4. **As-of** — the publisher’s date or reporting window (e.g. Jan 1–Dec 31 2025).
++5. **Retrieved** — ISO date we last verified the URL.
++6. **Cite anchor** — stable `#id` so a writer can link the specific stat.
++
++If any field is missing: omit the row and write Blocker or Next — do not pad.
++
++## Glossary anatomy (every term URL)
++
++1. H1 is the query (e.g. “What is CHFA down payment assistance?”).
++2. **Definition in the first 50 words.**
++3. Progressive depth: who it is for in Northern Colorado, how it connects to a program page, what to do next.
++4. Related terms as real `<a href="/glossary/{slug}/">` links.
++5. Byline (Adam and Mandi Schwartz), last-reviewed date, sources with URLs.
++6. CTA to the matching money page and `(970) 999-1407` / contact form.
++7. One entity per URL. Do not dump five programs onto one slug.
++
++## How to run this job
++
++1. Read this CEO’s INDEX Horizons and `org/projects/saa-homes/SEO-LINK-ASSETS.md`.
++2. Inventory what already ranks (CHFA cluster, blog, city hubs). Brownfield first — do not create a second competing CHFA explainer.
++3. **Think** (Hermes): outline hub sections + term inventory scored by lead impact, not keyword vanity. Park anything that needs a source.
++4. **Research** only when a source URL must be re-fetched. Tools stay off for Cos status.
++5. **Code** (OpenCode): data files + routes + sitemap/prerender + footer + `llms.txt`. Diff card. Accept before live.
++6. After Accept: INDEX Last = live URLs; Next = refresh cadence or next verified batch. Do not declare “backlinks landed” without Ahrefs/GSC proof.
++
++## Refresh (compounding)
++
++A hub that goes stale stops being the easy cite. Schedule a **source re-fetch** when CHFA publishes new year highlights or income limits — as an INDEX Next, not a live-Railway weekday Think cron until cutover.
++
++## What good looks like
++
++A journalist can quote one number, click the source, and land on CHFA.org. An AI agent reading `llms.txt` finds the hub. A Fort Collins buyer on a glossary term is one click from `/chfa-down-payment-assistance/` and a form. The job card names the engine. No invented stats. No outreach.
+diff --git a/public/llms.txt b/public/llms.txt
+index ac24e69..8f9a5b9 100644
+--- a/public/llms.txt
++++ b/public/llms.txt
+@@ -1,6 +1,6 @@
+ # SAA Homes — Schwartz and Associates
+ # Northern Colorado Real Estate
+-# Last updated: 2026-06-30
++# Last updated: 2026-09-13
+ 
+ > Schwartz and Associates (SAA Homes) is a Coldwell Banker real estate team serving buyers and sellers across Northern Colorado — Larimer, Weld, and Boulder counties. Agents Adam and Mandi Schwartz have 20+ years of combined local experience.
+ 
+@@ -22,6 +22,8 @@
+ - https://saahomes.com/chfa-down-payment-assistance/
+ - https://saahomes.com/chfa-schools-to-home/
+ - https://saahomes.com/colorado-champions-home-loan-program/
++- https://saahomes.com/housing-statistics/ — citation hub (dated CHFA figures to cite)
++- https://saahomes.com/glossary/ — CHFA / buyer glossary (one term per URL)
+ 
+ ## Key pages — sellers
+ - https://saahomes.com/for-sellers/
+diff --git a/src/App.jsx b/src/App.jsx
+index d95b1cf..a630c1b 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -43,6 +43,9 @@ const EatonPage = lazy(() => import("./pages/areas/EatonPage.jsx"));
+ const MillikenPage = lazy(() => import("./pages/areas/MillikenPage.jsx"));
+ const LaSallePage = lazy(() => import("./pages/areas/LaSallePage.jsx"));
+ const MortgageCalculatorPage = lazy(() => import("./pages/MortgageCalculatorPage.jsx"));
++const HousingStatisticsPage = lazy(() => import("./pages/HousingStatisticsPage.jsx"));
++const GlossaryIndexPage = lazy(() => import("./pages/GlossaryIndexPage.jsx"));
++const GlossaryTermPage = lazy(() => import("./pages/GlossaryTermPage.jsx"));
+ const AdminPage = lazy(() => import("./pages/AdminPage.jsx"));
+ const AgentPage = lazy(() => import("./pages/AgentPage.jsx"));
+ const TestimonialsPage = lazy(() => import("./pages/TestimonialsPage.jsx"));
+@@ -253,6 +256,16 @@ export default function App() {
+         <Route path="/mortgage-calculator" element={<AppLayout><LazyPage><MortgageCalculatorPage /></LazyPage></AppLayout>} />
+         <Route path="/mortgage-calculator/" element={<AppLayout><LazyPage><MortgageCalculatorPage /></LazyPage></AppLayout>} />
+ 
++        {/* Citation hub + CHFA glossary (passive link-earning assets) */}
++        <Route path="/housing-statistics" element={<AppLayout><LazyPage><HousingStatisticsPage /></LazyPage></AppLayout>} />
++        <Route path="/housing-statistics/" element={<AppLayout><LazyPage><HousingStatisticsPage /></LazyPage></AppLayout>} />
++        <Route path="/northern-colorado-housing-statistics" element={<AppLayout><LazyPage><HousingStatisticsPage /></LazyPage></AppLayout>} />
++        <Route path="/northern-colorado-housing-statistics/" element={<AppLayout><LazyPage><HousingStatisticsPage /></LazyPage></AppLayout>} />
++        <Route path="/glossary" element={<AppLayout><LazyPage><GlossaryIndexPage /></LazyPage></AppLayout>} />
++        <Route path="/glossary/" element={<AppLayout><LazyPage><GlossaryIndexPage /></LazyPage></AppLayout>} />
++        <Route path="/glossary/:slug" element={<AppLayout><LazyPage><GlossaryTermPage /></LazyPage></AppLayout>} />
++        <Route path="/glossary/:slug/" element={<AppLayout><LazyPage><GlossaryTermPage /></LazyPage></AppLayout>} />
++
+         {/* CHFA Down Payment Assistance */}
+         <Route path="/chfa-down-payment-assistance" element={<AppLayout><LazyPage><ChfaDownPaymentAssistancePage /></LazyPage></AppLayout>} />
+         <Route path="/chfa-down-payment-assistance/" element={<AppLayout><LazyPage><ChfaDownPaymentAssistancePage /></LazyPage></AppLayout>} />
+diff --git a/src/components/Breadcrumbs.jsx b/src/components/Breadcrumbs.jsx
+index 3fe9df5..722782f 100644
+--- a/src/components/Breadcrumbs.jsx
++++ b/src/components/Breadcrumbs.jsx
+@@ -1,6 +1,7 @@
+ import React from "react";
+ import { Link, useLocation } from "react-router-dom";
+ import { getBlogPost } from "../data/blogPosts";
++import { getGlossaryTerm } from "../data/glossaryTerms";
+ 
+ const breadcrumbMap = {
+   "about-us": "About SAA Homes",
+@@ -31,6 +32,9 @@ const breadcrumbMap = {
+     severance: "Severance",
+     niwot: "Niwot",
+     "mortgage-calculator": "Colorado Mortgage Calculator",
++  "housing-statistics": "Colorado Housing Statistics",
++  "northern-colorado-housing-statistics": "Colorado Housing Statistics",
++  glossary: "CHFA Glossary",
+   testimonials: "Client Reviews",
+   blog: "Colorado Real Estate Guides",
+   "helpful-guides": "Colorado Real Estate Guides",
+@@ -125,6 +129,21 @@ const customTrails = {
+     { path: "/for-buyers/", label: "Colorado Home Buyers" },
+     { path: "/mortgage-calculator/", label: "Colorado Mortgage Calculator" },
+   ],
++  "/housing-statistics": [
++    { path: "/", label: "Home" },
++    { path: "/for-buyers/", label: "Colorado Home Buyers" },
++    { path: "/housing-statistics/", label: "Colorado Housing Statistics" },
++  ],
++  "/northern-colorado-housing-statistics": [
++    { path: "/", label: "Home" },
++    { path: "/for-buyers/", label: "Colorado Home Buyers" },
++    { path: "/housing-statistics/", label: "Colorado Housing Statistics" },
++  ],
++  "/glossary": [
++    { path: "/", label: "Home" },
++    { path: "/for-buyers/", label: "Colorado Home Buyers" },
++    { path: "/glossary/", label: "CHFA Glossary" },
++  ],
+   "/northern-colorado-areas": [
+     { path: "/", label: "Home" },
+     { path: "/northern-colorado-areas/", label: "Northern Colorado Communities" },
+@@ -183,17 +202,16 @@ function getAreaTrail(pathname) {
+   ];
+ }
+ 
+-function getBlogTrail(pathname) {
+-  const match = pathname.match(/^\/blog\/([^/]+)$/);
++function getGlossaryTrail(pathname) {
++  const match = pathname.match(/^\/glossary\/([^/]+)$/);
+   if (!match) return null;
+-
+   const slug = match[1];
+-  const post = getBlogPost(slug);
+-
++  const term = getGlossaryTerm(slug);
+   return [
+     { path: "/", label: "Home" },
+-    { path: "/blog/", label: "Blog" },
+-    { path: `/blog/${slug}/`, label: post?.title || slug },
++    { path: "/for-buyers/", label: "Colorado Home Buyers" },
++    { path: "/glossary/", label: "CHFA Glossary" },
++    { path: `/glossary/${slug}/`, label: term?.term || slug },
+   ];
+ }
+ 
+@@ -211,6 +229,9 @@ function getTrail(pathname) {
+   const blogTrail = getBlogTrail(normalized);
+   if (blogTrail) return blogTrail;
+ 
++  const glossaryTrail = getGlossaryTrail(normalized);
++  if (glossaryTrail) return glossaryTrail;
++
+   const pathnames = normalized.split("/").filter(Boolean);
+   return [
+     { path: "/", label: "Home" },
+diff --git a/src/components/ChfaResourceHub.jsx b/src/components/ChfaResourceHub.jsx
+index 5fe6109..3ad5241 100644
+--- a/src/components/ChfaResourceHub.jsx
++++ b/src/components/ChfaResourceHub.jsx
+@@ -38,6 +38,18 @@ const hubLinks = [
+     description: "0.5% back + VA loan guidance",
+     badge: "0.5% back",
+   },
++  {
++    title: "Housing statistics hub",
++    href: "/housing-statistics/",
++    description: "Cite dated CHFA and local DPA figures",
++    badge: "Backlinks",
++  },
++  {
++    title: "CHFA glossary",
++    href: "/glossary/",
++    description: "One term per URL — definitions that feed program pages",
++    badge: "Authority",
++  },
+ ];
+ 
+ const blogGuides = [
+diff --git a/src/components/Footer.jsx b/src/components/Footer.jsx
+index 308515f..c607d2d 100644
+--- a/src/components/Footer.jsx
++++ b/src/components/Footer.jsx
+@@ -64,6 +64,8 @@ export default function Footer() {
+             <h4 className="font-semibold text-white mb-4">Resources</h4>
+             <ul className="space-y-2 text-sm">
+               <li><Link to="/mortgage-calculator/" className="hover:text-white transition-colors">Mortgage Calculator</Link></li>
++              <li><Link to="/housing-statistics/" className="hover:text-white transition-colors">Housing Statistics</Link></li>
++              <li><Link to="/glossary/" className="hover:text-white transition-colors">CHFA Glossary</Link></li>
+               <li><Link to="/testimonials/" className="hover:text-white transition-colors">Client Reviews</Link></li>
+               <li><Link to="/blog/" className="hover:text-white transition-colors">Real Estate Guides</Link></li>
+               <li><Link to="/events/" className="hover:text-white transition-colors">NOCO Events Calendar</Link></li>
+diff --git a/src/data/citationStats.js b/src/data/citationStats.js
+new file mode 100644
+index 0000000..417fda3
+--- /dev/null
++++ b/src/data/citationStats.js
+@@ -0,0 +1,214 @@
++/**
++ * Citation hub rows. Every figure must name a first publisher, source URL,
++ * as-of window, and retrieved date. Do not invent stats.
++ *
++ * CHFA 2025 highlights were verified against
++ * https://www.chfainfo.com/homeownership (retrieved 2026-09-13).
++ */
++
++export const HUB_REVIEWED = '2026-09-13';
++export const HUB_CANONICAL = 'https://saahomes.com/housing-statistics/';
++
++export const CITATION_STATS = [
++  {
++    id: 'chfa-homeowners-2025',
++    figure: '5,491',
++    unit: 'homeowners',
++    claim: 'CHFA served 5,491 homeowners with loans in calendar year 2025.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://www.chfainfo.com/homeownership',
++    sourceLabel: 'CHFA Homeownership — 2025 highlights',
++    asOf: 'January 1–December 31, 2025',
++    retrieved: '2026-09-13',
++    topic: 'CHFA statewide',
++    cite: 'CHFA, Homeownership 2025 highlights, chfainfo.com/homeownership.',
++  },
++  {
++    id: 'chfa-education-2025',
++    figure: '8,722',
++    unit: 'education customers',
++    claim: 'CHFA served 8,722 homebuyer education customers in calendar year 2025.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://www.chfainfo.com/homeownership',
++    sourceLabel: 'CHFA Homeownership — 2025 highlights',
++    asOf: 'January 1–December 31, 2025',
++    retrieved: '2026-09-13',
++    topic: 'CHFA statewide',
++    cite: 'CHFA, Homeownership 2025 highlights, chfainfo.com/homeownership.',
++  },
++  {
++    id: 'chfa-dpa-invested-2025',
++    figure: '$86.1 million',
++    unit: 'down payment assistance',
++    claim: 'CHFA invested $86.1 million in down payment assistance in calendar year 2025.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://www.chfainfo.com/homeownership',
++    sourceLabel: 'CHFA Homeownership — 2025 highlights',
++    asOf: 'January 1–December 31, 2025',
++    retrieved: '2026-09-13',
++    topic: 'CHFA statewide',
++    cite: 'CHFA, Homeownership 2025 highlights, chfainfo.com/homeownership.',
++  },
++  {
++    id: 'chfa-first-mortgage-2025',
++    figure: '$2 billion',
++    unit: 'first mortgage loans',
++    claim: 'CHFA invested $2 billion in first mortgage loans in calendar year 2025.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://www.chfainfo.com/homeownership',
++    sourceLabel: 'CHFA Homeownership — 2025 highlights',
++    asOf: 'January 1–December 31, 2025',
++    retrieved: '2026-09-13',
++    topic: 'CHFA statewide',
++    cite: 'CHFA, Homeownership 2025 highlights, chfainfo.com/homeownership.',
++  },
++  {
++    id: 'chfa-firstgeneration-dpa',
++    figure: '$25,000',
++    unit: 'maximum down payment assistance',
++    claim: 'CHFA FirstGeneration / FirstGeneration Plus can provide up to $25,000 in deferred down payment assistance.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://www.chfainfo.com/homeownership',
++    sourceLabel: 'CHFA Homeownership — FirstGeneration',
++    asOf: 'Published on CHFA Homeownership as of retrieval',
++    retrieved: '2026-09-13',
++    topic: 'CHFA programs',
++    cite: 'CHFA, FirstGeneration, chfainfo.com/homeownership.',
++  },
++  {
++    id: 'chfa-dpa-cap',
++    figure: '$25,000 or 3–4%',
++    unit: 'typical DPA cap',
++    claim: 'Most CHFA down payment options cap assistance at the lesser of $25,000 or 3% (grant) / 4% (second mortgage) of the first mortgage — lender confirms the exact figure.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://www.chfainfo.com/homeownership',
++    sourceLabel: 'CHFA Homeownership program description',
++    asOf: 'Aligned to CHFA public program copy; confirm with a participating lender',
++    retrieved: '2026-09-13',
++    topic: 'CHFA programs',
++    cite: 'CHFA Homeownership + participating-lender overlays. Confirm at chfainfo.com before citing a specific deal.',
++  },
++  {
++    id: 'chfa-min-credit',
++    figure: '620',
++    unit: 'minimum mid-credit score (typical)',
++    claim: 'Most CHFA first-mortgage programs require a minimum mid-credit score of 620; some FHA-based options allow no credit score. Lenders may add overlays.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://saahomes.com/chfa-down-payment-assistance/',
++    sourceLabel: 'SAA CHFA guide (compiled from CHFA program rules)',
++    asOf: 'Program rules as compiled on SAA Homes; confirm with CHFA lender',
++    retrieved: '2026-09-13',
++    topic: 'CHFA programs',
++    cite: 'CHFA program guidelines via participating lenders; compiled on saahomes.com/chfa-down-payment-assistance/.',
++  },
++  {
++    id: 'chfa-borrower-contribution',
++    figure: '$1,000',
++    unit: 'minimum borrower contribution',
++    claim: 'CHFA loans typically require the borrower to contribute at least $1,000 toward the purchase.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://saahomes.com/chfa-down-payment-assistance/',
++    sourceLabel: 'SAA CHFA guide (compiled from CHFA program rules)',
++    asOf: 'Program rules as compiled on SAA Homes; confirm with CHFA lender',
++    retrieved: '2026-09-13',
++    topic: 'CHFA programs',
++    cite: 'CHFA program guidelines via participating lenders; compiled on saahomes.com/chfa-down-payment-assistance/.',
++  },
++  {
++    id: 'chfa-schools-dpa',
++    figure: 'Up to 25%',
++    unit: 'down payment assistance',
++    claim: 'CHFA Schools To Home may provide up to 25% down payment assistance for eligible Colorado public school employees.',
++    firstPublisher: 'Colorado Housing and Finance Authority (CHFA)',
++    sourceUrl: 'https://saahomes.com/chfa-schools-to-home/',
++    sourceLabel: 'SAA Schools To Home guide (CHFA program)',
++    asOf: '2026 program year as published on SAA; confirm with CHFA',
++    retrieved: '2026-09-13',
++    topic: 'CHFA programs',
++    cite: 'CHFA Schools To Home; see saahomes.com/chfa-schools-to-home/.',
++  },
++  {
++    id: 'chfa-champions-income',
++    figure: '110%',
++    unit: 'of standard CHFA income limits',
++    claim: 'Colorado Champions Home Loan (SB26-053) expands income eligibility to 110% of standard CHFA limits for qualifying first responders and their households.',
++    firstPublisher: 'Colorado General Assembly / CHFA',
++    sourceUrl: 'https://saahomes.com/colorado-champions-home-loan-program/',
++    sourceLabel: 'SAA Champions guide (SB26-053 / CHFA)',
++    asOf: 'Law effective 2026-08-12; CHFA launch expected late 2026',
++    retrieved: '2026-09-13',
++    topic: 'CHFA programs',
++    cite: 'SB26-053 and CHFA Champions description; compiled on saahomes.com/colorado-champions-home-loan-program/.',
++  },
++  {
++    id: 'ghope-zone1',
++    figure: '$8,000',
++    unit: 'Zone 1 maximum',
++    claim: 'G-HOPE Zone 1 (east of 8th Avenue in Greeley) offers up to $8,000 in forgivable down payment assistance for eligible employees.',
++    firstPublisher: 'City of Greeley',
++    sourceUrl: 'https://saahomes.com/greeley-g-hope-down-payment-assistance/',
++    sourceLabel: 'SAA G-HOPE guide (City of Greeley program)',
++    asOf: 'City program rules as compiled on SAA; confirm with Greeley Housing',
++    retrieved: '2026-09-13',
++    topic: 'Northern Colorado local',
++    cite: 'City of Greeley G-HOPE; compiled on saahomes.com/greeley-g-hope-down-payment-assistance/.',
++  },
++  {
++    id: 'ghope-zone2',
++    figure: '$6,000',
++    unit: 'Zone 2 maximum',
++    claim: 'G-HOPE Zone 2 (between 8th and 14th Avenues) offers up to $6,000 in forgivable down payment assistance.',
++    firstPublisher: 'City of Greeley',
++    sourceUrl: 'https://saahomes.com/greeley-g-hope-down-payment-assistance/',
++    sourceLabel: 'SAA G-HOPE guide (City of Greeley program)',
++    asOf: 'City program rules as compiled on SAA; confirm with Greeley Housing',
++    retrieved: '2026-09-13',
++    topic: 'Northern Colorado local',
++    cite: 'City of Greeley G-HOPE; compiled on saahomes.com/greeley-g-hope-down-payment-assistance/.',
++  },
++  {
++    id: 'ghope-zone3',
++    figure: '$4,000',
++    unit: 'Zone 3 maximum',
++    claim: 'G-HOPE Zone 3 (west of 14th Avenue, still east of 35th) offers up to $4,000 in forgivable down payment assistance.',
++    firstPublisher: 'City of Greeley',
++    sourceUrl: 'https://saahomes.com/greeley-g-hope-down-payment-assistance/',
++    sourceLabel: 'SAA G-HOPE guide (City of Greeley program)',
++    asOf: 'City program rules as compiled on SAA; confirm with Greeley Housing',
++    retrieved: '2026-09-13',
++    topic: 'Northern Colorado local',
++    cite: 'City of Greeley G-HOPE; compiled on saahomes.com/greeley-g-hope-down-payment-assistance/.',
++  },
++  {
++    id: 'ghope-zone4',
++    figure: '$2,500',
++    unit: 'Zone 4 maximum',
++    claim: 'G-HOPE Zone 4 (outlying eligible areas east of 35th Avenue) offers up to $2,500 in forgivable down payment assistance.',
++    firstPublisher: 'City of Greeley',
++    sourceUrl: 'https://saahomes.com/greeley-g-hope-down-payment-assistance/',
++    sourceLabel: 'SAA G-HOPE guide (City of Greeley program)',
++    asOf: 'City program rules as compiled on SAA; confirm with Greeley Housing',
++    retrieved: '2026-09-13',
++    topic: 'Northern Colorado local',
++    cite: 'City of Greeley G-HOPE; compiled on saahomes.com/greeley-g-hope-down-payment-assistance/.',
++  },
++  {
++    id: 'ghope-forgiveness',
++    figure: '5 years / 20% per year',
++    unit: 'loan forgiveness',
++    claim: 'G-HOPE forgives 20% of the deferred loan each year the buyer occupies the home as a primary residence, reaching 100% after five years.',
++    firstPublisher: 'City of Greeley',
++    sourceUrl: 'https://saahomes.com/greeley-g-hope-down-payment-assistance/',
++    sourceLabel: 'SAA G-HOPE guide (City of Greeley program)',
++    asOf: 'City program rules as compiled on SAA; confirm with Greeley Housing',
++    retrieved: '2026-09-13',
++    topic: 'Northern Colorado local',
++    cite: 'City of Greeley G-HOPE; compiled on saahomes.com/greeley-g-hope-down-payment-assistance/.',
++  },
++];
++
++export const CITATION_TOPICS = [...new Set(CITATION_STATS.map((row) => row.topic))];
++
++export function citationById(id) {
++  return CITATION_STATS.find((row) => row.id === id) || null;
++}
+diff --git a/src/data/glossaryTerms.js b/src/data/glossaryTerms.js
+new file mode 100644
+index 0000000..31881fc
+--- /dev/null
++++ b/src/data/glossaryTerms.js
+@@ -0,0 +1,295 @@
++/**
++ * CHFA / Northern Colorado buyer glossary — one entity per slug.
++ * Definition field is the first-screen answer (keep ≤50 words).
++ */
++
++export const GLOSSARY_REVIEWED = '2026-09-13';
++export const GLOSSARY_BYLINE = 'Adam and Mandi Schwartz, Schwartz and Associates (SAA Homes), Coldwell Banker Realty';
++
++export const GLOSSARY_TERMS = [
++  {
++    slug: 'chfa',
++    term: 'CHFA',
++    h1: 'What is CHFA?',
++    definition:
++      'CHFA is the Colorado Housing and Finance Authority — the state’s housing finance agency. It does not take loan applications directly. Participating lenders originate CHFA first mortgages paired with down payment grants or deferred second mortgages.',
++    related: ['chfa-down-payment-assistance', 'chfa-participating-lender', 'chfa-homebuyer-education'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'CHFA down payment assistance guide',
++    sources: [
++      { label: 'CHFA Homeownership', href: 'https://www.chfainfo.com/homeownership' },
++    ],
++  },
++  {
++    slug: 'chfa-down-payment-assistance',
++    term: 'CHFA down payment assistance',
++    h1: 'What is CHFA down payment assistance?',
++    definition:
++      'CHFA down payment assistance is a grant or deferred second mortgage paired with a CHFA first loan. Typical caps are the lesser of $25,000 or 3–4% of the first mortgage, used for down payment, closing costs, or prepaids.',
++    related: ['chfa-dpa-grant', 'chfa-dpa-second-mortgage', 'chfa-firstgeneration'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'Compare CHFA DPA options',
++    sources: [
++      { label: 'CHFA Homeownership', href: 'https://www.chfainfo.com/homeownership' },
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-dpa-grant',
++    term: 'CHFA DPA grant',
++    h1: 'What is a CHFA DPA grant?',
++    definition:
++      'A CHFA DPA grant is down payment help that does not require repayment when used with eligible first-mortgage programs such as SmartStep Plus. Amounts are typically up to 3% of the first mortgage or $25,000, whichever is less.',
++    related: ['chfa-dpa-second-mortgage', 'chfa-smartstep', 'chfa-down-payment-assistance'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'See grant vs second mortgage',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-dpa-second-mortgage',
++    term: 'CHFA DPA second mortgage',
++    h1: 'What is a CHFA DPA second mortgage?',
++    definition:
++      'A CHFA DPA second mortgage is deferred assistance — no monthly payment — repaid when you sell, refinance, pay off the first mortgage, or move out. Typical caps are 4% of the first mortgage or $25,000.',
++    related: ['chfa-dpa-grant', 'chfa-down-payment-assistance', 'chfa-firstgeneration'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'CHFA second-mortgage DPA',
++    sources: [
++      { label: 'CHFA Homeownership', href: 'https://www.chfainfo.com/homeownership' },
++    ],
++  },
++  {
++    slug: 'chfa-smartstep',
++    term: 'CHFA SmartStep',
++    h1: 'What is CHFA SmartStep?',
++    definition:
++      'CHFA SmartStep and SmartStep Plus are first-mortgage programs using FHA, VA, or USDA-RD financing. Plus versions can pair with a DPA grant or second mortgage. Repeat buyers may qualify — first-time status is not always required.',
++    related: ['chfa-preferred', 'chfa-firststep', 'chfa-dpa-grant'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'SmartStep program table',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-preferred',
++    term: 'CHFA Preferred',
++    h1: 'What is CHFA Preferred?',
++    definition:
++      'CHFA Preferred and Preferred Plus are conventional HFA Preferred / HFA Advantage first mortgages. Down payment help on Plus is a second mortgage only. They fit buyers who qualify for conventional financing at high LTV.',
++    related: ['chfa-smartstep', 'hfa-preferred', 'chfa-dpa-second-mortgage'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'Preferred vs SmartStep',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-firststep',
++    term: 'CHFA FirstStep',
++    h1: 'What is CHFA FirstStep?',
++    definition:
++      'CHFA FirstStep and FirstStep Plus are FHA-only first mortgages aimed at first-time buyers, qualified veterans, or purchases in CHFA targeted areas. Plus adds a deferred DPA second mortgage.',
++    related: ['first-time-homebuyer-colorado', 'chfa-targeted-area', 'chfa-firstgeneration'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'FirstStep eligibility',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-firstgeneration',
++    term: 'CHFA FirstGeneration',
++    h1: 'What is CHFA FirstGeneration?',
++    definition:
++      'CHFA FirstGeneration is an FHA first-mortgage path for buyers who have never owned a home and whose parents or legal guardians have never owned one. Paired DPA can reach $25,000 regardless of loan size.',
++    related: ['chfa-down-payment-assistance', 'chfa-firststep', 'chfa-dpa-second-mortgage'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'FirstGeneration details',
++    sources: [
++      { label: 'CHFA Homeownership', href: 'https://www.chfainfo.com/homeownership' },
++    ],
++  },
++  {
++    slug: 'chfa-income-limits',
++    term: 'CHFA income limits',
++    h1: 'What are CHFA income limits?',
++    definition:
++      'CHFA income limits are household-income caps set by county, household size, and whether the property is in a targeted area. Limits change. A participating lender or CHFA’s published tables are the official source before you shop.',
++    related: ['chfa-purchase-price-limits', 'chfa-targeted-area', 'colorado-champions-home-loan'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'Larimer vs Weld ranges',
++    sources: [
++      { label: 'CHFA Homeownership', href: 'https://www.chfainfo.com/homeownership' },
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-purchase-price-limits',
++    term: 'CHFA purchase price limits',
++    h1: 'What are CHFA purchase price limits?',
++    definition:
++      'CHFA purchase price limits cap how much the home can cost under a given program and county. Homes above the cap cannot use that CHFA first mortgage, even if income qualifies. Limits are updated periodically.',
++    related: ['chfa-income-limits', 'chfa-participating-lender'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'Northern Colorado price ranges',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-participating-lender',
++    term: 'CHFA participating lender',
++    h1: 'What is a CHFA participating lender?',
++    definition:
++      'A CHFA participating lender is an approved mortgage company that originates CHFA loans. You cannot apply at CHFA’s office. Interview more than one lender; overlays and pricing differ even on the same program.',
++    related: ['chfa', 'chfa-homebuyer-education', 'chfa-down-payment-assistance'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'How to start a CHFA loan',
++    sources: [
++      { label: 'CHFA Homeownership', href: 'https://www.chfainfo.com/homeownership' },
++    ],
++  },
++  {
++    slug: 'chfa-homebuyer-education',
++    term: 'CHFA homebuyer education',
++    h1: 'What is CHFA homebuyer education?',
++    definition:
++      'CHFA-sponsored homebuyer education is a required class before most CHFA closings, offered in English and Spanish. Take it early — it does not replace lender underwriting, but it is a hard closing condition.',
++    related: ['chfa-participating-lender', 'chfa'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'CHFA steps to close',
++    sources: [
++      { label: 'CHFA Homeownership', href: 'https://www.chfainfo.com/homeownership' },
++    ],
++  },
++  {
++    slug: 'chfa-schools-to-home',
++    term: 'CHFA Schools To Home',
++    h1: 'What is CHFA Schools To Home?',
++    definition:
++      'CHFA Schools To Home is a standalone down payment program for eligible Colorado public school employees. Assistance can reach 25% of the purchase. It cannot be stacked with other CHFA first-mortgage DPA programs.',
++    related: ['chfa-down-payment-assistance', 'chfa-participating-lender'],
++    moneyPath: '/chfa-schools-to-home/',
++    moneyLabel: 'Schools To Home guide',
++    sources: [
++      { label: 'SAA Schools To Home', href: '/chfa-schools-to-home/' },
++    ],
++  },
++  {
++    slug: 'colorado-champions-home-loan',
++    term: 'Colorado Champions Home Loan',
++    h1: 'What is the Colorado Champions Home Loan Program?',
++    definition:
++      'Champions is a CHFA expansion created by SB26-053 for qualifying first responders and their households. Income eligibility can reach 110% of standard CHFA limits. It is not a separate zero-down product. Launch is expected late 2026.',
++    related: ['chfa-income-limits', 'chfa-down-payment-assistance'],
++    moneyPath: '/colorado-champions-home-loan-program/',
++    moneyLabel: 'Champions program page',
++    sources: [
++      { label: 'SAA Champions guide', href: '/colorado-champions-home-loan-program/' },
++    ],
++  },
++  {
++    slug: 'g-hope-greeley',
++    term: 'G-HOPE Greeley',
++    h1: 'What is G-HOPE in Greeley?',
++    definition:
++      'G-HOPE is the City of Greeley’s employee down payment program. Forgivable loans run $2,500–$8,000 by zone, all east of 35th Avenue. Twenty percent is forgiven each year you occupy the home, full forgiveness at year five.',
++    related: ['chfa-down-payment-assistance', 'chfa-dpa-second-mortgage'],
++    moneyPath: '/greeley-g-hope-down-payment-assistance/',
++    moneyLabel: 'G-HOPE zone map',
++    sources: [
++      { label: 'SAA G-HOPE guide', href: '/greeley-g-hope-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'first-time-homebuyer-colorado',
++    term: 'First-time homebuyer (Colorado / CHFA)',
++    h1: 'Who is a first-time homebuyer for CHFA?',
++    definition:
++      'CHFA often treats you as a first-time buyer if you have not owned a principal residence in the last three years — and some programs waive that in targeted areas or for qualified veterans. SmartStep and Preferred can serve repeat buyers.',
++    related: ['chfa-firststep', 'chfa-targeted-area', 'chfa-smartstep'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'Do I have to be a first-time buyer?',
++    sources: [
++      { label: 'SAA CHFA FAQ', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-targeted-area',
++    term: 'CHFA targeted area',
++    h1: 'What is a CHFA targeted area?',
++    definition:
++      'A CHFA targeted area is a census tract CHFA designates for extra flexibility — often higher income limits and, on some programs, repeat-buyer access. Whether a Northern Colorado address qualifies is a lender/CHFA map question, not a guess.',
++    related: ['chfa-income-limits', 'chfa-firststep', 'first-time-homebuyer-colorado'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'County limits and targeted areas',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'hfa-preferred',
++    term: 'HFA Preferred',
++    h1: 'What is HFA Preferred?',
++    definition:
++      'HFA Preferred (and HFA Advantage) are conventional mortgage products housing finance agencies use. In Colorado, CHFA Preferred wraps those products with CHFA pricing and optional DPA. PMI rules differ from standard conventional loans.',
++    related: ['chfa-preferred', 'chfa'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'CHFA Preferred',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-dti',
++    term: 'CHFA debt-to-income (DTI)',
++    h1: 'What DTI does CHFA allow?',
++    definition:
++      'Typical CHFA debt-to-income caps are about 50% for mid-scores 620–659 and 55% for 660+. Lenders can be tighter. DTI is income versus monthly debts, including the new housing payment.',
++    related: ['chfa-min-credit-score', 'chfa-participating-lender'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'CHFA requirements',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++  {
++    slug: 'chfa-min-credit-score',
++    term: 'CHFA minimum credit score',
++    h1: 'What credit score do you need for CHFA?',
++    definition:
++      'Most CHFA programs want a mid-credit score of at least 620. Some FHA-based options allow borrowers with no score. A lender overlay can still require higher. Credit is one of several CHFA tests, not the only one.',
++    related: ['chfa-dti', 'chfa-participating-lender', 'chfa-down-payment-assistance'],
++    moneyPath: '/chfa-down-payment-assistance/',
++    moneyLabel: 'Full CHFA requirements',
++    sources: [
++      { label: 'SAA CHFA guide', href: '/chfa-down-payment-assistance/' },
++    ],
++  },
++];
++
++export function getGlossaryTerm(slug) {
++  const key = String(slug || '').replace(/\/$/, '');
++  return GLOSSARY_TERMS.find((row) => row.slug === key) || null;
++}
++
++export function glossaryGrouped() {
++  const groups = new Map();
++  for (const row of GLOSSARY_TERMS) {
++    const letter = row.term.charAt(0).toUpperCase();
++    if (!groups.has(letter)) groups.set(letter, []);
++    groups.get(letter).push(row);
++  }
++  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
++}
++
++function wordCount(text) {
++  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
++}
++
++export function assertGlossaryDefinitions() {
++  return GLOSSARY_TERMS.filter((row) => wordCount(row.definition) > 50).map((row) => row.slug);
++}
+diff --git a/src/data/siteRoutes.js b/src/data/siteRoutes.js
+index f90ad73..4fdee93 100644
+--- a/src/data/siteRoutes.js
++++ b/src/data/siteRoutes.js
+@@ -2,6 +2,7 @@ import { blogPosts } from './blogPosts.js';
+ import { areaSeoPages, getAreaExactTitle } from './areaSeo.js';
+ import { neighborhoods } from './neighborhoods.js';
+ import { CITY_HOMES, getCityHomesPath } from './cityHomesData.js';
++import { GLOSSARY_TERMS } from './glossaryTerms.js';
+ 
+ export const SITE_URL = 'https://saahomes.com';
+ 
+@@ -263,6 +264,28 @@ const staticPages = [
+     ogImage: '/images/buyers-hero.jpg',
+     ogImageAlt: 'Colorado mortgage payment calculator',
+   },
++  {
++    path: '/housing-statistics/',
++    priority: '0.9',
++    changefreq: 'monthly',
++    title: 'Colorado Housing Statistics & CHFA Citation Hub 2026 | SAA Homes',
++    description: 'Verified CHFA and Northern Colorado down payment statistics — each figure dated, sourced, and ready to cite.',
++    ogTitle: 'Colorado CHFA & housing statistics you can cite',
++    ogDescription: 'Dated CHFA production numbers and program caps with first publisher, URL, and retrieved date.',
++    ogImage: '/images/buyers-hero.jpg',
++    ogImageAlt: 'Colorado housing statistics citation hub',
++  },
++  {
++    path: '/glossary/',
++    priority: '0.85',
++    changefreq: 'monthly',
++    title: 'CHFA & Colorado Homebuyer Glossary | SAA Homes',
++    description: 'Definitions of CHFA, down payment assistance, G-HOPE, and Northern Colorado buyer terms — one entity per URL.',
++    ogTitle: 'CHFA glossary for Colorado homebuyers',
++    ogDescription: 'One term per URL. Definition in the first 50 words. Linked to CHFA money pages.',
++    ogImage: '/images/buyers-hero.jpg',
++    ogImageAlt: 'CHFA and Colorado homebuyer glossary',
++  },
+   {
+     path: '/blog/',
+     priority: '0.9',
+@@ -322,6 +345,20 @@ export function getSitemapEntries(lastmod) {
+         ogImageAlt: `${area.city}, Colorado real estate guide`,
+       })
+     ),
++    ...GLOSSARY_TERMS.map((term) =>
++      withShareMeta({
++        path: `/glossary/${term.slug}/`,
++        priority: '0.8',
++        changefreq: 'monthly',
++        lastmod: date,
++        title: `${term.h1} | SAA Homes`,
++        description: term.definition,
++        ogTitle: term.h1,
++        ogDescription: term.definition,
++        ogImage: '/images/buyers-hero.jpg',
++        ogImageAlt: term.term,
++      })
++    ),
+     ...blogPosts.map((post) =>
+       withShareMeta({
+         path: `/blog/${post.slug}/`,
+diff --git a/src/pages/GlossaryIndexPage.jsx b/src/pages/GlossaryIndexPage.jsx
+new file mode 100644
+index 0000000..1dc905f
+--- /dev/null
++++ b/src/pages/GlossaryIndexPage.jsx
+@@ -0,0 +1,105 @@
++import React from "react";
++import { Link } from "react-router-dom";
++import SEO from "../components/SEO";
++import QualifyCta from "../components/QualifyCta";
++import { GLOSSARY_REVIEWED, GLOSSARY_TERMS, glossaryGrouped } from "../data/glossaryTerms.js";
++
++const GOLD = "#CFB36E";
++const CANONICAL = "https://saahomes.com/glossary/";
++const PAGE_TITLE = "CHFA & Colorado Homebuyer Glossary | SAA Homes";
++const PAGE_DESCRIPTION =
++  "Plain-language definitions of CHFA, down payment assistance, G-HOPE, and Northern Colorado buyer terms — one entity per URL, sourced, and linked to the program pages that convert.";
++
++export default function GlossaryIndexPage() {
++  const groups = glossaryGrouped();
++
++  return (
++    <>
++      <SEO
++        exactTitle={PAGE_TITLE}
++        description={PAGE_DESCRIPTION}
++        keywords="CHFA glossary, Colorado down payment assistance definitions, what is CHFA, G-HOPE meaning"
++        canonical={CANONICAL}
++        ogTitle="CHFA glossary for Colorado homebuyers"
++        ogDescription={PAGE_DESCRIPTION}
++        ogUrl={CANONICAL}
++        jsonLd={[
++          {
++            "@context": "https://schema.org",
++            "@type": "DefinedTermSet",
++            name: "CHFA and Northern Colorado homebuyer glossary",
++            url: CANONICAL,
++            dateModified: GLOSSARY_REVIEWED,
++            hasDefinedTerm: GLOSSARY_TERMS.map((row) => ({
++              "@type": "DefinedTerm",
++              name: row.term,
++              url: `https://saahomes.com/glossary/${row.slug}/`,
++              description: row.definition,
++            })),
++          },
++        ]}
++      />
++
++      <section
++        className="relative min-h-[18rem] sm:h-80 bg-cover bg-center flex items-center justify-center pt-28 sm:pt-32 pb-8"
++        style={{ backgroundImage: "url('/images/buyers-hero.jpg')" }}
++      >
++        <div className="absolute inset-0 bg-black/65" />
++        <div className="relative z-10 text-center text-white px-4 sm:px-6 max-w-3xl">
++          <p className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: GOLD }}>
++            Topical glossary · {GLOSSARY_TERMS.length} terms · reviewed {GLOSSARY_REVIEWED}
++          </p>
++          <h1 className="text-3xl sm:text-5xl font-bold font-serif">CHFA & Colorado buyer glossary</h1>
++          <p className="mt-4 text-lg text-gray-100">
++            One term per URL. Definition in the first 50 words. Then the Northern Colorado next step.
++          </p>
++        </div>
++      </section>
++
++      <section className="py-12 px-6">
++        <div className="max-w-4xl mx-auto text-gray-700 leading-relaxed space-y-4">
++          <p>
++            This glossary covers the CHFA and local-assistance language buyers actually search — not a 300-page doorway list. Each entry cites CHFA or the city program, then links to{" "}
++            <Link className="underline font-semibold" to="/chfa-down-payment-assistance/">
++              money pages
++            </Link>{" "}
++            and the{" "}
++            <Link className="underline font-semibold" to="/housing-statistics/">
++              citation hub
++            </Link>
++            .
++          </p>
++        </div>
++      </section>
++
++      <section className="pb-16 px-6">
++        <div className="max-w-4xl mx-auto space-y-10">
++          {groups.map(([letter, rows]) => (
++            <div key={letter}>
++              <h2 className="text-2xl font-bold font-serif border-b border-gray-200 pb-2 mb-4">{letter}</h2>
++              <ul className="space-y-3">
++                {rows.map((row) => (
++                  <li key={row.slug}>
++                    <Link
++                      to={`/glossary/${row.slug}/`}
++                      className="block rounded-lg border border-gray-200 p-4 hover:border-[#CFB36E] transition-colors"
++                    >
++                      <span className="font-semibold text-gray-900">{row.term}</span>
++                      <span className="block text-sm text-gray-600 mt-1">{row.definition}</span>
++                    </Link>
++                  </li>
++                ))}
++              </ul>
++            </div>
++          ))}
++        </div>
++      </section>
++
++      <QualifyCta
++        program="CHFA down payment assistance"
++        formAnchor="/chfa-down-payment-assistance/#chfa-dpa-lead-form"
++        headline="See if a program behind these terms fits"
++      />
++    </>
++  );
++}
+diff --git a/src/pages/GlossaryTermPage.jsx b/src/pages/GlossaryTermPage.jsx
+new file mode 100644
+index 0000000..63d18df
+--- /dev/null
++++ b/src/pages/GlossaryTermPage.jsx
+@@ -0,0 +1,125 @@
++import React from "react";
++import { Link, Navigate, useParams } from "react-router-dom";
++import SEO from "../components/SEO";
++import QualifyCta from "../components/QualifyCta";
++import {
++  GLOSSARY_BYLINE,
++  GLOSSARY_REVIEWED,
++  getGlossaryTerm,
++} from "../data/glossaryTerms.js";
++
++const GOLD = "#CFB36E";
++
++export default function GlossaryTermPage() {
++  const { slug } = useParams();
++  const term = getGlossaryTerm(slug);
++  if (!term) {
++    return <Navigate to="/glossary/" replace />;
++  }
++
++  const canonical = `https://saahomes.com/glossary/${term.slug}/`;
++  const title = `${term.h1} | SAA Homes`;
++
++  return (
++    <>
++      <SEO
++        exactTitle={title}
++        description={term.definition}
++        canonical={canonical}
++        ogTitle={term.h1}
++        ogDescription={term.definition}
++        ogUrl={canonical}
++        jsonLd={[
++          {
++            "@context": "https://schema.org",
++            "@type": "DefinedTerm",
++            name: term.term,
++            description: term.definition,
++            url: canonical,
++            inDefinedTermSet: "https://saahomes.com/glossary/",
++          },
++        ]}
++      />
++
++      <article className="pt-28 sm:pt-32 pb-8">
++        <header className="px-6 pb-10 bg-black text-white">
++          <div className="max-w-3xl mx-auto">
++            <p className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: GOLD }}>
++              <Link to="/glossary/" className="hover:underline">
++                Glossary
++              </Link>
++            </p>
++            <h1 className="text-3xl sm:text-5xl font-bold font-serif">{term.h1}</h1>
++            <p className="mt-6 text-lg sm:text-xl leading-relaxed text-gray-100">{term.definition}</p>
++          </div>
++        </header>
++
++        <div className="max-w-3xl mx-auto px-6 py-12 space-y-8 text-gray-700 leading-relaxed">
++          <p>
++            In Northern Colorado (Larimer, Weld, and Boulder counties) this term usually shows up when a buyer is choosing a first mortgage, stacking down payment help, or checking whether a listing sits inside program caps. Schwartz and Associates coordinates the home search; a{" "}
++            <Link to="/glossary/chfa-participating-lender/" className="underline font-semibold">
++              CHFA participating lender
++            </Link>{" "}
++            underwrites the loan.
++          </p>
++          <p>
++            Next step: read{" "}
++            <Link to={term.moneyPath} className="underline font-semibold">
++              {term.moneyLabel}
++            </Link>{" "}
++            or call <a href="tel:+19709991407" className="underline font-semibold">(970) 999-1407</a>.
++          </p>
++
++          {term.related.length > 0 && (
++            <section>
++              <h2 className="text-2xl font-bold font-serif text-gray-900 mb-3">Related terms</h2>
++              <ul className="list-disc pl-5 space-y-1">
++                {term.related.map((rel) => (
++                  <li key={rel}>
++                    <Link to={`/glossary/${rel}/`} className="underline">
++                      {rel.replace(/-/g, " ")}
++                    </Link>
++                  </li>
++                ))}
++              </ul>
++            </section>
++          )}
++
++          <section className="text-sm text-gray-600 border-t border-gray-200 pt-6 space-y-2">
++            <p>
++              <strong>Byline:</strong> {GLOSSARY_BYLINE}
++            </p>
++            <p>
++              <strong>Last reviewed:</strong> {GLOSSARY_REVIEWED}
++            </p>
++            <p>
++              <strong>Sources:</strong>{" "}
++              {term.sources.map((src, i) => (
++                <span key={src.href}>
++                  {i > 0 ? " · " : ""}
++                  <a
++                    href={src.href}
++                    className="underline"
++                    target={src.href.startsWith("http") ? "_blank" : undefined}
++                    rel={src.href.startsWith("http") ? "noopener noreferrer" : undefined}
++                  >
++                    {src.label}
++                  </a>
++                </span>
++              ))}
++            </p>
++            <p>
++              Equal housing opportunity. Program rules change — confirm with the first publisher and a participating lender before you write an offer.
++            </p>
++          </section>
++        </div>
++      </article>
++
++      <QualifyCta
++        program={term.term}
++        formAnchor={`${term.moneyPath.replace(/\/$/, "")}/#chfa-dpa-lead-form`}
++        formLabel="Talk to SAA Homes"
++      />
++    </>
++  );
++}
+diff --git a/src/pages/HousingStatisticsPage.jsx b/src/pages/HousingStatisticsPage.jsx
+new file mode 100644
+index 0000000..060aeb4
+--- /dev/null
++++ b/src/pages/HousingStatisticsPage.jsx
+@@ -0,0 +1,196 @@
++import React from "react";
++import { Link } from "react-router-dom";
++import SEO from "../components/SEO";
++import QualifyCta from "../components/QualifyCta";
++import ChfaResourceHub from "../components/ChfaResourceHub";
++import {
++  CITATION_STATS,
++  CITATION_TOPICS,
++  HUB_CANONICAL,
++  HUB_REVIEWED,
++} from "../data/citationStats.js";
++
++const GOLD = "#CFB36E";
++const PAGE_TITLE =
++  "Colorado Housing Statistics & CHFA Citation Hub 2026 | SAA Homes";
++const PAGE_DESCRIPTION =
++  "Verified Colorado Housing and Finance Authority (CHFA) and Northern Colorado down payment statistics — each figure dated, sourced, and ready to cite. No outreach. Confirm overlays with a participating lender.";
++
++function datasetSchema() {
++  return {
++    "@context": "https://schema.org",
++    "@type": "Dataset",
++    name: "Colorado CHFA and Northern Colorado housing program statistics",
++    description: PAGE_DESCRIPTION,
++    url: HUB_CANONICAL,
++    dateModified: HUB_REVIEWED,
++    creator: {
++      "@type": "RealEstateAgent",
++      name: "Schwartz and Associates",
++      url: "https://saahomes.com",
++    },
++    license: "https://saahomes.com/housing-statistics/",
++    variableMeasured: CITATION_STATS.map((row) => row.claim),
++  };
++}
++
++function faqSchema() {
++  return {
++    "@context": "https://schema.org",
++    "@type": "FAQPage",
++    mainEntity: [
++      {
++        "@type": "Question",
++        name: "Can I cite these Colorado housing statistics?",
++        acceptedAnswer: {
++          "@type": "Answer",
++          text: "Yes. Each row names the first publisher, a source URL, an as-of window, and the date SAA Homes last retrieved it. Link to this page or to the original publisher. Program overlays still need a CHFA participating lender.",
++        },
++      },
++      {
++        "@type": "Question",
++        name: "Does SAA Homes originate these CHFA numbers?",
++        acceptedAnswer: {
++          "@type": "Answer",
++          text: "No. CHFA and the City of Greeley publish the figures. This hub traces each claim so writers and AI agents can cite a verified source without guessing.",
++        },
++      },
++    ],
++  };
++}
++
++export default function HousingStatisticsPage() {
++  return (
++    <>
++      <SEO
++        exactTitle={PAGE_TITLE}
++        description={PAGE_DESCRIPTION}
++        keywords="Colorado housing statistics, CHFA statistics, Northern Colorado housing data, CHFA down payment assistance numbers, cite CHFA"
++        canonical={HUB_CANONICAL}
++        ogTitle="Colorado CHFA & housing statistics you can cite"
++        ogDescription={PAGE_DESCRIPTION}
++        ogUrl={HUB_CANONICAL}
++        jsonLd={[datasetSchema(), faqSchema()]}
++      />
++
++      <section
++        className="relative min-h-[18rem] sm:h-96 bg-cover bg-center flex items-center justify-center pt-28 sm:pt-32 pb-8"
++        style={{ backgroundImage: "url('/images/core-image-8.jpg')" }}
++      >
++        <div className="absolute inset-0 bg-black/65" />
++        <div className="relative z-10 text-center text-white px-4 sm:px-6 max-w-4xl">
++          <p className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: GOLD }}>
++            Citation hub · last verified {HUB_REVIEWED}
++          </p>
++          <h1 className="text-3xl sm:text-5xl font-bold font-serif">
++            Colorado housing statistics you can cite
++          </h1>
++          <p className="mt-4 text-lg sm:text-xl text-gray-100">
++            Every number names the organization that first published it. Writers and AI agents can link here instead of guessing.
++          </p>
++        </div>
++      </section>
++
++      <section className="py-12 px-6 bg-white">
++        <div className="max-w-4xl mx-auto text-gray-700 space-y-4 leading-relaxed">
++          <p>
++            Schwartz and Associates publishes this hub so a journalist, a CHFA explainer, or an AI agent can quote a{" "}
++            <strong>dated Colorado Housing and Finance Authority figure</strong> without emailing us. We do not buy links. We do not invent medians.
++          </p>
++          <p>
++            Rows stay on this page only when they pass the citation gate: first publisher, live URL, as-of window, retrieved date. If CHFA rotates a year-end highlight, the row updates or it comes off. Fair Housing still applies — these are program facts, not steering.
++          </p>
++          <p>
++            Need the program, not the footnote? Start with{" "}
++            <Link to="/chfa-down-payment-assistance/" className="underline font-semibold">
++              CHFA down payment assistance
++            </Link>
++            , the{" "}
++            <Link to="/glossary/" className="underline font-semibold">
++              CHFA glossary
++            </Link>
++            , or call{" "}
++            <a href="tel:+19709991407" className="underline font-semibold">(970) 999-1407</a>.
++          </p>
++        </div>
++      </section>
++
++      {CITATION_TOPICS.map((topic) => (
++        <section key={topic} className="py-10 px-6 border-t border-gray-100">
++          <div className="max-w-5xl mx-auto">
++            <h2 className="text-2xl sm:text-3xl font-bold font-serif mb-6">{topic}</h2>
++            <div className="grid gap-5">
++              {CITATION_STATS.filter((row) => row.topic === topic).map((row) => (
++                <article
++                  key={row.id}
++                  id={row.id}
++                  className="rounded-xl border border-gray-200 bg-gray-50 p-6 scroll-mt-28"
++                >
++                  <p className="text-4xl font-bold font-serif" style={{ color: "#1a1a1a" }}>
++                    {row.figure}
++                  </p>
++                  <p className="text-sm uppercase tracking-wide text-gray-500 mt-1">{row.unit}</p>
++                  <p className="mt-3 text-gray-800 leading-relaxed">{row.claim}</p>
++                  <dl className="mt-4 grid sm:grid-cols-2 gap-2 text-sm text-gray-600">
++                    <div>
++                      <dt className="font-semibold text-gray-800">First publisher</dt>
++                      <dd>{row.firstPublisher}</dd>
++                    </div>
++                    <div>
++                      <dt className="font-semibold text-gray-800">As of</dt>
++                      <dd>{row.asOf}</dd>
++                    </div>
++                    <div>
++                      <dt className="font-semibold text-gray-800">Retrieved</dt>
++                      <dd>{row.retrieved}</dd>
++                    </div>
++                    <div>
++                      <dt className="font-semibold text-gray-800">Source</dt>
++                      <dd>
++                        <a
++                          href={row.sourceUrl}
++                          className="underline"
++                          target={row.sourceUrl.startsWith("http") ? "_blank" : undefined}
++                          rel={row.sourceUrl.startsWith("http") ? "noopener noreferrer" : undefined}
++                        >
++                          {row.sourceLabel}
++                        </a>
++                      </dd>
++                    </div>
++                  </dl>
++                  <p className="mt-3 text-xs text-gray-500">
++                    Suggested citation: {row.cite} Permalink:{" "}
++                    <a href={`#${row.id}`} className="underline">
++                      saahomes.com/housing-statistics/#{row.id}
++                    </a>
++                  </p>
++                </article>
++              ))}
++            </div>
++          </div>
++        </section>
++      ))}
++
++      <section className="py-12 px-6 bg-gray-100">
++        <div className="max-w-4xl mx-auto text-sm text-gray-600 space-y-3">
++          <h2 className="text-xl font-bold font-serif text-gray-900">How to cite · equal housing</h2>
++          <p>
++            Prefer the original publisher when you can (CHFA.org, the City of Greeley). Use this page when you need a single URL that already traced the claim. Do not treat SAA Homes as the author of a CHFA production number.
++          </p>
++          <p>
++            We do business in accordance with the Fair Housing Act. Program eligibility is about income, credit, occupancy, and published program rules — never protected class.
++          </p>
++        </div>
++      </section>
++
++      <QualifyCta
++        program="CHFA down payment assistance"
++        formAnchor="/chfa-down-payment-assistance/#chfa-dpa-lead-form"
++        formLabel="CHFA eligibility form"
++        headline="Want the program behind the numbers?"
++        subtext="Adam and Mandi help Northern Colorado buyers match CHFA, G-HOPE, and city programs to a home that actually qualifies."
++      />
++      <ChfaResourceHub />
++    </>
++  );
++}
+-- 
+2.43.0
+
+
+From db8b3fd977e1d3149c2295acb7d1e20dbf1e7829 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sun, 13 Sep 2026 07:25:03 +0000
+Subject: [PATCH 2/2] Restore blog breadcrumbs and label glossary related
+ terms.
+
+getTrail still called getBlogTrail after the glossary helper landed; term pages went blank. Related-term links now use the human term name.
+---
+ src/components/Breadcrumbs.jsx | 14 ++++++++++++++
+ src/pages/GlossaryTermPage.jsx | 17 ++++++++++-------
+ 2 files changed, 24 insertions(+), 7 deletions(-)
+
+diff --git a/src/components/Breadcrumbs.jsx b/src/components/Breadcrumbs.jsx
+index 722782f..8745810 100644
+--- a/src/components/Breadcrumbs.jsx
++++ b/src/components/Breadcrumbs.jsx
+@@ -202,6 +202,20 @@ function getAreaTrail(pathname) {
+   ];
+ }
+ 
++function getBlogTrail(pathname) {
++  const match = pathname.match(/^\/blog\/([^/]+)$/);
++  if (!match) return null;
++
++  const slug = match[1];
++  const post = getBlogPost(slug);
++
++  return [
++    { path: "/", label: "Home" },
++    { path: "/blog/", label: "Blog" },
++    { path: `/blog/${slug}/`, label: post?.title || slug },
++  ];
++}
++
+ function getGlossaryTrail(pathname) {
+   const match = pathname.match(/^\/glossary\/([^/]+)$/);
+   if (!match) return null;
+diff --git a/src/pages/GlossaryTermPage.jsx b/src/pages/GlossaryTermPage.jsx
+index 63d18df..41f1d43 100644
+--- a/src/pages/GlossaryTermPage.jsx
++++ b/src/pages/GlossaryTermPage.jsx
+@@ -74,13 +74,16 @@ export default function GlossaryTermPage() {
+             <section>
+               <h2 className="text-2xl font-bold font-serif text-gray-900 mb-3">Related terms</h2>
+               <ul className="list-disc pl-5 space-y-1">
+-                {term.related.map((rel) => (
+-                  <li key={rel}>
+-                    <Link to={`/glossary/${rel}/`} className="underline">
+-                      {rel.replace(/-/g, " ")}
+-                    </Link>
+-                  </li>
+-                ))}
++                {term.related.map((rel) => {
++                  const related = getGlossaryTerm(rel);
++                  return (
++                    <li key={rel}>
++                      <Link to={`/glossary/${rel}/`} className="underline">
++                        {related?.term || rel.replace(/-/g, " ")}
++                      </Link>
++                    </li>
++                  );
++                })}
+               </ul>
+             </section>
+           )}
+-- 
+2.43.0
+
