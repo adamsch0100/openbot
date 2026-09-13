@@ -2621,6 +2621,12 @@ def gateway_start(
             restore_channels = True
         preserve_merge_hermes_env(home, restore_channels=restore_channels)
         sync_opencode_go_pool_env(home=home)
+        try:
+            from .go_session import heal_hermes_config_yaml
+
+            heal_hermes_config_yaml(home)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -2666,6 +2672,15 @@ def gateway_start(
                 proc = _popen_detached(cmd, home)
                 time.sleep(1.5)
                 status_check = gateway_status(home, timeout=5)
+                if "Failed to parse" in str(status_check.get("text") or ""):
+                    try:
+                        from .go_session import heal_hermes_config_yaml, quarantine_unparseable_hermes_yaml
+
+                        quarantine_unparseable_hermes_yaml(home)
+                        heal_hermes_config_yaml(home)
+                        status_check = gateway_status(home, timeout=5)
+                    except Exception:
+                        pass
                 running = bool(status_check.get("running"))
                 return {
                     "ok": running,

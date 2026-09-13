@@ -117,8 +117,69 @@ def _drop_extra_providers_blocks(text: str) -> str:
     return (text or "")[: matches[1].start()].rstrip() + "\n"
 
 
+def _fix_scalar_model_with_indented_keys(text: str) -> str:
+    """`model: foo` then indented keys is invalid YAML (Hermes: line 14 column 3)."""
+    return re.sub(
+        r"(?m)^model:\s+(\S[^\n]*)$\n(?=  \S)",
+        lambda match: f"model:\n  default: {match.group(1).strip()}\n",
+        text or "",
+        count=1,
+    )
+
+
+def heal_hermes_config_yaml(home: str | Path | None) -> dict:
+    """Make CEO config.yaml parse for Hermes. Does not restore Telegram."""
+    if not home:
+        return {"ok": False, "error": "no home"}
+    path = Path(home) / "config.yaml"
+    if not path.is_file():
+        return {"ok": True, "skipped": True}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as err:
+        return {"ok": False, "error": str(err)[:200]}
+    if text.startswith("\ufeff"):
+        text = text.lstrip("\ufeff")
+    text = text.replace("\t", "  ")
+    healed = _fix_scalar_model_with_indented_keys(_drop_extra_providers_blocks(_strip_marked_overlay(text)))
+    if healed == text:
+        return {"ok": True, "changed": False, "path": str(path)}
+    try:
+        path.write_text(healed if healed.endswith("\n") else healed + "\n", encoding="utf-8")
+    except OSError as err:
+        return {"ok": False, "error": str(err)[:200]}
+    return {"ok": True, "changed": True, "path": str(path)}
+
+
+def quarantine_unparseable_hermes_yaml(home: str | Path | None) -> dict:
+    """If Hermes cannot parse CEO YAML, park it and leave a valid stub. Overrides were already ignored."""
+    if not home:
+        return {"ok": False, "error": "no home"}
+    path = Path(home) / "config.yaml"
+    if not path.is_file():
+        return {"ok": True, "skipped": True}
+    try:
+        raw = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as err:
+        return {"ok": False, "error": str(err)[:200]}
+    bak = path.with_name("config.yaml.broken")
+    try:
+        if not bak.is_file():
+            bak.write_text(raw, encoding="utf-8")
+        path.write_text(
+            "# ottobot healed unparseable YAML; original saved as config.yaml.broken\n"
+            "runtime:\n"
+            "  nofile_soft_limit: 4096\n",
+            encoding="utf-8",
+        )
+    except OSError as err:
+        return {"ok": False, "error": str(err)[:200]}
+    return {"ok": True, "quarantined": True, "path": str(path), "backup": str(bak)}
+
+
 def sync_hermes_go_session(home: str | Path | None, session_id: str | None) -> bool:
     """Write Hermes config.yaml extra_headers so Go chat_completions send the header."""
+    heal_hermes_config_yaml(home)
     sid = str(session_id or "").strip()
     if not sid or not home:
         return False

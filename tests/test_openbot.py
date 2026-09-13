@@ -3995,6 +3995,42 @@ class GoSessionTests(unittest.TestCase):
             self.assertEqual(text.count("providers:"), 1)
             self.assertIn("x-opencode-session: ses_fix", text)
 
+    def test_heal_scalar_model_before_indented_keys(self):
+        import tempfile
+        from pathlib import Path
+        from openbot.go_session import heal_hermes_config_yaml
+
+        broken = (
+            "model: opencode-go/deepseek-v4-flash\n"
+            "  provider: opencode-go\n"
+            "providers:\n"
+            "  opencode-go:\n"
+            "    base_url: https://opencode.ai/zen/go/v1\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "config.yaml").write_text(broken, encoding="utf-8")
+            row = heal_hermes_config_yaml(home)
+            self.assertTrue(row.get("changed"))
+            text = (home / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("model:\n  default: opencode-go/deepseek-v4-flash\n", text)
+            self.assertIn("providers:", text)
+
+    def test_quarantine_unparseable_yaml(self):
+        import tempfile
+        from pathlib import Path
+        from openbot.go_session import quarantine_unparseable_hermes_yaml
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "config.yaml").write_text("model: x\n  bad: 1\n", encoding="utf-8")
+            row = quarantine_unparseable_hermes_yaml(home)
+            self.assertTrue(row.get("quarantined"))
+            self.assertTrue((home / "config.yaml.broken").is_file())
+            text = (home / "config.yaml").read_text(encoding="utf-8")
+            self.assertIn("nofile_soft_limit", text)
+            self.assertNotIn("bad:", text)
+
 
 if __name__ == "__main__":
     unittest.main()
