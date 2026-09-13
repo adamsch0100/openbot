@@ -2143,7 +2143,7 @@ def _handle_preset(
                     _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                     patch_index_line("Last", _index_last(text))
                     patch_index_line("Now", "Think finished")
-                    patch_index_line("Next", "Ask Code to execute, or Chief of Staff for status")
+                    patch_index_line("Next", "Ask Code to execute, or Cos for status")
                     patch_index_line("Blocker", "—")
                     try:
                         from .founding import ingest_ceo_result

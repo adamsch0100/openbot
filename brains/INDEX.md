@@ -14,12 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Merged overnight board to master. Chat names OttoBot/Cos, engines chip + three-line credit, settings IA, receipt tokens. 8787 up.
-Last: Boot+Desk+Safety retested on merged master. Run Think now and Builder both 401 until vault keys. Official OpenCode web is up.
-Next: Adam pastes Go/Nous keys. Then Run Think now from Chat and one Builder self-diff. Do not attach weekday cron on live SAA.
-Last: Run Think now + Builder both 401 Invalid API key. Rejected the wander INDEX diff. Official OpenCode web started after local data-dir fallback.
-Next: Adam pastes Go/Nous keys. Then Run Think now from Chat and one Builder self-diff. Do not attach weekday cron on live SAA.
-Blocker: Adam — vault keys, Nous Portal login (`hermes model`), Railway token. Do not pause/redeploy Railway. Do not Accept parked SAA restore cards.
+Now: Live OttoBot — Chat painted a good Hermes Think as Failed because PULSE said failed 0. Glue strips those counts.
+Last: Overnight chrome is on https://openbot-production-9334.up.railway.app. Cos board $0. Think 4e9130b6d0 Hermes Agent · glm-5.3-flash. Did not Accept parked cards.
+Next: After this deploys, reload live Chat and confirm Think shows Continue not Retry. Do not attach weekday cron on live SAA.
+Blocker: Do not pause/redeploy Railway SAA Hermes. Do not Accept parked SAA restore cards.
 
 ## Vault
 
@@ -42,7 +40,7 @@ Blocker: Adam — vault keys, Nous Portal login (`hermes model`), Railway token.
 
 ## Instance
 
-- URL: http://127.0.0.1:8787
+- URL: https://openbot-production-9334.up.railway.app
 - Phase: operator-only (local org)
 - Work dir: this checkout
 - Default: Auto on OpenCode Go, then the other Go wallets, OpenRouter last.

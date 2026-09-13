@@ -510,14 +510,25 @@ function humanFailReason(blob) {
   return cleaned.slice(0, 120);
 }
 
+function failCountNoise(s) {
+  // PULSE / INDEX lines say "due 0 · failed 0". That is a count, not this job failing.
+  return String(s || "").replace(/\bfailed\s*[:=]?\s*\d+/gi, " ");
+}
+
 function jobIsFailed(job) {
   if (!job) return false;
   if (job.stopped) return false;
-  const blob = `${job.blocker || ""} ${job.text || ""} ${job.status || ""}`;
+  const blob = `${job.blocker || ""} ${job.text || ""} ${job.status || ""} ${job.last_error || ""}`;
   if (/exited 130\b|\bsigint\b/i.test(blob)) return false;
   const blocker = String(job.blocker || "").trim();
   if (blocker && blocker !== "—" && blocker !== "ok") return true;
-  return /fail|error/i.test(String(job.status || job.last_status || ""));
+  const status = String(job.status || job.last_status || "").trim();
+  if (/^(ok|success|done|running|live|progress)$/i.test(status)) return false;
+  if (/fail|error/i.test(status)) return true;
+  const body = failCountNoise([
+    job.outcome, job.cron_outcome, job.text, job.summary, job.error, job.last_error
+  ].map((x) => String(x || "")).join(" "));
+  return /fail|error|traceback|exception/i.test(body);
 }
 
 function gateLineKind(job) {
@@ -4934,20 +4945,6 @@ function honestWorkLine(line, counts) {
     return `${next} due · open Next`;
   }
   return raw;
-}
-
-function jobIsFailed(row) {
-  if (!row) return false;
-  if (row.stopped) return false;
-  const blob = `${row.blocker || ""} ${row.text || ""} ${row.status || ""} ${row.last_error || ""}`;
-  if (/exited 130\b|\bsigint\b/i.test(blob)) return false;
-  const status = String(row.status || row.last_status || "").trim();
-  if (/^(ok|success|done|running|live|progress)$/i.test(status)) return false;
-  if (/fail|error/i.test(status)) return true;
-  const body = [
-    row.outcome, row.cron_outcome, row.text, row.summary, row.error, row.last_error
-  ].map((x) => String(x || "")).join(" ");
-  return /fail|error|traceback|exception/i.test(body);
 }
 
 function cronIsLiveWait(row) {

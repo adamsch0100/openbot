@@ -72,8 +72,36 @@ class OvernightBoardUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=169", html)
-        self.assertIn("styles.css?v=169", html)
+        self.assertIn("app.js?v=170", html)
+        self.assertIn("styles.css?v=170", html)
+
+    def test_pulse_failed_zero_is_not_a_failed_job(self):
+        import re
+
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertEqual(js.count("function jobIsFailed"), 1)
+        self.assertIn("function failCountNoise", js)
+        self.assertIn(r"\bfailed\s*[:=]?\s*\d+", js)
+        noise = re.compile(r"\bfailed\s*[:=]?\s*\d+", re.I)
+        fail = re.compile(r"fail|error|traceback|exception", re.I)
+
+        def body_failed(text: str) -> bool:
+            return bool(fail.search(noise.sub(" ", text)))
+
+        pulse = (
+            "PULSE shows schedule due 0 · failed 0, one routine running "
+            "(openbot routine e521843f) and master dirty at one known parked handoff; "
+            "overnight Think check is clean — VERIFIED from PULSE, engine: Hermes Agent."
+        )
+        self.assertFalse(body_failed(pulse))
+        self.assertTrue(body_failed("Failed - API key rejected (401)"))
+        self.assertTrue(body_failed("Failed. Script not found"))
+        org = (ROOT / "openbot" / "org.py").read_text(encoding="utf-8")
+        self.assertIn("keep going from Cos", org)
+        self.assertNotIn("keep going from Chief of Staff", org)
+        router = (ROOT / "openbot" / "router.py").read_text(encoding="utf-8")
+        self.assertIn("or Cos for status", router)
+        self.assertNotIn("or Chief of Staff for status", router)
 
 
 class OvernightHostAliasTests(unittest.TestCase):

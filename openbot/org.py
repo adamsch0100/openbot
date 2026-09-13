@@ -1949,7 +1949,7 @@ def rollup_staff(project_id: str | None, worker_id: str | None, result: str) -> 
     snippet = re.sub(r"\s+", " ", clean_memory_text(result or "").strip())[:160] or "—"
     patch_index_line("Last", f"{name} · {who}: {snippet}")
     patch_index_line("Now", f"{name} · {snippet[:140]}")
-    patch_index_line("Next", f"Open {name} if you want the report, or keep going from Chief of Staff")
+    patch_index_line("Next", f"Open {name} if you want the report, or keep going from Cos")
 
 
 def write_project_inbox(project_id: str, message: str) -> Path:

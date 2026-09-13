@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Overnight board — Chat is the company desk. Cos chairs. OttoBot CEO disk id stays openbot. Engines chip + three-line credit live.
-Last: Think 401 + Builder 401 on this VM. Rejected the OpenCode INDEX wander. Cursor glue already on the branch.
-Next: Run Think now from Chat when Nous/Go exist. One Builder (OpenCode) self-diff on this checkout. Do not attach weekday cron.
-Blocker: Adam — vault keys, Nous Portal login, Railway. Do not Accept parked SAA restore. Do not redeploy live Hermes.
+Now: Live overnight board on Railway. Chat must not paint PULSE "failed 0" as a Failed Think card.
+Last: Live Cos board + Think 4e9130b6d0 Hermes Agent · glm-5.3-flash. False Failed paint on that card.
+Next: Deploy this glue. Reload live. Confirm Continue not Retry. Do not attach weekday cron.
+Blocker: Do not Accept parked SAA restore. Do not redeploy live SAA Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons
