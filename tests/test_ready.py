@@ -31,7 +31,8 @@ class ReadyTests(unittest.TestCase):
         self.assertEqual(job.get("engine"), "board")
         self.assertTrue(job.get("talk"))
         text = job.get("text") or ""
-        self.assertIn("openbot:", text)
+        self.assertIn("OttoBot —", text)
+        self.assertNotIn("openbot:", text)
         self.assertNotIn("secrets.local.json", text)
         self.assertNotIn("## Vault", job.get("index") or "")
 
@@ -59,8 +60,8 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("OttoBot uses Hermes Agent (MIT, Nous Research)", html)
         self.assertIn("and OpenCode (MIT, Anomaly).", html)
         self.assertIn("id=\"aboutCredit\"", html)
-        self.assertIn("app.js?v=175", html)
-        self.assertIn("styles.css?v=175", html)
+        self.assertIn("app.js?v=176", html)
+        self.assertIn("styles.css?v=176", html)
         self.assertIn("activity-sheet", html)
         self.assertIn("route-hatch", html)
         self.assertIn("id=\"closeActivity\"", html)
@@ -265,7 +266,8 @@ class LiveBoardTests(unittest.TestCase):
         self.assertIn("event-stream", ctype)
         self.assertIn("event: start", body)
         self.assertIn("event: done", body)
-        self.assertIn("openbot:", body.lower())
+        self.assertIn("ottobot", body.lower())
+        self.assertNotIn("openbot:", body.lower())
 
     def test_engine_ports(self):
         if not self.live:

@@ -321,11 +321,16 @@ def _post_cron_card(project_id: str | None, row: dict, hermes_home: str | None =
         "next": nxt,
     }
     write_job(receipt)
-    if receipt["keep_going"]:
-        patch_scope(project_id, None, "Now", f"{title} failed · {outcome[:80]}")
-        patch_scope(project_id, None, "Last", f"{title} failed")
-        patch_scope(project_id, None, "Next", nxt[:160] or "Open this CEO and handle the failed job.")
-        patch_scope(project_id, None, "Blocker", outcome[:140])
+    failed = _cron_failed(row) or bool(re.search(r"\bfail", str(outcome or ""), re.I))
+    if failed:
+        patch_scope(project_id, None, "Last", f"{title} · {str(outcome)[:80]}")
+        if hermes_home is not None or peers is None:
+            next_line = _honest_next_line(project_id, hermes_home=hermes_home, finished=title)[:160]
+        else:
+            next_line = honest_next_line(peers)[:160]
+        patch_scope(project_id, None, "Next", next_line)
+        patch_scope(project_id, None, "Blocker", "—")
+        rollup_staff(project_id, None, f"{title} · {outcome}")
     else:
         patch_scope(project_id, None, "Now", f"{title} is done · {outcome[:80]}")
         patch_scope(project_id, None, "Last", f"{title} · {outcome[:80]}")
@@ -335,7 +340,7 @@ def _post_cron_card(project_id: str | None, row: dict, hermes_home: str | None =
             next_line = honest_next_line(peers)[:160]
         patch_scope(project_id, None, "Next", next_line)
         patch_scope(project_id, None, "Blocker", "—")
-    rollup_staff(project_id, None, f"{title} is done · {outcome}")
+        rollup_staff(project_id, None, f"{title} is done · {outcome}")
     append_turn(thread_key(project_id, None), {"role": "bot", "job": receipt})
     return receipt
 

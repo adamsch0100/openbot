@@ -39,7 +39,7 @@ STEER_RE = re.compile(
 )
 TELL_RE = re.compile(
     r"(?is)^(?:tell|ask|send(?:\s+this)?\s+to|route(?:\s+this)?\s+to)\s+"
-    r"(?:the\s+)?(?P<who>saa(?:\s*homes)?|listlogic|nadia|ottobot|openbot|support|pmill)"
+    r"(?:the\s+)?(?P<who>saa(?:\s*homes)?|listlogic|nadia|ottobot|openbot|support|pmill(?:\.ai)?)"
     r"(?:'s)?(?:\s+ceo)?\s*[:\-,]\s*(?P<body>.+)$"
 )
 WHO_TO_ID = {
@@ -51,7 +51,9 @@ WHO_TO_ID = {
     "ottobot": "openbot",
     "openbot": "openbot",
     "support": "support",
-    "pmill": "pmill",
+    "pmill": "pmill-ai",
+    "pmill.ai": "pmill-ai",
+    "pmill-ai": "pmill-ai",
 }
 
 KNOWN_HORIZONS = {
@@ -119,6 +121,8 @@ def resolve_tell_target(message: str) -> tuple[str, str] | None:
     if not pid or not body:
         return None
     live = {str(row.get("id") or "") for row in list_projects()}
+    if pid == "pmill-ai" and pid not in live and "pmill" in live:
+        pid = "pmill"
     if pid not in live and pid not in {"openbot", "support"}:
         return None
     return pid, body
@@ -447,8 +451,8 @@ def route_cos_to_ceo(message: str) -> str | None:
         pass
     who = CEO_PRETTY_NAMES.get(pid, pid)
     return (
-        f"Routed to {who}. It's in that CEO's inbox as a ticket — Cos does not write their INDEX. "
-        f"Open {who} and talk, or they'll pick it up as TICKET. Steer: {body[:180]}"
+        f"Routed to {who}. Ticket is in their inbox — Cos does not write their INDEX. "
+        f"Steer: {body[:180]}"
     )
 
 

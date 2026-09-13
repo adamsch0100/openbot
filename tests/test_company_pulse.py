@@ -257,7 +257,7 @@ class PulseIsolationTests(unittest.TestCase):
         with patch("openbot.org.project_cron_bundle", return_value=empty):
             text = company_pulse(pid)
         self.assertIn("Schedule: none attached", text)
-        self.assertIn("Goals empty", text)
+        self.assertIn("no horizon-week", text.lower())
         index = org_mod.read_project_index(pid)
         self.assertIn("compiled PULSE", index)
         self.assertIn("Never auto-cron", index)

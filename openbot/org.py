@@ -1014,7 +1014,7 @@ def company_pulse(project_id: str | None) -> str:
     if week:
         lines.append(f"This week: {week[:160]}")
     else:
-        lines.append("This week: Goals empty — operator Accepts founding or Save Goals.")
+        lines.append("This week: no Horizon-week on INDEX yet.")
     lines.append(f"Now: {now[:140]}")
     digest: dict = {}
     story = ""
@@ -1410,7 +1410,7 @@ def staff_briefing() -> str:
         if week:
             lines.append(f"This week: {week[:160]}")
         else:
-            lines.append("This week: Goals empty — operator Accepts a founding RESULT or Save Goals.")
+            lines.append("This week: no Horizon-week on INDEX yet.")
         lines.append(f"Now: {quiet_index_line(index_field(text, 'Now') or '—') or '—'}")
         lines.append(f"Last: {quiet_index_line(index_field(text, 'Last') or '—') or '—'}")
         lines.append(f"Next: {quiet_index_line(index_field(text, 'Next') or '—') or '—'}")
@@ -1480,6 +1480,9 @@ def board_copy(text: str) -> str:
     s = str(text or "")
     s = s.replace("Chief of Staff", "Cos")
     s = re.sub(r"\bOpenBot instance\b", "OttoBot instance", s)
+    s = re.sub(r"\bOpenBot Builder\b", "OttoBot Builder", s)
+    s = re.sub(r"\bOpenBot board\b", "OttoBot board", s)
+    s = re.sub(r"\bOpenBot docs\b", "OttoBot docs", s)
     return s
 
 
@@ -1521,7 +1524,7 @@ def staff_status_reply() -> str:
         if not isinstance(row, dict) or not row.get("id"):
             continue
         pid = str(row.get("id"))
-        name = str(row.get("name") or pid)
+        name = CEO_PRETTY_NAMES.get(pid) or str(row.get("name") or pid)
         text = read_project_index(pid)
         week = horizon_week(text)
         now_line = (
@@ -1530,27 +1533,21 @@ def staff_status_reply() -> str:
             or "—"
         )
         if week:
-            bit = f"{pid}: {name} — this week: {week[:140]} · now: {now_line}"
+            bit = f"{name} — this week: {week[:140]} · now: {now_line}"
         else:
-            bit = f"{pid}: {name} — Goals empty · now: {now_line}"
+            bit = f"{name} — now: {now_line}"
         stuck = quiet_index_line(index_field(text, "Blocker"))
         if stuck and stuck != "—":
             bit += f" · blocked {stuck}"
         try:
             sched = pulse_headline(pid)
-            if sched:
+            if sched and sched not in {"none attached", "unavailable"} and not re.match(
+                r"^due 0 · failed 0$", sched
+            ):
                 bit += f" · {sched}"
         except Exception:
             pass
         lines.append(bit)
-    try:
-        from .memory import prune_candidates
-
-        flags = prune_candidates()
-        if flags:
-            lines.append("Memory: " + flags[0] + (" — say prune memory" if len(flags) > 1 else ""))
-    except Exception:
-        pass
     return "\n".join(lines).strip()
 
 

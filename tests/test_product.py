@@ -95,6 +95,28 @@ class CheapChatTests(unittest.TestCase):
         self.assertIn("keep going from Cos", text)
         self.assertNotIn("smoke27", text.lower())
 
+    def test_staff_status_names_ceos_without_disk_ids(self):
+        from unittest.mock import patch
+
+        from openbot.org import staff_status_reply
+
+        with patch("openbot.org.read_index", return_value="# INDEX\nNow: Desk in use\nNext: —\nBlocker: —\n"), patch(
+            "openbot.org._load_saved",
+            return_value={"projects": [{"id": "openbot", "name": "OttoBot"}, {"id": "saa-homes", "name": "SAA Homes"}]},
+        ), patch(
+            "openbot.org.read_project_index",
+            side_effect=lambda pid: (
+                "Now: ready\nHorizon-week: 1 paying tenant\n" if pid == "openbot" else "Now: listing\n"
+            ),
+        ), patch("openbot.org.pulse_headline", return_value="due 0 · failed 0"):
+            text = staff_status_reply()
+        self.assertIn("OttoBot — this week:", text)
+        self.assertNotIn("openbot:", text)
+        self.assertIn("SAA Homes — now:", text)
+        self.assertNotIn("saa-homes:", text)
+        self.assertNotIn("Goals empty", text)
+        self.assertNotIn("due 0 · failed 0", text)
+
     def test_aimed_status_hides_smoke_now(self):
         from openbot.router import status_reply
 

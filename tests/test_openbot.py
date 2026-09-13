@@ -2100,7 +2100,8 @@ class StaffBusTests(unittest.TestCase):
                 self.assertIn("alpha CEO", brief)
                 self.assertIn("Scout:", brief)
                 status = org_mod.staff_status_reply()
-                self.assertIn("alpha:", status)
+                self.assertIn("alpha —", status)
+                self.assertNotIn("alpha:", status)
                 self.assertEqual(org_mod.session_name(None, None), None)
         finally:
             org_mod.ORG = old_org

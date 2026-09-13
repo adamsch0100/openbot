@@ -134,6 +134,36 @@ class AliveBoardCronwatchTests(unittest.TestCase):
         self.assertNotIn("On schedule", next_line)
         self.assertIn("due", next_line.lower())
 
+    def test_failed_cron_does_not_claim_now_is_done(self):
+        from openbot import cronwatch
+
+        now = datetime.now(timezone.utc)
+        patched = []
+
+        def capture(project_id, worker_id, field, value):
+            patched.append((field, value))
+
+        with patch.object(cronwatch, "write_job"), patch.object(cronwatch, "patch_scope", side_effect=capture), patch.object(
+            cronwatch, "rollup_staff"
+        ), patch.object(cronwatch, "append_turn"):
+            cronwatch._post_cron_card(
+                "saa-homes",
+                {
+                    "id": "cite",
+                    "name": "citation-submission-layer1",
+                    "last_status": "error",
+                    "last_result": "Script-not-found: scripts/foo.sh",
+                    "last_run_at": now.isoformat(),
+                    "outcome": "Failed. Script not found",
+                    "next_action": "Restore the script",
+                },
+                peers=[{"id": "cite", "name": "citation-submission-layer1", "last_status": "error", "enabled": True}],
+            )
+        fields = {field: value for field, value in patched}
+        self.assertNotIn("Now", fields)
+        self.assertIn("Failed", fields.get("Last") or "")
+        self.assertNotIn("is done", fields.get("Last") or "")
+
 
 class AliveBoardUiTests(unittest.TestCase):
     def test_board_js_locks_doing_honesty(self):

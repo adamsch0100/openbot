@@ -3,8 +3,8 @@
 CEO brief. Status on this project reads this file only.
 
 Now: Desk in use — Horizons on this CEO.
-Last: Think returned ready. Builder probe rejected.
-Next: Ask Cos what's going on, or open Builder for a change.
+Last: Cos names CEOs. Think ready. Builder probe rejected.
+Next: Talk to Cos, or send Builder a change.
 Blocker: —
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

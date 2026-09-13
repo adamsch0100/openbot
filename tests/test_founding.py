@@ -136,6 +136,9 @@ class FoundingDetectTests(unittest.TestCase):
             self.assertIn("CHFA", hit[1])
             self.assertIsNone(resolve_tell_target("tell ListLogic: not seated"))
             self.assertIsNone(resolve_tell_target("hello SAA"))
+        with patch("openbot.founding.list_projects", return_value=[{"id": "pmill-ai"}]):
+            hit = resolve_tell_target("tell pmill: own paid seats first")
+            self.assertEqual(hit[0], "pmill-ai")
 
     def test_status_leads_with_this_week(self):
         text = (
@@ -148,7 +151,8 @@ class FoundingDetectTests(unittest.TestCase):
         self.assertIn("CHFA", reply)
         self.assertIn("healthy", reply)
         empty = status_reply("Now: ticket 1\nLast: builder\nNext: folder then diff\nBlocker: —", "What is going on?", "openbot")
-        self.assertIn("Goals are empty", empty)
+        self.assertIn("No Horizon-week", empty)
+        self.assertNotIn("Ask CEO to propose", empty)
         self.assertIn("ticket 1", empty)
 
 

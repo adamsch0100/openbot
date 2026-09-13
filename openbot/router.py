@@ -1007,7 +1007,7 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
         if week:
             lines.append(f"This week: {week}")
         else:
-            lines.append("Goals are empty. Open Goals or Ask CEO to propose — I will not invent a board.")
+            lines.append("No Horizon-week on this INDEX yet.")
         lines.append(now)
         if live:
             lines.append(live)

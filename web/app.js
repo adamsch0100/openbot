@@ -3385,7 +3385,7 @@ function orgWeekGlance() {
   return projects.map((row) => {
     const name = prettyCeoName(row.id, row.name);
     const week = weekGoal(row);
-    if (!week) return `${name}: Goals empty`;
+    if (!week) return name;
     return `${name}: ${week.split("·")[0].trim()}`;
   }).join(" · ");
 }
@@ -3432,13 +3432,13 @@ function ceoWire(project) {
   if (week) return clipWire(week, 56);
   const founding = String((project.founding && project.founding.status) || "");
   if (founding === "draft") return "Goals ready to Accept";
-  if (founding === "needed") return "Goals empty — Ask CEO to propose";
+  if (founding === "needed") return "No Horizon-week yet";
   let line = (now && now !== "source of truth" && now !== "—") ? now : ((nxt && nxt !== "—") ? nxt : "");
   line = honestWorkLine(line, counts) || line;
   if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
   else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Next`;
   if (line) return clipWire(line, 56);
-  return "Goals empty — Ask CEO to propose";
+  return "No Horizon-week yet";
 }
 
 function ceoInitials(name) {
@@ -4422,7 +4422,7 @@ function renderBotMeta(opts) {
         if (!ask && (counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
         else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Next`;
       }
-      $("chatFolder").textContent = ask || "Goals are empty. Open Goals or Ask CEO to propose.";
+      $("chatFolder").textContent = ask || "No Horizon-week yet.";
     }
   }
   const folder = currentAim().folder || "";
@@ -5147,7 +5147,7 @@ function paintCeoBrief(digest) {
   } else {
     const week = weekGoal(project);
     if (week) bits.push(`This week: ${week}`);
-    else bits.push("Goals are empty. Open Goals or Ask CEO to propose.");
+    else bits.push("No Horizon-week yet.");
     const trust = scheduleTrustNowLine(counts, project);
     const now = String(project.index_now || "").trim();
     if (trust) bits.push(trust);
@@ -7166,7 +7166,7 @@ function emptyStreamHtml() {
     showCTA = false;
   } else if (project) {
     const week = weekGoal(project);
-    lead = week ? `This week: ${week}` : "Goals are empty. Open Goals or Ask CEO to propose.";
+    lead = week ? `This week: ${week}` : "No Horizon-week yet.";
     showCTA = false;
   } else {
     const glance = orgWeekGlance();
