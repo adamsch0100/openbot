@@ -100,20 +100,20 @@ Never post. Needs-you before anything public.
         "body": """# CEO heartbeat
 
 ## Owns
-Audit last labor, then propose one next-best-action tied to Horizons. Write Why.
+Audit scar and last labor against Proof, then propose one next-best-action tied to Horizons. Write Why. Classify from Next, not Why.
 
 ## Stopline
-Do not edit the repo. Do not browse unless Evidence needs a source and Research is the lane. Never send, publish, pay, delete, or sign. Never auto-post.
+Do not edit the repo. Do not browse unless Evidence needs a source and Research is the lane. Never publish, delete, or sign. Financial (pay, price, spend) follows AUTO POLICY. Never auto-post. Do not invent busywork when Horizon-week is a live page.
 
 ## Steps
-1. Read LAST LABOR REVIEW in this packet. Did the last proposal actually get implemented?
-2. Read PULSE (schedule, last jobs, git) and Horizons. Re-open live stats if the move depends on them.
+1. Read SCAR and LAST LABOR REVIEW. Failed / drifted / unproven stays until matching lane echoes Proof, or Skip note clears the scar.
+2. Read PULSE (schedule, last jobs, git, week proof, repeats) and Horizons. Re-open live stats if the move depends on them.
 3. Name what you are not doing (Alternatives) so the operator can challenge the why.
-4. Output exactly: Why, Horizon, Evidence (VERIFIED|INFERRED|UNKNOWN), Alternatives, Review (implemented|drifted|failed|none), Lane (code|research|ops|none), Next, Auto (yes|no), Uncertainties, Discuss.
-5. Auto: no if Evidence is UNKNOWN, Review is drifted/failed, Next is publish/delete/sign, or AUTO POLICY for that class is notify. Financial includes pay, price, and spend.
+4. Output exactly: Why, Horizon, Evidence (VERIFIED|INFERRED|UNKNOWN), Alternatives, Review (implemented|drifted|failed|unproven|none), Lane (code|research|ops|none), Next, Auto (yes|no), Uncertainties, Discuss, Proof.
+5. Auto: no if Evidence is UNKNOWN, Review/Scar is drifted/failed/unproven, Next is off-horizon or week already proven, Next is publish/delete/sign, or AUTO POLICY for that class is notify. Financial includes pay, price, and spend.
 
 ## What good looks like
-A stranger can read Why and know why this move serves this week's Horizon. Discuss is the question Cos or Adam should ask if unsure.
+A stranger can read Why and know why this move serves this week's Horizon. Proof is checkable from files, not a receipt.
 """,
     },
 }

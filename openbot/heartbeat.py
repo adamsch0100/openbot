@@ -95,7 +95,7 @@ def attach_heartbeat(project_id: str) -> dict:
     }
 
 
-def run_heartbeat_now(project_id: str) -> dict:
+def run_heartbeat_now(project_id: str, *, wait: bool = False) -> dict:
     """Operator prove: one Think now. Does not attach weekday cron."""
     if not project_id:
         return {"ok": False, "error": "no CEO"}
@@ -115,8 +115,11 @@ def run_heartbeat_now(project_id: str) -> dict:
         except Exception:
             pass
 
-    threading.Thread(target=_run, daemon=True).start()
-    return {
+    if wait:
+        _run()
+    else:
+        threading.Thread(target=_run, daemon=True).start()
+    info = {
         "ok": True,
         "action": "run_now",
         "project_id": project_id,
@@ -126,7 +129,22 @@ def run_heartbeat_now(project_id: str) -> dict:
         "cron_attached": heartbeat_enabled(project_id),
         "message": HEARTBEAT_MARK,
         "note": "One Think now. Weekday cron stays off until you Attach.",
+        "wait": bool(wait),
     }
+    if wait:
+        from .decide import load_open_proposal, load_parked, load_scar
+        from .store import list_jobs
+
+        jobs = sorted(
+            [job for job in list_jobs() if str(job.get("project_id") or "") == project_id],
+            key=lambda job: str(job.get("at") or ""),
+            reverse=True,
+        )
+        info["proposal"] = load_open_proposal(project_id)
+        info["parked"] = load_parked(project_id)[-3:]
+        info["scar"] = load_scar(project_id)
+        info["job"] = jobs[0] if jobs else {}
+    return info
 
 
 def detach_heartbeat(project_id: str) -> dict:

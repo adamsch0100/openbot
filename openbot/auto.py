@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .models import SEATS, allowed_for_seat, all_models, model_provider, seat_model
+from .models import SEATS, allowed_for_seat, all_models, go_unsupported, model_provider, pick_go_auto_model, seat_model, version_sort_key
 from .pickers import arena_key, ranking_guides
 
 _CHEAP = ("flash", "nano", "mini", "haiku", "lite", "small")
@@ -71,8 +71,12 @@ def _for_seat(seat_id: str, models: list[dict] | None) -> list[dict]:
     for row in rows:
         by_provider.setdefault(model_provider(row), []).append(row)
     for provider in _PROVIDER_ORDER:
-        if by_provider.get(provider):
-            return by_provider[provider]
+        group = by_provider.get(provider) or []
+        if not group:
+            continue
+        if provider == "opencode" and any(str(row.get("family") or "") == "go" for row in group):
+            group = [row for row in group if str(row.get("family") or "") != "zen"]
+        return group
     return rows
 
 
@@ -137,14 +141,27 @@ def _value_pick(rows: list[dict], seat_id: str) -> dict | None:
 def _cheap_pick(rows: list[dict], seat_id: str) -> dict | None:
     if not rows:
         return None
-    pool = list(rows)
-    if seat_id == "chat":
-        flash = [row for row in pool if "flash" in _blob(row)]
-        if flash:
-            pool = flash
-    if seat_id == "ops":
+    pool = [row for row in rows if not go_unsupported(row)] or list(rows)
+    if seat_id in {"chat", "ops"}:
+        flashes = [row for row in pool if "flash" in _blob(row)]
+        specials = [
+            row
+            for row in flashes
+            if row.get("go_exclusive")
+            and "lite" not in _blob(row)
+            and "vision" not in _blob(row)
+        ]
+        if specials:
+            pool = specials
+        elif flashes:
+            pool = [
+                row
+                for row in flashes
+                if "lite" not in _blob(row) and "vision" not in _blob(row)
+            ] or flashes
+    if seat_id == "ops" and not any("flash" in _blob(row) for row in pool):
         pool = [row for row in pool if not _heavy_name(row)] or pool
-        cheap = [row for row in pool if _cheap_name(row)]
+        cheap = [row for row in pool if _cheap_name(row) and not go_unsupported(row)]
         if cheap:
             pool = cheap
     scored = [row for row in pool if row["_quality"] > 0]
@@ -153,7 +170,15 @@ def _cheap_pick(rows: list[dict], seat_id: str) -> dict | None:
         kept = [row for row in scored if row["_quality"] >= floor]
         if kept:
             pool = kept
-    pool.sort(key=lambda row: (row["_cost"], -row["_quality"], str(row.get("id") or "")))
+    pool.sort(
+        key=lambda row: (
+            row["_cost"],
+            0 if row.get("go_exclusive") else 1,
+            row["_quality"] * -1,
+            version_sort_key(row),
+            str(row.get("id") or ""),
+        )
+    )
     return pool[0]
 
 
@@ -168,11 +193,27 @@ def auto_model_for_seat(
         return {"id": "", "why": "unknown seat"}
     rows = [_annotate(row, _scores_for(seat_id, guides)[0]) for row in _for_seat(seat_id, models)]
     as_of = _scores_for(seat_id, guides)[1]
+    rows = [row for row in rows if not go_unsupported(row)] or rows
     if not rows:
         return {"id": "", "label": "Auto", "why": "no connected model for this seat", "as_of": as_of}
-    if seat_id in {"chat", "ops"}:
-        chosen = _cheap_pick(rows, seat_id)
-        why = "lowest $ on OpenCode Go" if model_provider(chosen) == "opencode" else "lowest $ among connected wallets"
+    scored = any(row.get("_quality") for row in rows)
+    if seat_id in {"chat", "ops"} or not scored:
+        chosen = _cheap_pick(rows, seat_id) if seat_id in {"chat", "ops"} else None
+        if chosen is None:
+            pick_id = pick_go_auto_model(rows, seat_id)
+            chosen = next((row for row in rows if str(row.get("id") or "") == pick_id), None)
+            if chosen is None:
+                chosen = _value_pick(rows, seat_id)
+        if seat_id in {"chat", "ops"}:
+            why = "lowest $ among connected wallets"
+            if chosen and model_provider(chosen) == "opencode":
+                why = "lowest $ on OpenCode Go"
+            if chosen and chosen.get("go_exclusive"):
+                why = "Go special (live catalog) · cheapest capable"
+        else:
+            why = "live Go catalog · cheap capable (no Arena map yet)"
+            if chosen and chosen.get("go_exclusive"):
+                why = "Go special (live catalog) · cheap capable"
     else:
         chosen = _value_pick(rows, seat_id)
         if chosen and chosen.get("_quality"):

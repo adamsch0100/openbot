@@ -2240,7 +2240,8 @@ class Handler(SimpleHTTPRequestHandler):
 
             action = str(data.get("action") or "skip").strip().lower()
             if action == "skip":
-                return self._json(200, {"ok": True, "proposal": close_proposal(pid, "skipped")})
+                note = str(data.get("note") or "skipped from Needs-you")
+                return self._json(200, {"ok": True, "proposal": close_proposal(pid, "skipped", note)})
             return self._json(400, {"error": "unknown action"})
         
         if path == "/api/routines":

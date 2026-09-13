@@ -8,13 +8,20 @@ from pathlib import Path
 
 from .decide import (
     ACCEPT_ONLY,
+    BUSYWORK,
     FINANCIAL,
     HEARTBEAT_MARK,
     auto_labor_allowed,
     classify_proposal,
+    close_proposal,
+    horizon_satisfied,
     ingest_think_result,
     last_labor_review,
+    load_notifies,
     load_open_proposal,
+    load_parked,
+    load_scar,
+    load_skip_note,
     proposal_packet_extra,
     recommended_auto_policy,
     write_proposal,
@@ -24,8 +31,9 @@ from .store import write_job
 
 DESK_ID = "desk-month"
 WEEK = "1 live CHFA page · NoCO · via organic · proof form 200"
+PROOF = "form 200"
 
-# One weekday each. World is what changed. labor is what happens if the board autos.
+# labor: ok (auto+proof) | fail | hold | do (operator Do it + proof) | unproven | drift | skip
 MONTH = (
     {"world": "CHFA contact form returns HTTP 404", "labor": "ok"},
     {"world": "Form still 404 after overnight cache", "labor": "ok"},
@@ -41,7 +49,7 @@ MONTH = (
     {"world": "Fix the contact form handler unit test", "labor": "ok"},
     {"world": "Publish the CHFA page live to production", "labor": "hold"},
     {"world": "Draft a research note on NoCO search demand", "labor": "ok"},
-    {"world": "Form 200; git dirty on the city page", "labor": "ok"},
+    {"world": "Form 200; git dirty on the city page", "labor": "do"},
     {"world": "Budget talk: raise spend cap this week", "labor": "hold"},
     {"world": "Ops: pause a noisy local cron copy, not Railway", "labor": "hold"},
     {"world": "Wire the city page CTA to the restored form", "labor": "ok"},
@@ -53,13 +61,29 @@ MONTH = (
 
 
 def file_brain(project_id: str, world: str) -> str:
-    """Stand-in for Hermes Think. Reads the same files the packet would. Not a third engine."""
+    """Stand-in for Hermes Think. Reads scar / pulse extra / horizon. Not a third engine."""
     audit = last_labor_review(project_id)
     review = str(audit.get("review") or "none")
     week = horizon_week(read_project_index(project_id)) or WEEK
     extra = proposal_packet_extra(project_id, HEARTBEAT_MARK)
     prior = str(audit.get("proposal_next") or "").strip()
+    index = read_project_index(project_id)
     lower = world.lower()
+    evidence = "UNKNOWN" if "unknown" in lower else "VERIFIED"
+    if horizon_satisfied(index):
+        return (
+            f"Why: Week proof is already on INDEX — do not invent busywork\n"
+            f"Horizon: {week[:160]}\n"
+            f"Evidence: VERIFIED\n"
+            f"Alternatives: Unit tests; lint; another landing page\n"
+            f"Review: {review}\n"
+            f"Lane: none\n"
+            f"Next: Wait — week already proven\n"
+            f"Auto: no\n"
+            f"Uncertainties: compressed month; not live GSC\n"
+            f"Discuss: Is the live URL actually taking leads?\n"
+            f"Proof: {PROOF}\n"
+        )
     if ACCEPT_ONLY.search(world):
         lane, nxt, kind = "none", f"Park: {world[:80]}", "accept"
     elif FINANCIAL.search(world):
@@ -70,18 +94,27 @@ def file_brain(project_id: str, world: str) -> str:
         lane, nxt, kind = "ops", world[:80], "ops"
     else:
         lane, nxt, kind = "code", world[:80], "code"
-    if review in {"failed", "drifted"} and prior and kind not in {"financial", "accept"}:
-        nxt = f"Re-do after {review}: {prior[:120]}"
+    scar = load_scar(project_id)
+    scar_review = str(scar.get("review") or "")
+    if (
+        scar_review in {"failed", "drifted", "unproven"}
+        and prior
+        and kind not in {"financial", "accept"}
+        and str(scar.get("lane") or "code") == "code"
+        and kind == "code"
+        and not BUSYWORK.search(world)
+    ):
+        nxt = f"Re-do after {scar_review}: {prior[:120]}"
         lane = "code"
-    # Brain may mark Auto: yes on financial. Board policy is the gate that holds.
-    auto = "no" if review in {"failed", "drifted"} or kind == "accept" else "yes"
+        review = scar_review
+    auto = "no" if review in {"failed", "drifted", "unproven"} or kind == "accept" or evidence == "UNKNOWN" else "yes"
     discuss = f"Would this be the wrong move given Review {review}?"
     if extra:
-        discuss = f"{discuss} Packet saw last-labor + AUTO POLICY."
+        discuss = f"{discuss} Packet saw scar/policy/week-proof."
     return (
         f"Why: {world[:160]} blocks {week[:80]}\n"
         f"Horizon: {week[:160]}\n"
-        f"Evidence: VERIFIED\n"
+        f"Evidence: {evidence}\n"
         f"Alternatives: Do not blast email; do not touch live Railway\n"
         f"Review: {review}\n"
         f"Lane: {lane}\n"
@@ -89,6 +122,7 @@ def file_brain(project_id: str, world: str) -> str:
         f"Auto: {auto}\n"
         f"Uncertainties: compressed month; not live GSC\n"
         f"Discuss: {discuss}\n"
+        f"Proof: {PROOF}\n"
     )
 
 
@@ -98,10 +132,20 @@ def _stamp(day: int, hour: int) -> str:
 
 
 def _apply_labor(project_id: str, day: int, allowed: bool, labor: str, prop: dict) -> str:
-    if not allowed:
+    if labor == "skip":
+        close_proposal(project_id, "skipped", "skipped after fail; scar stays")
+        return "skipped"
+    force = labor == "do"
+    if not allowed and not force:
+        return "held"
+    if labor == "hold":
         return "held"
     preset = {"code": "builder", "research": "research", "ops": "ops"}.get(
-        classify_proposal(prop), "builder"
+        classify_proposal(prop) if classify_proposal(prop) != "financial" else "ops",
+        "builder",
+    )
+    lane_preset = {"code": "builder", "research": "research", "ops": "ops"}.get(
+        str(prop.get("lane") or "code"), "builder"
     )
     if labor == "fail":
         write_job(
@@ -109,27 +153,45 @@ def _apply_labor(project_id: str, day: int, allowed: bool, labor: str, prop: dic
                 "id": f"{day:02d}fail",
                 "at": _stamp(day, 10),
                 "project_id": project_id,
-                "preset": preset,
-                "engine": "OpenCode" if preset == "builder" else "Hermes Agent",
+                "preset": lane_preset,
+                "engine": "OpenCode" if lane_preset == "builder" else "Hermes Agent",
                 "blocker": "OpenCode binary missing",
                 "text": "failed",
             }
         )
         patch_scope(project_id, None, "Blocker", "OpenCode binary missing")
+        last_labor_review(project_id)
         return "failed"
+    if labor == "drift":
+        write_job(
+            {
+                "id": f"{day:02d}drft",
+                "at": _stamp(day, 10),
+                "project_id": project_id,
+                "preset": "research" if lane_preset == "builder" else "builder",
+                "engine": "Hermes Agent",
+                "text": "wrong lane",
+            }
+        )
+        last_labor_review(project_id)
+        return "drifted"
+    text = PROOF if labor in {"ok", "do"} else "done"
     write_job(
         {
-            "id": f"{day:02d}okxx",
+            "id": f"{day:02d}okxx" if labor != "unproven" else f"{day:02d}unpv",
             "at": _stamp(day, 10),
             "project_id": project_id,
-            "preset": preset,
-            "engine": "OpenCode" if preset == "builder" else "Hermes Agent",
-            "text": "done",
+            "preset": preset if classify_proposal(prop) != "financial" else lane_preset,
+            "engine": "OpenCode" if lane_preset == "builder" else "Hermes Agent",
+            "text": text,
         }
     )
     patch_scope(project_id, None, "Last", str(prop.get("next") or "")[:160])
     patch_scope(project_id, None, "Blocker", "—")
-    return "implemented"
+    audit = last_labor_review(project_id)
+    if labor == "unproven":
+        return "unproven"
+    return str(audit.get("review") or "implemented")
 
 
 def tick(project_id: str, day: int, world: str, labor: str) -> dict:
@@ -142,14 +204,18 @@ def tick(project_id: str, day: int, world: str, labor: str) -> dict:
         job_id=f"{day:02d}thnk",
     )
     prop = decided.get("proposal") or load_open_proposal(project_id)
-    if prop:
+    if prop and decided.get("status") != "parked":
         prop["id"] = f"prop-{project_id}-d{day:02d}"
         prop["at"] = _stamp(day, 9)
         write_proposal(project_id, prop)
         prop = load_open_proposal(project_id)
-    allowed, reason = auto_labor_allowed(project_id, prop)
+    allowed, reason = auto_labor_allowed(project_id, prop if decided.get("status") != "parked" else prop)
+    if decided.get("status") == "parked":
+        allowed, reason = False, reason if "Accept" in (reason or "") else "Next is publish/delete/sign — Accept gate"
     outcome = _apply_labor(project_id, day, allowed, labor, prop or {})
     audit = last_labor_review(project_id)
+    scar = load_scar(project_id)
+    notes = load_notifies(project_id)
     return {
         "day": day,
         "world": world,
@@ -162,6 +228,11 @@ def tick(project_id: str, day: int, world: str, labor: str) -> dict:
         "reason": reason,
         "labor": outcome,
         "review_out": audit.get("review"),
+        "scar": scar.get("review") or "",
+        "parked": len(load_parked(project_id)),
+        "status": decided.get("status") or "",
+        "financial_repeat": int((notes.get("financial") or {}).get("count") or 0),
+        "skip_note": load_skip_note(project_id),
         "index_next": "",
     }
 
@@ -213,15 +284,11 @@ def seed_desk(home: Path, policy: dict | None = None) -> str:
     return DESK_ID
 
 
-def run_month(days: int = 22, policy: dict | None = None) -> dict:
-    """Run weekday ticks on an isolated desk. Never live SAA."""
+def _isolate(home: Path):
     import openbot.bus as bus_mod
     import openbot.org as org_mod
     import openbot.store as store_mod
 
-    days = max(1, min(int(days), len(MONTH)))
-    tmp = tempfile.TemporaryDirectory()
-    home = Path(tmp.name)
     saved = {
         "org_root": org_mod.ROOT,
         "org": org_mod.ORG,
@@ -234,13 +301,58 @@ def run_month(days: int = 22, policy: dict | None = None) -> dict:
         "jobs": store_mod.JOBS,
         "index": store_mod.INDEX,
     }
+    seed_desk(home)
+    return saved
+
+
+def _restore(saved: dict) -> None:
+    import openbot.bus as bus_mod
+    import openbot.org as org_mod
+    import openbot.store as store_mod
+
+    org_mod.ROOT = saved["org_root"]
+    org_mod.ORG = saved["org"]
+    org_mod.PROFILE_PATH = saved["profile"]
+    org_mod.HERMES_HOMES = saved["homes"]
+    bus_mod.ORG = saved["bus_org"]
+    bus_mod.ROOT = saved["bus_root"]
+    store_mod.ROOT = saved["store_root"]
+    store_mod.BRAINS = saved["brains"]
+    store_mod.JOBS = saved["jobs"]
+    store_mod.INDEX = saved["index"]
+
+
+def run_on_desk(fn, policy: dict | None = None):
+    """Call fn(project_id) on an isolated desk-month. Restores live ROOT."""
+    tmp = tempfile.TemporaryDirectory()
+    home = Path(tmp.name)
+    saved = None
     try:
-        pid = seed_desk(home, policy)
+        saved = _isolate(home)
+        if policy:
+            patch_project_tools(DESK_ID, {"auto_policy": policy})
+        return fn(DESK_ID)
+    finally:
+        if saved:
+            _restore(saved)
+        tmp.cleanup()
+
+
+def run_month(days: int = 22, policy: dict | None = None) -> dict:
+    """Run weekday ticks on an isolated desk. Never live SAA."""
+    days = max(1, min(int(days), len(MONTH)))
+    tmp = tempfile.TemporaryDirectory()
+    home = Path(tmp.name)
+    saved = None
+    try:
+        saved = _isolate(home)
+        if policy:
+            patch_project_tools(DESK_ID, {"auto_policy": policy})
         rows = []
         for i, spec in enumerate(MONTH[:days], start=1):
-            row = tick(pid, i, spec["world"], spec["labor"])
+            row = tick(DESK_ID, i, spec["world"], spec["labor"])
             try:
-                row["index_next"] = index_field(read_project_index(pid), "Next")
+                row["index_next"] = index_field(read_project_index(DESK_ID), "Next")
             except Exception:
                 row["index_next"] = ""
             rows.append(row)
@@ -251,7 +363,7 @@ def run_month(days: int = 22, policy: dict | None = None) -> dict:
         return {
             "ok": True,
             "days": days,
-            "desk": pid,
+            "desk": DESK_ID,
             "auto": auto_n,
             "held": hold_n,
             "failed": fail_n,
@@ -259,16 +371,8 @@ def run_month(days: int = 22, policy: dict | None = None) -> dict:
             "rows": rows,
         }
     finally:
-        org_mod.ROOT = saved["org_root"]
-        org_mod.ORG = saved["org"]
-        org_mod.PROFILE_PATH = saved["profile"]
-        org_mod.HERMES_HOMES = saved["homes"]
-        bus_mod.ORG = saved["bus_org"]
-        bus_mod.ROOT = saved["bus_root"]
-        store_mod.ROOT = saved["store_root"]
-        store_mod.BRAINS = saved["brains"]
-        store_mod.JOBS = saved["jobs"]
-        store_mod.INDEX = saved["index"]
+        if saved:
+            _restore(saved)
         tmp.cleanup()
 
 
@@ -288,6 +392,8 @@ def format_month(report: dict) -> str:
         lines.append(f"     why: {str(row.get('why') or '')[:88]}")
         if not row.get("allowed"):
             lines.append(f"     gate: {row.get('reason')}")
+        if row.get("scar"):
+            lines.append(f"     scar: {row.get('scar')}")
     return "\n".join(lines)
 
 

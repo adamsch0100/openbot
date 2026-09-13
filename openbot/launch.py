@@ -19,7 +19,7 @@ from .hermes import _dotenv
 
 OPENCODE_WEB_PORT = 4096
 HERMES_DASH_PORT = 9119
-OPENCODE_GO_MODEL = "opencode/deepseek-v4-flash"
+OPENCODE_GO_MODEL = "opencode/deepseek-v4.1-flash"
 _opencode_proc: subprocess.Popen | None = None
 _hermes_dash_proc: subprocess.Popen | None = None
 _opencode_cwd: str | None = None

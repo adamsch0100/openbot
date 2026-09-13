@@ -1051,6 +1051,25 @@ def company_pulse(project_id: str | None) -> str:
     site = str(tools.get("site_url") or "").strip() or SITE_BY_ID.get(pid, "")
     if site:
         lines.append(f"Site: {site} (pointer — Research re-opens; not live stats)")
+    try:
+        from .decide import load_notifies, load_scar, week_proof_text
+
+        scar = load_scar(pid)
+        if scar.get("review") in {"failed", "drifted", "unproven"}:
+            lines.append(f"Scar: {scar.get('review')} — {str(scar.get('note') or '')[:120]}")
+        proof = week_proof_text(week)
+        if proof:
+            lines.append(f"Week proof: {proof[:120]}")
+        notes = load_notifies(pid)
+        repeats = [
+            f"{key} x{int((row or {}).get('count') or 0)}"
+            for key, row in notes.items()
+            if isinstance(row, dict) and int(row.get("count") or 0) >= 2
+        ]
+        if repeats:
+            lines.append("Repeat: " + ", ".join(repeats))
+    except Exception:
+        pass
     packed = "\n".join(line for line in lines if line).strip()
     if len(packed) > PULSE_CAP:
         packed = packed[:PULSE_CAP].rsplit("\n", 1)[0].rstrip()

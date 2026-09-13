@@ -14,6 +14,7 @@ from pathlib import Path
 from .detect import detect, hermes_home, which
 
 ZEN_USAGE = "https://opencode.ai/zen/go/v1/usage"
+GO_MODELS = "https://opencode.ai/zen/go/v1/models"
 ZEN_MODELS = "https://opencode.ai/zen/v1/models"
 ZEN_AUTH = "https://opencode.ai/auth"
 OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
@@ -385,7 +386,17 @@ def _pretty_zen_id(model_id: str) -> str:
     return raw.replace("-", " ").replace("_", " ").strip() or raw
 
 
-def _zen_row(row: dict) -> dict | None:
+def _catalog_payload_rows(payload: object) -> list[dict]:
+    if isinstance(payload, dict):
+        rows = payload.get("data") or payload.get("models") or []
+    elif isinstance(payload, list):
+        rows = payload
+    else:
+        rows = []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _zen_row(row: dict, *, family: str, badge: str) -> dict | None:
     model_id = str(row.get("id") or "").strip()
     if not model_id or row.get("object") not in {None, "model"}:
         return None
@@ -403,9 +414,10 @@ def _zen_row(row: dict) -> dict | None:
         "reasoning": not cheap,
         "tools": True,
         "code": True,
-        "badge": "OpenCode Zen",
+        "badge": badge,
         "engines": ("OpenCode", "Hermes Agent"),
-        "family": "go",
+        "family": family,
+        "go_exclusive": False,
     }
 
 
@@ -433,20 +445,31 @@ def _refresh_zen_models() -> None:
     global _ZEN_FETCHING
     try:
         token = _opencode_key()
-        models: list[dict] = []
+        go_rows: list[dict] = []
+        zen_rows: list[dict] = []
         if token:
+            status, payload = _http_json(GO_MODELS, token)
+            if status == 200:
+                for row in _catalog_payload_rows(payload):
+                    parsed = _zen_row(row, family="go", badge="OpenCode Go")
+                    if parsed:
+                        go_rows.append(parsed)
             status, payload = _http_json(ZEN_MODELS, token)
-            rows = []
-            if status == 200 and isinstance(payload, dict):
-                rows = payload.get("data") or payload.get("models") or []
-            elif status == 200 and isinstance(payload, list):
-                rows = payload
-            for row in rows:
-                if not isinstance(row, dict):
-                    continue
-                parsed = _zen_row(row)
-                if parsed:
-                    models.append(parsed)
+            if status == 200:
+                for row in _catalog_payload_rows(payload):
+                    parsed = _zen_row(row, family="zen", badge="OpenCode Zen")
+                    if parsed:
+                        zen_rows.append(parsed)
+        zen_ids = {row["id"] for row in zen_rows}
+        for row in go_rows:
+            row["go_exclusive"] = row["id"] not in zen_ids
+        models: list[dict] = list(go_rows)
+        seen = {row["id"] for row in models}
+        for row in zen_rows:
+            if row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            models.append(row)
         with _ZEN_LOCK:
             _ZEN_CACHE["at"] = time.time()
             if models:

@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v172 — Month sim on isolated desk-month: 13 auto / 9 notify / 1 failed labor. Gates held. Run `python -m openbot.brainmonth`.
-Last: v171 — Financial toggle includes pay. Publish/delete/sign stay Accept-gated. Run Think now.
-Next: Save This CEO auto mix. Run Think now on a desk you mean to prove — not silent on live SAA.
+Now: v175 — Auto follows live Go catalog specials (Go-only flash). OttoBrain v2 file-month green. Cron not attached.
+Last: v174 — Think Haiku swap fixed in code; live Think still 401'd before Go vs Zen split.
+Next: One throwaway then one SAA Homes Run Think now. Do not attach weekday cron on live SAA.
 Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

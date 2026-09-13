@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v172 — Compressed month (22 weekdays, isolated desk-month) proves Think→proposal→auto/notify. Code+research auto; financial+ops notify; publish/delete Accept-gated; failed labor blocks the next tick.
-Last: v171 — Financial = pay + price + spend + wallet (one toggle). Publish/delete/sign still Accept-gated. Run Think now. Recommended: code+research auto, financial+ops notify.
-Next: Save This CEO mix. Run Think now on a desk you mean to prove — not silent on live SAA. `python -m openbot.brainmonth` to re-dogfood.
+Now: v175 — Auto uses live Go catalog (not Zen tagged as Go). Go-only flash is the current special; Haiku is Zen-only and skipped. OttoBrain v2 file-month still green. Cron stayed off.
+Last: v174 — Think no longer swaps to Chat Haiku. Live Think still 401'd haiku before this catalog split.
+Next: One throwaway then one SAA Homes Run Think now to prove Hermes on Go flash. Do not attach weekday cron. Do not Accept parked restore cards.
 Blocker: Live Railway still owns the SAA scheduler until pause. Do not Accept parked restore cards. Do not mass-retry. ListLogic live box is Offline — ask before redeploy.
 
 ## Vault
