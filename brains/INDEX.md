@@ -14,7 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Overnight board on fix/overnight-board — Chat names OttoBot/Cos, engines chip + three-line credit, settings IA, receipt tokens.
+Now: Merged overnight board to master. Chat names OttoBot/Cos, engines chip + three-line credit, settings IA, receipt tokens. 8787 up.
+Last: Boot+Desk+Safety retested on merged master. Run Think now and Builder both 401 until vault keys. Official OpenCode web is up.
+Next: Adam pastes Go/Nous keys. Then Run Think now from Chat and one Builder self-diff. Do not attach weekday cron on live SAA.
 Last: Run Think now + Builder both 401 Invalid API key. Rejected the wander INDEX diff. Official OpenCode web started after local data-dir fallback.
 Next: Adam pastes Go/Nous keys. Then Run Think now from Chat and one Builder self-diff. Do not attach weekday cron on live SAA.
 Blocker: Adam — vault keys, Nous Portal login (`hermes model`), Railway token. Do not pause/redeploy Railway. Do not Accept parked SAA restore cards.
