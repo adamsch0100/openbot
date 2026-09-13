@@ -55,6 +55,7 @@ from .bus import (
 )
 from .org import (
     RETIRED_CEO_IDS,
+    SUPPORT_CEO_ID,
     add_schedule,
     company_pulse,
     ensure_ceo_engines,
@@ -1254,6 +1255,19 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         blob = f"{job.get('blocker') or ''} {job.get('text') or ''} {job.get('status') or ''}"
         return bool(re.search(r"exited 130\b|\bsigint\b|cancelled by (?:the )?operator", blob, re.I))
 
+    def _e2e_job(job: dict) -> bool:
+        blob = " ".join(
+            str(job.get(key) or "")
+            for key in ("message", "text", "id", "untracked", "diff")
+        )
+        return bool(
+            re.search(
+                r"SMOKE\d+_|e2e_wc8_|e2e_test_routine|WC8-|Create file e2e_|Reply with exactly",
+                blob,
+                re.I,
+            )
+        )
+
     def _need_rank(job: dict) -> int:
         if job.get("login_wall"):
             return 0
@@ -1273,6 +1287,8 @@ def pending_approvals(limit: int = 12) -> list[dict]:
         if not isinstance(job, dict) or job.get("stopped"):
             continue
         if _cancelled(job):
+            continue
+        if _e2e_job(job):
             continue
         rank = _need_rank(job)
         if rank >= 9:
@@ -1367,7 +1383,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
             if len(out) >= limit:
                 break
             pid = str(project.get("id") or "")
-            if not pid:
+            if not pid or pid == SUPPORT_CEO_ID:
                 continue
             draft = load_founding(pid)
             status = str(draft.get("status") or "")
@@ -1392,7 +1408,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 founding["primary_action"] = str(primary.get("label") or "Accept Goals")
                 out.insert(0, founding)
                 continue
-            week = horizon_week(str(project.get("index") or ""))
+            week = horizon_week(read_project_index(pid))
             if week or status == "accepted":
                 continue
             needed = {
@@ -1504,7 +1520,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 card["primary_action"] = str(primary.get("label") or "Skip")
                 out.append(card)
                 have_kinds.add((pid, park_id))
-            week = horizon_week(str(project.get("index") or ""))
+            week = horizon_week(read_project_index(pid))
             if not week:
                 continue
             if heartbeat_enabled(pid):

@@ -145,6 +145,12 @@ class CheapChatTests(unittest.TestCase):
         self.assertFalse(smoke_card.get("cron_name"))
         self.assertFalse(smoke_card.get("cron_report"))
 
+    def test_founding_needs_read_ceo_index_and_skip_support(self):
+        router = (ROOT / "openbot" / "router.py").read_text(encoding="utf-8")
+        self.assertIn("horizon_week(read_project_index(pid))", router)
+        self.assertNotIn('horizon_week(str(project.get("index")', router)
+        self.assertIn("pid == SUPPORT_CEO_ID", router)
+
     def test_empty_cos_stays_on_the_board(self):
         from unittest.mock import patch
 

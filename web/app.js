@@ -4055,10 +4055,11 @@ function operatorMoveRows() {
     });
   const haveFail = new Set(filtered.filter((row) => row.kind === "failed").map((row) => String(row.project_id || "")));
   const extra = [];
-  const pids = [];
-  if (projectId) pids.push(projectId);
-  ((cfg.org && cfg.org.projects) || []).forEach((row) => {
-    if (row && row.id && pids.indexOf(row.id) < 0) pids.push(row.id);
+  const pids = [projectId || "openbot"];
+  const scoped = filtered.filter((row) => {
+    const pid = String(row.project_id || "");
+    if (projectId) return pid === String(projectId);
+    return !pid || pid === "openbot";
   });
   pids.forEach((pid) => {
     if (haveFail.has(String(pid))) return;
@@ -4066,7 +4067,7 @@ function operatorMoveRows() {
     const need = topDigestFailNeed(pid);
     if (need && adamMustSee(need)) extra.push(need);
   });
-  return filtered.concat(extra).sort((a, b) => adamNeedRank(a) - adamNeedRank(b)).slice(0, 1);
+  return scoped.concat(extra).sort((a, b) => adamNeedRank(a) - adamNeedRank(b)).slice(0, 1);
 }
 
 function moveHeadLabel(rows) {

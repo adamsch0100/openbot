@@ -14,10 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: World-class Chat CEO loop is live — Cos status, Engines, and job cards are honest.
-Last: v=173 + job-read sanitize. Live Cos is board, no smoke/Chief of Staff; Support Engines ok with OttoBot dash; receipts omit empty $0.0000.
-Next: Do not attach weekday cron on live SAA. Operator Accepts founding/Save Goals when ready. Hermes chat still has no --usage-file, so Think tokens stay blank rather than fake $0.
-Blocker: Do not pause/redeploy Railway SAA Hermes. Do not Accept parked SAA restore cards.
+Now: Live desk greened — INDEX without smoke, SAA Engines not fake-red, Your move stays on the aimed CEO.
+Last: v=173 honesty pass. Volume INDEX still had smoke cron; SAA Engines warned on the OttoBot dash; Cos Your move stuck on ListLogic Facebook.
+Next: Use Cos for status. Open a CEO to work. Do not attach weekday cron on live SAA.
+Blocker: Do not pause/redeploy Railway SAA Hermes. Do not Accept parked SAA restore or Facebook FUB login.
 
 ## Vault
 

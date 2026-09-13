@@ -2,9 +2,9 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: World-class Chat loop is live — honest Engines, Cos board for status, INDEX without smoke gore, engine named on cards.
-Last: v=173 Cos/Support honesty and job-read sanitize on live.
-Next: Do not attach weekday cron. Operator Accepts founding when ready.
+Now: Live desk is green — Horizons on this CEO, Cos for status, engines honest.
+Last: Restored Horizons on the live volume INDEX and cleared smoke cron Now/Next.
+Next: Do not attach weekday cron. Open Builder for code. Do not Accept parked SAA restore.
 Blocker: Do not Accept parked SAA restore. Do not redeploy live SAA Hermes.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 

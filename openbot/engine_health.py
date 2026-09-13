@@ -148,8 +148,9 @@ def engine_health(project_id: str | None = None) -> dict:
         aimed_leaf = _hermes_homes_id(aimed)
         shared_hosted_dash = bool(dash_leaf and aimed_leaf)
         if saa_live:
-            warn.append("Hermes dash home mismatch — live SAA box owns schedule; do not Restart this imported home.")
-            next_steps.append("Leave the imported home off. Check the live SAA Hermes box if cron is actually down.")
+            next_steps.append(
+                "Live SAA Hermes owns schedule. Imported home Off is expected. Do not Restart this imported home."
+            )
         elif gateway.get("running") and shared_hosted_dash:
             next_steps.append(
                 f"Dash is on {dash_leaf}. Tools → Hermes aims this CEO's pane. Gateway is already up."

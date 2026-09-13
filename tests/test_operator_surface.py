@@ -50,6 +50,7 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         move = js[js.find("function operatorMoveRows") : js.find("function moveHeadLabel")]
         self.assertIn("adamMustSee(row)", move)
         self.assertIn("adamMustSee(need)", move)
+        self.assertIn("projectId || \"openbot\"", move)
         self.assertIn("Your move · ${names[0]}", js)
         self.assertNotIn("Your move (CEO)", js)
 
@@ -92,8 +93,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=173", html)
-        self.assertIn("styles.css?v=173", html)
+        self.assertIn("app.js?v=174", html)
+        self.assertIn("styles.css?v=174", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
