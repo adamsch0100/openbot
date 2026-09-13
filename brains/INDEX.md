@@ -14,10 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v175 — Auto uses live Go catalog (not Zen tagged as Go). Go-only flash is the current special; Haiku is Zen-only and skipped. OttoBrain v2 file-month still green. Cron stayed off.
-Last: v174 — Think no longer swaps to Chat Haiku. Live Think still 401'd haiku before this catalog split.
-Next: One throwaway then one SAA Homes Run Think now to prove Hermes on Go flash. Do not attach weekday cron. Do not Accept parked restore cards.
-Blocker: Live Railway still owns the SAA scheduler until pause. Do not Accept parked restore cards. Do not mass-retry. ListLogic live box is Offline — ask before redeploy.
+Now: v176 — SAA cutover live: OttoBot Hermes owns cron. Auto uses live Go catalog (Go-only flash). Standalone Railway SAA Homes Hermes paused.
+Last: v175 Auto/Go catalog split + Think Haiku fix; cutover Accept stuck ownership; OttoBot gateway running source=this-desk.
+Next: Hard-refresh. Aim SAA Homes → Doing/Results. Optional: one throwaway then SAA Run Think on Go flash. Do not restart old Railway Hermes. Do not Accept parked restore cards.
+Blocker: —
 
 ## Vault
 

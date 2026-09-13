@@ -2,9 +2,9 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: OttoBot chat is the inbox. Telegram is not required. Live Railway still runs cron until pause.
-Last: Saved search alerts immediate · Healthy on the live box.
-Next: Cutover = this desk owns cron, deliver local to Schedule/Results. Pause live the same minute. No Telegram poller.
+Now: OttoBot Hermes owns SAA cron. Chat is the inbox — not Telegram.
+Last: Cutover complete: Railway standalone Hermes paused; desk ownership sticky; gateway running on OttoBot.
+Next: Watch Doing / Results for the next scheduled fire. Confirm Telegram is quiet.
 Blocker: —
 Goals: —
 

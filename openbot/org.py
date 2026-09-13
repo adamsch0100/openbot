@@ -174,27 +174,57 @@ def _save(data: dict) -> None:
 
 def saa_desk_owns() -> bool:
     """True when this OttoBot desk owns SAA cron. Telegram is not part of ownership."""
-    return bool(_load_saved().get("saa_desk_owns"))
+    if bool(_load_saved().get("saa_desk_owns")):
+        return True
+    # Durable marker on the Hermes home survives ensure_org profile rebuilds.
+    try:
+        from .hermes import read_saa_desk_marker
+        from .launch import resolve_ceo_hermes_home
+
+        return bool(read_saa_desk_marker(resolve_ceo_hermes_home("saa-homes", "") or ""))
+    except Exception:
+        return False
 
 
 def set_saa_desk_owns(on: bool) -> dict:
     data = _load_saved() or {}
     data["saa_desk_owns"] = bool(on)
     _save(data)
+    try:
+        from .hermes import write_saa_desk_marker
+        from .launch import resolve_ceo_hermes_home
+
+        write_saa_desk_marker(resolve_ceo_hermes_home("saa-homes", "") or "", owns=bool(on))
+    except Exception:
+        pass
     return {"ok": True, "saa_desk_owns": bool(on)}
 
 
-def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = False) -> dict:
-    """This desk owns SAA cron. OttoBot chat is the inbox. Do not restore Telegram."""
-    from .hermes import gateway_start, migrate_cron_delivery
+def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = True) -> dict:
+    """Move SAA from standalone Railway Hermes onto this OttoBot Hermes desk.
+
+    Syncs latest live cron status + result markdown first, migrates delivery to
+    local, pauses the old gateway, then starts OttoBot-owned Hermes. Chat inbox
+    stays OttoBot — Telegram is not restored.
+    """
+    from .hermes import (
+        gateway_start,
+        migrate_cron_delivery,
+        stop_saa_live_gateway,
+        sync_saa_live_crons,
+    )
     from .launch import resolve_ceo_hermes_home
+    from .store import patch_index_line
 
     home = resolve_ceo_hermes_home("saa-homes", "") or ""
-    set_saa_desk_owns(True)
-    started = {"ok": False, "skipped": True}
-    if start_gateway and home:
-        started = gateway_start(home, wait=True, timeout=45, force=True)
-        started["skipped"] = False
+    synced = {"ok": False, "skipped": True}
+    if home and sync_live:
+        try:
+            synced = sync_saa_live_crons(home, live=True)
+            synced["skipped"] = False
+        except Exception as err:
+            synced = {"ok": False, "error": str(err)[:200], "skipped": False}
+
     migrated = {"ok": False, "skipped": True, "migrated": []}
     if home:
         try:
@@ -202,14 +232,60 @@ def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = False) -> dic
             migrated["skipped"] = False
         except Exception as err:
             migrated = {"ok": False, "error": str(err)[:200], "migrated": []}
-    synced = {"ok": False, "skipped": True}
-    if home and sync_live:
-        try:
-            from .hermes import sync_saa_live_crons
 
-            synced = sync_saa_live_crons(home, live=True)
-        except Exception as err:
-            synced = {"ok": False, "error": str(err)[:200]}
+    paused = {"ok": False, "skipped": True}
+    try:
+        paused = stop_saa_live_gateway()
+        paused["skipped"] = False
+    except Exception as err:
+        paused = {"ok": False, "error": str(err)[:200], "skipped": False}
+
+    set_saa_desk_owns(True)
+
+    started = {"ok": False, "skipped": True}
+    if start_gateway and home:
+        started = gateway_start(home, wait=True, timeout=45, force=True)
+        started["skipped"] = False
+
+    try:
+        patch_scope(
+            "saa-homes",
+            None,
+            "Now",
+            "OttoBot Hermes owns SAA cron. Chat is the inbox — not Telegram.",
+        )
+        patch_scope(
+            "saa-homes",
+            None,
+            "Last",
+            "Cutover Accept: synced live results onto OttoBot home, paused standalone Railway gateway.",
+        )
+        patch_scope(
+            "saa-homes",
+            None,
+            "Next",
+            "Watch Doing / Results on OttoBot. Confirm standalone Railway stays paused.",
+        )
+        patch_scope("saa-homes", None, "Blocker", "—")
+        patch_index_line(
+            "Now",
+            "v168 — SAA cutover onto OttoBot Hermes. Standalone Railway paused at Accept.",
+        )
+        patch_index_line(
+            "Last",
+            "Accepted SAA desk: live results synced, delivery local, old gateway stopped.",
+        )
+        patch_index_line(
+            "Next",
+            "Hard-refresh. Aim SAA Homes → Schedule / Results. Keep Railway Hermes paused.",
+        )
+        patch_index_line(
+            "Blocker",
+            "Confirm standalone Railway SAA Hermes stays paused so jobs do not double-fire.",
+        )
+    except Exception:
+        pass
+
     gateway_ok = bool(started.get("ok") or started.get("running") or not start_gateway)
     return {
         "ok": gateway_ok,
@@ -219,10 +295,13 @@ def take_saa_desk(*, start_gateway: bool = True, sync_live: bool = False) -> dic
         "gateway": started,
         "delivery": migrated,
         "synced": synced,
+        "paused_live": paused,
         "engine": "Hermes Agent",
         "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
-        "pause_live": "Pause Railway SAA Homes Hermes so cron does not run twice.",
+        "pause_live": "Standalone Railway SAA Hermes gateway stop was attempted at Accept.",
     }
+
+
 
 
 def _carry_tools(row: dict) -> dict:
@@ -633,6 +712,9 @@ def ensure_org() -> dict:
         "folder": work,
         "projects": [primary, *extras],
     }
+    # Keep desk-ownership flags. ensure_org rebuilds projects but must not wipe cutover.
+    if saved.get("saa_desk_owns"):
+        data["saa_desk_owns"] = True
     _save(data)
     seed_org_contracts([primary_id, *[row["id"] for row in extras]])
     try:

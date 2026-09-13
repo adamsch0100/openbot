@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v175 — Auto follows live Go catalog specials (Go-only flash). OttoBrain v2 file-month green. Cron not attached.
-Last: v174 — Think Haiku swap fixed in code; live Think still 401'd before Go vs Zen split.
-Next: One throwaway then one SAA Homes Run Think now. Do not attach weekday cron on live SAA.
-Blocker: Do not Accept parked restore cards. Do not redeploy live Hermes.
+Now: v176 — SAA cutover live on production. OttoBot Hermes owns the desk. Auto follows live Go catalog (flash).
+Last: v175 Auto/Go catalog + Think Haiku fix; ownership-sticky cutover deployed; Railway SAA Homes Hermes paused via CLI.
+Next: Hard-refresh. Verify SAA Results in chat. Optional throwaway + SAA Run Think on Go flash. Do not restart old Railway Hermes. Do not Accept parked restore cards.
+Blocker: —
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons

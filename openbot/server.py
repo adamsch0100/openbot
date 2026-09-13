@@ -1964,7 +1964,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, set_saa_desk_owns(False))
             result = take_saa_desk(
                 start_gateway=bool(data.get("start_gateway", True)),
-                sync_live=bool(data.get("sync_live", False)),
+                sync_live=bool(data.get("sync_live", True)),
             )
             return self._json(200 if result.get("ok") else 400, result)
         if path == "/api/org/projects":
