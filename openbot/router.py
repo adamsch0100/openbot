@@ -78,6 +78,7 @@ from .org import (
     work_target,
     write_project_inbox,
     quiet_index_line,
+    board_copy,
 )
 from .threadstore import search_quote, thread_key, wants_quote
 from .research import fetch_page, first_url
@@ -973,7 +974,7 @@ def _live_status_line(project_id: str | None) -> str:
         digest = (project_cron_bundle(project_id) or {}).get("digest") or {}
     except (TypeError, ValueError, OSError):
         return ""
-    return str(digest.get("live_story") or "").strip()
+    return quiet_index_line(str(digest.get("live_story") or "").strip(), drop_if_noisy=False)
 
 
 STAFF_WHO = frozenset({"OpenBot", "Chief of Staff", "Cos", "Staff"})
@@ -991,7 +992,7 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
     blocker = quiet_index_line(index_field(index_text, "Blocker") or "—") or "—"
     week = horizon_week(index_text)
     staff = name in STAFF_WHO
-    live = quiet_index_line(live)
+    live = quiet_index_line(live, drop_if_noisy=False)
     if greeting:
         if THANKS.search(message or ""):
             if staff:
@@ -2902,9 +2903,14 @@ def public_job(receipt: dict | None) -> dict:
     out.pop("git_snapshot", None)
     out.pop("engines", None)
     if "text" in out:
-        out["text"] = sanitize_job_text(out.get("text"))
+        out["text"] = quiet_index_line(sanitize_job_text(out.get("text")), drop_if_noisy=False)
     if "message" in out:
         out["message"] = redact_chat_login(out.get("message") or "")
+    for key in ("next", "index_now", "index_last", "index_blocker"):
+        if isinstance(out.get(key), str):
+            out[key] = quiet_index_line(out[key])
+    if isinstance(out.get("blocker"), str):
+        out["blocker"] = board_copy(out["blocker"])
     if out.get("login_wall") and not isinstance(out.get("logins"), list):
         pid = out.get("project_id") if isinstance(out.get("project_id"), str) else None
         out["logins"] = public_logins(pid)

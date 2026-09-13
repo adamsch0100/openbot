@@ -1471,7 +1471,7 @@ def wiring_brief(project_id: str | None = None) -> str:
 
 
 INDEX_NOISE = re.compile(
-    r"smoke\d+|SMOKE\d+_|e2e smoke|wc8_|routine-e521843f|Cron smoke",
+    r"smoke\d+|SMOKE\d+_|e2e smoke|wc8_|(?:openbot\s+)?routine[\s\-]*e521843f|Cron smoke",
     re.I,
 )
 
@@ -1483,11 +1483,22 @@ def board_copy(text: str) -> str:
     return s
 
 
-def quiet_index_line(text: str) -> str:
-    """INDEX line for Cos / rail / status. Hide smoke cron gore. Name Cos."""
+def quiet_index_line(text: str, *, drop_if_noisy: bool = True) -> str:
+    """INDEX / job copy for the board. Hide smoke cron gore. Name Cos."""
     s = board_copy(text)
-    if s and INDEX_NOISE.search(s):
+    s = re.sub(r"^(Now|Last|Next|Blocker):\s*", "", s, flags=re.I).strip()
+    if not s:
         return ""
+    if not INDEX_NOISE.search(s):
+        return s
+    if drop_if_noisy:
+        return ""
+    if "\n" in s:
+        kept = [line for line in s.splitlines() if not INDEX_NOISE.search(line)]
+        return "\n".join(kept).strip()
+    s = INDEX_NOISE.sub("", s)
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"\s*·\s*", " · ", s).strip(" ·-;:")
     return s
 
 
@@ -1511,7 +1522,11 @@ def staff_status_reply() -> str:
         name = str(row.get("name") or pid)
         text = read_project_index(pid)
         week = horizon_week(text)
-        now_line = quiet_index_line(index_field(text, "Now") or "—") or "—"
+        now_line = (
+            quiet_index_line(index_field(text, "Now") or "")
+            or quiet_index_line(index_field(text, "Last") or "")
+            or "—"
+        )
         if week:
             bit = f"{pid}: {name} — this week: {week[:140]} · now: {now_line}"
         else:

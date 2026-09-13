@@ -95,6 +95,7 @@ from .org import (
     parse_horizons,
     dismiss_horizon_notice,
     read_project_index,
+    quiet_index_line,
 )
 from .engine_proxy import inject_opencode_tree, maybe_proxy
 from .providers import connected_provider_ids, openrouter_models, provider_status, zen_models
@@ -545,7 +546,7 @@ def _activity(*, ingest_cron: bool = False, project_id: str | None = None) -> di
         ]
 
     return {
-        "now": (now_match.group(1).strip() if now_match else ""),
+        "now": quiet_index_line(now_match.group(1).strip() if now_match else ""),
         "jobs": [public_job(job) for job in jobs[:30]],
         "needs_you": needs,
         "cron_jobs": cron_jobs,

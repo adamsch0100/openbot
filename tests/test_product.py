@@ -108,6 +108,28 @@ class CheapChatTests(unittest.TestCase):
         self.assertIn("folder then diff", text)
         self.assertIn("Last: builder", text)
 
+    def test_quiet_index_strips_duplicate_next_and_public_jobs_say_cos(self):
+        from openbot.org import quiet_index_line
+        from openbot.router import public_job
+
+        self.assertEqual(quiet_index_line("Next: Open OttoBot if you want the report"), "Open OttoBot if you want the report")
+        self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Cos")
+        job = public_job(
+            {
+                "id": "abc",
+                "preset": "cos",
+                "engine": "board",
+                "text": "OttoBot · **Cron smoke27-552014 result:** gone\nNext: keep going from Chief of Staff",
+                "next": "Ask Code to execute, or Chief of Staff for status",
+                "index_now": "OttoBot · **Cron smoke27-552014 result:** gone",
+            }
+        )
+        self.assertNotIn("Chief of Staff", job.get("next") or "")
+        self.assertNotIn("Chief of Staff", job.get("text") or "")
+        self.assertNotIn("smoke27", (job.get("text") or "").lower())
+        self.assertIn("keep going from Cos", job.get("text") or "")
+        self.assertFalse(job.get("index_now"))
+
     def test_empty_cos_stays_on_the_board(self):
         from unittest.mock import patch
 
