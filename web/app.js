@@ -78,11 +78,32 @@ function paintBoardMark() {
       ? "ottobot. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
       : "ottobot · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
   }
-  const credit = $("aboutCredit");
-  if (credit && cfg && cfg.credit) credit.textContent = cfg.credit;
   const sub = document.querySelector(".sub");
   if (sub) sub.hidden = live;
   document.title = live ? "OttoBot" : "OttoBot · On it.";
+  paintEnginesChip();
+}
+
+function paintEnginesChip() {
+  const el = $("enginesChip");
+  if (!el) return;
+  const h = (cfg && cfg.engines && cfg.engines.hermes) || {};
+  const o = (cfg && cfg.engines && cfg.engines.opencode) || {};
+  const missing = [];
+  if (!h.present) missing.push("Hermes Agent");
+  if (!o.present) missing.push("OpenCode");
+  const found = [];
+  if (h.present) found.push("Hermes Agent");
+  if (o.present) found.push("OpenCode");
+  el.classList.toggle("warn", missing.length > 0 || found.length < 2);
+  el.classList.toggle("ok", missing.length === 0 && found.length === 2);
+  if (missing.length) {
+    el.textContent = `Engines: ${missing.join(" + ")} missing`;
+  } else if (found.length) {
+    el.textContent = `Engines: ${found.join(" · ")}`;
+  } else {
+    el.textContent = "Engines: board only";
+  }
 }
 
 function sharePerm(name) {
@@ -268,16 +289,18 @@ const PANEL_TITLES = {
   account: "You",
   workspace: "Folder",
   folder: "Folder",
-  keys: "Keys",
+  keys: "Keys & wallets",
+  engines: "Engines",
   ceo: "This CEO",
   models: "Models",
   connectors: "Connectors",
   git: "Git",
   memory: "Memory",
-  usage: "Usage",
+  usage: "Spend / caps",
   import: "Import",
   channels: "Channels",
-  jobs: "Usage",
+  jobs: "Spend / caps",
+  advanced: "Advanced",
   about: "About",
   help: "Help"
 };
@@ -333,7 +356,7 @@ function escapeHtml(s) {
   }[c]));
 }
 
-const PACKET_LINE = /^(You are the |You are Chief of Staff|You report to Chief of Staff|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in (OpenBot|OttoBot) Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |OttoBot chat is the inbox|.+ CEO — reports to Chief of Staff)/i;
+const PACKET_LINE = /^(You are the |You are Chief of Staff|You are Cos on a local|You report to (Chief of Staff|Cos)|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in (OpenBot|OttoBot) Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |OttoBot chat is the inbox|.+ CEO — reports to (Chief of Staff|Cos))/i;
 
 function statusOnly(text) {
   const rows = String(text || "").split("\n").map((line) => line.trim()).filter(Boolean);
@@ -599,7 +622,8 @@ const CEO_PRETTY = {
   "saa-homes": "SAA Homes",
   pmill: "Pmill.ai",
   "pmill-ai": "Pmill.ai",
-  openbot: "OpenBot",
+  openbot: "OttoBot",
+  ottobot: "OttoBot",
   support: "Support"
 };
 
@@ -610,6 +634,7 @@ function prettyCeoName(pid, fallback) {
   if (CEO_PRETTY[raw.toLowerCase()]) return CEO_PRETTY[raw.toLowerCase()];
   if (/^listlogic$/i.test(raw)) return "ListLogic";
   if (/^nadia$/i.test(raw)) return "Nadia";
+  if (/^openbot$/i.test(raw) || /^ottobot$/i.test(raw)) return "OttoBot";
   return raw;
 }
 
@@ -618,7 +643,7 @@ function ceoMoveName(pidOrProject) {
     return prettyCeoName(pidOrProject.id, pidOrProject.name) || talkName();
   }
   const pid = String(pidOrProject || "");
-  if (!pid) return "Chief of Staff";
+  if (!pid) return "Cos";
   const project = ((cfg.org && cfg.org.projects) || []).find((row) => String(row.id) === pid);
   return prettyCeoName(pid, project && project.name) || pid;
 }
@@ -1243,7 +1268,7 @@ function handlingAliveLine(counts) {
 }
 
 function ceoHandlingStoryHtml() {
-  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Chief of Staff";
+  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Cos";
   const pack = digestCache.get(projectId) || {};
   const failed = ((pack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row))).slice().sort(ownershipSort);
   const top = failed[0];
@@ -1579,8 +1604,8 @@ function talkName() {
   const worker = currentWorker();
   if (worker) return worker.name;
   const project = currentProject();
-  if (project) return project.name;
-  return "Chief of Staff";
+  if (project) return prettyCeoName(project.id, project.name);
+  return "Cos";
 }
 
 function syncComposerWho() {
@@ -1589,9 +1614,9 @@ function syncComposerWho() {
   const worker = currentWorker();
   const pin = preset && preset !== "cos";
   const engine = pin ? (PRESET_ENGINE[preset] || "board") : "";
-  let desk = "Chief of Staff";
-  if (worker && project) desk = `${worker.name} · ${project.name}`;
-  else if (project) desk = project.name;
+  let desk = "Cos";
+  if (worker && project) desk = `${worker.name} · ${prettyCeoName(project.id, project.name)}`;
+  else if (project) desk = prettyCeoName(project.id, project.name);
   const line = pin
     ? `${desk} · ${jobLabel(preset)}${engine ? ` · ${engine}` : ""}`
     : desk;
@@ -1808,10 +1833,16 @@ function receiptLine(job) {
   const engine = String(job.engine || PRESET_ENGINE[job.preset] || "board").trim() || "board";
   const status = jobStatusWord(job);
   const model = job.model && job.model !== "none" ? (modelName(job.model) || job.model) : "";
+  const prompt = Number(job.prompt_tokens || 0);
+  const output = Number(job.output_tokens || 0);
+  const cached = Number(job.cached_tokens || 0);
+  const tokCount = prompt + output + cached;
+  const tokens = tokCount ? `${prompt + cached}→${output} tok` : "";
   const cost = Number(job.usd_estimate || 0);
-  const money = cost ? `$${cost.toFixed(4)}` : "";
+  const ran = engine !== "board" && engine !== "";
+  const money = ran || cost ? `$${cost.toFixed(4)}` : "";
   const named = engine === "board" ? "" : engine;
-  return [status, named, model, money].filter(Boolean).join(" · ");
+  return [status, named, model, tokens, money].filter(Boolean).join(" · ");
 }
 
 async function stopLive(key) {
@@ -2011,7 +2042,7 @@ function seatLabel(name) {
 
 function allSeats() {
   const seats = [
-    { id: "cos", label: "Cos / Auto", description: "Chief of Staff (routing)" },
+    { id: "cos", label: "Cos / Auto", description: "Cos (routing)" },
     { id: "builder", label: "Code / Builder", description: "OpenCode in this folder" },
     { id: "think", label: "Think", description: "Hermes reasoning" },
     { id: "research", label: "Research", description: "Fetch + Hermes snapshot" },
@@ -2418,7 +2449,7 @@ function showNodeMenu(x, y, kind, pid, wid) {
     if (canAddCeo()) menu.classList.add("ceo-add");
     html = canAddCeo()
       ? `
-      <div class="menu-head">Chief of Staff</div>
+      <div class="menu-head">Cos</div>
       ${addCeoFormHtml()}
       <div class="menu-field">
         <label for="menuIndexEdit">Staff brief</label>
@@ -2700,11 +2731,17 @@ function shortHomeLeaf(home) {
   return parts[parts.length - 1] || raw;
 }
 
+function engineHealthHosts() {
+  return [$("ceoEngineHealth"), $("enginesHealth")].filter(Boolean);
+}
+
 function paintEngineHealthCard(data) {
-  const host = $("ceoEngineHealth");
-  if (!host) return;
+  const hosts = engineHealthHosts();
+  if (!hosts.length) return;
   if (!data || typeof data !== "object") {
-    host.innerHTML = `<p class="muted">Engine health unavailable.</p>`;
+    hosts.forEach((host) => {
+      host.innerHTML = `<p class="muted">Engine health unavailable.</p>`;
+    });
     return;
   }
   const h = data.hermes || {};
@@ -2732,13 +2769,13 @@ function paintEngineHealthCard(data) {
   ].filter(Boolean).join(" · ") || "pins unset";
   const nexts = Array.isArray(data.next) ? data.next : [];
   const action = data.action || "";
-  const hermesBad = Boolean(warns.length) || (h.dash_running && !h.dash_home_ok) || (h.home && !h.gateway_running);
+  const hermesBad = Boolean(warns.length) || (h.dash_running && !h.dash_home_ok) || (h.home && !h.gateway_running) || !h.present;
   const footer = warns.length
     ? `<p class="wire-error">${escapeHtml(warns[0])}</p>
        ${nexts[0] ? `<p class="muted">Next: ${escapeHtml(nexts[0])}</p>` : ""}
-       ${action === "restart_gateway" ? `<div class="actions"><button type="button" class="ghost-btn" id="ceoHealthRestartGw">Restart Hermes gateway</button></div>` : ""}`
+       ${action === "restart_gateway" ? `<div class="actions"><button type="button" class="ghost-btn ceo-health-restart">Restart Hermes gateway</button></div>` : ""}`
     : `<p class="muted">Engines look aligned for this CEO.</p>`;
-  host.innerHTML = `
+  const html = `
     <div class="kv">
       <div><dt>Hermes</dt><dd class="${hermesBad ? "wire-bad" : ""}">${escapeHtml(hermesLine)}</dd></div>
       <div><dt>OpenCode</dt><dd class="${o.present ? "" : "wire-bad"}">${escapeHtml(ocLine)}</dd></div>
@@ -2747,26 +2784,34 @@ function paintEngineHealthCard(data) {
     </div>
     ${footer}
   `;
-  const restart = $("ceoHealthRestartGw");
-  if (restart) {
+  hosts.forEach((host) => {
+    host.innerHTML = html;
+  });
+  document.querySelectorAll(".ceo-health-restart").forEach((restart) => {
     restart.addEventListener("click", () => {
       if ($("ceoRetryHermes")) $("ceoRetryHermes").click();
       else if ($("retryHermes")) $("retryHermes").click();
       else setStage("hermes");
     });
-  }
+  });
 }
 
 async function loadCeoEngineHealth(project) {
-  const host = $("ceoEngineHealth");
-  if (!host || !project || !project.id) return;
-  host.innerHTML = `<p class="muted">Checking engines…</p>`;
+  const hosts = engineHealthHosts();
+  if (!hosts.length) return;
+  const pid = (project && project.id) || projectId || "";
+  hosts.forEach((host) => {
+    host.innerHTML = `<p class="muted">Checking engines…</p>`;
+  });
   try {
-    const res = await fetch(`/api/engines/health?project_id=${encodeURIComponent(project.id)}`);
+    const q = pid ? `?project_id=${encodeURIComponent(pid)}` : "";
+    const res = await fetch(`/api/engines/health${q}`);
     const data = await res.json().catch(() => ({}));
     paintEngineHealthCard(data);
   } catch (err) {
-    host.innerHTML = `<p class="wire-error">Engine health failed.</p>`;
+    hosts.forEach((host) => {
+      host.innerHTML = `<p class="wire-error">Engine health failed.</p>`;
+    });
   }
 }
 
@@ -3851,7 +3896,7 @@ async function refreshGatewayStatus() {
 async function restartGateway() {
   const aim = currentAim();
   const retry = $("retryHermes");
-  const healthBtn = $("ceoHealthRestartGw");
+  const healthBtn = document.querySelector(".ceo-health-restart");
   if (!gatewayRestartOk || gatewayLiveOwns) {
     if ($("hermesStatus")) $("hermesStatus").textContent = "Live SAA Hermes owns the schedule — do not Restart the imported home.";
     return;
@@ -4228,7 +4273,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
       </div>`;
   }).join("");
   const staffBusy = lives.has(aimKey("", ""));
-  const cosInitials = ceoInitials("Chief of Staff");
+  const cosInitials = ceoInitials("Cos");
   const staffQueuedCount = queueByProject.get("_staff") || 0;
   const staffActiveCount = activeByProject.get("_staff") || 0;
   
@@ -4241,10 +4286,10 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
   }
   
   tree.innerHTML = `
-    ${isCollaborator() ? `<p class="share-banner">Shared with you by ${escapeHtml((cfg.share && cfg.share.owner_name) || "the owner")} · you are a collaborator</p>` : `<button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Chief of Staff${staffBusy ? " · working" : ""}">
+    ${isCollaborator() ? `<p class="share-banner">Shared with you by ${escapeHtml((cfg.share && cfg.share.owner_name) || "the owner")} · you are a collaborator</p>` : `<button type="button" class="org-btn org-staff${!projectId ? " on" : ""}${staffBusy ? " ping working" : ""}" data-project="" data-worker="" data-kind="staff" title="Cos${staffBusy ? " · working" : ""}">
       <span class="org-avatar" data-life="${staffBusy ? "working" : "idle"}" aria-hidden="true">${escapeHtml(cosInitials)}</span>
       <span class="org-btn-text">
-        <b>Chief of Staff${staffStatusChip}</b>
+        <b>Cos${staffStatusChip}</b>
         <span class="org-now">${escapeHtml(clipWire(orgWeekGlance() || "runs the CEOs", 72))}</span>
       </span>
     </button>`}
@@ -4308,9 +4353,9 @@ function currentWorker() {
 function whereLabel() {
   const project = currentProject();
   const worker = currentWorker();
-  if (worker && project) return `${project.name} · ${worker.name}`;
-  if (project) return `${project.name} · CEO`;
-  return "Chief of Staff";
+  if (worker && project) return `${prettyCeoName(project.id, project.name)} · ${worker.name}`;
+  if (project) return `${prettyCeoName(project.id, project.name)} · CEO`;
+  return "Cos";
 }
 
 function chatModelLabel() {
@@ -4334,7 +4379,7 @@ function renderBotMeta(opts) {
   if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty)";
   const worker = currentWorker();
   const project = currentProject();
-  const label = worker ? `${worker.name} brief` : project ? `${project.name} brief` : "Chief of Staff brief";
+  const label = worker ? `${worker.name} brief` : project ? `${prettyCeoName(project.id, project.name)} brief` : "Cos brief";
   if ($("indexSummary")) {
     $("indexSummary").textContent = `${label} · ${briefHonestyLine(cleaned)}`;
   }
@@ -5506,7 +5551,7 @@ function gatewayOffHtml() {
 }
 
 function emptyWorkCopy(view) {
-  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Chief of Staff";
+  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Cos";
   const why = whyIdleLine();
   if (view === "doing") {
     const counts = workCounts();
@@ -6138,6 +6183,7 @@ function applyConfig(data) {
     renderOrg(org);
   }
   if (data.engines) renderEngines(data.engines, "firstEngines");
+  paintEnginesChip();
   paintPulse();
   renderSpend(data.spend);
   renderActivity(data.activity);
@@ -6289,6 +6335,7 @@ function setSettingsPanel(name) {
   if (name === "keys") refreshProviders();
   if (name === "import") fillImport(cfg.hermes_instances || []);
   if (name === "ceo") fillCeoPanel();
+  if (name === "engines") loadCeoEngineHealth(currentProject() || { id: projectId || "openbot" });
   if (name === "channels") fillChannels();
   if (name === "memory") loadMemory();
   if (name === "usage") loadJobs();
@@ -6326,7 +6373,7 @@ async function setOrgNode(project, worker) {
   }
   const desk = activityBody();
   if (desk && scheduleOpen) {
-    const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Chief of Staff";
+    const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Cos";
     desk.innerHTML = `<p class="cron-empty">Loading ${escapeHtml(who)}…</p>`;
   }
   preset = "cos";
@@ -7101,7 +7148,7 @@ function emptyStreamHtml() {
   const now = briefHonestyLine(text);
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
-  const title = worker ? worker.name : project ? prettyCeoName(projectId, project.name) : "Chief of Staff";
+  const title = worker ? worker.name : project ? prettyCeoName(projectId, project.name) : "Cos";
   let lead = "Ask what’s going on, or open a CEO.";
   let showCTA = !project;
   if (worker && project) {
@@ -7652,9 +7699,17 @@ async function startOpenCode() {
   if (!data.ok && !data.url) {
     setEmbedOpen("ocOpen", data.install || "");
     paintEmbedAim("ocStatus", "", `${escapeHtml(data.error || "OpenCode missing")}${data.install ? ` · <a href="${data.install}">install</a>` : ""}`);
+    if ($("ocStatus")) $("ocStatus").classList.add("wall");
+    const frame = $("ocFrame");
+    if (frame) {
+      frame.removeAttribute("src");
+      frame.hidden = true;
+    }
     paintEmbedLive();
     return;
   }
+  if ($("ocStatus")) $("ocStatus").classList.remove("wall");
+  if ($("ocFrame")) $("ocFrame").hidden = false;
   const url = data.url || "/engine/opencode/";
   const aimed = data.folder || folder || "";
   const sid = data.session_id || "";
@@ -7686,10 +7741,18 @@ async function startHermes() {
     if ($("hermesStatus")) $("hermesStatus").innerHTML = `${escapeHtml(data.error || "Hermes Agent missing")}${docs}`;
     setEmbedOpen("hermesOpen", data.install || "");
     paintEmbedAim("hermesAim", "", `${escapeHtml(data.error || "Hermes Agent missing")}${docs}`);
+    if ($("hermesAim")) $("hermesAim").classList.add("wall");
+    const frame = $("hermesFrame");
+    if (frame) {
+      frame.removeAttribute("src");
+      frame.hidden = true;
+    }
     syncHermesHint();
     paintEmbedLive();
     return;
   }
+  if ($("hermesAim")) $("hermesAim").classList.remove("wall");
+  if ($("hermesFrame")) $("hermesFrame").hidden = false;
   const base = data.url || "/engine/hermes/";
   const aimed = data.home || home || "";
   const resume = data.session_id || sid || "";
@@ -8069,6 +8132,9 @@ if ($("modelSearch")) {
 }
 if ($("openSpend")) {
   $("openSpend").addEventListener("click", () => setSettings(true, "usage"));
+}
+if ($("enginesChip")) {
+  $("enginesChip").addEventListener("click", () => setSettings(true, "engines"));
 }
 document.querySelectorAll(".work-tabs").forEach((tabs) => {
   if (tabs.dataset.workBound) return;

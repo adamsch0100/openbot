@@ -229,13 +229,40 @@ def _hermes_env(home: str | Path | None = None) -> dict[str, str]:
     return env
 
 
+def _engine_data_root() -> Path:
+    """Writable XDG root for engine panes. Railway sets OPENBOT_DATA_DIR=/data.
+    Local boards without a writable /data fall back to ~/.openbot/engine-data — never fake a session."""
+    pinned = os.environ.get("OPENBOT_DATA_DIR", "").strip()
+    candidates: list[Path] = []
+    if pinned:
+        candidates.append(Path(pinned))
+    else:
+        candidates.append(Path("/data"))
+        candidates.append(Path.home() / ".openbot" / "engine-data")
+    last_err: OSError | None = None
+    for root in candidates:
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+            probe = root / ".write-ok"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            return root
+        except OSError as err:
+            last_err = err
+            if pinned:
+                raise
+            continue
+    if last_err is not None:
+        raise last_err
+    raise OSError("no writable engine data dir")
+
+
 def _opencode_env(folder: str | None = None) -> dict[str, str]:
     env = os.environ.copy()
     # `opencode web` always calls npm `open`. A non-browser BROWSER value
     # makes that fail silently so the UI stays in the OpenBot iframe.
     env["BROWSER"] = os.environ.get("OPENBOT_ENGINE_BROWSER", ":")
-    data = os.environ.get("OPENBOT_DATA_DIR", "").strip()
-    root = Path(data) if data else Path("/data")
+    root = _engine_data_root()
     # Per-CEO XDG so Cos /app worktrees don't pollute secondary CEO project switchers.
     ceo = ""
     try:
@@ -644,7 +671,10 @@ def opencode_web_status() -> dict:
 
 def start_opencode_web(folder: str | None = None, project_id: str | None = None) -> dict:
     with _oc_lock:
-        return _start_opencode_web(folder, project_id)
+        try:
+            return _start_opencode_web(folder, project_id)
+        except OSError as err:
+            return {"ok": False, "error": f"OpenCode pane cannot start: {err}", **opencode_web_status()}
 
 
 def _start_opencode_web(folder: str | None = None, project_id: str | None = None) -> dict:

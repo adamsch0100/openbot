@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
 
 GIT_TIMEOUT = 30
+_EMBEDDED_USERINFO = re.compile(r"https://[^/@]+@", re.I)
 
 
 def _run(folder: str, args: list[str], stdin: str | None = None) -> tuple[int, str]:
@@ -30,6 +32,16 @@ def _run(folder: str, args: list[str], stdin: str | None = None) -> tuple[int, s
 def is_repo(folder: str) -> bool:
     code, _ = _run(folder, ["rev-parse", "--verify", "HEAD"])
     return code == 0
+
+
+def public_remote_url(url: str) -> str:
+    """Strip embedded credentials so INDEX / packets / chat never store tokens."""
+    raw = (url or "").strip()
+    if not raw:
+        return ""
+    if raw.lower().startswith("error:") or "no such remote" in raw.lower():
+        return ""
+    return _EMBEDDED_USERINFO.sub("https://", raw, count=1)
 
 
 def git_status(folder: str | None) -> dict:
@@ -57,9 +69,7 @@ def git_status(folder: str | None) -> dict:
     _, branch = _run(path, ["branch", "--show-current"])
     _, remote = _run(path, ["remote", "get-url", "origin"])
     _, porcelain = _run(path, ["status", "--porcelain"])
-    remote_url = (remote or "").strip().splitlines()[0] if remote else ""
-    if remote_url.lower().startswith("error:") or "no such remote" in remote_url.lower():
-        remote_url = ""
+    remote_url = public_remote_url((remote or "").strip().splitlines()[0] if remote else "")
     return {
         "ok": True,
         "is_repo": True,
@@ -220,10 +230,7 @@ def get_remote_url(folder: str, remote: str = "origin") -> str:
     code, out = _run(folder, ["remote", "get-url", remote])
     if code != 0:
         return ""
-    url = (out or "").strip().splitlines()[0] if out else ""
-    if url.lower().startswith("error:") or "no such remote" in url.lower():
-        return ""
-    return url
+    return public_remote_url((out or "").strip().splitlines()[0] if out else "")
 
 
 def get_current_branch(folder: str) -> str:

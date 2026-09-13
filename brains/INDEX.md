@@ -14,10 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v177 — Go session header is wired for Hermes + OpenCode CLI. Overlay key is ottobot-go-session (does not shadow the plugin). Auto skips Qwen/MiniMax. Cron off. SAA Think not run.
-Last: v176 — Throwaway Think 400d: missing x-opencode-session; job had seated qwen3.8-max.
-Next: Retry throwaway Think, then one SAA Homes Run Think now. Do not attach weekday cron. Do not Accept parked restore cards.
-Blocker: Live Railway still owns the SAA scheduler until pause. Do not Accept parked restore cards. Do not mass-retry. ListLogic live box is Offline — ask before redeploy.
+Now: Overnight board on fix/overnight-board — Chat names OttoBot/Cos, engines chip + three-line credit, settings IA, receipt tokens.
+Last: Run Think now + Builder both 401 Invalid API key. Rejected the wander INDEX diff. Official OpenCode web started after local data-dir fallback.
+Next: Adam pastes Go/Nous keys. Then Run Think now from Chat and one Builder self-diff. Do not attach weekday cron on live SAA.
+Blocker: Adam — vault keys, Nous Portal login (`hermes model`), Railway token. Do not pause/redeploy Railway. Do not Accept parked SAA restore cards.
 
 ## Vault
 
@@ -42,7 +42,7 @@ Blocker: Live Railway still owns the SAA scheduler until pause. Do not Accept pa
 
 - URL: http://127.0.0.1:8787
 - Phase: operator-only (local org)
-- Work dir: C:\Users\adamm\Projects\openbot
+- Work dir: this checkout
 - Default: Auto on OpenCode Go, then the other Go wallets, OpenRouter last.
 - Plan: org/projects/openbot/INDEX.md
 - Tickets: org/projects/support/tickets (file via You → Help; Support is a CEO)
@@ -51,5 +51,5 @@ Blocker: Live Railway still owns the SAA scheduler until pause. Do not Accept pa
 ## Engines
 
 - board: this process
-- OpenCode: found — board start warms `opencode web` on :4096 in the OpenCode tab
-- Hermes Agent: found on D:\Users\adamm\hermes — board start warms `hermes dashboard` on :9119 in the Hermes tab
+- OpenCode: found on PATH (official binary). Pane is a wall if web cannot bind.
+- Hermes Agent: found on PATH (official binary). Dash needs Nous Portal login for Think.

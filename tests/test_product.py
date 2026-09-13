@@ -46,8 +46,9 @@ class CheapChatTests(unittest.TestCase):
         self.assertEqual(job.get("preset"), "cos")
         self.assertTrue(job.get("talk"))
         self.assertFalse(job.get("keep_going"))
-        self.assertIn("Chief of Staff", job.get("text") or "")
+        self.assertIn("OttoBot", job.get("text") or "")
         self.assertIn("Hello", job.get("text") or "")
+        self.assertIn("Cos", job.get("text") or "")
         self.assertNotIn("You are Chief of Staff", job.get("text") or "")
         self.assertNotIn("session_id", (job.get("text") or "").lower())
         self.assertNotIn("Resumed session", job.get("text") or "")
@@ -61,7 +62,8 @@ class CheapChatTests(unittest.TestCase):
         self.assertIn("Last: builder", status)
         self.assertNotIn("secret", status)
         talk = status_reply(index, "what should we do?", "openbot")
-        self.assertIn("openbot", talk)
+        self.assertIn("OttoBot", talk)
+        self.assertIn("Cos", talk)
         self.assertNotIn("## Law", talk)
         self.assertNotIn("ticket 1", talk)
         self.assertNotIn("Ticket 1", talk)
@@ -111,7 +113,7 @@ class EngineWireTests(unittest.TestCase):
 
         packet = chat_packet("openbot CEO", "Now: ok", "hello")
         self.assertIn("You are the openbot CEO", packet)
-        self.assertIn("report to Chief of Staff", packet)
+        self.assertIn("report to Cos", packet)
         self.assertIn("Reply like a person", packet)
         self.assertNotIn("Write a short RESULT", packet)
         self.assertIn("STAFF", packet)
@@ -130,7 +132,7 @@ class EngineWireTests(unittest.TestCase):
         self.assertEqual(cleaned, "Hello there.")
         echoed = clean_hermes_text(
             "You are the think engine on this CEO.\n"
-            "The operator is in OpenBot Chat — with this CEO, or with Chief of Staff above them.\n"
+            "The operator is in OttoBot Chat — with this CEO, or with Cos above them.\n"
             "Write a short RESULT with HANDOFF fields when you did specialist work.\n"
             "TASK:\n"
             "what is running\n\n"
@@ -255,7 +257,8 @@ class SimpleBoardUiTests(unittest.TestCase):
     def test_credit_stays_on_the_board(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
         self.assertIn("id=\"aboutCredit\"", html)
-        self.assertIn("OttoBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly).", html)
+        self.assertIn("OttoBot uses Hermes Agent (MIT, Nous Research)", html)
+        self.assertIn("and OpenCode (MIT, Anomaly).", html)
         self.assertIn("OpenCode", html)
         self.assertIn("activity-sheet", html)
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")

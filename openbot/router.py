@@ -950,7 +950,7 @@ def _packet_extra(
 def builder_prompt(message: str, extra: str = "", project_id: str | None = None) -> str:
     """OpenCode job prompt: INDEX four-liners + doctrine, then the task, then packet extra (PULSE)."""
     parts = [
-        "OpenBot Chat dispatched this to OpenCode for this CEO. "
+        "OttoBot Chat dispatched this to OpenCode for this CEO. "
         "Edit the Code folder. Diffs come back to this chat for the operator.",
         "Local edits only. Do not git push, publish, pay, or change production. "
         "The operator Accepts or Rejects the diff — that is the action gate.",
@@ -975,8 +975,13 @@ def _live_status_line(project_id: str | None) -> str:
     return str(digest.get("live_story") or "").strip()
 
 
+STAFF_WHO = frozenset({"OpenBot", "Chief of Staff", "Cos", "Staff"})
+
+
 def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "", live: str = "") -> str:
-    name = (who or "OpenBot").strip() or "OpenBot"
+    name = (who or "Chief of Staff").strip() or "Chief of Staff"
+    if name.casefold() in {"openbot", "ottobot", "otto-bot"}:
+        name = "OttoBot"
     is_status = bool(STATUS.search(message or ""))
     greeting = bool(GREET.search(message or "")) and not is_status
     now = index_field(index_text, "Now") or "—"
@@ -984,14 +989,15 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
     nxt = index_field(index_text, "Next") or "—"
     blocker = index_field(index_text, "Blocker") or "—"
     week = horizon_week(index_text)
+    staff = name in STAFF_WHO
     if greeting:
         if THANKS.search(message or ""):
-            if name in {"OpenBot", "Chief of Staff"}:
-                return "You're welcome. Chief of Staff is here — or open any CEO and talk to them directly."
-            return f"You're welcome. I'm {name} — I report to Chief of Staff."
-        if name in {"OpenBot", "Chief of Staff"}:
-            return "Hello — I'm Chief of Staff. The CEOs report to me. You can also open any CEO and talk to them directly."
-        return f"Hello — {name}. I report to Chief of Staff. How can I help?"
+            if staff:
+                return "You're welcome. Cos is here — or open any CEO and talk to them directly."
+            return f"You're welcome. I'm {name} — I report to Cos."
+        if staff:
+            return "Hello — I'm Cos. The CEOs report to me. You can also open any CEO and talk to them directly."
+        return f"Hello — {name}. I report to Cos. How can I help?"
     if is_status:
         lines: list[str] = []
         if week:
@@ -1008,9 +1014,9 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
         if blocker and blocker != "—":
             lines.append(f"Blocked: {blocker}")
         return "\n".join(lines).strip() or now
-    if name in {"OpenBot", "Chief of Staff"}:
-        return "Chief of Staff. Ask what's going on across the org, or open a CEO and talk to them directly."
-    return f"I'm {name}. I report to Chief of Staff. Ask what's going on, or send the work."
+    if staff:
+        return "Cos. Ask what's going on across the org, or open a CEO and talk to them directly."
+    return f"I'm {name}. I report to Cos. Ask what's going on, or send the work."
 
 
 def skills_reply() -> str:

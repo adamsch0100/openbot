@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png?v=4" />
   <link rel="apple-touch-icon" href="/favicon.png?v=4" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="stylesheet" href="/styles.css?v=167" />
+  <link rel="stylesheet" href="/styles.css?v=169" />
   <link rel="stylesheet" href="/observability.css?v=1" />
 </head>
 <body>
@@ -127,6 +127,7 @@
       <button type="button" class="stage-btn" data-stage="tools">Tools</button>
     </nav>
     <div class="bar-right">
+      <button type="button" class="engines-chip" id="enginesChip" title="Engine status — open Settings → Engines">Engines: checking…</button>
       <div class="pulse" id="pulse" title="What’s running, and which engines this board found">
         <i aria-hidden="true"></i>
         <span>Done</span>
@@ -169,8 +170,8 @@
       <div class="chat-head">
         <div class="chat-head-row">
           <div>
-            <div class="chat-where" id="chatWhere">Chief of Staff</div>
-            <div class="chat-folder" id="chatFolder">You → Chief of Staff → CEOs</div>
+            <div class="chat-where" id="chatWhere">Cos</div>
+            <div class="chat-folder" id="chatFolder">You → Cos → CEOs</div>
           </div>
           <nav class="work-tabs" id="workTabs" aria-label="Work in motion">
             <button type="button" class="work-tab" data-work="doing" id="workDoing">Doing</button>
@@ -212,7 +213,7 @@
       <form class="composer" id="form">
         <input id="folder" type="hidden" />
         <input id="attachInput" type="file" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.js,.ts,.py,.java,.cpp,.c,.h,.go,.rs,.rb,.php,.swift,.kt,.sql,.yaml,.yml,.toml" />
-        <p class="composer-who sr-only" id="composerWho">Talking to Chief of Staff</p>
+        <p class="composer-who sr-only" id="composerWho">Talking to Cos</p>
         <div class="seat-autocomplete hidden" id="seatAutocomplete" role="listbox"></div>
         <div class="reply-chip hidden" id="replyChip">
           <span class="reply-chip-kicker">Replying to</span>
@@ -316,18 +317,19 @@
       <div class="drawer-grid">
         <nav class="drawer-nav" aria-label="Settings sections">
           <button type="button" class="drawer-tab on" data-panel="you">You</button>
+          <button type="button" class="drawer-tab" data-panel="keys">Keys &amp; wallets</button>
+          <button type="button" class="drawer-tab" data-panel="engines">Engines</button>
+          <button type="button" class="drawer-tab" data-panel="models">Models</button>
+          <button type="button" class="drawer-tab" data-panel="usage">Spend / caps</button>
+          <button type="button" class="drawer-tab" data-panel="advanced">Advanced</button>
           <button type="button" class="drawer-tab" data-panel="folder">Folder</button>
-          <button type="button" class="drawer-tab" data-panel="keys">Keys</button>
           <button type="button" class="drawer-tab" data-panel="ceo">This CEO</button>
           <button type="button" class="drawer-tab" data-panel="import">Import</button>
           <button type="button" class="drawer-tab" data-panel="channels">Channels</button>
-          <button type="button" class="drawer-tab" data-panel="models">Models</button>
           <button type="button" class="drawer-tab" data-panel="connectors">Connectors</button>
           <button type="button" class="drawer-tab" data-panel="routines">Routines</button>
           <button type="button" class="drawer-tab" data-panel="git">Git</button>
           <button type="button" class="drawer-tab" data-panel="memory">Memory</button>
-          <button type="button" class="drawer-tab" data-panel="usage">Usage</button>
-          <button type="button" class="drawer-tab" data-panel="advanced">Advanced</button>
           <button type="button" class="drawer-tab" data-panel="help">Help</button>
           <button type="button" class="drawer-tab" data-panel="about">About</button>
         </nav>
@@ -405,7 +407,7 @@
               <button type="button" class="send" id="saveKey">Save</button>
               <p class="muted" id="keyStatus"></p>
             </div>
-            <p class="lede" id="keyFailoverHint">Failover order: OpenCode Go keys first (Up/Down), then OpenRouter. Anthropic never runs.</p>
+            <p class="lede" id="keyFailoverHint">Shared OpenCode Go pool first, then SAA Go, then ListLogic Go if present. OpenRouter PAYG last. Hermes / Nous is separate. Anthropic never runs.</p>
             <div id="keyList"></div>
             <h3 class="drawer-sub">Site logins</h3>
             <p class="lede">Usernames and passwords stay on this machine. Chat never keeps them. When Think, Research, or Ops hits a login wall, a card asks you to approve a saved login or type one for that job.</p>
@@ -454,6 +456,13 @@
           <section class="drawer-panel" id="panel-ceo">
             <p class="lede" id="ceoPanelHint">Select a CEO in the sidebar. Keys, spend, and seats for that project live here — not in the right-click menu.</p>
             <div id="ceoPanelBody"></div>
+          </section>
+          <section class="drawer-panel" id="panel-engines">
+            <p class="lede">Versions, dash/home match, gateway. Red means missing or mismatched. Never fake green. Raw OpenCode and Hermes stay under Tools.</p>
+            <div class="usage-card" id="enginesHealthCard">
+              <h4>Engines</h4>
+              <div id="enginesHealth"><p class="muted">Checking engines…</p></div>
+            </div>
           </section>
           <section class="drawer-panel" id="panel-import">
             <p class="lede">On the old Hermes, run <code>hermes backup</code>. Paste the zip here. OttoBot runs official <code>hermes import</code> into a private home for that CEO. It does not overwrite this machine’s default Hermes.</p>
@@ -711,7 +720,7 @@
           </section>
           <section class="drawer-panel" id="panel-about">
             <p class="muted" id="aboutMark">ottobot · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.</p>
-            <p class="muted" id="aboutCredit">OttoBot uses Hermes Agent (MIT, Nous Research) and OpenCode (MIT, Anomaly). Not affiliated with, sponsored by, or endorsed by those projects.</p>
+            <p class="muted credit-lines" id="aboutCredit">OttoBot uses Hermes Agent (MIT, Nous Research)<br />and OpenCode (MIT, Anomaly).<br />Not affiliated with, sponsored by, or endorsed by those projects.</p>
             <div class="actions">
               <button type="button" class="ghost-btn" id="aboutOpenCode">Open OpenCode</button>
               <button type="button" class="ghost-btn" id="gotoHermes">Open Hermes</button>
@@ -723,11 +732,14 @@
   </div>
 
   <footer>
-    <span id="boardMark">ottobot · On it.</span>
+    <div class="footer-lockup">
+      <span id="boardMark">ottobot · On it.</span>
+      <p id="footerCredit" class="footer-credit">OttoBot uses Hermes Agent (MIT, Nous Research)<br />and OpenCode (MIT, Anomaly).<br />Not affiliated with, sponsored by, or endorsed by those projects.</p>
+    </div>
   </footer>
   <datalist id="skillHints"></datalist>
   <div id="nodeMenu" class="menu node-menu hidden" role="menu"></div>
   <div id="msgMenu" class="menu node-menu hidden" role="menu"></div>
-  <script src="/app.js?v=167"></script>
+  <script src="/app.js?v=169"></script>
 </body>
 </html>

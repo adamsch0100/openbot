@@ -48,7 +48,7 @@ class CosReliabilityTests(unittest.TestCase):
         self.assertEqual(job.get("engine"), "board")
         text = job.get("text") or ""
         self.assertTrue(text, "Cos greeting returned empty text")
-        self.assertIn("Chief of Staff", text)
+        self.assertIn("Cos", text)
 
     def test_cos_thanks_always_replies(self):
         """Cos thanks should always return a reply."""
