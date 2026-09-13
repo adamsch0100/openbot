@@ -3969,6 +3969,32 @@ class GoSessionTests(unittest.TestCase):
             self.assertIn("x-opencode-session: ses_saa2", text)
             self.assertNotIn("ses_saa\n", text.replace("ses_saa2", ""))
 
+    def test_duplicate_providers_block_is_dropped(self):
+        import tempfile
+        from pathlib import Path
+        from openbot.go_session import _drop_extra_providers_blocks, sync_hermes_go_session
+
+        broken = (
+            "model:\n"
+            "  default: opencode-go\n"
+            "providers:\n"
+            "  opencode-go:\n"
+            "    base_url: https://opencode.ai/zen/go/v1\n"
+            "providers:\n"
+            "  extra:\n"
+            "    base_url: https://example.invalid\n"
+        )
+        cleaned = _drop_extra_providers_blocks(broken)
+        self.assertEqual(cleaned.count("providers:"), 1)
+        self.assertNotIn("example.invalid", cleaned)
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "config.yaml").write_text(broken, encoding="utf-8")
+            self.assertTrue(sync_hermes_go_session(home, "ses_fix"))
+            text = (home / "config.yaml").read_text(encoding="utf-8")
+            self.assertEqual(text.count("providers:"), 1)
+            self.assertIn("x-opencode-session: ses_fix", text)
+
 
 if __name__ == "__main__":
     unittest.main()

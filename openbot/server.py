@@ -2146,9 +2146,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return None
             if not project_id or not job_id:
                 return self._json(400, {"error": "project_id and job_id required"})
-            from .hermes import SAA_CRON_SKIP, cron_run, saa_live_nudge_due, sync_saa_live_crons
+            from .hermes import SAA_BOARD_PAUSE, SAA_CRON_SKIP, cron_run, saa_live_nudge_due, sync_saa_live_crons
 
-            if job_id in SAA_CRON_SKIP:
+            if job_id in SAA_CRON_SKIP or job_id in SAA_BOARD_PAUSE:
                 return self._json(400, {"ok": False, "error": "skipped", "id": job_id})
             tools = project_tools(project_id) if project_id else {}
             home = str(tools.get("hermes_home") or "").strip() or None

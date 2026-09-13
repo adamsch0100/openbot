@@ -292,6 +292,19 @@ def take_saa_desk(
             migrated["skipped"] = False
         except Exception as err:
             migrated = {"ok": False, "error": str(err)[:200], "migrated": []}
+    paused = {"ok": False, "skipped": True, "paused": []}
+    if home:
+        try:
+            from .hermes import SAA_BOARD_PAUSE, SAA_CRON_SKIP, cron_pause
+
+            held: list[str] = []
+            for jid in sorted(SAA_CRON_SKIP | SAA_BOARD_PAUSE):
+                row = cron_pause(jid, home=home)
+                if row.get("ok"):
+                    held.append(jid)
+            paused = {"ok": True, "skipped": False, "paused": held}
+        except Exception as err:
+            paused = {"ok": False, "error": str(err)[:200], "paused": []}
     gateway_ok = bool(started.get("ok") or started.get("running") or not start_gateway)
     return {
         "ok": gateway_ok,
@@ -302,6 +315,7 @@ def take_saa_desk(
         "delivery": migrated,
         "synced": synced,
         "live": stopped,
+        "paused": paused,
         "engine": "Hermes Agent",
         "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
     }

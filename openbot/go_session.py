@@ -109,6 +109,14 @@ def _strip_marked_overlay(text: str) -> str:
     return cleaned
 
 
+def _drop_extra_providers_blocks(text: str) -> str:
+    """A second top-level `providers:` makes Hermes reject the whole YAML."""
+    matches = list(re.finditer(r"(?m)^providers:\s*$", text or ""))
+    if len(matches) <= 1:
+        return text or ""
+    return (text or "")[: matches[1].start()].rstrip() + "\n"
+
+
 def sync_hermes_go_session(home: str | Path | None, session_id: str | None) -> bool:
     """Write Hermes config.yaml extra_headers so Go chat_completions send the header."""
     sid = str(session_id or "").strip()
@@ -119,7 +127,7 @@ def sync_hermes_go_session(home: str | Path | None, session_id: str | None) -> b
         text = path.read_text(encoding="utf-8") if path.is_file() else ""
     except OSError:
         return False
-    text = _strip_marked_overlay(text)
+    text = _drop_extra_providers_blocks(_strip_marked_overlay(text))
     overlay = _marked_overlay(sid)
     if re.search(r"(?m)^providers:\s*$", text):
         text = re.sub(

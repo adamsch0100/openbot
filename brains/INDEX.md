@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Cos names CEOs. SAA cutover: stop live Railway Hermes, then this desk owns cron.
-Last: Stopped Cos INDEX from eating Builder terminal dumps. Days-old overlay is not Due now.
-Next: After this deploy, take the SAA desk (stop live first). OttoBot chat is the inbox.
+Now: Cos names CEOs. This desk owns SAA cron.
+Last: SAA cut over: live Railway Hermes stopped, this desk owns schedule.
+Next: Cos routes work to CEOs. SAA schedule runs here.
 Blocker: —
 
 ## Vault

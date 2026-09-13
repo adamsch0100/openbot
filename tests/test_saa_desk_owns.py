@@ -20,7 +20,9 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertIn("stop_live", server)
         self.assertIn("def take_saa_desk", org)
         self.assertIn("def stop_saa_live_box", hermes)
+        self.assertIn("def cron_pause", hermes)
         self.assertIn("def write_saa_desk_marker", hermes)
+        self.assertIn("SAA_BOARD_PAUSE", hermes)
         self.assertIn("must not wipe cutover", org)
         self.assertIn('"telegram": False', org)
         self.assertIn("OttoBot chat is the inbox", js)
@@ -118,11 +120,15 @@ class SaaDeskOwnsTests(unittest.TestCase):
                                             "openbot.hermes.migrate_cron_delivery",
                                             return_value={"ok": True, "migrated": ["abc"]},
                                         ) as migrate:
-                                            with patch("openbot.keyring.preserve_merge_hermes_env") as preserve:
-                                                result = org.take_saa_desk(
-                                                    start_gateway=True, sync_live=True, stop_live=True
-                                                )
-                                                owns = org.saa_desk_owns()
+                                            with patch(
+                                                "openbot.hermes.cron_pause",
+                                                return_value={"ok": True, "id": "x"},
+                                            ):
+                                                with patch("openbot.keyring.preserve_merge_hermes_env") as preserve:
+                                                    result = org.take_saa_desk(
+                                                        start_gateway=True, sync_live=True, stop_live=True
+                                                    )
+                                                    owns = org.saa_desk_owns()
         self.assertTrue(result["ok"])
         self.assertFalse(result["telegram"])
         self.assertTrue(owns)
@@ -153,14 +159,14 @@ class SaaDeskOwnsTests(unittest.TestCase):
                 with patch.object(org, "stamp_saa_desk_owns_index") as stamp:
                     with patch("openbot.hermes.read_saa_desk_marker", return_value=False):
                         with patch("openbot.launch.resolve_ceo_hermes_home", return_value="/tmp/saa"):
-                        with patch("openbot.hermes.sync_saa_live_crons", return_value={"ok": True}):
-                            with patch(
-                                "openbot.hermes.stop_saa_live_box",
-                                return_value={"ok": False, "error": "still answers SSH", "running": True},
-                            ):
-                                with patch("openbot.hermes.gateway_start") as start:
-                                    result = org.take_saa_desk(start_gateway=True, stop_live=True)
-                                    owns = org.saa_desk_owns()
+                            with patch("openbot.hermes.sync_saa_live_crons", return_value={"ok": True}):
+                                with patch(
+                                    "openbot.hermes.stop_saa_live_box",
+                                    return_value={"ok": False, "error": "still answers SSH", "running": True},
+                                ):
+                                    with patch("openbot.hermes.gateway_start") as start:
+                                        result = org.take_saa_desk(start_gateway=True, stop_live=True)
+                                        owns = org.saa_desk_owns()
         self.assertFalse(result["ok"])
         self.assertFalse(owns)
         start.assert_not_called()

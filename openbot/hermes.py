@@ -972,6 +972,18 @@ def cron_run(job_id: str, home: str | Path | None = None) -> dict:
     return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
 
 
+def cron_pause(job_id: str, home: str | Path | None = None) -> dict:
+    """Official `hermes cron pause`. Does not delete the job."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
+    jid = str(job_id or "").strip()
+    if not is_valid_job_id(jid):
+        return {"ok": False, "code": 400, "text": "bad job id"}
+    code, out = _run([binary, "cron", "pause", jid], None, 60, home=home)
+    return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
+
+
 SAA_LIVE_PROJECT = os.environ.get("OPENBOT_SAA_HERMES_PROJECT", "87dc0fc7-9858-4e63-8c89-d9af0533b470")
 SAA_LIVE_SERVICE = os.environ.get("OPENBOT_SAA_HERMES_SERVICE", "SAA Homes Hermes")
 SAA_LIVE_ENV = os.environ.get("OPENBOT_SAA_HERMES_ENV", "production")
@@ -979,6 +991,9 @@ SAA_CRON_SKIP = frozenset({
     "7bdaa3b6fb9e",  # conversion-surge
     "1ee83ff221a4",  # competitor-content-watch
     "0f3bc267a48e",  # city-audit-batch-4
+})
+SAA_BOARD_PAUSE = frozenset({
+    "77ba37670bae",  # grok-build-supervisor — script is not on this desk
 })
 SAA_GO_MODEL = "deepseek-v4-flash"
 SAA_GO_PROVIDER = "opencode-go"
