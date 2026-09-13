@@ -14,9 +14,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: SAA Homes link-earning test — citation hub + glossary skill/plan in INDEX; pages on saahomes wait Accept.
-Last: Overnight board on master. Aimed SAA CEO at Flavio-style citable assets (original skill, not a paid pack).
-Next: Adam pastes Go/Nous keys for Think. Accept saahomes hub/glossary PR then deploy. Do not attach weekday cron on live SAA.
+Now: SAA Homes link-earning test — citation hub + glossary drafted; Think 401 until vault keys.
+Last: Aimed SAA Homes in Chat, pinned Think, sent Flavio packet. Hermes Think HTTP 401 Invalid API key. Cos status still reads INDEX (hub + glossary).
+Next: Adam pastes Go/Nous keys. Accept saahomes hub/glossary patch then deploy. Do not attach weekday cron on live SAA.
 Blocker: Adam — vault keys, Nous Portal login (`hermes model`), Railway token. Do not pause/redeploy Railway. Do not Accept parked SAA restore cards.
 
 ## Vault

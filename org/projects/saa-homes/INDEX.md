@@ -3,7 +3,7 @@
 CEO imported from Hermes Agent. Chat is not memory.
 
 Now: Citation hub `/housing-statistics/` + CHFA glossary `/glossary/` drafted on saahomes — live publish waits Accept.
-Last: OttoBot skill `link-earning-assets` + SEO pillar 5 (passive backlinks, no outreach). Engine: board + OpenCode/Cursor.
+Last: Aimed SAA Think with Flavio citation-hub packet — Hermes Think HTTP 401 Invalid API key (no vault). Engine named: Hermes Agent (failed) then board/Cursor shipped the pages as a patch.
 Next: Adam Accepts the saahomes diff, then deploy. Refresh CHFA.org year stats when they rotate. Do not attach weekday Think cron on live SAA.
 Blocker: Vault keys for Think on this desk. Do not pause/redeploy Railway. Do not Accept parked SAA restore cards.
 Goals: —
@@ -142,8 +142,8 @@ Adam wants Hermes to **run the program end-to-end**. Set it up correctly once; A
 | Blog posts (write + publish) | ✅ Auto when in content calendar | ✅ With published URL |
 | GBP + social posts | ✅ Draft + **email post pack** | ✅ Email + Telegram “check inbox” |
 | Local citations / directory NAP fixes | ✅ Auto where possible | ✅ With list of changes |
-Git: main · https://github.com/adamsch0100/saahomes.git
-Hermes: C:\Users\adamm\Projects\openbot\hermes-homes\saa-homes
+Git: local repo, no origin
+Hermes: /workspace/hermes-homes/saa-homes
 Telegram: Railway still live · Think/Ops resume this session
 
 ## Contract

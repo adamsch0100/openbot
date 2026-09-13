@@ -56,7 +56,7 @@ X API credits on this desk: **$0.00**. Do not spend X for syndication; the artic
 
 ## Proof
 
-- Draft: unique canonical on hub + one glossary term (not homepage).
+- Draft: unique canonical on hub + one glossary term (not homepage). Patch in this repo: `org/projects/saa-homes/patches/0001-link-earning-assets.patch` (apply on `adamsch0100/saahomes`; this cloud agent cannot push that remote).
 - Live (after Accept + deploy): HTTP 200, canonical self, Dataset JSON-LD, GSC coverage request.
 - Backlinks: report referring domains only from Ahrefs/GSC — never invent “Forbes linked us.”
 
