@@ -160,13 +160,29 @@ def _save(data: dict) -> None:
 
 def saa_desk_owns() -> bool:
     """True when this OttoBot desk owns SAA cron. Telegram is not part of ownership."""
-    return bool(_load_saved().get("saa_desk_owns"))
+    if bool(_load_saved().get("saa_desk_owns")):
+        return True
+    # Durable marker on the Hermes home survives ensure_org profile rebuilds.
+    try:
+        from .hermes import read_saa_desk_marker
+        from .launch import resolve_ceo_hermes_home
+
+        return bool(read_saa_desk_marker(resolve_ceo_hermes_home("saa-homes", "") or ""))
+    except Exception:
+        return False
 
 
 def set_saa_desk_owns(on: bool) -> dict:
     data = _load_saved() or {}
     data["saa_desk_owns"] = bool(on)
     _save(data)
+    try:
+        from .hermes import write_saa_desk_marker
+        from .launch import resolve_ceo_hermes_home
+
+        write_saa_desk_marker(resolve_ceo_hermes_home("saa-homes", "") or "", owns=bool(on))
+    except Exception:
+        pass
     return {"ok": True, "saa_desk_owns": bool(on)}
 
 
@@ -679,6 +695,9 @@ def ensure_org() -> dict:
         "folder": work,
         "projects": [primary, *extras],
     }
+    # Keep desk-ownership flags. ensure_org rebuilds projects but must not wipe cutover.
+    if saved.get("saa_desk_owns"):
+        data["saa_desk_owns"] = True
     _save(data)
     seed_org_contracts([primary_id, *[row["id"] for row in extras]])
     try:

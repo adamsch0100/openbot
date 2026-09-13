@@ -110,5 +110,25 @@ class SaaCutoverUiTests(unittest.TestCase):
         self.assertIn("write_overlay_result_files", hermes)
 
 
+
+class EnsureOrgKeepsDeskOwnsTests(unittest.TestCase):
+    def test_ensure_org_preserves_saa_desk_owns(self):
+        from openbot import org
+        with mock.patch.object(org, "_load_saved", return_value={"saa_desk_owns": True, "projects": []}):
+            with mock.patch.object(org, "retire_archived_ceos", side_effect=lambda d: d):
+                with mock.patch.object(org, "reattach_imported_ceos", side_effect=lambda d: d):
+                    with mock.patch.object(org, "ensure_support_project", side_effect=lambda d, _w: d):
+                        with mock.patch.object(org, "load_config", return_value={"work_dir": "/tmp/openbot-work"}):
+                            with mock.patch.object(org, "_ensure_project_index"):
+                                with mock.patch.object(org, "seed_org_contracts"):
+                                    saved = {}
+                                    def _save(data):
+                                        saved.clear(); saved.update(data)
+                                    with mock.patch.object(org, "_save", side_effect=_save):
+                                        with mock.patch.object(org, "public_org", side_effect=lambda d: d):
+                                            org.ensure_org()
+                                    self.assertTrue(saved.get("saa_desk_owns"))
+
+
 if __name__ == "__main__":
     unittest.main()
