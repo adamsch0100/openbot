@@ -16,7 +16,7 @@ Source of truth for this OttoBot instance. Status questions read this file only.
 
 Now: Cos names CEOs. Tickets route. Your move is clear.
 Last: Cos status dropped disk ids and empty-Goals nags. Failed cron no longer writes Now as done.
-Next: Cos routes work to CEOs. Open a CEO to talk, or ask Cos what's going on.
+Next: Cos routes work to CEOs.
 Blocker: Do not pause/redeploy live SAA Hermes.
 
 ## Vault
