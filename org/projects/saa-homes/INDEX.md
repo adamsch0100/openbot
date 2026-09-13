@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: OttoBot chat is the inbox. Telegram is not required. Live Railway still runs cron until pause.
-Last: Saved search alerts immediate · Healthy on the live box.
-Next: Cutover = this desk owns cron, deliver local to Schedule/Results. Pause live the same minute. No Telegram poller.
-Blocker: —
+Now: Citation hub `/housing-statistics/` + CHFA glossary `/glossary/` drafted on saahomes — live publish waits Accept.
+Last: OttoBot skill `link-earning-assets` + SEO pillar 5 (passive backlinks, no outreach). Engine: board + OpenCode/Cursor.
+Next: Adam Accepts the saahomes diff, then deploy. Refresh CHFA.org year stats when they rotate. Do not attach weekday Think cron on live SAA.
+Blocker: Vault keys for Think on this desk. Do not pause/redeploy Railway. Do not Accept parked SAA restore cards.
 Goals: —
 
 ## Horizons
