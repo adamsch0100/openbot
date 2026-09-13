@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: v168 — SAA Accept cutover ships: sync live results onto OttoBot Hermes, pause standalone, start desk.
-Last: Operator profile + DECISIONS + Reject→rule on job packets.
-Next: Hard-refresh ?v=168. Aim SAA Homes and Accept cutover. Do not mass-retry.
-Blocker: SAA cutover needs operator Accept. Do not Accept parked restore cards.
+Now: v169 — SAA Accept cutover live on production. OttoBot Hermes owns the desk.
+Last: Deployed ownership-sticky cutover; paused Railway SAA Homes Hermes via CLI.
+Next: Hard-refresh. Verify SAA Results in chat. Do not restart the old Railway Hermes.
+Blocker: —
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons

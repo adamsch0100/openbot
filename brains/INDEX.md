@@ -14,10 +14,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: v168 — SAA cutover onto OttoBot Hermes ready. Accept syncs live results, pauses standalone Railway, starts OttoBot home.
-Last: Cutover path: sync last_result markdown + jobs.json, stop standalone gateway, OttoBot chat is inbox.
-Next: Hard-refresh ?v=168. Aim SAA Homes → Accept cutover to OttoBot. Confirm Railway Hermes stays paused.
-Blocker: Operator Accept required for SAA cutover. Keep standalone Railway paused after Accept so jobs do not double-fire.
+Now: v169 — SAA cutover live: OttoBot Hermes owns cron. Standalone Railway SAA Homes Hermes paused.
+Last: Paused Railway SAA Homes Hermes; Accept stuck ownership; OttoBot gateway running source=this-desk.
+Next: Hard-refresh. Aim SAA Homes → Doing/Results. Confirm next cron lands in chat, not Telegram.
+Blocker: —
 
 ## Vault
 

@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: Cutover ready: Accept moves cron from standalone Railway Hermes onto OttoBot Hermes with latest results.
-Last: Standalone Railway still owned schedule until Accept. Board showed live copy only.
-Next: Accept cutover on Schedule. Watch Doing / Results on OttoBot. Do not restart Railway Hermes.
-Blocker: GBP login = skip + note. After Accept, standalone Railway must stay paused.
+Now: OttoBot Hermes owns SAA cron. Chat is the inbox — not Telegram.
+Last: Cutover complete: Railway standalone Hermes paused; desk ownership sticky; gateway running on OttoBot.
+Next: Watch Doing / Results for the next scheduled fire. Confirm Telegram is quiet.
+Blocker: —
 Blocker: —
 Goals: —
 
