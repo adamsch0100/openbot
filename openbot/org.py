@@ -283,10 +283,11 @@ def take_saa_desk(
         pass
     if home:
         try:
-            from .keyring import preserve_merge_hermes_env
+            from .keyring import merge_transfer_env_from_process, preserve_merge_hermes_env
 
             # Keep transferred DATABASE_URL. Do not restore Telegram poller.
             preserve_merge_hermes_env(home, restore_channels=False)
+            merge_transfer_env_from_process(home)
         except Exception:
             pass
     started = {"ok": False, "skipped": True}
@@ -1832,9 +1833,10 @@ def stamp_saa_fail_story(home: str | Path | None = None) -> str:
     if not dest or not Path(dest).is_dir():
         return ""
     try:
-        from .keyring import preserve_merge_hermes_env
+        from .keyring import merge_transfer_env_from_process, preserve_merge_hermes_env
 
         preserve_merge_hermes_env(dest, restore_channels=False)
+        merge_transfer_env_from_process(dest)
     except Exception:
         pass
     from .hermes import cron_row_is_noise, read_home_crons

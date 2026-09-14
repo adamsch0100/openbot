@@ -104,6 +104,39 @@ class TestHermesEnvPreserve(unittest.TestCase):
             self.assertEqual(live["OPENCODE_GO_API_KEY"], "new")
             self.assertTrue((home / ".env.bak-openbot").is_file())
 
+    def test_merges_database_url_from_process_when_home_empty(self):
+        import os
+        from unittest.mock import patch
+
+        from openbot.keyring import merge_transfer_env_from_process, _parse_env_lines, hermes_db_env_present
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".env").write_text("OPENCODE_GO_API_KEY=go-live\n", encoding="utf-8")
+            with patch.dict(os.environ, {"DATABASE_URL": "postgres://saa-local/saa"}, clear=False):
+                result = merge_transfer_env_from_process(home)
+            self.assertTrue(result["ok"])
+            self.assertIn("DATABASE_URL", result["restored"])
+            live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(live["DATABASE_URL"], "postgres://saa-local/saa")
+            self.assertEqual(live["OPENCODE_GO_API_KEY"], "go-live")
+            self.assertTrue(hermes_db_env_present(home))
+
+    def test_process_merge_does_not_overwrite_live_database_url(self):
+        import os
+        from unittest.mock import patch
+
+        from openbot.keyring import merge_transfer_env_from_process, _parse_env_lines
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".env").write_text("DATABASE_URL=postgres://already/here\n", encoding="utf-8")
+            with patch.dict(os.environ, {"DATABASE_URL": "postgres://saa-local/saa"}, clear=False):
+                result = merge_transfer_env_from_process(home)
+            self.assertEqual(result["restored"], [])
+            live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(live["DATABASE_URL"], "postgres://already/here")
+
 
 if __name__ == "__main__":
     unittest.main()

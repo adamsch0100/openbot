@@ -31,6 +31,7 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertIn("Do not remake crons", org)
         self.assertIn("restore_channels=False", org)
         self.assertIn("hermes_db_env_present", org)
+        self.assertIn("merge_transfer_env_from_process", org)
         self.assertIn("_heal_saa_desk_fails", launch)
         self.assertIn("3575dd7f3753", hermes)
         self.assertIn("6fd1e3be3cd1", hermes)

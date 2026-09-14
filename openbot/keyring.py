@@ -944,6 +944,31 @@ def preserve_merge_hermes_env(
     return {"ok": True, "restored": sorted(restored.keys()), "path": str(env_path)}
 
 
+def merge_transfer_env_from_process(home: str | Path | None = None) -> dict:
+    """Copy DATABASE_URL / PG* from this process into a Hermes home if missing.
+
+    Railway cutover often leaves the old SAA Postgres URL on this service.
+    Never logs values. Does not overwrite a live home value.
+    """
+    root = Path(home) if home else Path(hermes_home())
+    env_path = root / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    current = _parse_env_lines(env_path.read_text(encoding="utf-8") if env_path.is_file() else "")
+    restored: dict[str, str] = {}
+    for name, value in os.environ.items():
+        if not _is_transfer_env_key(name):
+            continue
+        if not str(value or "").strip():
+            continue
+        if str(current.get(name) or "").strip():
+            continue
+        restored[name] = value
+    if not restored:
+        return {"ok": True, "restored": [], "path": str(env_path)}
+    _write_hermes_env(restored, home=root)
+    return {"ok": True, "restored": sorted(restored.keys()), "path": str(env_path)}
+
+
 def push_engine_wallets(tools: dict | None = None, hermes_home_dir: str | None = None) -> str | None:
     """Three OpenCode Go keys, then OpenRouter. Writes OpenCode auth.json and Hermes .env."""
     prefer = prefer_account_ids(tools)

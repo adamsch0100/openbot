@@ -1180,9 +1180,10 @@ def _heal_saa_desk_fails(project_id: str, home: str) -> None:
     if not Path(home).is_dir():
         return
     try:
-        from .keyring import preserve_merge_hermes_env
+        from .keyring import merge_transfer_env_from_process, preserve_merge_hermes_env
 
         preserve_merge_hermes_env(home, restore_channels=False)
+        merge_transfer_env_from_process(home)
     except Exception:
         pass
     try:
