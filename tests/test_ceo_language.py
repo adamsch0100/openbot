@@ -190,7 +190,7 @@ class BoardUiTests(unittest.TestCase):
         self.assertIn("The model key was rejected. Open Settings.", js)
         self.assertIn("PROCESS LAW", js)
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=188", html)
+        self.assertIn("app.js?v=190", html)
 
 
 if __name__ == "__main__":

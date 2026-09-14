@@ -2696,6 +2696,25 @@ input, textarea, select {
   font-size: 12px;
 }
 .provider a { color: var(--bronze); font-size: 12px; }
+.key-role {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.provider .key-order { font-variant-numeric: tabular-nums; }
+.provider .ghost-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.keys-extra {
+  margin-top: 16px;
+}
+.keys-extra summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
 .pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .pill {
   font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;

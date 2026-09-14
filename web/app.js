@@ -162,7 +162,7 @@ function liveEngineName(lane) {
   const named = PRESET_ENGINE[key] || "";
   if (named === "OpenCode") return "OpenCode";
   if (/hermes/i.test(named)) return "Hermes Agent";
-  return "board";
+  return "Chat";
 }
 
 function normalizeLiveProgress(text, lane) {
@@ -171,8 +171,8 @@ function normalizeLiveProgress(text, lane) {
   if (!raw) return engine;
   let line = raw.replace(/^Hermes\s*·/i, "Hermes Agent ·");
   line = line.replace(/^fetch\s*\/\s*Hermes/i, "Hermes Agent");
-  if (/^(Hermes Agent|OpenCode|board)\s*·/i.test(line)) return line;
-  if (/^(Hermes Agent|OpenCode|board)$/i.test(line)) return line;
+  if (/^(Hermes Agent|OpenCode|Chat|board)\s*·/i.test(line)) return line;
+  if (/^(Hermes Agent|OpenCode|Chat|board)$/i.test(line)) return line;
   const parts = line.split("·").map((bit) => bit.trim()).filter(Boolean);
   if (parts.length >= 2) return `${engine} · ${parts.slice(1).join(" · ")}`;
   return `${engine} · ${line}`;
@@ -1511,7 +1511,7 @@ function sortSeatModels(seat, rows, recommendedId) {
 function modelsForSeat(seat, models) {
   const recommendedId = (cfg.catalog && cfg.catalog.recommended_chat) || "";
   if (seat.locked) {
-    return [{ id: "", label: "Status", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] }];
+    return [{ id: "", label: "Desk", provider: "chat", provider_label: "Chat", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] }];
   }
   const need = seat.need || [];
   const q = modelQuery.trim().toLowerCase();
@@ -1537,7 +1537,7 @@ function modelsForSeat(seat, models) {
         connected: true,
         caps: ["status"],
       },
-      { id: "DESK", label: "Desk status (free)", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] },
+      { id: "DESK", label: "What’s going on (no model)", provider: "chat", provider_label: "Desk", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] },
       ...rows.filter((row) => row.id),
     ];
   } else {
@@ -1585,7 +1585,6 @@ function renderSeats(catalog, seats) {
         <header>
           <div>
             <h3>${escapeHtml(seat.label)}</h3>
-            <span class="engine">${escapeHtml(seat.engine)}</span>
           </div>
           <span class="price" data-seat-price>${price}</span>
         </header>
@@ -1903,7 +1902,7 @@ function engineFoundLine() {
   const bits = [];
   if (o.present) bits.push("OpenCode");
   if (h.present) bits.push("Hermes");
-  return bits.length ? bits.join(" + ") : "board";
+  return bits.length ? bits.join(" + ") : "OttoBot";
 }
 
 function receiptLine(job) {
@@ -6283,6 +6282,19 @@ function fillSettings(data) {
   $("localStats").textContent = stats.text || stats.error || "No local OpenCode stats yet.";
 }
 
+function walletOrderLabel(index) {
+  const labels = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
+  return labels[index] || String(index + 1);
+}
+
+function walletRoleLine(row, index, never) {
+  if (never.has(row.provider)) return "Blocked — Auto will not use this.";
+  if (!row.has_key) return "No key saved. Paste one under Add a key, or Remove this key.";
+  if (row.provider === "openrouter") return "Pay-as-you-go after the OpenCode Go keys.";
+  if (index === 0) return "Tried first for Chat, Think, Code, Research, and Ops.";
+  return "Used if the key above is empty or at quota.";
+}
+
 function fillKeys(keyring) {
   if (keyring && Array.isArray(keyring.accounts)) cfg.keyring = keyring;
   const select = $("keyProvider");
@@ -6316,8 +6328,8 @@ function fillKeys(keyring) {
   if (failoverHint) {
     const chain = sorted.filter((row) => !never.has(row.provider)).map((row) => row.label || row.provider);
     failoverHint.textContent = chain.length
-      ? `Failover order (board → Hermes → OpenCode): ${chain.join(" → ")}. Anthropic never runs.`
-      : "Add OpenCode Go keys (up to 3) then OpenRouter as ordered backup. Anthropic never runs.";
+      ? `Auto tries them in this order: ${chain.join(" → ")}. Anthropic is never used.`
+      : "No keys yet. Paste an OpenCode Go key under Add a key. Anthropic is never used.";
   }
   $("keyList").innerHTML = sorted.length ? sorted.map((row, index) => `
     <article class="provider${never.has(row.provider) ? " blocked-provider" : ""}">
@@ -6325,23 +6337,23 @@ function fillKeys(keyring) {
         <b>${escapeHtml(row.label)}</b>
         <div class="pills">
           <span class="pill">${escapeHtml(row.provider)}</span>
-          ${never.has(row.provider) ? '<span class="pill warn">blocked</span>' : (index === 0 ? '<span class="pill on">primary</span>' : '<span class="pill">backup</span>')}
-          ${row.has_key ? '<span class="pill on">on</span>' : ""}
+          ${never.has(row.provider) ? '<span class="pill warn">blocked</span>' : `<span class="pill${index === 0 ? " on" : ""} key-order">${walletOrderLabel(index)}</span>`}
+          ${row.has_key ? '<span class="pill on">key saved</span>' : '<span class="pill warn">no key</span>'}
         </div>
       </div>
-      <div class="field-row">
-        <div class="field">
-          <input data-key-label="${escapeHtml(row.id)}" type="text" value="${escapeHtml(row.label)}" autocomplete="off" />
-        </div>
+      <p class="key-role">${escapeHtml(walletRoleLine(row, index, never))}</p>
+      <div class="field">
+        <label for="key-name-${escapeHtml(row.id)}">Name on this list</label>
+        <input id="key-name-${escapeHtml(row.id)}" data-key-label="${escapeHtml(row.id)}" type="text" value="${escapeHtml(row.label)}" autocomplete="off" />
       </div>
       <div class="actions">
-        <button type="button" class="ghost-btn" data-save-label="${escapeHtml(row.id)}">Rename</button>
-        <button type="button" class="ghost-btn" data-fallback-up="${escapeHtml(row.id)}">Up</button>
-        <button type="button" class="ghost-btn" data-fallback-down="${escapeHtml(row.id)}">Down</button>
+        <button type="button" class="ghost-btn" data-save-label="${escapeHtml(row.id)}">Save name</button>
+        <button type="button" class="ghost-btn" data-fallback-up="${escapeHtml(row.id)}"${index === 0 ? " disabled" : ""}>Use sooner</button>
+        <button type="button" class="ghost-btn" data-fallback-down="${escapeHtml(row.id)}"${index === sorted.length - 1 ? " disabled" : ""}>Use later</button>
         <button type="button" class="ghost-btn" data-del-key="${escapeHtml(row.id)}">Remove</button>
       </div>
     </article>
-  `).join("") : "";
+  `).join("") : '<p class="muted">No keys yet. Paste one under Add a key.</p>';
   $("blockedList").innerHTML = (keyring.blocked || []).map((row) => (
     `<p class="hint"><b>${escapeHtml(row.label)}</b> — ${escapeHtml(row.note)}</p>`
   )).join("");
@@ -9159,7 +9171,8 @@ $("keyList").addEventListener("click", async (event) => {
       body: JSON.stringify({ label: input ? input.value.trim() : "" })
     });
     const data = await res.json();
-    $("keyStatus").textContent = res.ok ? "renamed" : (data.error || "rename failed");
+    const status = $("keyListStatus") || $("keyStatus");
+    if (status) status.textContent = res.ok ? "Name saved." : (data.error || "rename failed");
     if (res.ok) {
       cfg.keyring = data;
       fillKeys(data);

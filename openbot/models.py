@@ -30,7 +30,7 @@ SEATS = (
 )
 
 SEAT_NOTES = {
-    "chat": "Everyday talk. Cheap. No tools. On Nous Portal, Hermes-4 is Chat. Status questions still read desk status for free.",
+    "chat": "Everyday talk. Auto picks from your keys. “What’s going on” reads the desk, no tools.",
     "think": "Hard reasoning. Auto = live catalog value (cheap + capable). Go 401s Haiku; do not pin it.",
     "code": "Builder. OpenCode in the project folder.",
     "research": "Fetch a URL. Snapshot only if the page is an app.",

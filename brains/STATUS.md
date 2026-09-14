@@ -17,9 +17,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Shipping founding glue to live Railway. Engine: board.
-Last: Accept Goals asks Attach weekday Think. New CEOs never auto-cron. Ghost Running is Stuck.
-Next: Prove Add CEO with a throwaway on live. Watch SAA/ListLogic/Nadia/Pmill/OttoBot on the UI.
+Now: Keys are APIs OttoBot uses. Models Auto-picks per Chat, Think, Code, Research, Ops.
+Last: Keys list-first, no shared-pool or Conversion nicknames. Chat is not labeled board.
+Next: Watch live Keys after deploy. Publish, pay, delete, and SMS stay Accept.
+Blocker: Do not mass-retry. Do not remake SAA crons. Do not Accept parked restore. Do not redeploy ListLogic replica.
 Blocker: Do not mass-retry. Do not remake SAA crons. Do not Accept parked restore. Do not redeploy ListLogic replica.
 
 ## Vault
@@ -27,9 +28,9 @@ Blocker: Do not mass-retry. Do not remake SAA crons. Do not Accept parked restor
 - Keys live in `secrets.local.json` on this machine (gitignored). Same idea as `.env`. Not markdown. Not chat.
 - Site logins live in that same vault. You → Keys → Site logins, or approve them on a login card when a job hits a wall.
 - Unlock PIN in You → Settings gates the board. Do not paste keys or passwords into chat.
-- OpenCode (three Go wallets, same catalog): shared pool first, then SAA Homes / Conversion, then ListLogic wallet if still in the keyring. OpenRouter PAYG last.
-- Seats are Auto unless you pin: Auto stays on OpenCode Go (flash). Muse Spark on an OpenRouter id is not Auto. OpenRouter PAYG is last after the three Go wallets. Empty Chat can still be Board (desk status) for free status.
-- CEO pins: openbot + Support → shared pool. SAA Homes → SAA Go. Nadia + ListLogic eligible again (not in RETIRED_CEO_IDS); seat via Add CEO after unlock — do not auto-wire here.
+- OpenCode Go wallets (same catalog): OpenCode Go first, then SAA Go, then ListLogic Go. OpenRouter PAYG last.
+- Seats are Auto unless you pin: Auto stays on OpenCode Go (flash). Muse Spark on an OpenRouter id is not Auto. OpenRouter PAYG is last after the Go wallets. Empty Chat can still be the board (desk status) with no key.
+- CEO pins: OttoBot + Support → OpenCode Go. SAA Homes → SAA Go. Nadia + ListLogic eligible again (not in RETIRED_CEO_IDS); seat via Add CEO after unlock — do not auto-wire here.
 - Hermes native: Nous Portal subscription. Subscribe at portal.nousresearch.com/r/adam-schwartz. Connect with `hermes portal` or paste `NOUS_API_KEY`. Not in this vault yet, so Auto is Go then OpenRouter.
 - PAYG: OpenRouter after the three Go wallets are empty, plus OpenCode Zen after Go quota
 - Not imported as the operator surface: Telegram, SMTP, GitHub, Meta. OttoBot chat is the inbox. Telegram, if connected later, must be the same thread as this chat.

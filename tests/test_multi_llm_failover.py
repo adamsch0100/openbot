@@ -21,6 +21,12 @@ class MultiLlmFailoverTests(unittest.TestCase):
         self.assertIn("sync_opencode_go_pool_env", kr)
         self.assertIn("keyFailoverHint", js)
         self.assertIn("keyFailoverHint", html)
+        self.assertIn("Your keys", html)
+        self.assertIn("Add a key", html)
+        self.assertIn("Which API", html)
+        self.assertIn("walletRoleLine", js)
+        self.assertIn("Use sooner", js)
+        self.assertIn("key saved", js)
         self.assertIn('item.id !== "anthropic"', js)
 
     def test_ordered_skips_anthropic(self):
