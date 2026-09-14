@@ -217,6 +217,32 @@ class FoundingParkTests(unittest.TestCase):
 
         self.assertIsNone(seed_horizons_if_empty("scratch"))
 
+    def test_remove_project_archives_so_reattach_skips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp)
+            project = dest / "projects" / "scratch"
+            project.mkdir(parents=True)
+            status = project / "STATUS.md"
+            status.write_text("# Scratch\n\nNow: Ready.\nLast: —\nNext: —\nBlocker: —\n", encoding="utf-8")
+            profile = dest / "profile.json"
+            profile.write_text(
+                json.dumps({"projects": [{"id": "scratch", "name": "Scratch", "folder": str(dest)}]}),
+                encoding="utf-8",
+            )
+            homes = dest / "hermes-homes" / "scratch"
+            homes.mkdir(parents=True)
+            with patch("openbot.org.ORG", dest), patch("openbot.org.PROFILE_PATH", profile), patch(
+                "openbot.org.HERMES_HOMES", dest / "hermes-homes"
+            ):
+                from openbot.org import _index_is_archived, reattach_imported_ceos, remove_project
+
+                remove_project("scratch", "Scratch")
+                self.assertTrue(_index_is_archived(status.read_text(encoding="utf-8")))
+                saved = {"projects": []}
+                out = reattach_imported_ceos(saved)
+                ids = [row.get("id") for row in (out.get("projects") or [])]
+                self.assertNotIn("scratch", ids)
+
     def test_steer_merges_into_index(self):
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp)

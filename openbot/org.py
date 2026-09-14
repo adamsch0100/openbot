@@ -2635,6 +2635,10 @@ def remove_project(project_id: str, confirm: str = "") -> dict:
     typed = (confirm or "").strip()
     if typed.casefold() not in {name.casefold(), pid.casefold()}:
         raise ValueError(f"type {name} to delete")
+    try:
+        _archive_retired_index(pid, name)
+    except Exception:
+        pass
     was_primary = bool(target.get("primary"))
     data["projects"] = [
         row
