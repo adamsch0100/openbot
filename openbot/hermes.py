@@ -1885,6 +1885,21 @@ def nudge_local_job_due(home: str | Path | None, job_id: str) -> dict:
     return {"ok": True, "id": jid, "due": when, "engine": "Hermes Agent"}
 
 
+def queue_local_cron_run(home: str | Path | None, job_id: str) -> dict:
+    """Ask this desk’s Hermes gateway to run one job. Detached — do not block supervise."""
+    jid = str(job_id or "").strip()
+    if not home or not is_valid_job_id(jid) or jid in SAA_CRON_SKIP or jid in SAA_BOARD_PAUSE:
+        return {"ok": False, "skipped": True, "id": jid}
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "error": "Hermes Agent binary missing", "id": jid}
+    try:
+        _popen_detached([binary, "cron", "run", "--accept-hooks", jid], home=home)
+    except Exception as err:
+        return {"ok": False, "error": str(err)[:200], "id": jid}
+    return {"ok": True, "id": jid, "queued": True, "engine": "Hermes Agent"}
+
+
 def saa_desk_catchup_once(home: str | Path | None) -> dict:
     """One leftover gateway-scar job on this desk. Cos owns the queue. Do not mass-fire."""
     if not home:
@@ -1904,7 +1919,9 @@ def saa_desk_catchup_once(home: str | Path | None) -> dict:
                 return {"ok": True, "skipped": True, "reason": "cooldown", "id": jid}
     except (OSError, json.JSONDecodeError, TypeError):
         pass
-    out = nudge_local_job_due(home, jid)
+    out = queue_local_cron_run(home, jid)
+    if not out.get("ok"):
+        out = nudge_local_job_due(home, jid)
     if out.get("ok"):
         try:
             mark.write_text(

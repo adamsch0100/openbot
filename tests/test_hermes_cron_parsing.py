@@ -606,6 +606,23 @@ class TestJobIdValidation(unittest.TestCase):
             self.assertTrue(data["jobs"][0].get("next_run_at"))
             self.assertEqual(data["jobs"][0]["prompt"], "keep")
 
+    def test_queue_local_cron_run_is_detached(self):
+        from unittest.mock import patch
+
+        from openbot.hermes import queue_local_cron_run
+
+        with patch("openbot.hermes.which", return_value="/usr/bin/hermes"), patch(
+            "openbot.hermes._popen_detached"
+        ) as popen:
+            out = queue_local_cron_run("/tmp/saa-home", "38041c7a6501")
+        self.assertTrue(out.get("ok"), out)
+        self.assertTrue(out.get("queued"))
+        popen.assert_called_once()
+        cmd = popen.call_args[0][0]
+        self.assertIn("cron", cmd)
+        self.assertIn("run", cmd)
+        self.assertIn("38041c7a6501", cmd)
+
     def test_overlay_rows_fill_empty_board_copy(self):
         from openbot.hermes import merge_saa_cron_rows, overlay_to_cron_rows, save_saa_overlay_cache, load_saa_overlay_cache
 
