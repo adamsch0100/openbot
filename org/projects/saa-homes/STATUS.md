@@ -2,9 +2,9 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: This desk owns the SAA schedule. Conversion fixes and Competitor watch are on. OttoBot chat is the inbox.
-Last: Operator turned shop jobs back on. Citation-hub skills stay in the toolbox — not current labor.
-Next: CEO runs Horizons. Do not remake crons. Parked scars stay parked.
+Now: This CEO runs the company. Weekday Think is on. Conversion fixes and Competitor watch are on. OttoBot chat is the inbox.
+Last: Operator asked for hands-off CEO labor toward Horizons.
+Next: Think at 9am weekdays. Code/research auto. Publish, pay, delete wait for Accept.
 Blocker: Alerts need reachable saahomes Postgres. Citation-submit leftover script is missing — not the citation-hub.
 
 Goals: —

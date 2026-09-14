@@ -1172,6 +1172,14 @@ def _hold_saa_board_jobs(project_id: str, home: str) -> None:
         resume_saa_shop_jobs(home)
     except Exception:
         pass
+    try:
+        from .heartbeat import ensure_ceo_heartbeat
+        from .org import saa_desk_owns
+
+        if saa_desk_owns():
+            ensure_ceo_heartbeat("saa-homes")
+    except Exception:
+        pass
 
 
 def _heal_saa_desk_fails(project_id: str, home: str) -> None:

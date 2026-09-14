@@ -184,6 +184,21 @@ def fire_heartbeat(project_id: str) -> dict:
     }
 
 
+def ensure_ceo_heartbeat(project_id: str) -> dict:
+    """Operator asked this CEO to run hands-off. Attach weekday Think once. Detach still wins."""
+    pid = str(project_id or "").strip()
+    if not pid:
+        return {"ok": False, "error": "no CEO"}
+    if heartbeat_enabled(pid):
+        return {"ok": True, "skipped": True, "reason": "already on", "project_id": pid}
+    out = attach_heartbeat(pid)
+    if heartbeat_enabled(pid) or out.get("ok"):
+        run_heartbeat_now(pid)
+        out["ran_now"] = True
+    out["project_id"] = pid
+    return out
+
+
 def cron_is_heartbeat(name: str) -> bool:
     raw = str(name or "").lower()
     return "routine-heartbeat" in raw

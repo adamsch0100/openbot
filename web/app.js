@@ -5336,6 +5336,9 @@ function paintCeoBrief(digest) {
     } else if (String(project.id || "") === "saa-homes" && (gatewayLiveOwns || !gatewayRestartOk)) {
       bits.push("Live Railway Hermes still owns the schedule. This desk is a copy until cutover. OttoBot chat is the inbox — not Telegram.");
     }
+    if (String(project.heartbeat_offer || "") === "on") {
+      bits.push("Weekday Think is on. This CEO picks Next from Goals; Code and research run themselves. Publish, pay, and delete still wait for you.");
+    }
     const nxt = indexLineUseful(honestIndexNext(project.index_next));
     if (nxt && !isScheduleFluff(nxt)) {
       bits.push(`Up next: ${nxt}`);

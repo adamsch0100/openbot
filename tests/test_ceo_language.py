@@ -161,11 +161,12 @@ class BoardUiTests(unittest.TestCase):
         self.assertIn("This week:", js)
         self.assertIn("This month:", js)
         self.assertIn("Goals tab is the 1 week", js)
+        self.assertIn("Weekday Think is on", js)
         self.assertIn("Up next:", js)
         self.assertIn("The model key was rejected. Open Settings.", js)
         self.assertIn("PROCESS LAW", js)
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=185", html)
+        self.assertIn("app.js?v=186", html)
 
 
 if __name__ == "__main__":

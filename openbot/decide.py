@@ -409,18 +409,37 @@ def proof_ok(project_id: str | None, prop: dict | None, jobs: list | None) -> bo
     return _covers(have, need)
 
 
+def horizon_line_satisfied(index: str, key: str, goal: str) -> bool:
+    """True when Last/Now echo that horizon's proof tokens. Week also needs a live URL."""
+    need = week_proof_tokens(goal)
+    if not need:
+        return False
+    blob = f"{index_field(index, 'Now')} {index_field(index, 'Last')}"
+    if not _covers(_tokens(blob), need):
+        return False
+    if str(key or "") == "week":
+        return bool(re.search(r"https?://|\blive url\b", blob, re.I))
+    return True
+
+
 def horizon_satisfied(index: str) -> bool:
     """Week is done when Last/Now echo week-proof tokens and a live URL pointer."""
     week = horizon_week(index)
-    need = week_proof_tokens(week)
-    if not need:
-        return False
-    now = index_field(index, "Now")
-    last = index_field(index, "Last")
-    blob = f"{now} {last}"
-    if not _covers(_tokens(blob), need):
-        return False
-    return bool(re.search(r"https?://|\blive url\b", blob, re.I))
+    return horizon_line_satisfied(index, "week", week)
+
+
+def active_horizon(index: str) -> tuple[str, str, str]:
+    """First unproven filled horizon (week → 5 years). Empty if the board is caught up."""
+    from .org import HORIZON_KEYS, horizon_filled, parse_horizons
+
+    parsed = parse_horizons(index or "")
+    for key, label in HORIZON_KEYS:
+        goal = str(parsed.get(key) or "").strip()
+        if not horizon_filled(goal):
+            continue
+        if not horizon_line_satisfied(index, key, goal):
+            return str(key), goal, str(label)
+    return "", "", ""
 
 
 def off_horizon(nxt: str, week: str) -> bool:
@@ -589,11 +608,13 @@ def auto_labor_allowed(project_id: str | None, proposal: dict | None = None) -> 
     if ACCEPT_ONLY.search(nxt):
         return False, "Next is publish/delete/sign — Accept gate"
     index = read_project_index(project_id)
-    if horizon_satisfied(index):
+    key, goal, _label = active_horizon(index)
+    if not key and horizon_satisfied(index):
         return False, "week already proven"
+    if not goal:
+        goal = horizon_week(index)
     kind = classify_proposal(prop)
-    week = horizon_week(index)
-    if kind in {"code", "research"} and off_horizon(nxt, week):
+    if kind in {"code", "research"} and off_horizon(nxt, goal):
         return False, "off_horizon"
     if proposal_conflict(prop):
         return False, "lane and Next disagree — notify"
@@ -712,12 +733,29 @@ def proposal_packet_extra(project_id: str | None, message: str = "") -> str:
             "HEARTBEAT LAW: Audit SCAR and last labor first. Then propose one next-best-action tied to Horizons. "
             "Output Why / Horizon / Evidence / Alternatives / Review / Lane / Next / Auto / Uncertainties / Discuss / Proof. "
             "Evidence UNKNOWN or Review/Scar drifted/failed/unproven ⇒ Auto: no. "
-            "If week proof is already on INDEX Last/Now, Next is wait — do not invent busywork. "
+            "If this horizon's proof is already on INDEX Last/Now, climb to the next unproven Horizon "
+            "(month, then quarter, then 6 months / year / 5 years). If all are proven, Next is wait — do not invent busywork. "
             "Honor AUTO POLICY. Financial = pay/price/spend. Publish, delete, sign get parked (free the open slot). "
             "Do not write INDEX."
         )
+        key, goal, label = active_horizon(read_project_index(project_id))
+        if key:
+            lines.append(f"Active horizon ({label}): {goal}")
         if week:
             lines.append(f"This week: {week}")
+        try:
+            from .org import HORIZON_KEYS, horizon_filled, parse_horizons
+
+            parsed = parse_horizons(read_project_index(project_id))
+            filled = [
+                f"{label}: {parsed[item]}"
+                for item, label in HORIZON_KEYS
+                if horizon_filled(str(parsed.get(item) or ""))
+            ]
+            if filled:
+                lines.append("HORIZONS: " + " · ".join(filled)[:800])
+        except Exception:
+            pass
         sched = ""
         try:
             sched = pulse_headline(project_id)
@@ -734,7 +772,8 @@ def heartbeat_step_instruction() -> str:
         f"{HEARTBEAT_MARK} Audit scar and last labor against Proof, then propose "
         "the next-best-action from PULSE and Horizons. Output Why/Horizon/Evidence/"
         "Alternatives/Review/Lane/Next/Auto/Uncertainties/Discuss/Proof. "
-        "Stop if the week is already proven. Classify from Next."
+        "Serve the first unproven Horizon (week, then month, then longer). "
+        "Stop only if every filled Horizon is proven. Classify from Next."
     )
 
 

@@ -396,3 +396,34 @@ class DecideIsolationTests(unittest.TestCase):
         self.assertEqual(classify_proposal({"lane": "ops", "next": "Pay the Stripe invoice", "why": "wallet"}), "financial")
         self.assertEqual(classify_proposal({"lane": "code", "next": "Change the listing price", "why": "too low"}), "financial")
         self.assertEqual(classify_proposal({"lane": "code", "next": "Publish the CHFA page live", "why": "go live"}), "code")
+
+
+class EnsureCeoHeartbeatTests(unittest.TestCase):
+    def test_skips_when_already_on(self):
+        from openbot.heartbeat import ensure_ceo_heartbeat
+
+        with patch("openbot.heartbeat.heartbeat_enabled", return_value=True):
+            with patch("openbot.heartbeat.attach_heartbeat") as attach:
+                with patch("openbot.heartbeat.run_heartbeat_now") as run:
+                    out = ensure_ceo_heartbeat("saa-homes")
+        self.assertTrue(out.get("skipped"))
+        attach.assert_not_called()
+        run.assert_not_called()
+
+    def test_active_horizon_climbs_after_week_proof(self):
+        from openbot.decide import active_horizon
+
+        index = (
+            "Now: week closed\n"
+            "Last: form 200 live url https://example.com/chfa\n"
+            "Horizon-week: 1 live CHFA page · proof form 200\n"
+            "Horizon-month: 8 qualified inquiries · proof form submits\n"
+        )
+        key, goal, label = active_horizon(index)
+        self.assertEqual(key, "month")
+        self.assertIn("inquiries", goal)
+        self.assertIn("month", label.lower())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -41,6 +41,7 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertIn("def hold_saa_paused_jobs", hermes)
         self.assertIn("def cron_row_is_noise", hermes)
         self.assertIn("_hold_saa_board_jobs(project_id, home)", launch)
+        self.assertIn("ensure_ceo_heartbeat", launch)
         self.assertIn("must not wipe cutover", org)
         self.assertIn('"telegram": False', org)
         self.assertIn("OttoBot chat is the inbox", js)
