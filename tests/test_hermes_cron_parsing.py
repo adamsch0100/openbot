@@ -187,7 +187,7 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertIn("No action", nxt)
         failed, fix = cron_outcome("error", "## Response\nGateway shutdown")
         self.assertTrue(failed.startswith("Failed"))
-        self.assertIn("retry on its own", fix)
+        self.assertIn("Parked. Retry once if you want it again", fix)
         gated, cred = cron_outcome("error", "", "cron endpoint returned 401")
         self.assertIn("model key was rejected", gated)
         self.assertIn("Open Settings", cred)
@@ -567,6 +567,17 @@ class TestJobIdValidation(unittest.TestCase):
             {"id": "38041c7a6501", "last_status": "error", "state": "scheduled", "enabled": True},
         ])
         self.assertEqual(skip_script, "38041c7a6501")
+        skip_gw = saa_catchup_next([
+            {
+                "id": "38041c7a6501",
+                "last_status": "error",
+                "state": "scheduled",
+                "enabled": True,
+                "last_error": "Gateway shutdown (final-cleanup)",
+            },
+            {"id": "77bfe1c9f7a1", "last_status": "error", "state": "scheduled", "enabled": True},
+        ])
+        self.assertEqual(skip_gw, "77bfe1c9f7a1")
 
     def test_local_payload_marks_gateway_live_wait_and_db(self):
         from openbot.hermes import _cron_row_payload, fail_kind_from_blob, nudge_local_job_due

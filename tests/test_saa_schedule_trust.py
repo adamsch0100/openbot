@@ -25,7 +25,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
         self.assertIn("function scheduleRosterRowHtml", js)
         self.assertIn("function cronFailNext", js)
         self.assertIn("Open Schedule", js)
-        self.assertIn("Auto-retry — gateway will pick this up", js)
+        self.assertIn("Parked. Retry once if you want it again", js)
+        self.assertNotIn("Auto-retry — gateway will pick this up", js)
         self.assertIn("Parked until you say restore", js)
         self.assertIn("This job's script never arrived", js)
         self.assertIn("trustFailed", js)
@@ -46,8 +47,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=183", html)
-        self.assertIn("styles.css?v=183", html)
+        self.assertIn("app.js?v=184", html)
+        self.assertIn("styles.css?v=184", html)
 
     def test_roster_status_priority_in_sort(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -77,7 +78,7 @@ class SaaScheduleTrustBackendTests(unittest.TestCase):
             "Gateway shutdown (final-cleanup) killed the job's tool subprocess before the run finished.",
         )
         self.assertIn("The schedule stalled mid-run", outcome)
-        self.assertIn("retry on its own", nxt)
+        self.assertIn("Parked. Retry once if you want it again", nxt)
 
         reason2 = human_fail_reason("RuntimeError: Script-not-found: scripts/alert-digest.sh")
         self.assertEqual(reason2, "This job's script never arrived")

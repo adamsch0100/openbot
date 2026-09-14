@@ -1922,7 +1922,7 @@ def queue_local_cron_run(home: str | Path | None, job_id: str) -> dict:
 
 
 def saa_desk_catchup_once(home: str | Path | None) -> dict:
-    """One leftover gateway-scar job on this desk. Cos owns the queue. Do not mass-fire."""
+    """One leftover job that never ran. Gateway scars stay parked — do not stampede."""
     if not home:
         return {"ok": False, "skipped": True, "reason": "no hermes home"}
     rows = read_home_crons(home, results=False)
@@ -1939,6 +1939,8 @@ def saa_desk_catchup_once(home: str | Path | None) -> dict:
             row = next((item for item in rows if str(item.get("id") or "") == jid), {})
             last = _parse_cron_when(str(row.get("last_run_at") or ""))
             started = bool(last and at and last >= at)
+            if not started:
+                return {"ok": True, "skipped": True, "reason": "already queued", "id": jid}
             if _cron_is_running(row) or started:
                 if at and (datetime.now(timezone.utc) - at).total_seconds() < CATCHUP_COOLDOWN_SEC:
                     return {"ok": True, "skipped": True, "reason": "cooldown", "id": jid}
@@ -1964,7 +1966,7 @@ def saa_desk_catchup_once(home: str | Path | None) -> dict:
 def saa_catchup_next(overlay: list[dict]) -> str:
     """Next leftover job the live gateway should own. Empty if caught up or a run is in flight."""
     rows = [row for row in overlay if isinstance(row, dict)]
-    if any(row.get("live") is True for row in rows):
+    if any(_cron_is_running(row) for row in rows):
         return ""
     by_id = {str(row.get("id") or ""): row for row in rows}
     for jid in SAA_CATCHUP_IDS:
@@ -1974,11 +1976,11 @@ def saa_catchup_next(overlay: list[dict]) -> str:
         if row.get("enabled") is False or str(row.get("state") or "") == "paused":
             continue
         if _claim_is_live(row) and not _claim_is_stale(row):
+            if _row_fail_kind(row) in {"script", "db", "key", "wallet", "gateway"}:
+                continue
             return ""
-        kind = str(row.get("fail_kind") or "") or fail_kind_from_blob(
-            f"{row.get('last_error') or ''} {row.get('last_status') or ''}"
-        )
-        if kind in {"script", "db", "key", "wallet"}:
+        kind = _row_fail_kind(row)
+        if kind in {"script", "db", "key", "wallet", "gateway"}:
             continue
         status = str(row.get("last_status") or "").strip().lower()
         if status in {"", "never", "error", "fail", "failed"}:
@@ -2038,14 +2040,24 @@ def cron_title(name: str) -> str:
     return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
 
 
-_FAIL_NEXT = "Retry once, or ask Cos if it happens again."
-_GATEWAY_FAIL_NEXT = "It will retry on its own. Do not fire the whole set."
+_FAIL_NEXT = "Retry once, or ask Chief of Staff if it happens again."
+_GATEWAY_FAIL_NEXT = "Parked. Retry once if you want it again — do not mass-fire."
 _SCRIPT_FAIL_NEXT = "Parked until you say restore."
 _KEY_FAIL_NEXT = "Open Settings and fix the model key. Retrying will fail the same way."
 _WALLET_FAIL_NEXT = "Add credits in Settings. Only you can top that up."
 _TRANSIENT_FAIL_NEXT = "A short stall — retry once if it stays red."
 _HERMES_FAIL_NEXT = "Retry once. This is not a missing key."
 _DB_FAIL_NEXT = "Alerts cron kept. Same job as the old Hermes. Needs reachable Postgres (DATABASE_URL). Do not remake."
+
+
+def _row_fail_kind(row: dict) -> str:
+    """Ownership kind from a cron row. Prefer stored fail_kind, else the error blob."""
+    kind = str((row or {}).get("fail_kind") or "").strip()
+    if kind:
+        return kind
+    return fail_kind_from_blob(
+        f"{(row or {}).get('last_error') or ''} {(row or {}).get('last_status') or ''} {(row or {}).get('last_result') or ''}"
+    )
 
 
 def fail_kind_from_blob(blob: str) -> str:
@@ -2237,8 +2249,24 @@ def _cron_elapsed_seconds(row: dict) -> float | None:
     return max(0.0, (datetime.now(timezone.utc) - started).total_seconds())
 
 
+def _cron_is_ghost_claim(row: dict) -> bool:
+    """A fresh claim or overlay live flag on a days-old gateway scar is catch-up noise."""
+    if _row_fail_kind(row) != "gateway":
+        return False
+    last = _parse_cron_when(str(row.get("last_run_at") or ""))
+    if last is None:
+        return False
+    if (datetime.now(timezone.utc) - last).total_seconds() < CRON_STUCK_SECONDS:
+        return False
+    if row.get("live") is True:
+        return True
+    return _claim_is_live(row)
+
+
 def _cron_would_be_running(row: dict) -> bool:
     if row.get("enabled") is False:
+        return False
+    if _cron_is_ghost_claim(row):
         return False
     if row.get("live") is True:
         return True

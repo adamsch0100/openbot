@@ -55,17 +55,17 @@ class OvernightBoardUiTests(unittest.TestCase):
         self.assertIn('setSettings(true, "keys")', js)
         self.assertIn('setSettings(true, "engines")', js)
 
-    def test_chat_surface_says_cos_and_ottobot(self):
+    def test_chat_surface_says_chief_of_staff_and_ottobot(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('id="chatWhere">Cos</div>', html)
-        self.assertIn("Talking to Cos", html)
+        self.assertIn('id="chatWhere">Chief of Staff</div>', html)
+        self.assertIn("Talking to Chief of Staff", html)
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertIn('return "Cos"', js)
-        self.assertIn('return inheritFromStaff ? "inherit Cos" : "Auto"', js)
-        self.assertNotIn("inherit Chief of Staff", js)
+        self.assertIn('STAFF_NAME = "Chief of Staff"', js)
+        self.assertIn("inherit ${STAFF_NAME}", js)
+        self.assertNotIn("inherit Cos", js)
         self.assertIn('classList.add("wall")', js)
         org = (ROOT / "openbot" / "org.py").read_text(encoding="utf-8")
-        self.assertIn('return "Cos"', org)
+        self.assertIn('return "Chief of Staff"', org)
 
     def test_host_display_is_ottobot(self):
         org = (ROOT / "openbot" / "org.py").read_text(encoding="utf-8")
@@ -77,8 +77,8 @@ class OvernightBoardUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=183", html)
-        self.assertIn("styles.css?v=183", html)
+        self.assertIn("app.js?v=184", html)
+        self.assertIn("styles.css?v=184", html)
 
     def test_pulse_failed_zero_is_not_a_failed_job(self):
         import re
@@ -105,7 +105,8 @@ class OvernightBoardUiTests(unittest.TestCase):
         self.assertNotIn("keep going from Chief of Staff", org)
         from openbot.org import quiet_index_line
 
-        self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Cos")
+        self.assertEqual(quiet_index_line("keep going from Cos"), "keep going from Chief of Staff")
+        self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Chief of Staff")
         router = (ROOT / "openbot" / "router.py").read_text(encoding="utf-8")
         self.assertNotIn("or Cos for status", router)
         self.assertNotIn("or Chief of Staff for status", router)
@@ -130,7 +131,7 @@ class OvernightHostAliasTests(unittest.TestCase):
         self.assertEqual(HOST_CEO_ID, "openbot")
         self.assertEqual(HOST_CEO_NAME, "OttoBot")
         self.assertIn("ottobot", HOST_NAME_ALIASES)
-        self.assertEqual(node_label(None), "Cos")
+        self.assertEqual(node_label(None), "Chief of Staff")
 
     def test_chat_packet_names_ottobot_and_cos(self):
         from openbot.hermes import chat_packet, job_packet

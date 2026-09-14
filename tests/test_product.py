@@ -48,7 +48,7 @@ class CheapChatTests(unittest.TestCase):
         self.assertFalse(job.get("keep_going"))
         self.assertIn("OttoBot", job.get("text") or "")
         self.assertIn("Hello", job.get("text") or "")
-        self.assertIn("Cos", job.get("text") or "")
+        self.assertIn("Chief of Staff", job.get("text") or "")
         self.assertNotIn("You are Chief of Staff", job.get("text") or "")
         self.assertNotIn("session_id", (job.get("text") or "").lower())
         self.assertNotIn("Resumed session", job.get("text") or "")
@@ -69,7 +69,7 @@ class CheapChatTests(unittest.TestCase):
         ):
             job = handle("Hello Cos")
         self.assertEqual(job.get("engine"), "board")
-        self.assertIn("I'm Cos", job.get("text") or "")
+        self.assertIn("I'm Chief of Staff", job.get("text") or "")
         self.assertNotIn("Hey Adam", job.get("text") or "")
 
     def test_status_is_index_only_not_a_dump(self):
@@ -82,7 +82,7 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("secret", status)
         talk = status_reply(index, "what should we do?", "openbot")
         self.assertIn("OttoBot", talk)
-        self.assertIn("Cos", talk)
+        self.assertIn("Chief of Staff", talk)
         self.assertNotIn("## Law", talk)
         self.assertNotIn("ticket 1", talk)
         self.assertNotIn("Ticket 1", talk)
@@ -94,8 +94,8 @@ class CheapChatTests(unittest.TestCase):
             "What is going on?",
             "Cos",
         )
-        self.assertIn("keep going from Cos", staff_next)
-        self.assertNotIn("Chief of Staff", staff_next)
+        self.assertIn("keep going from Chief of Staff", staff_next)
+        self.assertNotIn("keep going from Cos", staff_next)
 
         long_week = (
             "Horizon-week: 1 live city or CHFA page that can take a lead · NoCO buyer/seller · via organic URLs\n"
@@ -122,8 +122,8 @@ class CheapChatTests(unittest.TestCase):
             "openbot.org._load_saved", return_value={"projects": []}
         ):
             text = staff_status_reply()
-        self.assertNotIn("Chief of Staff", text)
-        self.assertIn("keep going from Cos", text)
+        self.assertIn("Chief of Staff", text)
+        self.assertIn("keep going from Chief of Staff", text)
         self.assertNotIn("smoke27", text.lower())
 
     def test_staff_status_names_ceos_without_disk_ids(self):
@@ -200,7 +200,7 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("big-pickle", text)
         self.assertIn("SAA Homes", text)
         self.assertIn("live Hermes owns schedule", text)
-        self.assertIn("keep going from Cos", text)
+        self.assertIn("keep going from Chief of Staff", text)
 
     def test_aimed_status_hides_smoke_now(self):
         from openbot.router import status_reply
@@ -220,7 +220,8 @@ class CheapChatTests(unittest.TestCase):
         from openbot.router import public_job
 
         self.assertEqual(quiet_index_line("Next: Open OttoBot if you want the report"), "Open OttoBot if you want the report")
-        self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Cos")
+        self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Chief of Staff")
+        self.assertEqual(quiet_index_line("keep going from Cos"), "keep going from Chief of Staff")
         self.assertEqual(quiet_index_line("Pmill.ai · \x1b[0m > build · git status"), "")
         job = public_job(
             {
@@ -232,10 +233,10 @@ class CheapChatTests(unittest.TestCase):
                 "index_now": "OttoBot · **Cron smoke27-552014 result:** gone",
             }
         )
-        self.assertNotIn("Chief of Staff", job.get("next") or "")
-        self.assertNotIn("Chief of Staff", job.get("text") or "")
+        self.assertIn("Chief of Staff", job.get("next") or "")
+        self.assertIn("Chief of Staff", job.get("text") or "")
         self.assertNotIn("smoke27", (job.get("text") or "").lower())
-        self.assertIn("keep going from Cos", job.get("text") or "")
+        self.assertIn("keep going from Chief of Staff", job.get("text") or "")
         self.assertFalse(job.get("index_now"))
         smoke_card = public_job(
             {

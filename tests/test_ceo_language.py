@@ -120,6 +120,36 @@ class StatusEnglishTests(unittest.TestCase):
         self.assertNotIn('patch_index_line("Now", "Think finished")', src)
 
 
+class CatchupHonestyTests(unittest.TestCase):
+    def test_old_gateway_scar_is_not_a_fresh_run(self):
+        from openbot.hermes import cron_digest, saa_catchup_next
+
+        now = datetime.now(timezone.utc)
+        row = {
+            "id": "38041c7a6501",
+            "name": "geo-citation-audit",
+            "enabled": True,
+            "state": "scheduled",
+            "last_status": "error",
+            "last_error": "Gateway shutdown (final-cleanup)",
+            "last_run_at": (now - timedelta(days=5)).isoformat(),
+            "live": True,
+            "fire_claim": {"at": now.isoformat()},
+        }
+        pack = cron_digest([row])
+        self.assertEqual(pack["running"], [])
+        self.assertTrue(any(item["id"] == "38041c7a6501" for item in pack["failed"]))
+        self.assertNotIn("Now running", pack["live_story"])
+        self.assertNotEqual(saa_catchup_next([row]), "38041c7a6501")
+
+    def test_js_parks_gateway_and_pauses_on_stop(self):
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function cronIsGhostClaim", js)
+        self.assertIn("/api/crons/pause", js)
+        self.assertIn("Parked. Retry once if you want it again", js)
+        self.assertIn('STAFF_NAME = "Chief of Staff"', js)
+
+
 class BoardUiTests(unittest.TestCase):
     def test_js_has_stuck_and_ceo_brief(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -131,7 +161,7 @@ class BoardUiTests(unittest.TestCase):
         self.assertIn("The model key was rejected. Open Settings.", js)
         self.assertIn("PROCESS LAW", js)
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=183", html)
+        self.assertIn("app.js?v=184", html)
 
 
 if __name__ == "__main__":

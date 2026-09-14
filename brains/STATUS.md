@@ -17,10 +17,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Shipping CEO English to the live board — week goal, running or stuck, needs you, one next move. Engine: board.
-Last: Citation-hub skills on board; plan ready for Accept. Packet dumps stripped; a run past 2h is stuck + Stop.
-Next: After this deploy — refresh SAA live copy. If Citation audit is still running with no finish, Stop. Then Accept the citation-hub plan. Do not mass-retry.
-Blocker: Do not Accept parked restore cards. Do not mass-retry.
+Now: Stop the Citation audit restart loop. Gateway scars stay parked. Engine: board.
+Last: OttoBot · RESULT — Hermes Agent (think engine, tools off, packet-only) STATUS: Nothing is running on this copy. Desk is live and in use (CEO English on the boar
+Next: Refresh SAA. Citation audit should be Failed/Parked, not Running 1s. Alerts need DATABASE_URL. Citation submit needs the missing script. Accept citation-hub when you want that work.
+Blocker: Do not mass-retry. Do not remake SAA crons. Do not Accept parked restore cards.
 
 ## Vault
 

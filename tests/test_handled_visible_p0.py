@@ -127,8 +127,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=183", html)
-        self.assertIn("styles.css?v=183", html)
+        self.assertIn("app.js?v=184", html)
+        self.assertIn("styles.css?v=184", html)
 
 
 
@@ -205,7 +205,7 @@ class HandledVisibleBackendTests(unittest.TestCase):
             "",
             "Gateway shutdown (final-cleanup) killed the job's tool subprocess before the run finished.",
         )
-        self.assertIn("retry on its own", nxt)
+        self.assertIn("Parked. Retry once if you want it again", nxt)
 
     def test_script_parked_for_accept_restore(self):
         from openbot.hermes import cron_outcome

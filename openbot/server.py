@@ -2162,6 +2162,22 @@ class Handler(SimpleHTTPRequestHandler):
             result["engine"] = "Hermes Agent"
             return self._json(200 if result.get("ok") else 400, result)
 
+        if path == "/api/crons/pause":
+            project_id = str(data.get("project_id") or "").strip()
+            job_id = str(data.get("job_id") or data.get("id") or "").strip()
+            if self._require_perm("jobs_run", project_id or None):
+                return None
+            if not project_id or not job_id:
+                return self._json(400, {"error": "project_id and job_id required"})
+            from .hermes import cron_pause
+
+            tools = project_tools(project_id) if project_id else {}
+            home = str(tools.get("hermes_home") or "").strip() or None
+            result = cron_pause(job_id, home=home)
+            result["project_id"] = project_id
+            result["engine"] = "Hermes Agent"
+            return self._json(200 if result.get("ok") else 400, result)
+
         if path == "/api/crons/overlay":
             project_id = str(data.get("project_id") or "").strip()
             if self._require_perm("jobs_run", project_id or None):

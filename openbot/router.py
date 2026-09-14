@@ -1048,9 +1048,11 @@ def _useful_index_line(value: str) -> str:
 
 
 def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "", live: str = "") -> str:
-    name = (who or "Cos").strip() or "Cos"
+    name = (who or "Chief of Staff").strip() or "Chief of Staff"
     if name.casefold() in {"openbot", "ottobot", "otto-bot"}:
         name = "OttoBot"
+    if name.casefold() in {"cos", "staff", "chief of staff"}:
+        name = "Chief of Staff"
     is_status = bool(STATUS.search(message or ""))
     greeting = bool(GREET.search(message or "")) and not is_status
     now = quiet_index_line(index_field(index_text, "Now") or "—") or "—"
@@ -1063,11 +1065,11 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
     if greeting:
         if THANKS.search(message or ""):
             if staff:
-                return "You're welcome. Cos is here — or open any CEO and talk to them directly."
-            return f"You're welcome. I'm {name} — I report to Cos."
+                return "You're welcome. Chief of Staff is here — or open any CEO and talk to them directly."
+            return f"You're welcome. I'm {name} — I report to Chief of Staff."
         if staff:
-            return "Hello — I'm Cos. The CEOs report to me. You can also open any CEO and talk to them directly."
-        return f"Hello — {name}. I report to Cos. How can I help?"
+            return "Hello — I'm Chief of Staff. The CEOs report to me. You can also open any CEO and talk to them directly."
+        return f"Hello — {name}. I report to Chief of Staff. How can I help?"
     if is_status:
         lines: list[str] = []
         week_short = week.split("·")[0].strip() if week else ""
@@ -1095,8 +1097,8 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
             lines.append(f"Needs you: {block_line}")
         return "\n".join(lines).strip() or now
     if staff:
-        return "Cos. Ask what's going on across the org, or open a CEO and talk to them directly."
-    return f"I'm {name}. I report to Cos. Ask what's going on, or send the work."
+        return "Chief of Staff. Ask what's going on across the org, or open a CEO and talk to them directly."
+    return f"I'm {name}. I report to Chief of Staff. Ask what's going on, or send the work."
 
 
 def skills_reply() -> str:
@@ -1253,7 +1255,7 @@ def need_choices(row: dict) -> list[dict]:
             out.append({"id": "do_proposal", "label": "Do it"})
         out.extend(
             [
-                {"id": "ask_cos_proposal", "label": "Ask Cos"},
+                {"id": "ask_cos_proposal", "label": "Ask Chief of Staff"},
                 {"id": "ask_me_proposal", "label": "Ask me"},
                 {"id": "skip_proposal", "label": "Skip"},
             ]
@@ -1282,7 +1284,7 @@ def need_choices(row: dict) -> list[dict]:
         if fail_kind == "key":
             return [
                 {"id": "fix_key", "label": "Fix key", "cron_id": cron_id},
-                {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
+                {"id": "ask_cos", "label": "Ask Chief of Staff", "cron_id": cron_id},
             ]
         if fail_kind == "script":
             from .hermes import script_restore_ok
@@ -1291,20 +1293,25 @@ def need_choices(row: dict) -> list[dict]:
             if can_restore:
                 return [
                     {"id": "restore_script", "label": "Restore", "cron_id": cron_id},
-                    {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
+                    {"id": "ask_cos", "label": "Ask Chief of Staff", "cron_id": cron_id},
                 ]
             return [
-                {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
+                {"id": "ask_cos", "label": "Ask Chief of Staff", "cron_id": cron_id},
             ]
-        if fail_kind in {"gateway", "db"}:
-            return [{"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id}]
+        if fail_kind == "gateway":
+            return [
+                {"id": "retry", "label": "Retry", "cron_id": cron_id},
+                {"id": "ask_cos", "label": "Ask Chief of Staff", "cron_id": cron_id},
+            ]
+        if fail_kind == "db":
+            return [{"id": "ask_cos", "label": "Ask Chief of Staff", "cron_id": cron_id}]
         if fail_kind == "wallet":
             return [{"id": "fix_key", "label": "Open Settings", "cron_id": cron_id}]
         if fail_kind == "cancelled":
             return [{"id": "open", "label": "Open chat", "cron_id": cron_id}]
         return [
             {"id": "retry", "label": "Retry", "cron_id": cron_id},
-            {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
+            {"id": "ask_cos", "label": "Ask Chief of Staff", "cron_id": cron_id},
         ]
     return [{"id": "open", "label": "Open"}]
 
@@ -1582,7 +1589,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 }
                 waiting["choices"] = need_choices(waiting)
                 primary = (waiting["choices"] or [{}])[0]
-                waiting["primary_action"] = str(primary.get("label") or "Ask Cos")
+                waiting["primary_action"] = str(primary.get("label") or "Ask Chief of Staff")
                 out.append(waiting)
                 have_kinds.add((pid, "proposal"))
             for held in load_parked(pid)[-4:]:
@@ -1637,7 +1644,7 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 "id": f"heartbeat-{pid}",
                 "kind": "heartbeat",
                 "name": who,
-                "label": f"{who}: attach weekday Think? It proposes Next with Why, then you Do it / Ask Cos / Ask me.",
+                "label": f"{who}: attach weekday Think? It proposes Next with Why, then you Do it / Ask Chief of Staff / Ask me.",
                 "subject": f"{who} · heartbeat",
                 "why": "Hermes is the timer. The board builds the packet. Not silent on a live desk.",
                 "project_id": pid,

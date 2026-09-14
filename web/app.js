@@ -38,6 +38,8 @@ const messageQueues = new Map();
 const chainContexts = new Map();
 let focusedLane = "";
 let unreadLanes = new Set();
+const STAFF_NAME = "Chief of Staff";
+const WAITING_STAFF = `Waiting ${STAFF_NAME}`;
 let hydratingHistory = false;
 let seenCron = new Set();
 let seenJobIds = new Set();
@@ -588,7 +590,7 @@ function failClustersHtml(rows, want) {
 function markFailHandling(id, act) {
   const key = String(id || "").trim();
   if (!key) return;
-  const status = act === "ask_cos" ? "Waiting Cos" : "Handling";
+  const status = act === "ask_cos" ? WAITING_STAFF : "Handling";
   failHandling.set(key, { at: Date.now(), act: String(act || ""), status });
 }
 
@@ -663,7 +665,7 @@ function ceoMoveName(pidOrProject) {
     return prettyCeoName(pidOrProject.id, pidOrProject.name) || talkName();
   }
   const pid = String(pidOrProject || "");
-  if (!pid) return "Cos";
+  if (!pid) return STAFF_NAME;
   const project = ((cfg.org && cfg.org.projects) || []).find((row) => String(row.id) === pid);
   return prettyCeoName(pid, project && project.name) || pid;
 }
@@ -697,7 +699,7 @@ function failAskWhy(pid, cronId) {
 }
 
 function failWhyLine(kind, reason) {
-  if (kind === "gateway") return "The schedule stalled. It will retry on its own.";
+  if (kind === "gateway") return "The schedule stalled. Parked — retry once if you want it again.";
   if (kind === "db") return "Alerts cron kept — same job as the old Hermes. Needs reachable Postgres, not a remake.";
   if (kind === "script") return "This job's script never arrived. Parked until you say restore.";
   if (kind === "hermes") return "The worker stopped. Retry once.";
@@ -718,16 +720,16 @@ function failOwnership(row) {
   // Real 401 still wins via kind === "key". Gateway scars beat skill-doc X-API-KEY dumps in failKindFromBlob.
   const gatewayScar = kind === "gateway" || (typeof cronIsGatewayFail === "function" && cronIsGatewayFail(row));
 
-  if (local === "Waiting Cos") {
+  if (local === "Waiting Cos" || local === WAITING_STAFF) {
     return {
       owner: "cos",
       rank: 2,
-      status: "Waiting Cos",
+      status: WAITING_STAFF,
       resultStatus: "Blocked·Cos",
       kind,
       reason,
-      why: "CEO stuck — Cos judgment requested.",
-      next: "Waiting on Cos · thread opened.",
+      why: `CEO stuck — ${STAFF_NAME} judgment requested.`,
+      next: `Waiting on ${STAFF_NAME} · thread opened.`,
       outcome: `Failed · ${reason}`
     };
   }
@@ -764,7 +766,7 @@ function failOwnership(row) {
     return {
       owner: "cos",
       rank: 2,
-      status: "Waiting Cos",
+      status: WAITING_STAFF,
       resultStatus: "Blocked·Cos",
       kind,
       reason,
@@ -777,7 +779,7 @@ function failOwnership(row) {
     return {
       owner: "cos",
       rank: 2,
-      status: "Waiting Cos",
+      status: WAITING_STAFF,
       resultStatus: "Blocked·Cos",
       kind,
       reason,
@@ -815,14 +817,14 @@ function failOwnership(row) {
       };
     }
     return {
-      owner: "auto",
-      rank: 0,
-      status: "Auto-retry",
-      resultStatus: "Recovering",
+      owner: "ceo",
+      rank: 1,
+      status: "Parked",
+      resultStatus: "Parked",
       kind: "gateway",
       reason,
       why: failWhyLine("gateway", reason),
-      next: "Auto-retry — gateway will pick this up. Do not mass-fire.",
+      next: "Parked. Retry once if you want it again — do not mass-fire.",
       outcome: `Failed · ${reason}`
     };
   }
@@ -861,7 +863,7 @@ function failOwnership(row) {
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: "CEO handling · Retry once. Ask Cos if it stays red.",
+      next: `CEO handling · Retry once. Ask ${STAFF_NAME} if it stays red.`,
       outcome: `Failed · ${reason}`
     };
   }
@@ -873,7 +875,7 @@ function failOwnership(row) {
     kind,
     reason,
     why: failWhyLine(kind, reason),
-    next: "CEO handling · Retry once. Ask Cos if stuck.",
+    next: `CEO handling · Retry once. Ask ${STAFF_NAME} if stuck.`,
     outcome: `Failed · ${reason}`
   };
 }
@@ -903,17 +905,20 @@ function failChoices(row) {
   const out = [];
   if (own.kind === "gateway" && !gatewayRunning && gatewayRestartOk) {
     out.push({ id: "restart_gateway", label: "Restart gateway" });
+  } else if (own.kind === "gateway") {
+    if (cronId && !cronSkipRetry(row)) out.push({ id: "retry", label: "Retry", cron_id: cronId });
+    out.push({ id: "ask_cos", label: `Ask ${STAFF_NAME}`, cron_id: cronId });
   } else if (own.kind === "script") {
     if (cronId && bootstrapCanRestore(row)) {
       out.push({ id: "restore_script", label: "Restore", cron_id: cronId });
-      out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+      out.push({ id: "ask_cos", label: `Ask ${STAFF_NAME}`, cron_id: cronId });
     } else {
-      out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+      out.push({ id: "ask_cos", label: `Ask ${STAFF_NAME}`, cron_id: cronId });
     }
   } else if (own.kind === "key") {
     out.push({ id: "fix_key", label: "Fix key", cron_id: cronId });
     if (!gatewayRunning && gatewayRestartOk) out.push({ id: "restart_gateway", label: "Restart gateway" });
-    else out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+    else out.push({ id: "ask_cos", label: `Ask ${STAFF_NAME}`, cron_id: cronId });
   } else if (own.kind === "cancelled") {
     out.push({ id: "open_detail", label: "Open detail", cron_id: cronId });
   } else if (own.kind === "wallet") {
@@ -924,7 +929,7 @@ function failChoices(row) {
     // unknown / hermes-exit — Retry. Never Fix key on script-missing or crash gore.
     if (!cronSkipRetry(row)) out.push({ id: "retry", label: "Retry", cron_id: cronId });
     else out.push({ id: "open_detail", label: "Open detail", cron_id: cronId });
-    out.push({ id: "ask_cos", label: "Ask Cos", cron_id: cronId });
+    out.push({ id: "ask_cos", label: `Ask ${STAFF_NAME}`, cron_id: cronId });
   }
   return out.slice(0, 2);
 }
@@ -1321,7 +1326,7 @@ function handlingAliveLine(counts) {
   }
   const moving = list.filter((row) => {
     const st = failOwnership(row).status;
-    return st === "Handling" || st === "Waiting Cos" || st === "CEO";
+    return st === "Handling" || st === "Waiting Cos" || st === WAITING_STAFF || st === "CEO";
   });
   const n = moving.length || (counts && counts.handling) || 0;
   if (!n) return "";
@@ -1329,8 +1334,8 @@ function handlingAliveLine(counts) {
   const top = topRow ? failOwnership(topRow) : null;
   const title = failJobTitle(topRow);
   const fails = (counts && counts.failed) || list.length || n;
-  if (top && top.status === "Waiting Cos") {
-    return `Waiting Cos · ${title || "fail"} · next: Cos judgment`;
+  if (top && (top.status === "Waiting Cos" || top.status === WAITING_STAFF)) {
+    return `${WAITING_STAFF} · ${title || "fail"} · next: ${STAFF_NAME} judgment`;
   }
   const bit = top
     ? (top.kind === "script" ? "restore script" : (top.kind === "gateway" ? "retry gateway" : "retry"))
@@ -1339,7 +1344,7 @@ function handlingAliveLine(counts) {
 }
 
 function ceoHandlingStoryHtml() {
-  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Cos";
+  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : STAFF_NAME;
   const pack = digestCache.get(projectId) || {};
   const failed = ((pack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row))).slice().sort(ownershipSort);
   const top = failed[0];
@@ -1414,7 +1419,7 @@ function defaultModelOptionLabel(seat, inheritFromStaff) {
   }
   const row = defaultModelRow(seat, inheritFromStaff);
   if (row && (row.label || row.id)) return `${row.label || modelName(row.id)} (default)`;
-  return inheritFromStaff ? "inherit Cos" : "Auto";
+  return inheritFromStaff ? `inherit ${STAFF_NAME}` : "Auto";
 }
 
 function defaultKeyAccount(inheritFromStaff) {
@@ -1636,7 +1641,7 @@ function renderProfileSeats(rootId, chosen, inheritLabel) {
   const groups = (catalog.seats || []).filter((seat) => !seat.locked);
   const models = catalog.models || [];
   const seats = chosen || {};
-  const blank = inheritLabel || "inherit Cos";
+  const blank = inheritLabel || `inherit ${STAFF_NAME}`;
   root.innerHTML = groups.map((seat) => {
     const current = (seats[seat.id] || {}).model || "";
     const options = seat.options && seat.options.length ? seat.options : modelsForSeat(seat, models);
@@ -1654,7 +1659,7 @@ function renderProfileSeats(rootId, chosen, inheritLabel) {
 
 function renderCeoSeats(rootId) {
   const seats = (currentProject() && currentProject().tools && currentProject().tools.seats) || {};
-  renderProfileSeats(rootId || "menuCeoSeatList", seats, "inherit Cos");
+  renderProfileSeats(rootId || "menuCeoSeatList", seats, `inherit ${STAFF_NAME}`);
 }
 
 function renderStaffSeats() {
@@ -1676,7 +1681,7 @@ function talkName() {
   if (worker) return worker.name;
   const project = currentProject();
   if (project) return prettyCeoName(project.id, project.name);
-  return "Cos";
+  return STAFF_NAME;
 }
 
 function syncComposerWho() {
@@ -1685,7 +1690,7 @@ function syncComposerWho() {
   const worker = currentWorker();
   const pin = preset && preset !== "cos";
   const engine = pin ? (PRESET_ENGINE[preset] || "board") : "";
-  let desk = "Cos";
+  let desk = STAFF_NAME;
   if (worker && project) desk = `${worker.name} · ${prettyCeoName(project.id, project.name)}`;
   else if (project) desk = prettyCeoName(project.id, project.name);
   const line = pin
@@ -1696,7 +1701,7 @@ function syncComposerWho() {
     const prefix = pin ? `${jobLabel(preset)} · ` : "";
     $("msg").placeholder = pin
       ? `${prefix}Message ${who}`
-      : (project ? `Message ${who}` : "Ask Cos what’s going on…");
+      : (project ? `Message ${who}` : `Ask ${STAFF_NAME} what’s going on…`);
   }
 }
 
@@ -2767,7 +2772,7 @@ function accountSelectOptions(selected, blank) {
   const rows = (cfg.keyring && cfg.keyring.accounts) || [];
   const inheritFromStaff = /inherit/i.test(blank || "");
   const def = defaultKeyAccount(inheritFromStaff);
-  const blankLabel = def ? `${def.label} (first in keyring)` : (blank || "inherit Cos");
+  const blankLabel = def ? `${def.label} (first in keyring)` : (blank || `inherit ${STAFF_NAME}`);
   return [`<option value="">${escapeHtml(blankLabel)}</option>`].concat(rows.map((row) => (
     `<option value="${escapeHtml(row.id)}"${row.id === selected ? " selected" : ""}>${escapeHtml(row.label)}</option>`
   ))).join("");
@@ -3580,7 +3585,7 @@ function needChoices(row) {
     const lane = String(row.lane || "");
     const out = [];
     if (lane && lane !== "none") out.push({ id: "do_proposal", label: "Do it" });
-    out.push({ id: "ask_cos_proposal", label: "Ask Cos" });
+    out.push({ id: "ask_cos_proposal", label: `Ask ${STAFF_NAME}` });
     out.push({ id: "ask_me_proposal", label: "Ask me" });
     out.push({ id: "skip_proposal", label: "Skip" });
     return out;
@@ -3685,6 +3690,15 @@ async function runNeedChoice(btn) {
   if (act === "stop_stuck") {
     const jid = String(cronId || id || "");
     if (jid) stuckStopped.add(jid);
+    if (jid && pid) {
+      try {
+        await fetch("/api/crons/pause", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project_id: pid, job_id: jid })
+        });
+      } catch (_err) {}
+    }
     paintWorkTabs();
     paintCeoBrief();
     paintCeoLive();
@@ -3715,7 +3729,7 @@ async function runNeedChoice(btn) {
     if (typeof syncLiveFromAim === "function") syncLiveFromAim();
     focusLane("cos");
     sendMessage(
-      `Ask Cos: ${who} is stuck on ${title}${why ? ` (${why})` : ""}. What should we do next?`,
+      `Ask ${STAFF_NAME}: ${who} is stuck on ${title}${why ? ` (${why})` : ""}. What should we do next?`,
       { preset: "cos", forceNew: true }
     );
     paintWorkTabs();
@@ -3844,7 +3858,7 @@ async function runNeedChoice(btn) {
       if (typeof syncLiveFromAim === "function") syncLiveFromAim();
       focusLane("cos");
       sendMessage(
-        `Ask Cos: this CEO proposed Up next: ${nxt || "Up next on this desk"} because ${why || "the open proposal"}. Challenge it: ${ask} Route Code/Think/Research/Ops or escalate to Adam only for keys, money, login, publish, pay, delete, sign.`,
+        `Ask ${STAFF_NAME}: this CEO proposed Up next: ${nxt || "Up next on this desk"} because ${why || "the open proposal"}. Challenge it: ${ask} Route Code/Think/Research/Ops or escalate to Adam only for keys, money, login, publish, pay, delete, sign.`,
         { preset: "cos", forceNew: true }
       );
       return;
@@ -4382,7 +4396,7 @@ function renderOrgWithQueue(org, queueData, spendAlerts) {
       </div>`;
   }).join("");
   const staffBusy = lives.has(aimKey("", ""));
-  const cosInitials = ceoInitials("Cos");
+  const cosInitials = ceoInitials(STAFF_NAME);
   const staffQueuedCount = queueByProject.get("_staff") || 0;
   const staffActiveCount = activeByProject.get("_staff") || 0;
   
@@ -4464,7 +4478,7 @@ function whereLabel() {
   const worker = currentWorker();
   if (worker && project) return `${prettyCeoName(project.id, project.name)} · ${worker.name}`;
   if (project) return prettyCeoName(project.id, project.name);
-  return "Cos";
+  return STAFF_NAME;
 }
 
 function chatModelLabel() {
@@ -4488,7 +4502,7 @@ function renderBotMeta(opts) {
   paintDeskCard(cleaned);
   const worker = currentWorker();
   const project = currentProject();
-  const label = worker ? `${worker.name}` : project ? prettyCeoName(project.id, project.name) : "Cos";
+  const label = worker ? `${worker.name}` : project ? prettyCeoName(project.id, project.name) : STAFF_NAME;
   if ($("indexSummary")) {
     $("indexSummary").textContent = `${label} · ${briefHonestyLine(cleaned)}`;
   }
@@ -4747,7 +4761,7 @@ function scheduleTrustNowLine(counts, project) {
   if ((handling > 0 || waitingCos > 0) && (failed > 0 || never > 0)) {
     const bits = [];
     if (handling) bits.push(`Handling ${handling}`);
-    if (waitingCos) bits.push(`Waiting Cos ${waitingCos}`);
+    if (waitingCos) bits.push(`${WAITING_STAFF} ${waitingCos}`);
     return `${who} · ${bits.join(" · ")} · Open Schedule`;
   }
   if (failed > 0 || never > 0) {
@@ -4870,7 +4884,7 @@ function workCounts(forProjectId) {
   actionFails.forEach((row) => {
     const st = failOwnership(row).status;
     if (st === "Handling") handling += 1;
-    if (st === "Waiting Cos") waitingCos += 1;
+    if (st === "Waiting Cos" || st === WAITING_STAFF) waitingCos += 1;
   });
   // Live schedule trust — operator jobs only (grok/alerts are Board internals, not SEO overdue).
   const enabledRows = list.filter((row) => !cronIsPaused(row));
@@ -4892,7 +4906,7 @@ function workCounts(forProjectId) {
     orgFailRows.forEach((row) => {
       const st = failOwnership(row).status;
       if (st === "Handling") orgHandling += 1;
-      if (st === "Waiting Cos") orgWaiting += 1;
+      if (st === "Waiting Cos" || st === WAITING_STAFF) orgWaiting += 1;
     });
     const orgAction = orgFailRows.length;
     return {
@@ -5024,10 +5038,23 @@ function formatElapsed(ms) {
   return `${Math.floor(hr / 24)}d`;
 }
 
+function cronIsGhostClaim(row) {
+  if (!row) return false;
+  const kind = failKindFromBlob(failBlobOf(row));
+  if (kind !== "gateway") return false;
+  const last = Date.parse(String(row.last_run_at || ""));
+  if (!Number.isFinite(last)) return false;
+  if ((Date.now() - last) < STUCK_MS) return false;
+  const claimAt = cronClaimAt(row);
+  if (row.live) return true;
+  return Boolean(claimAt && claimAt > last);
+}
+
 function cronWouldBeLive(row) {
   if (!row || cronIsNoise(row)) return false;
   if (row.enabled === false) return false;
   if (stuckStopped.has(String(row.id || ""))) return false;
+  if (cronIsGhostClaim(row)) return false;
   if (row.live) return true;
   const claimAt = cronClaimAt(row);
   const last = Date.parse(String(row.last_run_at || ""));
@@ -5074,7 +5101,7 @@ function isScheduleFluff(line) {
   if (/^Idle\b/i.test(raw)) return true;
   if (/^(Your move|Needs you)\b/i.test(raw)) return true;
   if (/Continue from Last/i.test(raw)) return true;
-  if (/Retry or Ask Cos/i.test(raw)) return true;
+  if (/Retry or Ask Cos/i.test(raw) || /Retry or Ask Chief of Staff/i.test(raw)) return true;
   if (/keep jobs\.json/i.test(raw)) return true;
   if (/do not remake/i.test(raw)) return true;
   if (/cos owns catch-up/i.test(raw)) return true;
@@ -5250,7 +5277,7 @@ function cronCardHtml(row, open, mark, extraCount) {
     ? (elapsed ? `Running ${elapsed} on this CEO.` : "Running now on this CEO.")
     : (failed ? failWhyLine(failKindFromBlob(cronFailBlob(row)), reason) : outcome));
   const stuckActs = stuck
-    ? `<div class="need-actions">${choiceButtonsHtml([{ id: "stop_stuck", label: "Stop", cron_id: row.id || "" }, { id: "ask_cos", label: "Ask Cos", cron_id: row.id || "" }], { id: row.id || "", project_id: projectId || "", cron_id: row.id || "" })}</div>`
+    ? `<div class="need-actions">${choiceButtonsHtml([{ id: "stop_stuck", label: "Stop", cron_id: row.id || "" }, { id: "ask_cos", label: `Ask ${STAFF_NAME}`, cron_id: row.id || "" }], { id: row.id || "", project_id: projectId || "", cron_id: row.id || "" })}</div>`
     : "";
   const failActs = failed && !live && !stuck && !cronSkipRetry(row)
     ? `<div class="need-actions">${choiceButtonsHtml(needChoices({ kind: "failed", cron_id: row.id || "", project_id: projectId || "" }), { id: row.id || "", project_id: projectId || "", cron_id: row.id || "", kind: "failed" })}</div>`
@@ -5725,7 +5752,7 @@ function gatewayOffHtml() {
 }
 
 function emptyWorkCopy(view) {
-  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Cos";
+  const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : STAFF_NAME;
   const why = whyIdleLine();
   if (view === "doing") {
     const counts = workCounts();
@@ -5808,7 +5835,7 @@ function gatewayFailClusterHtml(rows, want) {
   if (list.length === 1) return `${banner}${cronCardHtml(list[0], list[0].id === want, "result")}`;
   const inner = list.map((row) => cronCardHtml(row, row.id === want, "result")).join("");
   const next = (gatewayLiveOwns || !gatewayRestartOk)
-    ? `A past cleanup hit ${list.length} jobs. Live Hermes owns the next fire — do not mass-retry.`
+    ? `A past cleanup hit ${list.length} jobs. Parked — retry one if you want it again. Do not mass-retry.`
     : `A past cleanup hit ${list.length} jobs. Restart the gateway once — do not mass-retry.`;
   return `${banner}<article class="cron-card cron-cluster">
     <div class="cron-head"><b>Old gateway stop scars</b><span>Stale</span></div>
@@ -6550,7 +6577,7 @@ async function setOrgNode(project, worker) {
   }
   const desk = activityBody();
   if (desk && scheduleOpen) {
-    const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : "Cos";
+    const who = projectId ? prettyCeoName(projectId, (currentProject() || {}).name) : STAFF_NAME;
     desk.innerHTML = `<p class="cron-empty">Loading ${escapeHtml(who)}…</p>`;
   }
   preset = "cos";
@@ -7330,7 +7357,7 @@ function emptyStreamHtml() {
   const now = briefHonestyLine(text);
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
-  const title = worker ? worker.name : project ? prettyCeoName(projectId, project.name) : "Cos";
+  const title = worker ? worker.name : project ? prettyCeoName(projectId, project.name) : STAFF_NAME;
   const chairEmpty = !project && !worker;
   let lead = "Ask what’s going on, or open a CEO.";
   let showCTA = !project;

@@ -1640,7 +1640,7 @@ def board_copy(text: str) -> str:
     from .store import ANSI_ESCAPE
 
     s = ANSI_ESCAPE.sub("", str(text or ""))
-    s = s.replace("Chief of Staff", "Cos")
+    s = re.sub(r"\bCos\b", "Chief of Staff", s)
     s = re.sub(r"\bOpenBot instance\b", "OttoBot instance", s)
     s = re.sub(r"\bOpenBot Builder\b", "OttoBot Builder", s)
     s = re.sub(r"\bOpenBot board\b", "OttoBot board", s)
@@ -1649,7 +1649,7 @@ def board_copy(text: str) -> str:
 
 
 def quiet_index_line(text: str, *, drop_if_noisy: bool = True) -> str:
-    """INDEX / job copy for the board. Hide smoke cron gore. Name Cos."""
+    """INDEX / job copy for the board. Hide smoke cron gore. Name Chief of Staff."""
     s = board_copy(text)
     s = re.sub(r"^(Now|Last|Next|Blocker):\s*", "", s, flags=re.I).strip()
     if not s:
@@ -2048,7 +2048,7 @@ def project_tools(project_id: str | None) -> dict:
 
 def node_label(project_id: str | None = None, worker_id: str | None = None) -> str:
     if not project_id:
-        return "Cos"
+        return "Chief of Staff"
     pid = _slug(project_id)
     for row in (_load_saved().get("projects") or []):
         if not isinstance(row, dict):
