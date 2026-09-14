@@ -1915,8 +1915,12 @@ def saa_desk_catchup_once(home: str | Path | None) -> dict:
         prev = json.loads(mark.read_text(encoding="utf-8"))
         if str(prev.get("id") or "") == jid:
             at = _parse_cron_when(str(prev.get("at") or ""))
-            if at and (datetime.now(timezone.utc) - at).total_seconds() < CATCHUP_COOLDOWN_SEC:
-                return {"ok": True, "skipped": True, "reason": "cooldown", "id": jid}
+            row = next((item for item in rows if str(item.get("id") or "") == jid), {})
+            last = _parse_cron_when(str(row.get("last_run_at") or ""))
+            started = bool(last and at and last >= at)
+            if _cron_is_running(row) or started:
+                if at and (datetime.now(timezone.utc) - at).total_seconds() < CATCHUP_COOLDOWN_SEC:
+                    return {"ok": True, "skipped": True, "reason": "cooldown", "id": jid}
     except (OSError, json.JSONDecodeError, TypeError):
         pass
     out = queue_local_cron_run(home, jid)
