@@ -2,10 +2,11 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: This desk owns the SAA schedule. Keep transferred crons. Citation audit is current labor.
-Last: Cos + SAA desk status agree: keep transferred crons; no remake.
-Next: Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept.
-Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
+Now: This desk owns the SAA schedule. Citation audit + citation-hub plan are current labor. OttoBot chat is the inbox.
+Last: Citation-hub skills/plan drafted; Cos agrees keep transferred crons (no remake).
+Next: Accept citation-hub PLAN → Research citation gate on national magnets N01–N10 → Builder page shell → weekly monitor. Keep jobs.json; Cos owns catch-up; Restore stays Accept.
+Blocker: Alerts still need DATABASE_URL from old SAA Hermes .env; Hermes Think needs live auth per Settings — not a remake
+
 Goals: —
 
 ## Horizons
@@ -26,7 +27,7 @@ Horizon-five: Schwartz and Associates is the name NoCO already trusts to buy or 
 - GBP / login walls: skip + note; never auto-fill secrets.
 - digest 401 / CRON_SECRET mismatch remains a known watch item if digest cards go blank.
 
-Folder: C:\Users\adamm\Projects\saahomes
+Folder: /tmp/saahomes
 Source: C:\Users\adamm\AppData\Local\Temp\openbot-hermes-import\saa-homes.zip
 
 ## From Hermes
@@ -145,7 +146,7 @@ Adam wants Hermes to **run the program end-to-end**. Set it up correctly once; A
 | GBP + social posts | ✅ Draft + **email post pack** | ✅ Email + Telegram “check inbox” |
 | Local citations / directory NAP fixes | ✅ Auto where possible | ✅ With list of changes |
 Git: main · https://github.com/adamsch0100/saahomes.git
-Hermes: C:\Users\adamm\Projects\openbot\hermes-homes\saa-homes
+Hermes: /workspace/hermes-homes/saa-homes
 Telegram: Off — OttoBot chat is the inbox
 
 ## Contract

@@ -1819,10 +1819,14 @@ def handle(
             write_project_inbox(inbox_id, message)
     # Chat seat is auto: same composer hands Code / Think / Research / Ops
     # to the engines. Picking a work seat still forces that path.
-    # Status always reads INDEX — even if Think / Research / Ops is pinned.
+    # Status reads INDEX only when the seat is Cos/auto — an explicit
+    # Think / Research / Ops / Builder pin must win (e.g. prompts that
+    # mention the word "index" file should not become a status brief).
     # Bare "Fix key" is an operator CTA, not a Builder job.
+    explicit_work = preset in {"think", "builder", "research", "ops"}
     if (
-        (STATUS.search(message or "") or wants_run_existing(message or ""))
+        not explicit_work
+        and (STATUS.search(message or "") or wants_run_existing(message or ""))
         and not URL.search(message or "")
         and not CODE.search(message or "")
     ):

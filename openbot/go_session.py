@@ -118,10 +118,26 @@ def _drop_extra_providers_blocks(text: str) -> str:
 
 
 def _fix_scalar_model_with_indented_keys(text: str) -> str:
-    """`model: foo` then indented keys is invalid YAML (Hermes: line 14 column 3)."""
+    """`model: foo` then indented keys is invalid YAML (Hermes: line 14 column 3).
+
+    Only rewrite a *same-line scalar* model value. Never touch an already-mapped
+    block (`model:\\n  default: ...`), and never wrap a value that already looks
+    like `default: ...` (repeated heals used to produce `default: default: ...`).
+    """
+    def _replace(match: re.Match[str]) -> str:
+        raw = match.group(1).strip().strip("\"'")
+        if not raw or raw.endswith(":"):
+            return match.group(0)
+        if re.match(r"^(default|provider|base_url)\s*:", raw, re.I):
+            return match.group(0)
+        if ":" in raw and "://" not in raw:
+            # Already a mapping fragment — do not wrap again.
+            return match.group(0)
+        return f"model:\n  default: {raw}\n"
+
     return re.sub(
         r"(?m)^model:\s+(\S[^\n]*)$\n(?=  \S)",
-        lambda match: f"model:\n  default: {match.group(1).strip()}\n",
+        _replace,
         text or "",
         count=1,
     )
