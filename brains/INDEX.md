@@ -16,9 +16,15 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
+<<<<<<< HEAD
 Now: Chat is Grok-simple. Desk status is What’s going on (Working on / Just did / Up next / Stuck). SAA schedule still runs on this desk.
 Last: Mobile + desktop calm chrome live — track dividers, soft depth, short motion (board CSS).
 Next: Use Cos and SAA in Chat. Status questions read desk status, not the thread.
+=======
+Now: Desk walk polish. Cos status is short week lines. Board internals stay off Due now. Hello Cos stays board. Cache 180.
+Last: Grok-simple chat labels on production (What’s going on / Running / Due).
+Next: Hard-refresh Chat. Ask Cos and SAA what’s going on. Do not mass-retry SAA fails.
+>>>>>>> 4611b48 (Quiet Cos status and keep board internals off Due now.)
 Blocker: —
 
 ## Vault

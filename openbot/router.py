@@ -1087,7 +1087,7 @@ def cos_run_existing_reply(project_id: str | None = None) -> str:
         bits.append(story)
     bits.append(
         "Watch Now running at the top of this CEO. When a job finishes, it lands in this chat "
-        "and in What’s happening. Do them one at a time from there, or pin Think and name one "
+        "and in Results. Do them one at a time from there, or pin Think and name one "
         "failed job. This chat will not walk the whole set."
     )
     return " ".join(bits)
@@ -2202,24 +2202,26 @@ def _handle_preset(
         chosen_model = seated_or_auto(settings, "chat", seats) or recommended_chat_id() or None
         provider, model_id = split_model(chosen_model)
         status_ask = bool(STATUS.search(message or "")) or not str(message or "").strip()
+        greet_ask = (not project_id) and bool(GREET.search(message or "")) and not status_ask
         skill_ask = bool(SKILL.search(message or ""))
-        file_reply = "" if skill_ask or status_ask else (cos_file_reply(message or "") or "")
-        if not file_reply and wants_run_existing(message or ""):
+        file_reply = "" if skill_ask or status_ask or greet_ask else (cos_file_reply(message or "") or "")
+        if not file_reply and not greet_ask and wants_run_existing(message or ""):
             file_reply = cos_run_existing_reply(project_id)
-        if not file_reply and not project_id:
+        if not file_reply and not greet_ask and not project_id:
             try:
                 from .founding import route_cos_to_ceo
 
                 file_reply = route_cos_to_ceo(message or "") or ""
             except Exception:
                 file_reply = ""
-        if not file_reply and BROWSER_LOGIN.search(message or ""):
+        if not file_reply and not greet_ask and BROWSER_LOGIN.search(message or ""):
             file_reply = cos_browser_login_reply()
         use_llm = (
             bool(chosen_model)
             and bool(provider)
             and bool(model_id)
             and not status_ask
+            and not greet_ask
             and not skill_ask
             and not file_reply
             and bool(str(message or "").strip())
@@ -2803,7 +2805,7 @@ def _handle_preset(
                     _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                     patch_index_line("Last", _index_last(text))
                     patch_index_line("Now", "Ops asked Hermes to attach a schedule")
-                    patch_index_line("Next", "Open What’s happening, or pin Think for one failed job")
+                    patch_index_line("Next", "Open Results, or pin Think for one failed job")
                     patch_index_line("Blocker", "—")
 
     cfg = load_config()

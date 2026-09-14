@@ -424,6 +424,47 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertNotIn("Due now", pack["live_story"])
         self.assertIn("form-pipeline-health", pack["next_up"]["name"])
 
+    def test_cron_digest_hides_board_noise_from_live_story(self):
+        now = datetime.now(timezone.utc)
+        rows = [
+            {
+                "id": "3575dd7f3753",
+                "name": "grok-heartbeat",
+                "title": "Grok heartbeat",
+                "enabled": True,
+                "state": "scheduled",
+                "last_status": "error",
+                "last_run_at": (now - timedelta(minutes=5)).isoformat(),
+                "next_run_at": (now + timedelta(minutes=2)).isoformat(),
+            },
+            {
+                "id": "6fd1e3be3cd1",
+                "name": "grok-finish-notify",
+                "enabled": True,
+                "state": "scheduled",
+                "last_status": "error",
+                "last_run_at": (now - timedelta(minutes=4)).isoformat(),
+                "next_run_at": (now + timedelta(minutes=3)).isoformat(),
+            },
+            {
+                "id": "real1",
+                "name": "saved-search-alerts",
+                "enabled": True,
+                "state": "scheduled",
+                "last_status": "error",
+                "last_run_at": (now - timedelta(minutes=8)).isoformat(),
+                "next_run_at": (now + timedelta(minutes=5)).isoformat(),
+            },
+        ]
+        pack = cron_digest(rows)
+        blob = f"{pack['live_story']} {pack['story']}"
+        self.assertNotIn("Grok heartbeat", blob)
+        self.assertNotIn("grok-heartbeat", blob.lower())
+        self.assertNotIn("Grok finish notify", blob)
+        self.assertTrue(any("saved" in str(row.get("name") or "").lower() for row in pack["failed"]))
+        self.assertFalse(any("grok" in str(row.get("name") or "").lower() for row in pack["failed"]))
+        self.assertFalse(any("grok" in str(row.get("name") or "").lower() for row in pack["due"]))
+
     def test_parse_skill_list_skips_installed_chrome(self):
         names = parse_skill_list(
             "Installed skills\n"

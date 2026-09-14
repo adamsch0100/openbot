@@ -984,6 +984,42 @@ def cron_pause(job_id: str, home: str | Path | None = None) -> dict:
     return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
 
 
+def cron_row_is_noise(row: dict | None) -> bool:
+    """Board-internal jobs. Fold them; do not put them in Cos “Due now”."""
+    if not isinstance(row, dict):
+        return False
+    name = str(row.get("name") or row.get("id") or "").strip()
+    slug = re.sub(r"\s+", "-", name).lower()
+    if BOARD_CRON_NOISE.match(slug):
+        return True
+    title = str(row.get("title") or "").strip()
+    return bool(re.match(r"^Grok (heartbeat|finish notify|build driver|build supervisor)$", title, re.I))
+
+
+def hold_saa_paused_jobs(home: str | Path | None = None) -> list[str]:
+    """Keep skip + board-internal jobs paused while this desk owns SAA. Idempotent."""
+    if not home:
+        return []
+    held: list[str] = []
+    want = SAA_CRON_SKIP | SAA_BOARD_PAUSE
+    try:
+        rows = read_home_crons(home, results=False)
+    except Exception:
+        rows = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        jid = str(row.get("id") or "").strip()
+        if jid not in want:
+            continue
+        if row.get("enabled") is False or re.search(r"paused", str(row.get("state") or ""), re.I):
+            continue
+        out = cron_pause(jid, home=home)
+        if out.get("ok"):
+            held.append(jid)
+    return held
+
+
 SAA_LIVE_PROJECT = os.environ.get("OPENBOT_SAA_HERMES_PROJECT", "87dc0fc7-9858-4e63-8c89-d9af0533b470")
 SAA_LIVE_SERVICE = os.environ.get("OPENBOT_SAA_HERMES_SERVICE", "SAA Homes Hermes")
 SAA_LIVE_ENV = os.environ.get("OPENBOT_SAA_HERMES_ENV", "production")
@@ -994,7 +1030,14 @@ SAA_CRON_SKIP = frozenset({
 })
 SAA_BOARD_PAUSE = frozenset({
     "77ba37670bae",  # grok-build-supervisor — script is not on this desk
+    "3575dd7f3753",  # grok-heartbeat — board internal, script missing
+    "6fd1e3be3cd1",  # grok-finish-notify — board internal, script missing
+    "6f8b4dcf42e2",  # grok-build-driver — board internal
 })
+BOARD_CRON_NOISE = re.compile(
+    r"^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$",
+    re.I,
+)
 SAA_GO_MODEL = "deepseek-v4-flash"
 SAA_GO_PROVIDER = "opencode-go"
 SAA_CRON_PIN_GO = frozenset({
@@ -2139,6 +2182,8 @@ def cron_digest(
         on = row.get("enabled") is not False
         if on:
             enabled += 1
+        if cron_row_is_noise(row):
+            continue
         status = str(row.get("last_status") or "").lower()
         state = str(row.get("state") or "")
         paused = (not on) or bool(_CRON_PAUSED.search(state))
@@ -2244,7 +2289,7 @@ def cron_digest(
             else:
                 live_bits.append("Live Hermes + Telegram still own today’s jobs.")
         else:
-            live_bits.append("A finished job will land in this chat and in What’s happening.")
+            live_bits.append("A finished job will land in this chat and in Results.")
     return {
         "story": " ".join(bits),
         "live_story": " ".join(live_bits),

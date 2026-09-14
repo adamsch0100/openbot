@@ -1161,6 +1161,18 @@ def _ceo_hermes_home(project_id: str) -> str:
     return resolve_ceo_hermes_home(project_id)
 
 
+def _hold_saa_board_jobs(project_id: str, home: str) -> None:
+    """Keep SAA board-internal / skip jobs paused while this desk owns the schedule."""
+    if str(project_id or "") != "saa-homes" or not home:
+        return
+    try:
+        from .hermes import hold_saa_paused_jobs
+
+        hold_saa_paused_jobs(home)
+    except Exception:
+        pass
+
+
 def ensure_supervised_gateway(project_id: str) -> dict:
     from .hermes import gateway_start, gateway_status
 
@@ -1189,6 +1201,7 @@ def ensure_supervised_gateway(project_id: str) -> dict:
         pass
     status = gateway_status(home, timeout=5)
     if status.get("running"):
+        _hold_saa_board_jobs(project_id, home)
         return {
             "ok": True,
             "running": True,
@@ -1212,6 +1225,7 @@ def ensure_supervised_gateway(project_id: str) -> dict:
     result = gateway_start(home, wait=False)
     result["project_id"] = project_id
     result["home"] = home
+    _hold_saa_board_jobs(project_id, home)
     return result
 
 

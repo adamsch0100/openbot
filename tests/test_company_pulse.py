@@ -241,6 +241,19 @@ class PulseIsolationTests(unittest.TestCase):
         self.assertIn("live Hermes owns schedule", headline)
         self.assertNotIn("due 0", headline)
 
+    def test_pulse_headline_omits_zero_due_failed(self):
+        digest = {
+            "due": [],
+            "failed": [{"title": "indexation-patrol"}],
+            "running": [],
+            "enabled": 4,
+            "result": {"title": "saved search alerts"},
+        }
+        headline = pulse_headline("saa-homes", digest)
+        self.assertIn("failed 1", headline)
+        self.assertNotIn("due 0", headline)
+        self.assertIn("last: saved search alerts", headline)
+
     def test_packet_extra_and_builder_prompt_carry_pulse_and_index(self):
         with patch("openbot.org.project_cron_bundle", return_value=CRON_BUNDLE), patch(
             "openbot.org.git_status",

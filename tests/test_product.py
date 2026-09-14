@@ -53,6 +53,25 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("session_id", (job.get("text") or "").lower())
         self.assertNotIn("Resumed session", job.get("text") or "")
 
+    def test_cos_hello_stays_board_when_hermes_present(self):
+        from unittest.mock import patch
+
+        from openbot.router import handle
+
+        engines = {
+            "hermes": {"present": True, "path": "hermes", "install": ""},
+            "opencode": {"present": False, "path": "", "install": ""},
+        }
+        with patch("openbot.router.detect", return_value=engines), patch(
+            "openbot.router.seated_or_auto", return_value="opencode-go/x"
+        ), patch("openbot.router.recommended_chat_id", return_value="opencode-go/x"), patch(
+            "openbot.router.split_model", return_value=("opencode-go", "x")
+        ):
+            job = handle("Hello Cos")
+        self.assertEqual(job.get("engine"), "board")
+        self.assertIn("I'm Cos", job.get("text") or "")
+        self.assertNotIn("Hey Adam", job.get("text") or "")
+
     def test_status_is_index_only_not_a_dump(self):
         from openbot.router import SKILL, skills_reply, status_reply
 
@@ -116,6 +135,32 @@ class CheapChatTests(unittest.TestCase):
         self.assertNotIn("saa-homes:", text)
         self.assertNotIn("Goals empty", text)
         self.assertNotIn("due 0 · failed 0", text)
+
+    def test_staff_status_shortens_week_without_now_dump(self):
+        from unittest.mock import patch
+
+        from openbot.org import staff_status_reply
+
+        long_week = (
+            "1 live city · NoCO buyer/seller · via organic URLs · proof form HTTP 200"
+        )
+        with patch("openbot.org.read_index", return_value="# INDEX\nNow: Desk in use\nNext: —\nBlocker: —\n"), patch(
+            "openbot.org._load_saved",
+            return_value={"projects": [{"id": "openbot", "name": "OttoBot"}, {"id": "saa-homes", "name": "SAA Homes"}]},
+        ), patch(
+            "openbot.org.read_project_index",
+            side_effect=lambda pid: (
+                f"Now: ready for a long dump\nHorizon-week: {long_week}\n"
+                if pid == "openbot"
+                else "Now: listing\n"
+            ),
+        ), patch("openbot.org.pulse_headline", return_value="on schedule"):
+            text = staff_status_reply()
+        self.assertIn("OttoBot — this week: 1 live city", text)
+        self.assertNotIn("NoCO buyer/seller", text)
+        self.assertNotIn("ready for a long dump", text)
+        self.assertIn("SAA Homes — working on:", text)
+        self.assertNotIn("on schedule", text)
 
     def test_staff_status_drops_terminal_dump_and_names_saa_copy(self):
         from unittest.mock import patch

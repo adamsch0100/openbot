@@ -274,7 +274,7 @@ def take_saa_desk(
                 "synced": synced,
                 "error": str(stopped.get("error") or "Live SAA Hermes is still up. Did not take the desk."),
                 "engine": "board",
-                "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
+                "inbox": "OttoBot chat — Running / Due / Results / Schedule. Not Telegram.",
             }
     set_saa_desk_owns(True)
     try:
@@ -317,7 +317,7 @@ def take_saa_desk(
         "live": stopped,
         "paused": paused,
         "engine": "Hermes Agent",
-        "inbox": "OttoBot chat — Doing / Next / Results / Schedule. Not Telegram.",
+        "inbox": "OttoBot chat — Running / Due / Results / Schedule. Not Telegram.",
     }
 
 
@@ -1115,7 +1115,11 @@ def pulse_headline(project_id: str | None, digest: dict | None = None) -> str:
         if pid == "saa-homes" and not saa_desk_owns():
             return "live Hermes owns schedule · this copy is quiet"
         return "schedule quiet · last labor older than two days"
-    bits = [f"due {len(due)}", f"failed {len(failed)}"]
+    bits: list[str] = []
+    if failed:
+        bits.append(f"failed {len(failed)}")
+    if due:
+        bits.append(f"due {len(due)}")
     if running:
         names = [str(row.get("title") or "").strip() for row in running[:2] if isinstance(row, dict)]
         names = [name for name in names if name]
@@ -1123,7 +1127,9 @@ def pulse_headline(project_id: str | None, digest: dict | None = None) -> str:
             bits.append("running " + ", ".join(names))
     if last_title:
         bits.append(f"last: {last_title}")
-    return " · ".join(bits)
+    if bits:
+        return " · ".join(bits)
+    return "on schedule" if count > 0 else "none attached"
 
 
 def company_pulse(project_id: str | None) -> str:
@@ -1536,8 +1542,9 @@ def staff_briefing() -> str:
         text = read_project_index(pid)
         lines.append(f"## {name} CEO")
         week = horizon_week(text)
-        if week:
-            lines.append(f"This week: {week[:160]}")
+        week_short = week.split("·")[0].strip() if week else ""
+        if week_short:
+            lines.append(f"This week: {week_short[:160]}")
         else:
             lines.append("This week: no week goal yet.")
         lines.append(f"Now: {quiet_index_line(index_field(text, 'Now') or '—') or '—'}")
@@ -1670,8 +1677,9 @@ def staff_status_reply() -> str:
             or quiet_index_line(index_field(text, "Last") or "")
             or "—"
         )
-        if week:
-            bit = f"{name} — this week: {week[:140]} · working on: {now_line}"
+        week_short = week.split("·")[0].strip() if week else ""
+        if week_short:
+            bit = f"{name} — this week: {week_short[:180]}"
         else:
             bit = f"{name} — working on: {now_line}"
         stuck = quiet_index_line(index_field(text, "Blocker"))
@@ -1679,7 +1687,7 @@ def staff_status_reply() -> str:
             bit += f" · stuck {stuck}"
         try:
             sched = pulse_headline(pid)
-            if sched and sched not in {"none attached", "unavailable"} and not re.match(
+            if sched and sched not in {"none attached", "unavailable", "on schedule"} and not re.match(
                 r"^due 0 · failed 0$", sched
             ):
                 bit += f" · {sched}"

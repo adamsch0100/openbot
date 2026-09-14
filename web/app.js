@@ -294,7 +294,7 @@ const PANEL_TITLES = {
   models: "Models",
   connectors: "Connectors",
   git: "Git",
-  memory: "Memory",
+  memory: "Desk status",
   usage: "Spend / caps",
   import: "Import",
   channels: "Channels",

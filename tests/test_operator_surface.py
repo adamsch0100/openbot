@@ -94,8 +94,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=179", html)
-        self.assertIn("styles.css?v=179", html)
+        self.assertIn("app.js?v=180", html)
+        self.assertIn("styles.css?v=180", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
