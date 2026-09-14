@@ -2,8 +2,8 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: This desk owns the SAA schedule. Citation audit + citation-hub plan are current labor. OttoBot chat is the inbox.
-Last: Citation-hub skills/plan drafted; Cos agrees keep transferred crons (no remake).
+Now: Citation-hub program live — audit/skills on desk; waiting Adam Accept on PLAN. OttoBot chat is the inbox.
+Last: Citation-hub skills/PLAN live on Railway; Chat frontend verified PROOF paths; Cos cron keep-policy unchanged.
 Next: Accept citation-hub PLAN → Research citation gate on national magnets N01–N10 → Builder page shell → weekly monitor. Keep jobs.json; Cos owns catch-up; Restore stays Accept.
 Blocker: Alerts still need DATABASE_URL from old SAA Hermes .env; Hermes Think needs live auth per Settings — not a remake
 
