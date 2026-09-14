@@ -17,8 +17,8 @@
 Source of truth for this OttoBot instance. Status questions read this file only.
 
 Now: SAA: keep transferred crons. Citation audit is current labor. Alerts need old-home DATABASE_URL — not a remake.
-Last: Cos + SAA INDEX agree: keep transferred crons; no remake.
-Next: Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept.
+Last: Process law live — verifier, retry≠round, store split, single INDEX writer, effect keys (board).
+Next: Keep jobs.json. Do not remake crons. Cos owns catch-up. Dogfood VERIFY/PROOF. Restore stays Accept.
 Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
 
 ## Vault
