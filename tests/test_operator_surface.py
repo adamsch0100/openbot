@@ -37,7 +37,7 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         self.assertNotIn("Promise.all", digest)
         self.assertIn("function renderChatSchedule(rows, digest, focusId, forPid)", js)
         self.assertIn("Live SAA Hermes", js)
-        self.assertIn("This desk owns SAA cron", js)
+        self.assertIn("This desk owns the SAA schedule", js)
         self.assertIn("gatewayRestartOk", js)
         self.assertIn("Do not Restart this imported home", (ROOT / "openbot" / "server.py").read_text(encoding="utf-8"))
         choices = js[js.find("function failChoices") : js.find("function cronFailNext")]
@@ -52,7 +52,7 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         self.assertIn("adamMustSee(row)", move)
         self.assertIn("adamMustSee(need)", move)
         self.assertIn("projectId || \"openbot\"", move)
-        self.assertIn("Your move · ${names[0]}", js)
+        self.assertIn("Needs you · ${names[0]}", js)
         self.assertNotIn("Your move (CEO)", js)
 
     def test_fail_choices_never_dump_fix_key_on_unknown(self):
@@ -94,8 +94,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=178", html)
-        self.assertIn("styles.css?v=178", html)
+        self.assertIn("app.js?v=179", html)
+        self.assertIn("styles.css?v=179", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -113,7 +113,7 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         self.assertIn("function topDigestFailNeed", js)
         self.assertIn("function anyCeoHasFailedWork", js)
         fluff = js[js.find("function isScheduleFluff") : js.find("function honestWorkLine")]
-        self.assertIn("/^Your move\\b/i.test(raw)", fluff)
+        self.assertIn("/^(Your move|Needs you)\\b/i.test(raw)", fluff)
         noise = js[js.find("function cronIsNoise") : js.find("function cronNextUseful")]
         self.assertIn("row.name || row.id || row.title", noise)
         self.assertIn('name.replace(/\\s+/g, "-").toLowerCase()', noise)

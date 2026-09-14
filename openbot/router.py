@@ -1007,16 +1007,16 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
         if week:
             lines.append(f"This week: {week}")
         else:
-            lines.append("No Horizon-week on this INDEX yet.")
+            lines.append("No week goal yet.")
         lines.append(now)
         if live:
             lines.append(live)
         if nxt and nxt != "—":
-            lines.append(f"Next: {nxt}")
+            lines.append(f"Up next: {nxt}")
         if last and last != "—":
-            lines.append(f"Last: {last}")
+            lines.append(f"Just did: {last}")
         if blocker and blocker != "—":
-            lines.append(f"Blocked: {blocker}")
+            lines.append(f"Stuck: {blocker}")
         return "\n".join(lines).strip() or now
     if staff:
         return "Cos. Ask what's going on across the org, or open a CEO and talk to them directly."
@@ -1222,7 +1222,7 @@ def need_choices(row: dict) -> list[dict]:
 
 
 def dismiss_need(job_id: str, reason: str = "") -> dict:
-    """Cancel a parked job so Your move and login walls stop asking."""
+    """Cancel a parked job so Needs-you and login walls stop asking."""
     job = read_job(job_id)
     if job is None:
         return {"ok": False, "error": "job not found"}

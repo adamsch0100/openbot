@@ -35,11 +35,11 @@ class CosReliabilityTests(unittest.TestCase):
         job = handle("status", project_id="openbot")
         text = job.get("text") or ""
         self.assertTrue(text, "Cos status returned empty text for project")
-        # Should show at least one INDEX field
+        # Should show human desk-status labels (files still use Now/Last/Next/Blocker)
         has_field = any(
-            field in text for field in ["Now:", "Last:", "Next:", "Blocker:"]
+            field in text for field in ["This week:", "Up next:", "Just did:", "Stuck:", "Working on:"]
         )
-        self.assertTrue(has_field, "Status reply missing INDEX fields")
+        self.assertTrue(has_field, "Status reply missing desk-status fields")
 
     def test_cos_greeting_always_replies(self):
         """Cos greeting should always return a reply."""

@@ -2,7 +2,7 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: This desk owns SAA cron. OttoBot chat is the inbox. Not Telegram.
+Now: This desk owns the SAA schedule. OttoBot chat is the inbox. Not Telegram.
 Last: Cut over from live Railway SAA Homes Hermes.
 Next: Keep the SAA Hermes gateway up. Schedule reads this home. OttoBot chat is the inbox.
 Blocker: —

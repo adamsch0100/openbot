@@ -17,7 +17,8 @@ class DashRootOrphanTests(unittest.TestCase):
         self.assertIn("def _should_reuse_dash", src)
         self.assertIn("Always fuser-kill :9119 on retarget", src)
         cw = (ROOT / "openbot" / "cronwatch.py").read_text(encoding="utf-8")
-        self.assertIn('{title} failed — open Results.', cw)
+        js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("failed — open Results", js)
         self.assertNotIn("needs a look", cw)
 
     def test_should_not_reuse_root_when_aiming_saa(self):

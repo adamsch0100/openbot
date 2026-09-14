@@ -151,7 +151,7 @@ class FoundingDetectTests(unittest.TestCase):
         self.assertIn("CHFA", reply)
         self.assertIn("healthy", reply)
         empty = status_reply("Now: ticket 1\nLast: builder\nNext: folder then diff\nBlocker: —", "What is going on?", "openbot")
-        self.assertIn("No Horizon-week", empty)
+        self.assertIn("No week goal", empty)
         self.assertNotIn("Ask CEO to propose", empty)
         self.assertIn("ticket 1", empty)
 

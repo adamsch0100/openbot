@@ -16,9 +16,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Cos names CEOs. This desk owns SAA cron.
-Last: Mobile + desktop calm chrome — track dividers, soft depth, short motion (board CSS).
-Next: Cos routes work to CEOs. SAA schedule runs here.
+Now: Chat is Grok-simple. Desk status is What’s going on (Working on / Just did / Up next / Stuck). SAA schedule still runs on this desk.
+Last: Mobile + desktop calm chrome live — track dividers, soft depth, short motion (board CSS).
+Next: Use Cos and SAA in Chat. Status questions read desk status, not the thread.
 Blocker: —
 
 ## Vault

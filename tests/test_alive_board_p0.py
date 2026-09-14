@@ -16,7 +16,7 @@ class AliveBoardP0Tests(unittest.TestCase):
         self.assertIn("digestKnown", js)
         self.assertIn("digestKnown.has(projectId)", js)
         self.assertIn("failed in Results — clear those to move", js)
-        self.assertIn("due in Next", js)
+        self.assertIn("open Due", js)
         self.assertIn("/^On schedule\\b/i", js)
 
     def test_cronwatch_honest_next_not_blanket_on_schedule(self):
@@ -98,7 +98,7 @@ class AliveBoardCronwatchTests(unittest.TestCase):
         )
         self.assertNotIn("On schedule", due)
         self.assertIn("due", due.lower())
-        self.assertIn("Next", due)
+        self.assertIn("Due", due)
 
     def test_post_cron_card_uses_honest_next(self):
         from openbot import cronwatch
