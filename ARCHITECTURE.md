@@ -94,6 +94,19 @@ Rules:
 
 That is how you keep “internal chat” without paying for a novel on every keystroke.
 
+## Process control (board law)
+
+Engines are workers. The board owns the loop:
+
+1. **Verifier before done** — RESULT ends with `VERIFY:` / `PROOF:`. Builder diffs wait for human Accept.
+2. **Three stores** — pulse (`Now/Last/Next/Blocker`) ≠ doctrine (law/Horizons) ≠ `run_state.json` (attempts).
+3. **Retry ≠ round** — transport failures keep the same `round_key`; a new round needs new evidence or a new task.
+4. **Single writer** — propose INDEX patches to `bus/index_inbox`; the board commits.
+5. **Effect keys** — claim before pay/publish/delete/sign/push; reconcile claimed effects on resume.
+6. **Nested harness gap** — Accepting a board job does not approve every inner tool call inside OpenCode/Hermes.
+
+`openbot/process.py` implements this. Job packets carry the law. Receipts stamp `round_key` / `attempt_kind` / `verify`.
+
 ## Memory per bot (without stuffing history)
 
 Each bot is a folder, not a context window.

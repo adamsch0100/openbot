@@ -863,6 +863,51 @@ def _index_last(text: str, *, failed: bool = False) -> str:
     return snippet
 
 
+def _stamp_process(
+    receipt: dict,
+    text: str,
+    *,
+    chosen: str,
+    talk: bool,
+    diff_pending: bool,
+    blocker: str | None,
+    patch_index_line=None,
+) -> str | None:
+    """Attach round/verify metadata. VERIFY: fail blocks a false-success Last."""
+    try:
+        from .process import enrich_receipt, is_transient_text, verifier_blocks_success
+    except Exception:
+        return blocker
+    transient = bool(blocker) and (
+        is_transient_text(text or "") or is_transient_text(str(blocker or ""))
+    )
+    enrich_receipt(
+        receipt,
+        result=text or "",
+        transient=transient,
+        new_evidence=False,
+    )
+    blocked, why = verifier_blocks_success(
+        preset=chosen,
+        result=text or "",
+        diff_pending=diff_pending,
+        talk=talk,
+        failed=blocker is not None,
+    )
+    if not blocked:
+        return blocker
+    note = f"verify fail — {why}"[:160]
+    receipt["blocker"] = note
+    receipt["verify_blocked"] = True
+    if patch_index_line is not None:
+        try:
+            patch_index_line("Blocker", note)
+            patch_index_line("Last", _index_last(text, failed=True))
+        except Exception:
+            pass
+    return note
+
+
 def _packet_extra(
     project_id: str | None,
     extra: str = "",
@@ -2890,6 +2935,25 @@ def _handle_preset(
         talk=talk,
     )
     receipt["text"] = text
+    blocker = _stamp_process(
+        receipt,
+        text,
+        chosen=chosen,
+        talk=talk,
+        diff_pending=diff_pending,
+        blocker=blocker,
+        patch_index_line=patch_index_line,
+    )
+    if blocker:
+        receipt["blocker"] = blocker
+        receipt["gate"] = classify_gate(
+            chosen,
+            message,
+            diff_pending=diff_pending,
+            login_wall=login_wall,
+            ok=False,
+            talk=talk,
+        )
     close_work_job(receipt, text)
     write_job(receipt)
     if proposal_blob and project_id and blocker is None:
@@ -3036,43 +3100,81 @@ def decide_diff(job_id: str, accept: bool, force: bool = False, push_branch: boo
             if bypassed_error:
                 update_fields["validation_error"] = bypassed_error[:500]  # Cap at 500 chars
         
-        # Optional branch/PR workflow
+        # Optional branch/PR workflow (effect-keyed: claim → execute once → receipt)
         if push_branch and folder:
             from .gitutil import create_branch, commit_changes, push_branch as git_push, get_current_branch, get_remote_url
+            from .process import claim_effect, complete_effect, reconcile_effects
             import time
+
+            open_effects = reconcile_effects(pid)
+            if open_effects:
+                return {
+                    "ok": False,
+                    "error": f"reconcile claimed effect {open_effects[0].get('key')} before another push",
+                    "open_effects": [
+                        {"key": row.get("key"), "kind": row.get("kind")} for row in open_effects[:5]
+                    ],
+                    "job": public_job(job),
+                    "index": read_project_index(pid) if pid else read_index(),
+                }
             
             # Generate branch name if not provided
             if not branch_name:
                 timestamp = time.strftime("%Y%m%d-%H%M%S")
                 branch_name = f"openbot-builder-{job_id}-{timestamp}"
-            
-            # Check if we're on a clean branch (not main/master)
-            current_branch = get_current_branch(folder)
-            if current_branch.lower() in {"main", "master"}:
-                # Create new branch
-                ok, msg = create_branch(folder, branch_name)
-                if not ok:
-                    return {"ok": False, "error": f"branch creation failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+
+            effect = claim_effect(
+                pid,
+                kind="git-push",
+                payload=f"{folder}:{branch_name}:{job_id}",
+                job_id=job_id,
+            )
+            if effect.get("duplicate") and effect.get("status") == "done":
+                update_fields["branch_name"] = branch_name
+                update_fields["pushed"] = True
+                update_fields["effect_key"] = effect.get("key")
+                update_fields["effect_replay"] = True
+            elif effect.get("duplicate") and effect.get("status") == "claimed":
+                return {
+                    "ok": False,
+                    "error": f"effect {effect.get('key')} already claimed — reconcile before retry",
+                    "job": public_job(job),
+                    "index": read_project_index(pid) if pid else read_index(),
+                }
             else:
-                # Use current branch
-                branch_name = current_branch
-            
-            # Commit changes
-            commit_msg = f"Builder job {job_id}: {str(job.get('message') or 'code changes')[:100]}"
-            ok, msg = commit_changes(folder, commit_msg)
-            if not ok:
-                return {"ok": False, "error": f"commit failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
-            
-            # Push to remote
-            ok, msg = git_push(folder, branch_name)
-            if not ok:
-                return {"ok": False, "error": f"push failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
-            
-            update_fields["branch_name"] = branch_name
-            update_fields["pushed"] = True
-            remote_url = get_remote_url(folder)
-            if remote_url:
-                update_fields["remote_url"] = remote_url
+                effect_key = str(effect.get("key") or "")
+                # Check if we're on a clean branch (not main/master)
+                current_branch = get_current_branch(folder)
+                if current_branch.lower() in {"main", "master"}:
+                    # Create new branch
+                    ok, msg = create_branch(folder, branch_name)
+                    if not ok:
+                        complete_effect(pid, effect_key, receipt=msg, ok=False)
+                        return {"ok": False, "error": f"branch creation failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+                else:
+                    # Use current branch
+                    branch_name = current_branch
+                
+                # Commit changes
+                commit_msg = f"Builder job {job_id}: {str(job.get('message') or 'code changes')[:100]}"
+                ok, msg = commit_changes(folder, commit_msg)
+                if not ok:
+                    complete_effect(pid, effect_key, receipt=msg, ok=False)
+                    return {"ok": False, "error": f"commit failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+                
+                # Push to remote
+                ok, msg = git_push(folder, branch_name)
+                if not ok:
+                    complete_effect(pid, effect_key, receipt=msg, ok=False)
+                    return {"ok": False, "error": f"push failed: {msg}", "job": public_job(job), "index": read_project_index(pid) if pid else read_index()}
+
+                complete_effect(pid, effect_key, receipt=f"pushed {branch_name}", ok=True)
+                update_fields["branch_name"] = branch_name
+                update_fields["pushed"] = True
+                update_fields["effect_key"] = effect_key
+                remote_url = get_remote_url(folder)
+                if remote_url:
+                    update_fields["remote_url"] = remote_url
             
             # Open PR with gh CLI
             pr_title = f"Builder job {job_id}"

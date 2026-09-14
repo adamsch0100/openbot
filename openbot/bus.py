@@ -213,9 +213,12 @@ def law_extra(preset: str, project_id: str | None = None, worker_id: str | None 
     kind = "worker" if worker_id else (preset if preset in CONTRACTS else "ceo")
     if str(project_id or "") == "support" and not worker_id:
         kind = "support"
+    from .process import process_law_block
+
     parts = [
         "CONTRACT:\n" + contract_lines(kind),
         gates_block(preset),
+        process_law_block(),
         MEMORY_POLICY,
         handoff_instruction(),
     ]

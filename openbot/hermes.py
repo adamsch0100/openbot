@@ -340,6 +340,8 @@ def _index_block(index: str) -> str:
 
 
 def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") -> str:
+    from .process import process_law_block, result_trailer
+
     parts = [
         f"You are the {preset} engine on this CEO.",
         "The operator is in OttoBot Chat — with this CEO, or with Cos above them.",
@@ -347,6 +349,8 @@ def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") 
         "Chat is not memory. INDEX and this packet are the source of truth.",
         "Never print passwords, TOTP, or API keys in RESULT, chat, or INDEX.",
         "Name the engine that ran (Hermes Agent or OpenCode).",
+        "",
+        process_law_block(),
         "",
         "INDEX:",
         _index_block(index),
@@ -365,6 +369,7 @@ def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") 
         "If VAULT LOGINS is in this packet, fill ordinary username/password fields from that file. Never print the file. "
         "Park send, publish, pay, delete, and sign."
     )
+    parts.append(result_trailer())
     return "\n".join(parts)
 
 
