@@ -97,6 +97,18 @@ class CheapChatTests(unittest.TestCase):
         self.assertIn("keep going from Cos", staff_next)
         self.assertNotIn("Chief of Staff", staff_next)
 
+        long_week = (
+            "Horizon-week: 1 live city or CHFA page that can take a lead · NoCO buyer/seller · via organic URLs\n"
+        )
+        saa = status_reply(
+            "Now: listing\nLast: alerts\nNext: open Schedule\nBlocker: —\n" + long_week,
+            "What is going on?",
+            "SAA Homes",
+        )
+        self.assertIn("This week: 1 live city or CHFA page that can take a lead", saa)
+        self.assertNotIn("NoCO buyer/seller", saa)
+        self.assertIn("listing", saa)
+
     def test_staff_status_hides_smoke_and_says_cos(self):
         from unittest.mock import patch
 

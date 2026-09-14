@@ -1004,8 +1004,9 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
         return f"Hello — {name}. I report to Cos. How can I help?"
     if is_status:
         lines: list[str] = []
-        if week:
-            lines.append(f"This week: {week}")
+        week_short = week.split("·")[0].strip() if week else ""
+        if week_short:
+            lines.append(f"This week: {week_short}")
         else:
             lines.append("No week goal yet.")
         lines.append(now)
