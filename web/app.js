@@ -7219,6 +7219,7 @@ function emptyStreamHtml() {
   const blocked = (text.match(/^Blocker:\s*(.*)$/m) || [])[1] || "";
   const stuck = blocked && blocked !== "—" ? blocked : "";
   const title = worker ? worker.name : project ? prettyCeoName(projectId, project.name) : "Cos";
+  const chairEmpty = !project && !worker;
   let lead = "Ask what’s going on, or open a CEO.";
   let showCTA = !project;
   if (worker && project) {
@@ -7229,16 +7230,20 @@ function emptyStreamHtml() {
     lead = week ? `This week: ${week}` : "No week goal yet. Open Goals.";
     showCTA = false;
   } else {
-    const glance = orgWeekGlance();
-    lead = glance ? glance : "Board chair. Ask what’s going on, or open a CEO.";
+    // Keep the empty chair calm — long org glances feel like a wall on phones.
+    lead = "Board chair. Ask what’s going on, or open a CEO.";
   }
   const showNow = project && now && now !== "source of truth" && now !== "—" && !isScheduleFluff(now) && now !== weekGoal(project);
   const nowLine = showNow ? `<p class="empty-now">${escapeHtml(now)}</p>` : "";
   const stuckLine = stuck ? `<p class="empty-block">${escapeHtml(stuck)}</p>` : "";
+  // Cos is already the chat-where title — don't stack Cos + Cos on mobile empty.
+  const markBlock = chairEmpty
+    ? `<p class="empty-kicker">On it.</p>`
+    : `<img class="empty-mark" src="/otto.png?v=5" alt="OttoBot" width="44" height="44" />
+      <h1>${escapeHtml(title)}</h1>`;
   return `
-    <div class="empty-stream" id="streamEmpty">
-      <img class="empty-mark" src="/otto.png?v=5" alt="OttoBot" width="44" height="44" />
-      <h1>${escapeHtml(title)}</h1>
+    <div class="empty-stream${chairEmpty ? " chair-empty" : ""}" id="streamEmpty">
+      ${markBlock}
       ${nowLine}
       ${stuckLine}
       <p>${escapeHtml(lead)}</p>

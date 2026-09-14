@@ -2983,9 +2983,17 @@ footer a { color: var(--bronze); }
     padding: 8px 12px;
     gap: 8px;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
     border-bottom: 1px solid var(--track);
     background: rgba(16, 15, 13, 0.92);
+  }
+  .mobile-org-toggle {
+    position: relative;
+    z-index: 5;
+  }
+  .stages {
+    position: relative;
+    z-index: 1;
   }
   .drawer-top,
   .activity-bar,
@@ -3130,18 +3138,26 @@ footer a { color: var(--bronze); }
   }
 
   .bar-left { flex: 0 0 auto; }
-  .bar-right { flex: 1 1 0; min-width: 0; margin-left: auto; }
-  .bar-right .engines-chip {
-    max-width: min(28vw, 120px);
-    font-size: 10px;
-    padding: 5px 8px;
-  }
+  .bar-right { flex: 0 0 auto; min-width: 0; margin-left: auto; }
+  /* Drop status chrome from the phone top bar — Engines lives in Settings */
+  .bar-right .engines-chip,
+  .bar-right .pulse,
+  .bar-right .meter,
+  .bar-right .engine-hint { display: none !important; }
   
-  /* Compact header: hide "On it." sub, keep Otto + ottobot */
+  /* Compact header: mark + stages only */
   .sub { display: none; }
   .word { font-size: 13px; letter-spacing: 0.05em; }
   .mark-gem { width: 28px; height: 28px; border-radius: 7px; }
   .mark-row { gap: 10px; }
+  .stages {
+    margin: 0 auto;
+    padding: 3px;
+    gap: 2px;
+  }
+  .stage-btn {
+    min-width: 4.2rem;
+  }
   
   /* Keep composer-who screen-reader only — do not unclip sr-only on mobile */
   .composer-who.sr-only {
@@ -3316,40 +3332,58 @@ footer a { color: var(--bronze); }
   .work-status-index dd {
     -webkit-line-clamp: 1;
   }
-  /* calm phone work lane */
+  /* calm phone work lane: one scroll row (5 tabs — never a 4-col grid) */
   .chat-head-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
   }
   .chat-folder { display: none; }
+  .chat-where {
+    font-size: 20px;
+    line-height: 1.2;
+    letter-spacing: var(--track-title);
+    text-transform: none;
+  }
   .work-tabs,
   .embed-head .work-tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    width: 100%;
-    gap: 0;
-    padding: 3px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: #161411;
-    justify-content: stretch;
+    display: flex;
     flex-wrap: nowrap;
+    width: 100%;
+    gap: 4px;
+    padding: 3px;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg) 70%, #000);
+    box-shadow: inset 0 0 0 1px var(--track), var(--shadow-inset);
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
   }
+  .work-tabs::-webkit-scrollbar { display: none; }
   .work-tab,
   .stage-btn,
   .mobile-org-toggle {
     touch-action: manipulation;
   }
   .work-tab {
-    display: flex;
+    display: inline-flex;
     align-items: baseline;
     justify-content: center;
-    gap: 5px;
-    padding: 10px 8px;
-    min-height: 44px;
+    gap: 4px;
+    flex: 0 0 auto;
+    padding: 9px 12px;
+    min-height: 40px;
     font-size: 13px;
     border-radius: 999px;
+    white-space: nowrap;
+  }
+  .work-tab.on {
+    background: var(--bronze-soft);
+    color: var(--bronze);
   }
   .mobile-org-toggle {
     width: 44px;
@@ -3547,29 +3581,31 @@ footer a { color: var(--bronze); }
     align-items: center;
   }
   
-  /* Composer: ensure above safe area, compact layout */
+    /* Composer: thumb-first dock with safe area */
   .composer {
-    padding: 8px 10px;
-    margin-bottom: env(safe-area-inset-bottom, 8px);
-    gap: 4px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    gap: 6px;
     max-width: 100%;
     overflow-x: hidden;
     border: 0;
-    border-radius: var(--radius-deep);
-    box-shadow: var(--shadow-soft), var(--shadow-inset);
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.28), var(--shadow-inset);
+    background: color-mix(in srgb, var(--panel) 96%, #000);
   }
   .composer textarea {
-    font-size: 16px; /* Prevent iOS Safari auto-zoom on focus */
-    min-height: 42px;
-    max-height: 120px;
-    padding: 6px 0;
-    font-family: var(--ui); /* Use UI font, not serif display font */
+    font-size: 16px;
+    min-height: 44px;
+    max-height: 132px;
+    padding: 10px 0;
+    font-family: var(--ui);
     letter-spacing: var(--track-body);
+    line-height: 1.35;
   }
   .composer-input-row {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    gap: 6px;
-    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
   }
   .route-select {
     font-size: 10px;
@@ -3579,36 +3615,85 @@ footer a { color: var(--bronze); }
     background-position: right 0 center;
   }
   .composer .send {
-    height: 42px;
-    min-width: 72px;
-    min-height: 42px;
-    padding: 6px 16px;
-    font-size: 13px;
+    height: 44px;
+    min-width: 76px;
+    min-height: 44px;
+    padding: 8px 16px;
+    font-size: 14px;
     border-radius: 999px;
   }
   .attach-btn {
     padding: 0;
     font-size: 16px;
-    height: 42px;
-    width: 42px;
-    min-width: 42px;
-    min-height: 42px;
+    height: 44px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
-  
-  /* Compact footer: collapse engines info */
-  footer { 
-    white-space: normal;
-    font-size: 10px;
-    padding: 6px 12px;
-    line-height: 1.4;
-    border-top: 1px solid var(--track);
+  .stream {
+    padding: 8px 14px max(132px, 24vh);
   }
-  
-  /* Settings drawer full-width */
+  .bubble {
+    gap: 8px;
+  }
+  .bubble.user {
+    max-width: 88%;
+    padding: 12px 14px;
+  }
+  .bubble-text .bot-lead {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .empty-stream {
+    margin: auto;
+    padding: 28px 16px 24px;
+    gap: 12px;
+    max-width: 22rem;
+  }
+  .empty-stream.chair-empty {
+    text-align: left;
+    justify-items: start;
+  }
+  .empty-stream.chair-empty .empty-kicker {
+    margin: 0 0 2px;
+  }
+  .empty-stream.chair-empty p {
+    max-width: 18rem;
+  }
+  .empty-stream h1 {
+    font: var(--type-title);
+    letter-spacing: var(--track-title);
+  }
+  .empty-stream p {
+    font: var(--type-body);
+    letter-spacing: var(--track-body);
+    line-height: 1.45;
+  }
+  .mobile-cta {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    min-height: 44px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-soft), var(--shadow-inset);
+  }
+  .chat-shell {
+    padding: 0 0 0;
+  }
+  .chat-head {
+    padding: 10px 14px 6px;
+  }
+
+  /* Credit stays in Settings / About on phone — free vertical space for chat */
+  footer {
+    display: none;
+  }
+
+/* Settings drawer full-width */
   .drawer { grid-template-columns: minmax(0, 1fr); }
   .drawer-grid { 
     grid-template-columns: minmax(0, 1fr);
@@ -3685,7 +3770,9 @@ footer a { color: var(--bronze); }
   .engine-hint { display: none; } /* Hide on mobile */
   .pulse { max-width: min(48vw, 200px); }
   .pulse small { display: none; }
-  .bar-right .engines-chip { max-width: 76px; }
+  .bar-right .engines-chip,
+  .bar-right .pulse,
+  .bar-right .meter { display: none !important; }
   
   /* Wizard/first-run panels: phone-friendly */
   .overlay {
@@ -3817,6 +3904,28 @@ footer a { color: var(--bronze); }
 }
 
 /* Phone-specific: ≤480px */
+
+  /* first-run / unlock feel */
+  .overlay {
+    padding: max(12px, env(safe-area-inset-top, 12px)) 14px 14px;
+    align-items: flex-end;
+  }
+  .overlay .panel {
+    border: 0;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.4);
+    max-height: min(92vh, 760px);
+    overflow: auto;
+    padding: 20px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+  .overlay .panel h2 {
+    font: var(--type-title);
+    letter-spacing: var(--track-title);
+  }
+  .overlay .ghost-btn {
+    min-height: 44px;
+  }
+
 @media (max-width: 480px) {
   html { overflow-x: hidden; max-width: 100%; }
   body { overflow: hidden; overflow-x: hidden; max-width: 100%; height: 100%; }
@@ -3855,8 +3964,8 @@ footer a { color: var(--bronze); }
   .chat-head { padding: 12px 0 8px; gap: 8px; }
   .chat-where { font-size: 18px; letter-spacing: 0; text-transform: none; }
   .work-tab {
-    padding: 10px 6px;
-    min-height: 44px;
+    padding: 9px 12px;
+    min-height: 40px;
     font-size: 13px;
   }
   
@@ -3868,9 +3977,9 @@ footer a { color: var(--bronze); }
   }
   
   /* Even more compact composer on phones */
-  .composer { 
-    padding: 5px 8px;
-    gap: 3px;
+  .composer {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    gap: 6px;
   }
   .composer-who {
     font-size: 8px;
@@ -3893,16 +4002,19 @@ footer a { color: var(--bronze); }
     height: auto;
   }
   .composer .send {
-    height: 36px;
-    min-width: 60px;
-    padding: 5px 10px;
-    font-size: 12px;
+    height: 44px;
+    min-width: 72px;
+    min-height: 44px;
+    padding: 8px 14px;
+    font-size: 14px;
   }
   .attach-btn {
-    padding: 7px 9px;
-    font-size: 15px;
-    height: 36px;
-    min-width: 36px;
+    padding: 0;
+    font-size: 16px;
+    height: 44px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
   
   /* Ensure stream has enough bottom padding */
@@ -4022,13 +4134,13 @@ footer a { color: var(--bronze); }
   .composer .send,
   .attach-btn,
   .ghost-btn {
-    height: 40px;
-    min-height: 40px;
+    height: 44px;
+    min-height: 44px;
     border-radius: 999px;
   }
   .attach-btn {
-    width: 40px;
-    min-width: 40px;
+    width: 44px;
+    min-width: 44px;
   }
   
   /* Index brief */
@@ -4040,15 +4152,18 @@ footer a { color: var(--bronze); }
     max-height: 140px;
   }
   
-  /* Empty state on phone */
+  /* Empty state on phone — fill the dead middle */
   .empty-stream {
-    padding: 28px 8px 36px;
-    gap: 10px;
+    margin: auto;
+    padding: 24px 18px 28px;
+    gap: 12px;
+    text-align: left;
+    max-width: 22rem;
   }
   .empty-stream .empty-mark {
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
   }
   .empty-stream h1 {
     font: var(--type-title);

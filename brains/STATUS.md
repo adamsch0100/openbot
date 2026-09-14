@@ -2,6 +2,7 @@
 
 
 ## Engine changelog (Steward propose)
+- 2026-09-14: Mobile feel pass — 5-tab scroll row (no 4-col crush), hide Engines/pulse in bar, thumb composer dock, safe-area (board CSS).
 - 2026-09-14: Micro-motion + fewer hard borders (transitions.dev cues) on mobile/desktop board CSS.
 - 2026-09-14: Mobile calm UI — type scale, track dividers, layered card/button shadows (board CSS; brand fonts kept).
 - 2026-09-10: Chat-as-home polish (empty stream, Ready fluff kill) + align Engines Wire auth when site/repo/railway URLs exist.
@@ -16,9 +17,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Desk status rename — UI says desk status; on disk STATUS.md (old filename still reads).
-Last: User asked to drop INDEX lingo; STATUS.md + frontend scrub shipped.
-Next: Dogfood the board copy; migrate live volumes on write.
+Now: Mobile feel pass on the board (scroll work tabs, quieter top bar, thumb composer).
+Last: Desk status rename — UI says desk status; on disk STATUS.md.
+Next: Hard-refresh Chat on phone and dogfood the copy.
 Blocker: —
 
 ## Vault
