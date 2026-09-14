@@ -35,6 +35,7 @@ class HandledVisibleUiTests(unittest.TestCase):
         self.assertIn('kind === "script"', own)
         self.assertIn("Needs Adam", own)
         self.assertIn("Waiting Cos", own)
+        self.assertIn("Do not remake this cron", own)
         # 401/key must precede gatewayScar so Fix key wins over Restart gateway
         key_before_gw = own.index('if (kind === "key")')
         gw_block = own.index("if (gatewayScar)")
@@ -126,8 +127,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=181", html)
-        self.assertIn("styles.css?v=181", html)
+        self.assertIn("app.js?v=182", html)
+        self.assertIn("styles.css?v=182", html)
 
 
 
@@ -213,6 +214,19 @@ class HandledVisibleBackendTests(unittest.TestCase):
         self.assertIn("Accept Restore", nxt)
         self.assertNotIn("Fix key", nxt)
         self.assertNotIn("Auto-retry", nxt)
+
+    def test_db_fail_keeps_cron_no_remake(self):
+        from openbot.hermes import cron_outcome
+
+        _, nxt = cron_outcome(
+            "error",
+            "",
+            "Script exited with code 1\nstderr:\nalertDigest error: AggregateError [ECONNREFUSED]:\n"
+            "    at /data/workspaces/saa-homes/backend/node_modules/pg-pool/index.js:45:11",
+        )
+        self.assertIn("Do not remake", nxt)
+        self.assertIn("DATABASE_URL", nxt)
+        self.assertNotIn("workspace copy has no Postgres", nxt)
 
 
 if __name__ == "__main__":

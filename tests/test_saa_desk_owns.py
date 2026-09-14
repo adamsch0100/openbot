@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -27,6 +28,9 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertIn("313da214bb9f", hermes)
         self.assertIn("def saa_desk_catchup_once", hermes)
         self.assertIn("def stamp_saa_fail_story", org)
+        self.assertIn("Do not remake crons", org)
+        self.assertIn("restore_channels=False", org)
+        self.assertIn("hermes_db_env_present", org)
         self.assertIn("_heal_saa_desk_fails", launch)
         self.assertIn("3575dd7f3753", hermes)
         self.assertIn("6fd1e3be3cd1", hermes)
@@ -147,7 +151,8 @@ class SaaDeskOwnsTests(unittest.TestCase):
         stopper.assert_called_once()
         start_gw.assert_called_once()
         migrate.assert_called_once()
-        preserve.assert_not_called()
+        preserve.assert_called_once()
+        self.assertEqual(preserve.call_args.kwargs.get("restore_channels"), False)
         self.assertEqual(order, ["sync", "stop", "start"])
         self.assertIn("OttoBot chat", result["inbox"])
         self.assertTrue(result.get("live", {}).get("ok"))
@@ -238,3 +243,49 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertNotIn("Telegram", stale["live_story"])
         copy = cron_digest([], local_owner=False)
         self.assertIn("Telegram", copy["story"])
+
+    def test_stamp_saa_fail_story_does_not_remake_crons(self):
+        from openbot import org
+
+        rows = [
+            {
+                "id": "38041c7a6501",
+                "name": "geo-citation-audit",
+                "enabled": True,
+                "fail_kind": "gateway",
+            },
+            {
+                "id": "402427761418",
+                "name": "saved-search-alerts-immediate",
+                "enabled": True,
+                "fail_kind": "db",
+            },
+            {
+                "id": "dadd8574d37f",
+                "name": "citation-submission-layer1",
+                "enabled": True,
+                "fail_kind": "script",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "cron").mkdir()
+            with patch("openbot.hermes.read_home_crons", return_value=rows):
+                with patch("openbot.hermes.cron_row_is_noise", return_value=False):
+                    with patch("openbot.keyring.preserve_merge_hermes_env"):
+                        with patch("openbot.keyring.hermes_db_env_present", return_value=False):
+                            with patch.object(org, "patch_scope") as scope:
+                                with patch.object(org, "patch_index_line") as idx:
+                                    now = org.stamp_saa_fail_story(str(home))
+        self.assertIn("not a remake", now)
+        self.assertIn("alerts cron kept", now)
+        nxt = [
+            call.args[3]
+            for call in scope.call_args_list
+            if call.args[:3] == ("saa-homes", None, "Next")
+        ]
+        self.assertTrue(nxt)
+        self.assertIn("Do not remake crons", nxt[0])
+        blocker = [call.args[1] for call in idx.call_args_list if call.args[0] == "Blocker"]
+        self.assertTrue(blocker)
+        self.assertIn("not a remake", blocker[0])

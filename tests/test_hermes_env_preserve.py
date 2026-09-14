@@ -55,6 +55,40 @@ class TestHermesEnvPreserve(unittest.TestCase):
             live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
             self.assertNotIn("TELEGRAM_BOT_TOKEN", live)
 
+    def test_restores_database_url_when_channels_off(self):
+        from openbot.keyring import preserve_merge_hermes_env, _parse_env_lines, hermes_db_env_present
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".env").write_text("OPENCODE_GO_API_KEY=go-live\n", encoding="utf-8")
+            (home / ".env.bak-openbot").write_text(
+                "TELEGRAM_BOT_TOKEN=123:ABC\nDATABASE_URL=postgres://saa-local/saa\n",
+                encoding="utf-8",
+            )
+            result = preserve_merge_hermes_env(home, restore_channels=False)
+            self.assertTrue(result["ok"])
+            self.assertIn("DATABASE_URL", result["restored"])
+            self.assertNotIn("TELEGRAM_BOT_TOKEN", result["restored"])
+            live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(live["DATABASE_URL"], "postgres://saa-local/saa")
+            self.assertEqual(live["OPENCODE_GO_API_KEY"], "go-live")
+            self.assertNotIn("TELEGRAM_BOT_TOKEN", live)
+            self.assertTrue(hermes_db_env_present(home))
+
+    def test_write_keeps_database_url_when_updating_go_key(self):
+        from openbot.keyring import _write_hermes_env, _parse_env_lines
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".env").write_text(
+                "DATABASE_URL=postgres://saa-local/saa\nOPENCODE_GO_API_KEY=old\n",
+                encoding="utf-8",
+            )
+            _write_hermes_env({"OPENCODE_GO_API_KEY": "new"}, home=home)
+            live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(live["DATABASE_URL"], "postgres://saa-local/saa")
+            self.assertEqual(live["OPENCODE_GO_API_KEY"], "new")
+
     def test_write_keeps_telegram_when_updating_go_key(self):
         from openbot.keyring import _write_hermes_env, _parse_env_lines
 

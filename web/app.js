@@ -691,7 +691,7 @@ function failAskWhy(pid, cronId) {
 
 function failWhyLine(kind, reason) {
   if (kind === "gateway") return "Schedule stalled until the gateway recovers.";
-  if (kind === "db") return "Alerts need the live SAA database — this workspace copy has no Postgres.";
+  if (kind === "db") return "Alerts cron kept — same job as the old Hermes. Needs reachable Postgres, not a remake.";
   if (kind === "script") return "Job cannot run without its script on Hermes.";
   if (kind === "hermes") return "Hermes exited — Retry once. This is not a missing API key.";
   if (kind === "key") return "Auth rejected — retries will keep failing until the key is fixed.";
@@ -775,7 +775,7 @@ function failOwnership(row) {
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: "Needs the live SAA database. Do not retry this workspace copy.",
+      next: "Do not remake this cron. Merge DATABASE_URL from the old SAA Hermes .env if this home is missing it.",
       outcome: `Failed · ${reason}`
     };
   }

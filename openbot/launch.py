@@ -1180,6 +1180,12 @@ def _heal_saa_desk_fails(project_id: str, home: str) -> None:
     if not Path(home).is_dir():
         return
     try:
+        from .keyring import preserve_merge_hermes_env
+
+        preserve_merge_hermes_env(home, restore_channels=False)
+    except Exception:
+        pass
+    try:
         from .org import saa_desk_owns, stamp_saa_fail_story
 
         if not saa_desk_owns():
@@ -1212,8 +1218,12 @@ def ensure_supervised_gateway(project_id: str) -> dict:
     # (no manual activate / Tools wallet push after deploy).
     try:
         from .keyring import preserve_merge_hermes_env, sync_opencode_go_pool_env
+        from .org import saa_desk_owns
 
-        preserve_merge_hermes_env(home)
+        restore_channels = True
+        if str(project_id or "") == "saa-homes" and saa_desk_owns():
+            restore_channels = False
+        preserve_merge_hermes_env(home, restore_channels=restore_channels)
         sync_opencode_go_pool_env(home=home)
     except Exception:
         pass

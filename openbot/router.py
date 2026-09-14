@@ -103,7 +103,10 @@ STATUS = re.compile(
     r"what('?s| is) (going on|blocked|the status|happening)|"
     r"what('?s| is).{0,24}running|"
     r"now running|"
-    r"status|blocked|index|what are you doing"
+    r"status|blocked|index|what are you doing|"
+    r"re-?make.{0,24}(cron|crown|schedule)|"
+    r"(cron|crown|schedule).{0,20}(re-?make|rebuild)|"
+    r"what (db|database)|which (db|database)"
     r")\b",
     re.I,
 )
@@ -130,7 +133,7 @@ RUN_EXISTING = re.compile(
     r"run\b.{0,24}\b(cron|schedule)s?\b.{0,16}\b(all|every)\b|"
     r"(fire|start|kick off)\b.{0,40}\b(all|every)\b.{0,24}\b(cron|schedule)s?\b|"
     r"get (everything|things|it all|saa|the (site|board|jobs))\b.{0,24}\bworking\b|"
-    r"catch(ed)? up|catch-up"
+    r"caught up|catch(ed)? up|catch-up"
     r")",
     re.I,
 )
@@ -1080,7 +1083,10 @@ def cos_run_existing_reply(project_id: str | None = None) -> str:
     except Exception:
         pass
     if saa_owns:
-        bits.append("This desk owns the SAA schedule. OttoBot chat is the inbox.")
+        bits.append(
+            "This desk owns the SAA schedule. OttoBot chat is the inbox. "
+            "Keep the transferred crons — do not remake alerts or scripts."
+        )
     elif saa_copy:
         bits.append("The live Hermes box already runs the schedule. Telegram gets today’s checks.")
     else:

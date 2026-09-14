@@ -281,6 +281,14 @@ def take_saa_desk(
         stamp_saa_desk_owns_index()
     except Exception:
         pass
+    if home:
+        try:
+            from .keyring import preserve_merge_hermes_env
+
+            # Keep transferred DATABASE_URL. Do not restore Telegram poller.
+            preserve_merge_hermes_env(home, restore_channels=False)
+        except Exception:
+            pass
     started = {"ok": False, "skipped": True}
     if start_gateway and home:
         started = gateway_start(home, wait=True, timeout=45, force=True)
@@ -1811,7 +1819,11 @@ def sync_ceo_hermes_scripts(project_id: str, home: str | Path | None = None) -> 
 
 
 def stamp_saa_fail_story(home: str | Path | None = None) -> str:
-    """Cos + SAA INDEX: what this desk owns vs parked. No operator click-through."""
+    """Cos + SAA INDEX: what this desk owns vs parked. No operator click-through.
+
+    Cos and the SAA CEO do not hold an LLM meeting. These INDEX lines are the
+    discussion: keep transferred crons; do not remake alerts or scripts.
+    """
     dest = str(home or "").strip()
     if not dest:
         from .launch import resolve_ceo_hermes_home
@@ -1819,6 +1831,12 @@ def stamp_saa_fail_story(home: str | Path | None = None) -> str:
         dest = resolve_ceo_hermes_home("saa-homes", "") or ""
     if not dest or not Path(dest).is_dir():
         return ""
+    try:
+        from .keyring import preserve_merge_hermes_env
+
+        preserve_merge_hermes_env(dest, restore_channels=False)
+    except Exception:
+        pass
     from .hermes import cron_row_is_noise, read_home_crons
     rows = read_home_crons(dest, results=False) if dest else []
     enabled = [
@@ -1832,22 +1850,42 @@ def stamp_saa_fail_story(home: str | Path | None = None) -> str:
     gateway = [row for row in enabled if str(row.get("fail_kind") or "") == "gateway"]
     db = [row for row in enabled if str(row.get("fail_kind") or "") == "db"]
     script = [row for row in enabled if str(row.get("fail_kind") or "") == "script"]
+    db_env = False
+    if db:
+        try:
+            from .keyring import hermes_db_env_present
+
+            db_env = hermes_db_env_present(dest)
+        except Exception:
+            db_env = False
     bits: list[str] = []
     if gateway:
-        bits.append(f"{len(gateway)} gateway scars auto-retry one at a time")
-    if db:
-        bits.append("saved-search needs the live SAA database")
+        bits.append(f"{len(gateway)} gateway scars auto-retry 1-by-1")
+    if db and db_env:
+        bits.append("alerts cron kept; env here, Postgres refused")
+    elif db:
+        bits.append("alerts cron kept — old-home DATABASE_URL, not a remake")
     if script:
-        bits.append(f"{len(script)} scripts parked for Accept Restore")
-    now = ". ".join(bits) or "This desk owns the SAA schedule."
-    nxt = "Do not mass-retry. Cos owns catch-up. Restore stays Accept."
+        bits.append(f"{len(script)} scripts parked — copy old home, not a remake")
+    now = ". ".join(bits) or "This desk owns the SAA schedule. Keep transferred crons."
+    nxt = "Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept."
+    last = "Cos + SAA INDEX agree: keep transferred crons; no remake."
+    if db and db_env:
+        blocker = "Alerts: env present, Postgres unreachable from this desk"
+    elif db:
+        blocker = "Alerts: DATABASE_URL from old SAA Hermes .env — not a remake"
+    elif script:
+        blocker = "Accept Restore for missing scripts — copy from old home"
+    else:
+        blocker = "—"
     try:
         patch_scope("saa-homes", None, "Now", now[:160])
         patch_scope("saa-homes", None, "Next", nxt[:160])
+        patch_scope("saa-homes", None, "Last", last[:160])
         patch_index_line("Now", f"SAA: {now}"[:160])
         patch_index_line("Next", nxt[:160])
-        patch_index_line("Last", "Cos classified SAA fails. Gateway scars auto-retry. Scripts parked.")
-        patch_index_line("Blocker", "—" if not script and not db else "Accept Restore / live DB — not a click-through")
+        patch_index_line("Last", last[:160])
+        patch_index_line("Blocker", blocker[:160])
     except Exception:
         pass
     return now

@@ -2024,7 +2024,7 @@ _KEY_FAIL_NEXT = "Fix key in Settings."
 _WALLET_FAIL_NEXT = "Needs Adam · add credits / fix billing."
 _TRANSIENT_FAIL_NEXT = "Auto-retry — transient. Retry once if it stays red."
 _HERMES_FAIL_NEXT = "Retry — Hermes exited. Not a key."
-_DB_FAIL_NEXT = "Needs the live SAA database. This workspace copy has no Postgres. Do not retry here."
+_DB_FAIL_NEXT = "Alerts cron kept. Same job as the old Hermes. Needs reachable Postgres (DATABASE_URL). Do not remake."
 
 
 def fail_kind_from_blob(blob: str) -> str:

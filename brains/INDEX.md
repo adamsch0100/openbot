@@ -16,10 +16,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: SAA: Cos owns fail queue. Gateway scars auto-retry one at a time. Scripts parked. Saved-search needs live DB.
-Last: Desk walk polish live (cache 180). Grok internals paused.
-Next: Do not mass-retry. Restore stays Accept. Hard-refresh Chat after 181.
-Blocker: Accept Restore / live SAA database — not a click-through.
+Now: SAA: keep transferred crons. Citation audit is current labor. Alerts need old-home DATABASE_URL — not a remake.
+Last: Cos + SAA INDEX agree: keep transferred crons; no remake.
+Next: Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept.
+Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
 
 ## Vault
 

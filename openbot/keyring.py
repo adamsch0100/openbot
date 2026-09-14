@@ -780,7 +780,7 @@ def prefer_account_ids(tools: dict | None = None) -> list[str]:
 
 
 # Channel / messaging secrets that must survive wallet rewrites and redeploys.
-_PRESERVE_ENV_EXACT = {
+_CHANNEL_ENV_EXACT = {
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_ALLOWED_USERS",
     "TELEGRAM_CHAT_ID",
@@ -790,16 +790,48 @@ _PRESERVE_ENV_EXACT = {
     "SLACK_BOT_TOKEN",
     "SLACK_APP_TOKEN",
 }
-_PRESERVE_ENV_PREFIXES = ("TELEGRAM_", "DISCORD_", "SLACK_", "WHATSAPP_")
+_CHANNEL_ENV_PREFIXES = ("TELEGRAM_", "DISCORD_", "SLACK_", "WHATSAPP_")
+# Transferred Hermes home secrets (SAA Postgres, etc). Same crons — merge from .env.bak.
+_TRANSFER_ENV_EXACT = {
+    "DATABASE_URL",
+    "DATABASE_PUBLIC_URL",
+    "PGHOST",
+    "PGPORT",
+    "PGUSER",
+    "PGPASSWORD",
+    "PGDATABASE",
+    "POSTGRES_URL",
+    "POSTGRES_HOST",
+    "POSTGRES_PORT",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DB",
+}
+_TRANSFER_ENV_PREFIXES = ("DATABASE_", "POSTGRES_")
+_PRESERVE_ENV_EXACT = _CHANNEL_ENV_EXACT | _TRANSFER_ENV_EXACT
+_PRESERVE_ENV_PREFIXES = _CHANNEL_ENV_PREFIXES + _TRANSFER_ENV_PREFIXES
 
 
-def _is_preserve_env_key(name: str) -> bool:
+def _is_channel_env_key(name: str) -> bool:
     key = str(name or "").strip()
     if not key:
         return False
-    if key in _PRESERVE_ENV_EXACT:
+    if key in _CHANNEL_ENV_EXACT:
         return True
-    return any(key.startswith(prefix) for prefix in _PRESERVE_ENV_PREFIXES)
+    return any(key.startswith(prefix) for prefix in _CHANNEL_ENV_PREFIXES)
+
+
+def _is_transfer_env_key(name: str) -> bool:
+    key = str(name or "").strip()
+    if not key:
+        return False
+    if key in _TRANSFER_ENV_EXACT:
+        return True
+    return any(key.startswith(prefix) for prefix in _TRANSFER_ENV_PREFIXES)
+
+
+def _is_preserve_env_key(name: str) -> bool:
+    return _is_channel_env_key(name) or _is_transfer_env_key(name)
 
 
 def _parse_env_lines(text: str) -> dict[str, str]:
@@ -848,17 +880,41 @@ def _env_backup_paths(env_path: Path) -> list[Path]:
     return found
 
 
+def hermes_db_env_present(home: str | Path | None = None) -> bool:
+    """True if DATABASE_URL / PG* exists in live .env or backups. Never returns values."""
+    root = Path(home) if home else Path(hermes_home())
+    env_path = root / ".env"
+    sources: list[dict[str, str]] = []
+    if env_path.is_file():
+        try:
+            sources.append(_parse_env_lines(env_path.read_text(encoding="utf-8")))
+        except OSError:
+            pass
+    for backup in _env_backup_paths(env_path):
+        try:
+            sources.append(_parse_env_lines(backup.read_text(encoding="utf-8")))
+        except OSError:
+            continue
+    for blob in sources:
+        for name, value in blob.items():
+            if _is_transfer_env_key(name) and str(value or "").strip():
+                return True
+    return False
+
+
 def preserve_merge_hermes_env(
     home: str | Path | None = None,
     *,
     restore_channels: bool = True,
 ) -> dict:
-    """Restore missing channel secrets into HERMES_HOME/.env from sibling backups.
+    """Restore missing preserve secrets into HERMES_HOME/.env from sibling backups.
 
     Post-redeploy / OpenRouter strip has wiped TELEGRAM_BOT_TOKEN while leaving
-    `.env.env.bak-openrouter`. Never overwrite a non-empty live value.
+    `.env.env.bak-openrouter`. Wallet rewrite can also drop DATABASE_URL from a
+    transferred Hermes home. Never overwrite a non-empty live value.
     restore_channels=False skips Telegram/Discord/Slack so this desk can run
-    cron without standing up a second messaging poller.
+    cron without standing up a second messaging poller. Transfer keys
+    (DATABASE_URL / PG*) still restore — that is not a remake of the cron.
     """
     root = Path(home) if home else Path(hermes_home())
     env_path = root / ".env"
@@ -873,7 +929,7 @@ def preserve_merge_hermes_env(
         for name, value in blob.items():
             if not _is_preserve_env_key(name):
                 continue
-            if not restore_channels:
+            if _is_channel_env_key(name) and not restore_channels:
                 continue
             if not str(value or "").strip():
                 continue

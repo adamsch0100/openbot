@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: This desk owns the SAA schedule. OttoBot chat is the inbox. Not Telegram.
-Last: Cut over from live Railway SAA Homes Hermes.
-Next: Keep the SAA Hermes gateway up. Schedule reads this home. OttoBot chat is the inbox.
-Blocker: —
+Now: This desk owns the SAA schedule. Keep transferred crons. Citation audit is current labor.
+Last: Cos + SAA INDEX agree: keep transferred crons; no remake.
+Next: Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept.
+Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
 Goals: —
 
 ## Horizons
@@ -21,7 +21,7 @@ Horizon-five: Schwartz and Associates is the name NoCO already trusts to buy or 
 - This desk’s `jobs.json` is the schedule after cutover — overlay SSH is off.
 - Gateway shutdown scars auto-retry one at a time on this Hermes gateway — Cos owns the queue; do not stampede.
 - Missing scripts (citation submit, mention scan) stay parked for Accept Restore. Cos will not invent them.
-- Saved-search alerts ECONNREFUSED: this workspace copy has no Postgres. Needs the live SAA database. Do not retry here.
+- Saved-search alerts ECONNREFUSED: keep the transferred cron. Needs DATABASE_URL from the old SAA Hermes .env (reachable Postgres). Do not remake this job.
 - Paused jobs stay paused on purpose (conversion-surge, competitor-content-watch, city-audit-batch-4, board internals).
 - GBP / login walls: skip + note; never auto-fill secrets.
 - digest 401 / CRON_SECRET mismatch remains a known watch item if digest cards go blank.
