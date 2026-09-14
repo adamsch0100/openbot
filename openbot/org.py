@@ -312,9 +312,10 @@ def take_saa_desk(
         except Exception as err:
             migrated = {"ok": False, "error": str(err)[:200], "migrated": []}
     paused = {"ok": False, "skipped": True, "paused": []}
+    resumed = {"ok": False, "skipped": True, "resumed": []}
     if home:
         try:
-            from .hermes import SAA_BOARD_PAUSE, SAA_CRON_SKIP, cron_pause
+            from .hermes import SAA_BOARD_PAUSE, SAA_CRON_SKIP, cron_pause, resume_saa_shop_jobs
 
             held: list[str] = []
             for jid in sorted(SAA_CRON_SKIP | SAA_BOARD_PAUSE):
@@ -322,6 +323,7 @@ def take_saa_desk(
                 if row.get("ok"):
                     held.append(jid)
             paused = {"ok": True, "skipped": False, "paused": held}
+            resumed = {"ok": True, "skipped": False, "resumed": resume_saa_shop_jobs(home)}
         except Exception as err:
             paused = {"ok": False, "error": str(err)[:200], "paused": []}
     gateway_ok = bool(started.get("ok") or started.get("running") or not start_gateway)
@@ -335,6 +337,7 @@ def take_saa_desk(
         "synced": synced,
         "live": stopped,
         "paused": paused,
+        "resumed": resumed,
         "engine": "Hermes Agent",
         "inbox": "OttoBot chat — Running / Due / Results / Schedule. Not Telegram.",
     }
@@ -1881,7 +1884,7 @@ def stamp_saa_fail_story(home: str | Path | None = None) -> str:
     if script:
         bits.append(f"{len(script)} scripts parked — copy old home, not a remake")
     now = ". ".join(bits) or "This desk owns the SAA schedule. Keep transferred crons."
-    nxt = "Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept."
+    nxt = "CEO runs Horizons. Do not remake crons. Conversion fixes and Competitor watch are on."
     last = "Cos + SAA desk status agree: keep transferred crons; no remake."
     if db and db_env:
         blocker = "Alerts: env present, Postgres unreachable from this desk"

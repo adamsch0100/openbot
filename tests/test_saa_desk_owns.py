@@ -23,6 +23,8 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertIn("def take_saa_desk", org)
         self.assertIn("def stop_saa_live_box", hermes)
         self.assertIn("def cron_pause", hermes)
+        self.assertIn("def cron_resume", hermes)
+        self.assertIn("def resume_saa_shop_jobs", hermes)
         self.assertIn("def write_saa_desk_marker", hermes)
         self.assertIn("SAA_BOARD_PAUSE", hermes)
         self.assertIn("313da214bb9f", hermes)
@@ -140,11 +142,15 @@ class SaaDeskOwnsTests(unittest.TestCase):
                                                 "openbot.hermes.cron_pause",
                                                 return_value={"ok": True, "id": "x"},
                                             ):
-                                                with patch("openbot.keyring.preserve_merge_hermes_env") as preserve:
-                                                    result = org.take_saa_desk(
-                                                        start_gateway=True, sync_live=True, stop_live=True
-                                                    )
-                                                    owns = org.saa_desk_owns()
+                                                with patch(
+                                                    "openbot.hermes.resume_saa_shop_jobs",
+                                                    return_value=[],
+                                                ):
+                                                    with patch("openbot.keyring.preserve_merge_hermes_env") as preserve:
+                                                        result = org.take_saa_desk(
+                                                            start_gateway=True, sync_live=True, stop_live=True
+                                                        )
+                                                        owns = org.saa_desk_owns()
         self.assertTrue(result["ok"])
         self.assertFalse(result["telegram"])
         self.assertTrue(owns)

@@ -144,8 +144,10 @@ class CatchupHonestyTests(unittest.TestCase):
 
     def test_js_parks_gateway_and_pauses_on_stop(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        server = (ROOT / "openbot" / "server.py").read_text(encoding="utf-8")
         self.assertIn("function cronIsGhostClaim", js)
         self.assertIn("/api/crons/pause", js)
+        self.assertIn("/api/crons/resume", server)
         self.assertIn("Parked. Retry once if you want it again", js)
         self.assertIn('STAFF_NAME = "Chief of Staff"', js)
 
@@ -157,11 +159,13 @@ class BoardUiTests(unittest.TestCase):
         self.assertIn("looks stuck", js)
         self.assertIn("stop_stuck", js)
         self.assertIn("This week:", js)
+        self.assertIn("This month:", js)
+        self.assertIn("Goals tab is the 1 week", js)
         self.assertIn("Up next:", js)
         self.assertIn("The model key was rejected. Open Settings.", js)
         self.assertIn("PROCESS LAW", js)
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=184", html)
+        self.assertIn("app.js?v=185", html)
 
 
 if __name__ == "__main__":

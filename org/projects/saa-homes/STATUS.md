@@ -2,10 +2,10 @@
 
 CEO imported from Hermes Agent. Chat is not memory.
 
-Now: This desk owns the SAA schedule. Citation audit + citation-hub plan are current labor. OttoBot chat is the inbox.
-Last: Citation-hub skills/plan drafted; Cos agrees keep transferred crons (no remake).
-Next: Accept citation-hub PLAN → Research citation gate on national magnets N01–N10 → Builder page shell → weekly monitor. Keep jobs.json; Cos owns catch-up; Restore stays Accept.
-Blocker: Alerts still need DATABASE_URL from old SAA Hermes .env; Hermes Think needs live auth per Settings — not a remake
+Now: This desk owns the SAA schedule. Conversion fixes and Competitor watch are on. OttoBot chat is the inbox.
+Last: Operator turned shop jobs back on. Citation-hub skills stay in the toolbox — not current labor.
+Next: CEO runs Horizons. Do not remake crons. Parked scars stay parked.
+Blocker: Alerts need reachable saahomes Postgres. Citation-submit leftover script is missing — not the citation-hub.
 
 Goals: —
 
@@ -20,10 +20,10 @@ Horizon-five: Schwartz and Associates is the name NoCO already trusts to buy or 
 ## Residual risks (honest)
 
 - This desk’s `jobs.json` is the schedule after cutover — overlay SSH is off.
-- Gateway shutdown scars auto-retry one at a time on this Hermes gateway — Cos owns the queue; do not stampede.
-- Missing scripts (citation submit, mention scan) stay parked for Accept Restore. Cos will not invent them.
-- Saved-search alerts ECONNREFUSED: keep the transferred cron. Needs DATABASE_URL from the old SAA Hermes .env (reachable Postgres). Do not remake this job.
-- Paused jobs stay paused on purpose (conversion-surge, competitor-content-watch, city-audit-batch-4, board internals).
+- Gateway shutdown scars stay parked. Do not stampede Retry.
+- Citation-hub builder/monitor are OttoBot skills (statistics pages people cite). Directory citation-submit is a leftover Hermes cron missing `citation_submit_layer1.py` — not the hub. Do not invent that script.
+- Saved-search alerts: keep the transferred cron. Wire the saahomes Postgres public URL into this Hermes home. Do not remake this job.
+- Conversion fixes and Competitor watch are on. city-audit-batch-4 and board internals stay paused.
 - GBP / login walls: skip + note; never auto-fill secrets.
 - digest 401 / CRON_SECRET mismatch remains a known watch item if digest cards go blank.
 

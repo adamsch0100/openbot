@@ -830,6 +830,23 @@ def _is_transfer_env_key(name: str) -> bool:
     return any(key.startswith(prefix) for prefix in _TRANSFER_ENV_PREFIXES)
 
 
+def _db_url_is_private(value: str) -> bool:
+    """True when this desk cannot reach the host (other Railway project or loopback)."""
+    try:
+        from urllib.parse import urlparse
+
+        host = (urlparse(str(value or "")).hostname or "").lower()
+    except Exception:
+        host = str(value or "").lower()
+    if not host:
+        return "railway.internal" in str(value or "").lower()
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    if host.endswith(".local"):
+        return True
+    return "railway.internal" in host
+
+
 def _is_preserve_env_key(name: str) -> bool:
     return _is_channel_env_key(name) or _is_transfer_env_key(name)
 
@@ -948,7 +965,8 @@ def merge_transfer_env_from_process(home: str | Path | None = None) -> dict:
     """Copy DATABASE_URL / PG* from this process into a Hermes home if missing.
 
     Railway cutover often leaves the old SAA Postgres URL on this service.
-    Never logs values. Does not overwrite a live home value.
+    Prefer a public URL when the live home still has railway.internal.
+    Never logs values. Does not overwrite a reachable live home value.
     """
     root = Path(home) if home else Path(hermes_home())
     env_path = root / ".env"
@@ -963,6 +981,16 @@ def merge_transfer_env_from_process(home: str | Path | None = None) -> dict:
         if str(current.get(name) or "").strip():
             continue
         restored[name] = value
+    live_url = str(current.get("DATABASE_URL") or restored.get("DATABASE_URL") or "").strip()
+    public = str(os.environ.get("DATABASE_PUBLIC_URL") or "").strip()
+    process_url = str(os.environ.get("DATABASE_URL") or "").strip()
+    reachable = ""
+    if public and not _db_url_is_private(public):
+        reachable = public
+    elif process_url and not _db_url_is_private(process_url):
+        reachable = process_url
+    if reachable and (not live_url or _db_url_is_private(live_url)):
+        restored["DATABASE_URL"] = reachable
     if not restored:
         return {"ok": True, "restored": [], "path": str(env_path)}
     _write_hermes_env(restored, home=root)

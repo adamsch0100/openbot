@@ -137,6 +137,53 @@ class TestHermesEnvPreserve(unittest.TestCase):
             live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
             self.assertEqual(live["DATABASE_URL"], "postgres://already/here")
 
+    def test_replaces_private_database_url_with_public(self):
+        import os
+        from unittest.mock import patch
+
+        from openbot.keyring import merge_transfer_env_from_process, _parse_env_lines
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".env").write_text(
+                "DATABASE_URL=postgres://user:pass@postgres.railway.internal:5432/saa\n",
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {
+                    "DATABASE_URL": "postgres://user:pass@postgres.railway.internal:5432/saa",
+                    "DATABASE_PUBLIC_URL": "postgres://user:pass@hopper.proxy.rlwy.net:1234/saa",
+                },
+                clear=False,
+            ):
+                result = merge_transfer_env_from_process(home)
+            self.assertIn("DATABASE_URL", result["restored"])
+            live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(live["DATABASE_URL"], "postgres://user:pass@hopper.proxy.rlwy.net:1234/saa")
+
+    def test_replaces_localhost_database_url_with_public(self):
+        import os
+        from unittest.mock import patch
+
+        from openbot.keyring import merge_transfer_env_from_process, _parse_env_lines
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / ".env").write_text(
+                "DATABASE_URL=postgres://user:pass@localhost:5432/saa\n",
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {"DATABASE_URL": "postgres://user:pass@hopper.proxy.rlwy.net:1234/saa"},
+                clear=False,
+            ):
+                result = merge_transfer_env_from_process(home)
+            self.assertIn("DATABASE_URL", result["restored"])
+            live = _parse_env_lines((home / ".env").read_text(encoding="utf-8"))
+            self.assertEqual(live["DATABASE_URL"], "postgres://user:pass@hopper.proxy.rlwy.net:1234/saa")
+
 
 if __name__ == "__main__":
     unittest.main()

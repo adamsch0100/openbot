@@ -1005,6 +1005,20 @@ def cron_pause(job_id: str, home: str | Path | None = None) -> dict:
     return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
 
 
+def cron_resume(job_id: str, home: str | Path | None = None) -> dict:
+    """Official `hermes cron resume`. Does not delete the job."""
+    binary = which("hermes")
+    if not binary:
+        return {"ok": False, "code": 127, "text": "Hermes Agent binary missing"}
+    jid = str(job_id or "").strip()
+    if not is_valid_job_id(jid):
+        return {"ok": False, "code": 400, "text": "bad job id"}
+    if jid in SAA_CRON_SKIP or jid in SAA_BOARD_PAUSE:
+        return {"ok": False, "code": 400, "text": "skipped", "id": jid}
+    code, out = _run([binary, "cron", "resume", jid], None, 60, home=home)
+    return {"ok": code == 0, "code": code, "text": out.strip() or "(no output)", "id": jid}
+
+
 def cron_row_is_noise(row: dict | None) -> bool:
     """Board-internal jobs. Fold them; do not put them in Cos “Due now”."""
     if not isinstance(row, dict):
@@ -1041,14 +1055,59 @@ def hold_saa_paused_jobs(home: str | Path | None = None) -> list[str]:
     return held
 
 
+def resume_saa_shop_jobs(home: str | Path | None = None) -> list[str]:
+    """Turn Conversion fixes + Competitor watch back on once. A later Pause stays Pause."""
+    if not home:
+        return []
+    root = Path(home)
+    mark = root / SHOP_RESUME_MARK
+    already: set[str] = set()
+    try:
+        prev = json.loads(mark.read_text(encoding="utf-8"))
+        already = {str(item) for item in (prev.get("done") or [])}
+    except (OSError, json.JSONDecodeError, TypeError, AttributeError):
+        already = set()
+    want = [jid for jid in SAA_SHOP_RESUME_IDS if jid not in already]
+    if not want:
+        return []
+    try:
+        rows = read_home_crons(home, results=False)
+    except Exception:
+        rows = []
+    by_id = {str(row.get("id") or ""): row for row in rows if isinstance(row, dict)}
+    finished: list[str] = []
+    for jid in want:
+        row = by_id.get(jid) or {}
+        paused = bool(re.search(r"paused", str(row.get("state") or ""), re.I))
+        enabled = row.get("enabled") is not False
+        if row and enabled and not paused:
+            finished.append(jid)
+            continue
+        out = cron_resume(jid, home=home)
+        if out.get("ok"):
+            finished.append(jid)
+    if finished:
+        try:
+            mark.write_text(
+                json.dumps({"done": sorted(already | set(finished))}) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+    return finished
+
+
 SAA_LIVE_PROJECT = os.environ.get("OPENBOT_SAA_HERMES_PROJECT", "87dc0fc7-9858-4e63-8c89-d9af0533b470")
 SAA_LIVE_SERVICE = os.environ.get("OPENBOT_SAA_HERMES_SERVICE", "SAA Homes Hermes")
 SAA_LIVE_ENV = os.environ.get("OPENBOT_SAA_HERMES_ENV", "production")
 SAA_CRON_SKIP = frozenset({
+    "0f3bc267a48e",  # city-audit-batch-4 — still paused until the operator asks
+})
+SAA_SHOP_RESUME_IDS = (
     "7bdaa3b6fb9e",  # conversion-surge
     "1ee83ff221a4",  # competitor-content-watch
-    "0f3bc267a48e",  # city-audit-batch-4
-})
+)
+SHOP_RESUME_MARK = ".openbot-shop-resume.json"
 SAA_BOARD_PAUSE = frozenset({
     "77ba37670bae",  # grok-build-supervisor — script is not on this desk
     "3575dd7f3753",  # grok-heartbeat — board internal, script missing

@@ -1166,9 +1166,10 @@ def _hold_saa_board_jobs(project_id: str, home: str) -> None:
     if str(project_id or "") != "saa-homes" or not home:
         return
     try:
-        from .hermes import hold_saa_paused_jobs
+        from .hermes import hold_saa_paused_jobs, resume_saa_shop_jobs
 
         hold_saa_paused_jobs(home)
+        resume_saa_shop_jobs(home)
     except Exception:
         pass
 

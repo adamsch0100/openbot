@@ -511,8 +511,9 @@ class TestJobIdValidation(unittest.TestCase):
             jobs = json.loads((cron / "jobs.json").read_text(encoding="utf-8"))["jobs"]
             self.assertEqual(jobs[0]["last_status"], "ok")
             self.assertEqual(jobs[0]["prompt"], "keep")
-        self.assertIn("7bdaa3b6fb9e", SAA_CRON_SKIP)
-        skipped = saa_live_cron_run("7bdaa3b6fb9e")
+        self.assertIn("0f3bc267a48e", SAA_CRON_SKIP)
+        self.assertNotIn("7bdaa3b6fb9e", SAA_CRON_SKIP)
+        skipped = saa_live_cron_run("0f3bc267a48e")
         self.assertFalse(skipped["ok"])
         self.assertEqual(skipped["text"], "skipped")
         from openbot.hermes import SAA_CRON_PIN_GO, pin_saa_live_jobs_json, saa_ssh_payload
@@ -550,7 +551,7 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertIsNone(row["fire_claim"])
         self.assertEqual(row["deliver"], "origin")
         self.assertEqual(row["prompt"], "keep")
-        self.assertFalse(nudge_saa_job_due(blob, "7bdaa3b6fb9e", "2026-09-09T20:00:00+00:00"))
+        self.assertFalse(nudge_saa_job_due(blob, "0f3bc267a48e", "2026-09-09T20:00:00+00:00"))
         nxt = saa_catchup_next([{"id": "38041c7a6501", "last_status": "error", "state": "scheduled", "enabled": True}])
         self.assertEqual(nxt, "38041c7a6501")
         caught = saa_catchup_next([{"id": "38041c7a6501", "last_status": "ok", "state": "scheduled", "enabled": True}])
@@ -725,6 +726,13 @@ class TestJobIdValidation(unittest.TestCase):
                 "enabled": True,
             },
             {
+                "id": "0f3bc267a48e",
+                "name": "city-audit-batch-4",
+                "last_status": "error",
+                "last_error": "Gateway shutdown (final-cleanup) killed the job",
+                "enabled": True,
+            },
+            {
                 "id": "38041c7a6501",
                 "name": "geo-citation-audit",
                 "last_status": "error",
@@ -740,12 +748,35 @@ class TestJobIdValidation(unittest.TestCase):
             },
         ])
         by_id = {row["id"]: row for row in rows}
-        self.assertFalse(by_id["7bdaa3b6fb9e"]["enabled"])
-        self.assertEqual(by_id["7bdaa3b6fb9e"]["board_status"], "paused")
+        self.assertTrue(by_id["7bdaa3b6fb9e"]["enabled"])
+        self.assertEqual(by_id["7bdaa3b6fb9e"]["board_status"], "live-wait")
+        self.assertFalse(by_id["0f3bc267a48e"]["enabled"])
+        self.assertEqual(by_id["0f3bc267a48e"]["board_status"], "paused")
         self.assertEqual(by_id["38041c7a6501"]["board_status"], "live-wait")
         self.assertEqual(by_id["38041c7a6501"]["fail_kind"], "gateway")
         self.assertEqual(by_id["deadbeef0001"]["fail_kind"], "unknown")
         self.assertEqual(by_id["deadbeef0001"]["board_status"], "")
+
+    def test_resume_saa_shop_jobs_once(self):
+        from openbot.hermes import SHOP_RESUME_MARK, resume_saa_shop_jobs
+
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            (home / "cron").mkdir()
+            (home / "cron" / "jobs.json").write_text(json.dumps({
+                "jobs": [{
+                    "id": "7bdaa3b6fb9e",
+                    "name": "conversion-surge",
+                    "enabled": False,
+                    "state": "paused",
+                }]
+            }), encoding="utf-8")
+            with patch("openbot.hermes.cron_resume", return_value={"ok": True, "id": "7bdaa3b6fb9e"}):
+                first = resume_saa_shop_jobs(home)
+                second = resume_saa_shop_jobs(home)
+            self.assertIn("7bdaa3b6fb9e", first)
+            self.assertEqual(second, [])
+            self.assertTrue((home / SHOP_RESUME_MARK).is_file())
 
 
 if __name__ == "__main__":

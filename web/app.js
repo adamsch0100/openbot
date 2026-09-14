@@ -3460,6 +3460,12 @@ function weekGoal(project) {
   return (week && week !== "—") ? week : "";
 }
 
+function horizonSlice(project, key) {
+  const raw = String((project && project.horizons && project.horizons[key]) || "").trim();
+  if (!raw || raw === "—") return "";
+  return raw.split("·")[0].trim();
+}
+
 function orgWeekGlance() {
   const projects = ((org && org.projects) || (cfg.org && cfg.org.projects) || []);
   return projects.map((row) => {
@@ -5003,7 +5009,7 @@ function cronNextUseful(next) {
 }
 
 function cronSkipRetry(row) {
-  return /^(conversion-surge|competitor-content-watch|city-audit-batch-4)$/i.test(String(row.name || ""));
+  return /^(city-audit-batch-4)$/i.test(String(row.name || ""));
 }
 
 const CLAIM_FRESH_MS = 25 * 60 * 1000;
@@ -5312,22 +5318,29 @@ function paintCeoBrief(digest) {
   } else {
     const week = weekGoal(project);
     bits.push(week ? `This week: ${week}` : "No week goal yet. Open Goals.");
+    const month = horizonSlice(project, "month");
+    const quarter = horizonSlice(project, "quarter");
+    if (month) bits.push(`This month: ${month}`);
+    if (quarter) bits.push(`This quarter: ${quarter}`);
+    if (horizonFilledCount(project) > 1) {
+      bits.push("Goals tab is the 1 week–5 year board. This CEO runs those.");
+    }
     const story = quietStory(runningStory());
     if (story && story.line) {
       if (story.on && story.warn) bits.push(`Stuck: ${story.line}`);
       else if (story.on) bits.push(`Working on: ${String(story.line).replace(/^Running · /, "")}`);
       else if (!/^Done\b/i.test(story.line)) bits.push(`Just did: ${String(story.line).replace(/^Done · /, "")}`);
     }
-    if (String(project.id || "") === "saa-homes" && (gatewayLiveOwns || !gatewayRestartOk)) {
-      bits.push("Live Railway Hermes still owns the schedule. This desk is a copy until cutover. OttoBot chat is the inbox — not Telegram.");
-    } else if (String(project.id || "") === "saa-homes" && saaDeskOwns) {
+    if (String(project.id || "") === "saa-homes" && saaDeskOwns) {
       bits.push("This desk owns the SAA schedule. OttoBot chat is the inbox — not Telegram.");
+    } else if (String(project.id || "") === "saa-homes" && (gatewayLiveOwns || !gatewayRestartOk)) {
+      bits.push("Live Railway Hermes still owns the schedule. This desk is a copy until cutover. OttoBot chat is the inbox — not Telegram.");
     }
     const nxt = indexLineUseful(honestIndexNext(project.index_next));
     if (nxt && !isScheduleFluff(nxt)) {
       bits.push(`Up next: ${nxt}`);
     } else if (String(project.id || "") === "saa-homes") {
-      bits.push("Up next: Accept the citation-hub plan, then research the first national numbers, then a page that can take a lead.");
+      bits.push("Up next: this CEO runs Horizons. Open Goals if a timeframe is wrong.");
     }
     const pack = digestCache.get(projectId) || {};
     const keyFail = ((pack.crons || []).concat((cfg.activity && cfg.activity.jobs) || [])).find((row) => failKindFromBlob(failBlobOf(row)) === "key");
@@ -7366,7 +7379,9 @@ function emptyStreamHtml() {
     showCTA = false;
   } else if (project) {
     const week = weekGoal(project);
+    const month = horizonSlice(project, "month");
     lead = week ? `This week: ${week}` : "No week goal yet. Open Goals.";
+    if (month) lead = `${lead} · This month: ${month}`;
     showCTA = false;
   } else {
     // Keep the empty chair calm — long org glances feel like a wall on phones.
