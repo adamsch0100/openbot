@@ -2,6 +2,7 @@
 
 
 ## Engine changelog (Steward propose)
+- 2026-09-14: Mobile calm UI — type scale, track dividers, layered card/button shadows (board CSS; brand fonts kept).
 - 2026-09-10: Chat-as-home polish (empty stream, Ready fluff kill) + align Engines Wire auth when site/repo/railway URLs exist.
 - 2026-09-10: Treat Ready…/Idle INDEX copy as fluff so org-now shows failed/due (#96 soft note).
 - 2026-09-10: Hotfix loadCeoDigest → renderBotMeta so indexSummary picks up honest failed counts.
@@ -15,7 +16,7 @@
 Source of truth for this OttoBot instance. Status questions read this file only.
 
 Now: Cos names CEOs. This desk owns SAA cron.
-Last: SAA cut over: live Railway Hermes stopped, this desk owns schedule.
+Last: Mobile board polish — calm dense tokens on ≤860px (board CSS).
 Next: Cos routes work to CEOs. SAA schedule runs here.
 Blocker: —
 
