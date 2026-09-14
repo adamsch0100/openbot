@@ -30,7 +30,7 @@ SEATS = (
 )
 
 SEAT_NOTES = {
-    "chat": "Everyday talk. Cheap. No tools. On Nous Portal, Hermes-4 is Chat. Status questions still read INDEX for free.",
+    "chat": "Everyday talk. Cheap. No tools. On Nous Portal, Hermes-4 is Chat. Status questions still read desk status for free.",
     "think": "Hard reasoning. Auto = live catalog value (cheap + capable). Go 401s Haiku; do not pin it.",
     "code": "Builder. OpenCode in the project folder.",
     "research": "Fetch a URL. Snapshot only if the page is an app.",
@@ -395,12 +395,12 @@ def pick_think_go_model(models: list[dict] | None = None) -> str:
 
 
 def allowed_for_seat(seat_id: str, model_id: str) -> bool:
-    if seat_id == "chat" and model_id in {"", "INDEX"}:
+    if seat_id == "chat" and model_id in {"", "INDEX", "DESK"}:
         return True
     spec = next((item for item in SEATS if item["id"] == seat_id), None)
     if spec is None:
         return False
-    if spec.get("locked") and model_id not in {"", "INDEX"}:
+    if spec.get("locked") and model_id not in {"", "INDEX", "DESK"}:
         return False
     if model_id == "":
         return True

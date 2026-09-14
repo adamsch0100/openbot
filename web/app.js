@@ -355,7 +355,7 @@ function escapeHtml(s) {
   }[c]));
 }
 
-const PACKET_LINE = /^(You are the |You are Chief of Staff|You are Cos on a local|You report to (Chief of Staff|Cos)|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in (OpenBot|OttoBot) Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |OttoBot chat is the inbox|.+ CEO — reports to (Chief of Staff|Cos))/i;
+const PACKET_LINE = /^(You are the |You are Chief of Staff|You are Cos on a local|You report to (Chief of Staff|Cos)|The (human )?operator |You dispatch |Ask, and you dispatch|Your job is triage|Before doing substantial|Do not hire a Bot|Reply like a person|You do not edit files|No RESULT\.|Do not mention Now|Do not print session_id|If RECENT TELEGRAM|Never ask the operator to paste|If they ask to run all existing|OpenCode edits your|You own the outcome|Chat is not memory|Report a short RESULT|Name the engine that ran|Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|Write a short RESULT|STAFF \(files|DESK STATUS:\s*$|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|OPEN HANDOFFS:|VAULT LOGINS|The operator is talking|The operator is in (OpenBot|OttoBot) Chat|The operator can also open|Specialist lanes execute|Code: OpenCode in |Hermes: |Bus: org\/projects\/|Telegram: |OttoBot chat is the inbox|.+ CEO — reports to (Chief of Staff|Cos))/i;
 
 function statusOnly(text) {
   const rows = String(text || "").split("\n").map((line) => line.trim()).filter(Boolean);
@@ -386,7 +386,7 @@ function stripPacketEcho(text) {
   cleaned.split("\n").forEach((line) => {
     const stripped = line.trim();
     if (PACKET_LINE.test(stripped)) {
-      skipping = /^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):/i.test(stripped);
+      skipping = /^(DESK STATUS|INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS):/i.test(stripped);
       return;
     }
     if (skipping) {
@@ -510,7 +510,7 @@ function humanFailReason(blob) {
 }
 
 function failCountNoise(s) {
-  // PULSE / INDEX lines say "due 0 · failed 0". That is a count, not this job failing.
+  // PULSE / desk status lines say "due 0 · failed 0". That is a count, not this job failing.
   return String(s || "").replace(/\bfailed\s*[:=]?\s*\d+/gi, " ");
 }
 
@@ -1510,7 +1510,7 @@ function modelsForSeat(seat, models) {
         connected: true,
         caps: ["status"],
       },
-      { id: "INDEX", label: "Board — status (free)", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] },
+      { id: "DESK", label: "Desk status (free)", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] },
       ...rows.filter((row) => row.id),
     ];
   } else {
@@ -1545,7 +1545,7 @@ function renderSeats(catalog, seats) {
     const auto = autoPick(seat.id);
     const selected = options.find((opt) => opt.id === current) || options.find((opt) => !opt.id) || options[0] || {};
     const selectedId = Object.prototype.hasOwnProperty.call(selected, "id") ? selected.id : "";
-    const price = selected.id && selected.id !== "INDEX"
+    const price = selected.id && selected.id !== "INDEX" && selected.id !== "DESK"
       ? moneyPair(selected.in_usd, selected.out_usd)
       : (auto.id ? moneyPair(auto.in_usd, auto.out_usd) : (seat.id === "chat" || seat.locked ? "$0.00" : "—"));
     const note = auto.why && !current
@@ -2514,14 +2514,14 @@ function showNodeMenu(x, y, kind, pid, wid) {
       <div class="menu-head">Cos</div>
       ${addCeoFormHtml()}
       <div class="menu-field">
-        <label for="menuIndexEdit">Staff status</label>
+        <label for="menuIndexEdit">Desk status</label>
         <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
         <button type="button" class="ghost-btn" data-menu="save-index">Save status</button>
       </div>
       <button type="button" role="menuitem" data-menu="configure">Open settings</button>`
       : `
       <div class="menu-field">
-        <label for="menuIndexEdit">Staff status</label>
+        <label for="menuIndexEdit">Desk status</label>
         <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
         <button type="button" class="ghost-btn" data-menu="save-index">Save status</button>
       </div>
@@ -3477,7 +3477,7 @@ function ceoWire(project) {
     const line = now && now !== "—" && now !== "source of truth" ? now : "this chat";
     return `Running · ${clipWire(line, 42)}`;
   }
-  // Known fails beat idle INDEX copy (Ready… / schedule fluff) once digest is ready.
+  // Known fails beat idle desk status copy (Ready… / schedule fluff) once digest is ready.
   if (counts.ready && (counts.failed || 0) > 0) {
     return clipWire(`${counts.failed} failed — open Results`, 56);
   }
@@ -4981,7 +4981,7 @@ function isScheduleFluff(line) {
   if (/^On schedule\b/i.test(raw)) return true;
   if (/attach a schedule/i.test(raw)) return true;
   if (/Ops asked Hermes to attach/i.test(raw)) return true;
-  // Idle INDEX copy must not beat real failed/due counts in the rail (#96 soft note).
+  // Idle desk status copy must not beat real failed/due counts in the rail (#96 soft note).
   if (/^Ready\b/i.test(raw)) return true;
   if (/^Ready when you are/i.test(raw)) return true;
   if (/on this Railway board/i.test(raw)) return true;
@@ -6888,7 +6888,7 @@ function renderReportCard(job) {
   }
   card.appendChild(result);
   
-  // INDEX delta: Now / Last / Next / Blocker
+  // Desk status delta: Working on / Just did / Up next / Stuck
   const hasIndexDelta = job.index_now || job.index_last || job.next || job.index_blocker;
   if (hasIndexDelta) {
     const delta = document.createElement("div");
@@ -9051,7 +9051,7 @@ if ($("importHermesZip")) {
     const data = await res.json();
     const imported = data.hermes_import || {};
     $("importZipStatus").textContent = res.ok
-      ? (imported.ok ? "CEO imported" : `CEO added. hermes import: ${imported.text || "INDEX only"}`)
+      ? (imported.ok ? "CEO imported" : `CEO added. hermes import: ${imported.text || "desk status only"}`)
       : (data.error || "import failed");
     if (res.ok && data.org) {
       org = data.org;

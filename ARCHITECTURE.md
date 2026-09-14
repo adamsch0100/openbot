@@ -37,11 +37,11 @@ Chat is the UI. Files are the memory. Engines are rented only for a job.
   only      + git MCP   browser / cron
 ```
 
-Chief of Staff is the dispatcher, not an engine. CEOs own OpenCode (folder) and Hermes (private home). They do not DM. INDEX, inbox, and BRAIN are the bus. Cos status is a short projection of those files — not a replay of chat, and not a third runtime.
+Chief of Staff is the dispatcher, not an engine. CEOs own OpenCode (folder) and Hermes (private home). They do not DM. desk status, inbox, and BRAIN are the bus. Cos status is a short projection of those files — not a replay of chat, and not a third runtime.
 
-Do not vendor QwenPaw / Scroll. That stack is another agent loop (CodeAct over a session environment). OpenBot already keeps history off the prompt: thread JSON is UI, INDEX is memory, jobs stay on disk.
+Do not vendor QwenPaw / Scroll. That stack is another agent loop (CodeAct over a session environment). OpenBot already keeps history off the prompt: thread JSON is UI, desk status is memory, jobs stay on disk.
 
-- **OpenBot** = control plane: routing, INDEX, job log, spend cap, presets, board UI
+- **OpenBot** = control plane: routing, desk status, job log, spend cap, presets, board UI
 - **Hermes Agent** = ops, memory, skills, cron, long jobs (official binary)
 - **OpenCode** = code edits, diffs, LSP, MCP (`opencode run` / `opencode web`)
 
@@ -57,7 +57,7 @@ A Grok-Bot-like column:
 
 - Bot name + avatar
 - Composer always at the bottom
-- Cards in the stream: text, diff, INDEX update, job cost, snapshot, blocker
+- Cards in the stream: text, diff, desk status update, job cost, snapshot, blocker
 - Optional “open raw Hermes / OpenCode” for power users
 
 ### What the model actually receives
@@ -67,7 +67,7 @@ A **job packet**, not the archive:
 ```
 SYSTEM: agent law + preset (Cos / Builder / Research / Ops)
 OPERATOR: org/OPERATOR.md + aimed CEO Horizon-week (Goals live here)
-INDEX:  structured excerpt — Now / Last / Next / Blocker / Horizons first, then doctrine (not a steward changelog)
+DESK STATUS: structured excerpt — Now / Last / Next / Blocker / Horizons first, then doctrine (not a steward changelog)
 DECISIONS: instance + this CEO   (settled calls; do not reopen)
 PULSE:  compiled projection — schedule due/failed/last, last jobs, git, site pointer (not live GSC/FUB)
 BRAIN:  brains/<bot>.md           (Now / Last / Next / Blocker)
@@ -78,15 +78,15 @@ HINTS:  last 3 job RESULT lines  (not the full chat)
 
 Three tempos (not a living mind):
 
-1. **Reflex** — status reads INDEX + pulse headlines. Tools off. No Hermes.
-2. **Job** — one-shot packet → Hermes or OpenCode → RESULT patches INDEX.
-3. **Heartbeat** — Hermes cron is WHEN (weekday Think). The board builds the packet (PULSE + INDEX + scar + last-labor review + week proof). Think writes an **open proposal** with Why, Evidence, Alternatives, Review, Proof, and a Discuss question. Labor is Do it / Ask Cos / Ask me / Skip, or auto when this CEO’s **per-lane policy** says so (code / research / ops / financial). Financial is pay, price, spend, and wallet — one toggle. Publish, delete, and sign park to Needs-you and free the open slot. Scar (failed / drifted / unproven) survives the next Think until matching-lane proof or a Skip note that clears it. Horizon-week can kill busywork and stop when Last already holds week proof plus a live URL. Operator can Run Think now without waiting for weekday cron. A 22-weekday file-brain sim (`python -m openbot.brainmonth`) compresses a month on an isolated desk — no calendar wait, no live SAA Think.
+1. **Reflex** — status reads desk status + pulse headlines. Tools off. No Hermes.
+2. **Job** — one-shot packet → Hermes or OpenCode → RESULT patches desk status.
+3. **Heartbeat** — Hermes cron is WHEN (weekday Think). The board builds the packet (PULSE + desk status + scar + last-labor review + week proof). Think writes an **open proposal** with Why, Evidence, Alternatives, Review, Proof, and a Discuss question. Labor is Do it / Ask Cos / Ask me / Skip, or auto when this CEO’s **per-lane policy** says so (code / research / ops / financial). Financial is pay, price, spend, and wallet — one toggle. Publish, delete, and sign park to Needs-you and free the open slot. Scar (failed / drifted / unproven) survives the next Think until matching-lane proof or a Skip note that clears it. Horizon-week can kill busywork and stop when Last already holds week proof plus a live URL. Operator can Run Think now without waiting for weekday cron. A 22-weekday file-brain sim (`python -m openbot.brainmonth`) compresses a month on an isolated desk — no calendar wait, no live SAA Think.
 
-PULSE is a projection, not a second memory. Cos sees one schedule headline per seated CEO. Each CEO sees only its own pulse. Sibling INDEX dumps are a bug. Discussion rides the open proposal file, not the chat archive.
+PULSE is a projection, not a second memory. Cos sees one schedule headline per seated CEO. Each CEO sees only its own pulse. Sibling desk status dumps are a bug. Discussion rides the open proposal file, not the chat archive.
 
 Rules:
 
-- Status questions: INDEX + pulse headlines, tools OFF, cheap model
+- Status questions: desk status + pulse headlines, tools OFF, cheap model
 - Follow-ups in the same thread still start from INDEX + brain, not from turn 47
 - If the user says “as I said earlier,” OpenBot searches the thread locally and injects one quote — it does not replay the week
 - After every job, the engine writes a RESULT and OpenBot patches INDEX / brain
@@ -113,7 +113,7 @@ Each bot is a folder, not a context window.
 
 ```
 brains/
-  INDEX.md              # board source of truth
+  STATUS.md             # board desk status (source of truth)
   cos.md
   builder.md
   research.md

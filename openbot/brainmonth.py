@@ -72,7 +72,7 @@ def file_brain(project_id: str, world: str) -> str:
     evidence = "UNKNOWN" if "unknown" in lower else "VERIFIED"
     if horizon_satisfied(index):
         return (
-            f"Why: Week proof is already on INDEX — do not invent busywork\n"
+            f"Why: Week proof is already on desk status — do not invent busywork\n"
             f"Horizon: {week[:160]}\n"
             f"Evidence: VERIFIED\n"
             f"Alternatives: Unit tests; lint; another landing page\n"
@@ -251,14 +251,14 @@ def seed_desk(home: Path, policy: dict | None = None) -> str:
     store_mod.ROOT = home
     store_mod.BRAINS = home / "brains"
     store_mod.JOBS = home / "jobs"
-    store_mod.INDEX = store_mod.BRAINS / "INDEX.md"
+    store_mod.INDEX = store_mod.BRAINS / store_mod.DESK_STATUS_NAME
     org_mod.ORG.mkdir(parents=True)
     store_mod.BRAINS.mkdir(parents=True)
     store_mod.JOBS.mkdir(parents=True)
     store_mod.INDEX.write_text("Now: month sim\nLast: —\nNext: —\nBlocker: —\n", encoding="utf-8")
     dest = org_mod.ORG / "projects" / DESK_ID
     dest.mkdir(parents=True)
-    (dest / "INDEX.md").write_text(
+    (dest / store_mod.DESK_STATUS_NAME).write_text(
         f"# Month desk\n\nNow: ready\nLast: —\nNext: —\nBlocker: —\nHorizon-week: {WEEK}\n",
         encoding="utf-8",
     )

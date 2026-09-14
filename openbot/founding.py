@@ -1,4 +1,4 @@
-"""Founding INDEX + Horizon steers. Chat is the pipe. INDEX is memory."""
+"""Founding desk status + Horizon steers. Chat is the pipe. Desk status is memory."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .org import (
     parse_horizons,
     write_project_horizons,
 )
-from .store import now_iso
+from .store import now_iso, resolve_desk_status
 
 HORIZON_SHAPE = "{money or count} · {who pays} · via {how they arrive} · proof {metric}"
 FOUNDING_MARK = "FOUNDING_TASK"
@@ -66,16 +66,16 @@ KNOWN_HORIZONS = {
         "five": "Schwartz and Associates is the name NoCO already trusts to buy or sell · via compounding local search · proof branded queries + inbound",
     },
     "openbot": {
-        "week": "1 paying tenant on a live CEO desk · operators who will pay · via hosted OttoBot wrapping Hermes + OpenCode · proof tenant login + isolated INDEX",
+        "week": "1 paying tenant on a live CEO desk · operators who will pay · via hosted OttoBot wrapping Hermes + OpenCode · proof tenant login + isolated desk status",
         "month": "Paid board seats (engines billed to the tenant) · companies who want CEOs without running glue · via signup · proof paid seats vs churn",
-        "quarter": "Multi-tenant isolation — INDEX, Hermes home, OpenCode folder per company · tenants · via product · proof tenant A cannot see tenant B",
+        "quarter": "Multi-tenant isolation — desk status, Hermes home, OpenCode folder per company · tenants · via product · proof tenant A cannot see tenant B",
         "half": "Seat MRR covers OttoBot's own Hermes + OpenCode · tenants · via subscriptions · proof revenue vs token spend",
         "year": "OttoBot is the paid board companies run from · tenants · via CEOs + engines that stay theirs · proof paying tenants with live Horizons",
         "five": "The wrapper that gets paid for Hermes Agent + OpenCode · via multi-tenant seats · proof P&L",
     },
     "support": {
         "week": "Every ask is a ticket file · Adam · via Support CEO · proof no silent Accept / send / announce",
-        "month": "Working-on board matches ticket phase · operators · via INDEX four-liners · proof Now/Last/Next honest",
+        "month": "Working-on board matches ticket phase · operators · via desk status four-liners · proof Now/Last/Next honest",
         "quarter": "Help other people can clone · operators · via tickets not chat memory · proof a stranger can file and see status",
         "half": "Support pays for itself by making OttoBot delightful · seat cost · via fewer owner interrupts · proof Accept-only gates hold",
         "year": "Help stays a CEO, not a chatbot · operators · via files · proof tickets still route to openbot Builder",
@@ -87,7 +87,7 @@ KNOWN_HORIZONS = {
         "quarter": "A conversion path that covers the seat · agents who price listings · via ListLogic.homes · proof paid activations",
         "half": "ListLogic is the pricing story agents use with sellers · via product + drafts (never auto-post) · proof parked Needs-you not browser posts",
         "year": "Paid activations cover the seat first, then profit · listing agents · via product · proof revenue vs token spend",
-        "five": "The listing-price company that pays for itself · via one CEO not a C-suite · proof P&L on INDEX",
+        "five": "The listing-price company that pays for itself · via one CEO not a C-suite · proof P&L on desk status",
     },
     "nadia": {
         "week": "Conversion Hermes stays Online; SMS never claims Adam · ISA tenants · via follow-up that books · proof no impersonation",
@@ -95,7 +95,7 @@ KNOWN_HORIZONS = {
         "quarter": "ISA that books without sounding like a landing page · FUB users · via Adam-voice drafts in groups, Nadia-voice to leads · proof parked Needs-you",
         "half": "Nadia is the ISA layer brokerages pay for · via seats not ads · proof paid seats",
         "year": "Seats cover Hermes/OpenCode; voice calling still off until Adam says · via product · proof spend vs seats",
-        "five": "The ISA company that pays for itself · via one CEO · proof P&L on INDEX",
+        "five": "The ISA company that pays for itself · via one CEO · proof P&L on desk status",
     },
 }
 
@@ -135,7 +135,7 @@ def founding_prompt(*, name: str, idea: str = "", site: str = "", goals: str = "
     return (
         f"{FOUNDING_MARK}\n"
         f"You are founding {who}. The operator will Accept before Horizons go live. "
-        "Do not write INDEX.md. Do not invent a CFO or COO bot. "
+        "Do not write STATUS.md. Do not invent a CFO or COO bot. "
         "Spin Code/Think/Research/Ops or one named worker only if a jam already repeats.\n\n"
         f"{site_line}"
         f"Operator Goal (source of truth for what they want this CEO to produce): {idea_line}\n"
@@ -164,7 +164,7 @@ def founding_prompt(*, name: str, idea: str = "", site: str = "", goals: str = "
 
 
 def founding_intent(project_id: str | None) -> dict[str, str]:
-    """Operator Goal + site saved at Add CEO, else INDEX Goals / tools."""
+    """Operator Goal + site saved at Add CEO, else desk status Goals / tools."""
     pid = _slug(project_id) if project_id else ""
     blob = load_founding(pid) if pid else {}
     idea = str(blob.get("idea") or blob.get("goals") or "").strip()
@@ -225,13 +225,13 @@ def horizon_packet_extra(project_id: str | None, message: str = "") -> str:
     if is_founding_message(message):
         lines.append(
             "FOUNDING LAW: Output Offer/Who/How/Proof/Never and Horizon-* lines. "
-            "Do not write INDEX. The board parks Accept."
+            "Do not write STATUS.md. The board parks Accept."
         )
     elif is_steer_message(message):
         lines.append(
             "STEER LAW: The operator is steering this company. "
             "Output the six Horizon-* lines in the RESULT (full set, same shape). "
-            "Do not rewrite Never/gates. Do not write INDEX — the board will."
+            "Do not rewrite Never/gates. Do not write STATUS.md — the board will."
         )
     return "\n".join(lines)
 
@@ -331,7 +331,7 @@ def accept_founding(project_id: str) -> dict:
     written = write_project_horizons(pid, horizons, notify=True)
     from .org import patch_file_index, read_project_index
 
-    path = _project_dir(pid) / "INDEX.md"
+    path = resolve_desk_status(_project_dir(pid))
     extra = []
     for label in ("Offer", "Who", "How", "Proof", "Never"):
         val = str(draft.get(label.lower()) or "").strip()
@@ -406,7 +406,7 @@ def seed_seated_horizons(*, notify: bool = False) -> list[str]:
             done.append(pid)
     for pid in KNOWN_HORIZONS:
         if pid not in done:
-            path = _project_dir(pid) / "INDEX.md"
+            path = resolve_desk_status(_project_dir(pid))
             if path.is_file():
                 apply_known_horizons(pid, notify=False)
                 done.append(pid)
@@ -414,14 +414,14 @@ def seed_seated_horizons(*, notify: bool = False) -> list[str]:
 
 
 def _write_cos_inbox(project_id: str, body: str) -> None:
-    """Ticket only. Cos never patches that CEO's INDEX."""
+    """Ticket only. Cos never patches that CEO's desk status."""
     path = _project_dir(_slug(project_id)) / "inbox.md"
     snippet = re.sub(r"\s+", " ", (body or "").strip())[:400]
     block = (
         f"## {now_iso()}\n"
         "Now: queued\n"
         f"Last: Cos steer: {snippet}\n"
-        "Next: This CEO owns Horizons. Cos does not write INDEX.\n"
+        "Next: This CEO owns Horizons. Cos does not write desk status.\n"
         "Blocker: —\n\n"
     )
     prev = path.read_text(encoding="utf-8") if path.is_file() else "# Inbox\n\n"
@@ -430,7 +430,7 @@ def _write_cos_inbox(project_id: str, body: str) -> None:
 
 
 def route_cos_to_ceo(message: str) -> str | None:
-    """Cos chairs. Write inbox + handoff. Do not rewrite that CEO INDEX."""
+    """Cos chairs. Write inbox + handoff. Do not rewrite that CEO desk status."""
     hit = resolve_tell_target(message)
     if not hit:
         return None
@@ -445,13 +445,13 @@ def route_cos_to_ceo(message: str) -> str | None:
             from_seat="cos",
             to_seat="ceo",
             next_owner=pid,
-            output="Operator steer via Cos. CEO owns Horizons / Next. Do not rewrite INDEX from Cos.",
+            output="Operator steer via Cos. CEO owns Horizons / Next. Do not rewrite desk status from Cos.",
         )
     except Exception:
         pass
     who = CEO_PRETTY_NAMES.get(pid, pid)
     return (
-        f"Routed to {who}. Ticket is in their inbox — Cos does not write their INDEX. "
+        f"Routed to {who}. Ticket is in their inbox — Cos does not write their desk status. "
         f"Steer: {body[:180]}"
     )
 

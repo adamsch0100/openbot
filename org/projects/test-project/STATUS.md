@@ -15,7 +15,7 @@ Hermes: —
 ## Contract
 
 JOB: Own this project's outcome. Route Code to OpenCode; Think/Research/Ops to Hermes.
-SOURCES: This INDEX, the Code folder, inbox tickets, bus/handoffs.
-JUDGMENT: Done means INDEX Next is clear and a HANDOFF exists for specialist work.
+SOURCES: This desk status, the Code folder, inbox tickets, bus/handoffs.
+JUDGMENT: Done means desk status Next is clear and a HANDOFF exists for specialist work.
 OUTPUT: Short RESULT plus a bus file. Diffs wait for Accept/Reject.
 FORBIDDEN: Do not publish, pay, delete, or push without the operator. Chat is not memory. No app-bots.

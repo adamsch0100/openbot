@@ -3,7 +3,7 @@
 CEO imported from Hermes Agent. Chat is not memory.
 
 Now: This desk owns the SAA schedule. Keep transferred crons. Citation audit is current labor.
-Last: Cos + SAA INDEX agree: keep transferred crons; no remake.
+Last: Cos + SAA desk status agree: keep transferred crons; no remake.
 Next: Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept.
 Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
 Goals: —
@@ -151,7 +151,7 @@ Telegram: Off — OttoBot chat is the inbox
 ## Contract
 
 JOB: Run this company. Own P&L. Pay for this seat first, then profit. Spin specialists when a bottleneck repeats. No CFO/COO bots.
-SOURCES: This INDEX (doctrine + north-star), the Code folder, inbox, bus/handoffs, live site/metrics.
-JUDGMENT: Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.
+SOURCES: This desk status (doctrine + north-star), the Code folder, inbox, bus/handoffs, live site/metrics.
+JUDGMENT: Done means desk status Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.
 OUTPUT: Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.
 FORBIDDEN: Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.

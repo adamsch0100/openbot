@@ -44,7 +44,7 @@ class ProcessControlTests(unittest.TestCase):
         store_mod.ROOT = self.home
         store_mod.BRAINS = self.home / "brains"
         store_mod.JOBS = self.home / "jobs"
-        store_mod.INDEX = self.home / "brains" / "INDEX.md"
+        store_mod.INDEX = self.home / "brains" / "STATUS.md"
         store_mod.BRAINS.mkdir(parents=True, exist_ok=True)
         store_mod.JOBS.mkdir(parents=True, exist_ok=True)
         store_mod.INDEX.write_text(
@@ -56,7 +56,7 @@ class ProcessControlTests(unittest.TestCase):
         bus_mod.ROOT = self.home
         bus_mod.ORG = org_mod.ORG
         (org_mod.ORG / "projects" / "demo").mkdir(parents=True, exist_ok=True)
-        (org_mod.ORG / "projects" / "demo" / "INDEX.md").write_text(
+        (org_mod.ORG / "projects" / "demo" / "STATUS.md").write_text(
             "Now: ready\nLast: —\nNext: ship\nBlocker: —\n",
             encoding="utf-8",
         )
@@ -106,7 +106,7 @@ class ProcessControlTests(unittest.TestCase):
         self.assertEqual(prop.get("status"), "proposed")
         applied = commit_index_patches("demo")
         self.assertEqual(len(applied), 1)
-        text = (org_mod.ORG / "projects" / "demo" / "INDEX.md").read_text(encoding="utf-8")
+        text = (org_mod.ORG / "projects" / "demo" / "STATUS.md").read_text(encoding="utf-8")
         self.assertIn("Last: verified ship", text)
 
     def test_effect_claim_once(self) -> None:

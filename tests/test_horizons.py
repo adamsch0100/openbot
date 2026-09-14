@@ -68,7 +68,7 @@ class HorizonWriteTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "saa-homes"
             project.mkdir(parents=True)
-            (project / "INDEX.md").write_text("# SAA Homes\n\nGoals: —\n", encoding="utf-8")
+            (project / "STATUS.md").write_text("# SAA Homes\n\nGoals: —\n", encoding="utf-8")
             with patch("openbot.org.ORG", dest):
                 result = write_project_horizons(
                     "saa-homes",

@@ -96,7 +96,7 @@ class IndexForPacketTests(unittest.TestCase):
 
     def test_job_packet_uses_structured_index(self):
         packet = job_packet("think", SAA_INDEX, "Now: worker", "Propose next city page")
-        self.assertIn("INDEX:", packet)
+        self.assertIn("DESK STATUS:", packet)
         self.assertIn("Now: Desk owns cron cutover", packet)
         self.assertIn(SAA_DOCTRINE, packet)
         self.assertIn("Propose next city page", packet)
@@ -119,7 +119,7 @@ class PulseIsolationTests(unittest.TestCase):
         org_mod.ORG.mkdir(parents=True)
         bus_mod.ORG = org_mod.ORG
         store_mod.BRAINS = self.home / "brains"
-        store_mod.INDEX = store_mod.BRAINS / "INDEX.md"
+        store_mod.INDEX = store_mod.BRAINS / "STATUS.md"
         store_mod.JOBS = self.home / "jobs"
         store_mod.BRAINS.mkdir(parents=True)
         store_mod.JOBS.mkdir()
@@ -129,7 +129,7 @@ class PulseIsolationTests(unittest.TestCase):
         )
         dest = org_mod.ORG / "projects" / "saa-homes"
         dest.mkdir(parents=True)
-        (dest / "INDEX.md").write_text(SAA_INDEX, encoding="utf-8")
+        (dest / "STATUS.md").write_text(SAA_INDEX, encoding="utf-8")
         (dest / "inbox.md").write_text(
             "## ticket\nNow: queued\nLast: check CHFA page\n",
             encoding="utf-8",
@@ -264,7 +264,7 @@ class PulseIsolationTests(unittest.TestCase):
         self.assertIn("PULSE:", extra)
         self.assertIn("due 1", extra)
         self.assertIn("PULSE:", prompt)
-        self.assertIn("INDEX:", prompt)
+        self.assertIn("DESK STATUS:", prompt)
         self.assertIn("Now: Desk owns cron cutover", prompt)
         self.assertIn(SAA_DOCTRINE, prompt)
         self.assertIn("Fix the CHFA form", prompt)

@@ -999,7 +999,7 @@ def _packet_extra(
 
 
 def builder_prompt(message: str, extra: str = "", project_id: str | None = None) -> str:
-    """OpenCode job prompt: INDEX four-liners + doctrine, then the task, then packet extra (PULSE)."""
+    """OpenCode job prompt: desk status four-liners + doctrine, then the task, then packet extra (PULSE)."""
     parts = [
         "OttoBot Chat dispatched this to OpenCode for this CEO. "
         "Edit the Code folder. Diffs come back to this chat for the operator.",
@@ -1008,8 +1008,8 @@ def builder_prompt(message: str, extra: str = "", project_id: str | None = None)
     ]
     if project_id:
         packed = index_for_packet(read_project_index(project_id))
-        if packed and packed != "(empty INDEX)":
-            parts.append("INDEX:\n" + packed)
+        if packed and packed != "(empty desk status)":
+            parts.append("DESK STATUS:\n" + packed)
     parts.append((message or "").strip())
     if extra:
         parts.append(extra.strip())

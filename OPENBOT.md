@@ -15,7 +15,7 @@ We do not fork or rewrite those engines.
 
 ## What we are doing
 
-- OttoBot: first-run, board UI, INDEX, tickets, allowlists, job log, spend cap, snapshot browser policy
+- OttoBot: first-run, board UI, desk status, tickets, allowlists, job log, spend cap, snapshot browser policy
 - Hermes Agent: long jobs, skills, cron, persistent memory when we opt in
 - OpenCode: code edits, diffs, MCP, `opencode web` / `opencode run`
 
@@ -32,7 +32,7 @@ The user sees one product. Power users can still open raw Hermes and OpenCode.
 
 ## Distribution
 
-Phase 1: your instance only. Web board at a URL (`http://127.0.0.1:8787`, then a host you control). Chat, jobs, INDEX all live there.
+Phase 1: your instance only. Web board at a URL (`http://127.0.0.1:8787`, then a host you control). Chat, jobs, desk status all live there.
 Phase 2: other people clone the repo and spin **their own** instance. No multi-tenant OpenBot cloud in v1.
 
 ## Legal + credit (keep this in README, footer, About)
@@ -61,8 +61,8 @@ Every job card names the engine that ran. See `BRAND.md`.
 
 Chat dies. Files stay. Engines are upstream.
 
-- Status questions read `brains/INDEX.md` only (no tools)
-- Doing work: Hermes and/or `opencode run`, then RESULT back to INDEX
+- Status questions read `brains/STATUS.md` only (no tools)
+- Doing work: Hermes and/or `opencode run`, then RESULT back to desk status
 - Agents do not DM. Four-line tickets go to `inbox/<agent>.md`
 - Browser default: accessibility snapshot + refs, not a pixel stream
 - Screenshots are opt-in. Login walls stop for a human on the real screen
@@ -72,7 +72,7 @@ Chat dies. Files stay. Engines are upstream.
 One composer. Always. Simple surface, rich underneath.
 
 Beginner sees: one composer, named bots (Cos / CEOs), What’s going on (desk status), schedule in plain language.
-Chat **Running / Due / Results / Schedule / Goals** is the live work surface (Grok-simple). Desk status on disk is still `INDEX.md` (Now / Last / Next / Blocker) — the UI says Working on / Just did / Up next / Stuck.
+Chat **Running / Due / Results / Schedule / Goals** is the live work surface (Grok-simple). Desk status on disk is `STATUS.md` (Now / Last / Next / Blocker) — the UI says Working on / Just did / Up next / Stuck.
 Tools → OpenCode / Hermes are raw engines; Hermes live line shows schedule health for the aimed CEO.
 Advanced opens: job log, tokens, engine used, MCP toggles, raw brains, OpenCode session, Hermes cron, `opencode.json`.
 
@@ -82,7 +82,7 @@ First run:
 2. Detect Hermes + OpenCode; use official installers if missing
 3. Ask where work lives (folder)
 4. Use existing engine auth; never commit keys
-5. Create INDEX + Cos
+5. Create desk status + Cos
 6. Open http://127.0.0.1:8787
 7. First prompt: What is this project and what is blocked?
 
@@ -128,10 +128,10 @@ Call them as binaries.
 
 ## Cursor / coding-agent law
 
-1. Read `OPENBOT.md` and `brains/INDEX.md` first
+1. Read `OPENBOT.md` and `brains/STATUS.md` first
 2. Change only glue, board, docs, and presets
 3. If Hermes or OpenCode already has it, wire it, do not reimplement it
-4. End jobs by updating INDEX or the agent brain: Now / Last / Next / Blocker
+4. End jobs by updating desk status or the agent brain: Now / Last / Next / Blocker
 5. No secrets in files
 6. New tools default OFF for Cos
 7. If you stall, one-line blocker
@@ -139,7 +139,7 @@ Call them as binaries.
 ## Build order
 
 - Week 1: board on 127.0.0.1, detect engines, status path, code path, job log, README + NOTICE
-- Week 2: Builder happy path (folder → change → diff card → INDEX). If this is not delightful, stop adding features.
+- Week 2: Builder happy path (folder → change → diff card → desk status). If this is not delightful, stop adding features.
 - Week 3: Research + snapshot browser. Password fields blocked.
 - Week 4: MCP toggles per agent, Hermes schedule UI, model picker, spend/tool cap.
 
@@ -148,11 +148,11 @@ Not this month: Telegram mesh, cloud computer, merging upstream source, unsuperv
 ## Why cheaper than a hosted cloud bot
 
 Hosted bots resend a giant thread, keep a desktop warm, and browse with screenshots.
-OpenBot uses one-shot jobs, INDEX instead of transcript memory, tools only on the agent that needs them, and snapshot text instead of pixels.
+OpenBot uses one-shot jobs, desk status instead of transcript memory, tools only on the agent that needs them, and snapshot text instead of pixels.
 
 ## Done looks like
 
-A new user installs OpenBot, points at a repo, asks for a change, sees a diff and an INDEX update,
+A new user installs OpenBot, points at a repo, asks for a change, sees a diff and a desk status update,
 and never had to choose Hermes vs OpenCode. Advanced users can still open both engines.
 Credits in the README. No stolen marks.
 

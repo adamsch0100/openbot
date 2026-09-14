@@ -14,7 +14,17 @@ from .config import load_config
 from .detect import hermes_home, which
 from .gitutil import git_status
 from .bus import ensure_bus, handoff_summary, seed_file_contract, seed_org_contracts
-from .store import CODE_ROOT, ROOT, clean_memory_text, now_iso, patch_index_line, read_index
+from .store import (
+    CODE_ROOT,
+    ROOT,
+    clean_memory_text,
+    desk_status_exists,
+    migrate_desk_status,
+    now_iso,
+    patch_index_line,
+    read_index,
+    resolve_desk_status,
+)
 
 SITE_BY_ID = {
     "saa-homes": "https://saahomes.com",
@@ -422,7 +432,7 @@ def _clean_workers(rows) -> list[dict]:
 def _ensure_project_index(project_id: str, title: str, folder: str) -> Path:
     dest = _project_dir(project_id)
     dest.mkdir(parents=True, exist_ok=True)
-    path = dest / "INDEX.md"
+    path = migrate_desk_status(dest)
     if not path.exists():
         path.write_text(_empty_index(title, folder), encoding="utf-8")
     return path
@@ -448,7 +458,7 @@ def _index_is_archived(text: str) -> bool:
 
 def _unarchive_project_index(project_id: str) -> None:
     """Strip the retired banner so Add CEO puts this company back on the board."""
-    path = _project_dir(project_id) / "INDEX.md"
+    path = resolve_desk_status(_project_dir(project_id))
     if not path.is_file():
         return
     body = path.read_text(encoding="utf-8")
@@ -472,14 +482,15 @@ def _seed_live_index_from_code(project_id: str) -> None:
         return
     if ROOT.resolve() == CODE_ROOT.resolve():
         return
-    src = CODE_ROOT / "org" / "projects" / project_id / "INDEX.md"
+    code_dir = CODE_ROOT / "org" / "projects" / project_id
+    src = resolve_desk_status(code_dir)
     if not src.is_file():
         return
     text = src.read_text(encoding="utf-8")
     if _index_is_archived(text):
         return
     dest_dir = _project_dir(project_id)
-    dest = dest_dir / "INDEX.md"
+    dest = migrate_desk_status(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
     if dest.is_file() and not _index_is_archived(dest.read_text(encoding="utf-8")):
         return
@@ -532,7 +543,7 @@ def reattach_imported_ceos(saved: dict) -> dict:
     if homes.is_dir():
         candidates.update(home.name for home in homes.iterdir() if home.is_dir())
     for pid in MANUAL_SEAT_CEO_IDS:
-        if (projects / pid / "INDEX.md").is_file():
+        if desk_status_exists(projects / pid):
             candidates.add(pid)
     if not candidates:
         return saved
@@ -540,7 +551,7 @@ def reattach_imported_ceos(saved: dict) -> dict:
     for pid in sorted(candidates):
         if pid in have or pid in skip or pid.startswith("test"):
             continue
-        index = projects / pid / "INDEX.md"
+        index = resolve_desk_status(projects / pid)
         if not index.is_file():
             continue
         text = index.read_text(encoding="utf-8")
@@ -558,7 +569,7 @@ def reattach_imported_ceos(saved: dict) -> dict:
 def _archive_retired_index(project_id: str, title: str) -> None:
     dest = _project_dir(project_id)
     dest.mkdir(parents=True, exist_ok=True)
-    path = dest / "INDEX.md"
+    path = migrate_desk_status(dest)
     banner = (
         f"# {title} (archived)\n\n"
         "Now: Retired from this OpenBot board. Folder kept on disk.\n"
@@ -667,7 +678,7 @@ def ensure_support_project(saved: dict, work: str) -> dict:
             }
         )
         saved["projects"] = rows
-    index = _project_dir(SUPPORT_CEO_ID) / "INDEX.md"
+    index = resolve_desk_status(_project_dir(SUPPORT_CEO_ID))
     text = index.read_text(encoding="utf-8") if index.is_file() else ""
     if "Stopline" not in text:
         index.parent.mkdir(parents=True, exist_ok=True)
@@ -687,7 +698,7 @@ def _host_identity(work: str, saved: dict) -> tuple[str, str]:
             continue
         if str(row.get("id") or "") == HOST_CEO_ID:
             raw = str(row.get("name") or HOST_CEO_NAME).strip()
-            if raw.upper() in {"INDEX", "APP", "OPENBOT", "OTTOBOT", HOST_CEO_ID.upper()}:
+            if raw.upper() in {"INDEX", "STATUS", "DESK", "APP", "OPENBOT", "OTTOBOT", HOST_CEO_ID.upper()}:
                 return HOST_CEO_ID, HOST_CEO_NAME
             return HOST_CEO_ID, raw
     if folder_slug == HOST_CEO_ID:
@@ -717,7 +728,7 @@ def ensure_org() -> dict:
             if pid == HOST_CEO_ID:
                 primary_id = HOST_CEO_ID
                 raw = str(row.get("name") or primary_name).strip()
-                if raw.upper() not in {"INDEX", "APP", "OPENBOT", "OTTOBOT"}:
+                if raw.upper() not in {"INDEX", "STATUS", "DESK", "APP", "OPENBOT", "OTTOBOT"}:
                     primary_name = raw
                 else:
                     primary_name = HOST_CEO_NAME
@@ -865,12 +876,12 @@ def public_org(data: dict | None = None) -> dict:
         name = str(row.get("name") or pid)
         if not pid or pid in RETIRED_CEO_IDS:
             continue
-        if pid == HOST_CEO_ID and name.strip().upper() in {"INDEX", "APP", "OPENBOT", "OTTOBOT"}:
+        if pid == HOST_CEO_ID and name.strip().upper() in {"INDEX", "STATUS", "DESK", "APP", "OPENBOT", "OTTOBOT"}:
             name = HOST_CEO_NAME
         if pid == SUPPORT_CEO_ID:
             name = "Support"
         _ensure_project_index(pid, name, folder)
-        seed_file_contract(_project_dir(pid) / "INDEX.md", "ceo")
+        seed_file_contract(migrate_desk_status(_project_dir(pid)), "ceo")
         ensure_bus(pid)
         index_text = read_project_index(pid)
         from .launch import resolve_ceo_folder, resolve_ceo_hermes_home
@@ -1040,7 +1051,7 @@ def index_for_packet(text: str, *, cap: int = INDEX_PACKET_CAP) -> str:
     """Four-liners and Horizons first, then doctrine. Never prefer a steward changelog."""
     blob = (text or "").strip()
     if not blob:
-        return "(empty INDEX)"
+        return "(empty desk status)"
     head: list[str] = []
     for label in ("Now", "Last", "Next", "Blocker", "Goals"):
         val = index_field(blob, label)
@@ -1063,7 +1074,7 @@ def index_for_packet(text: str, *, cap: int = INDEX_PACKET_CAP) -> str:
     limit = max(1200, int(cap))
     if len(packed) > limit:
         packed = packed[:limit].rsplit("\n", 1)[0].rstrip()
-    return packed or "(empty INDEX)"
+    return packed or "(empty desk status)"
 
 
 def _project_folder(project_id: str) -> str:
@@ -1322,7 +1333,7 @@ def dismiss_horizon_notice(notice_id: str) -> dict:
 
 def write_project_horizons(project_id: str, horizons: dict, *, notify: bool = True) -> dict:
     pid = _slug(project_id)
-    path = _project_dir(pid) / "INDEX.md"
+    path = resolve_desk_status(_project_dir(pid))
     old_text = path.read_text(encoding="utf-8") if path.is_file() else ""
     old = parse_horizons(old_text)
     text = apply_horizons_to_text(old_text, horizons)
@@ -1820,7 +1831,7 @@ def sync_ceo_hermes_scripts(project_id: str, home: str | Path | None = None) -> 
 
 
 def stamp_saa_fail_story(home: str | Path | None = None) -> str:
-    """Cos + SAA INDEX: what this desk owns vs parked. No operator click-through.
+    """Cos + SAA desk status: what this desk owns vs parked. No operator click-through.
 
     Cos and the SAA CEO do not hold an LLM meeting. These INDEX lines are the
     discussion: keep transferred crons; do not remake alerts or scripts.
@@ -1871,7 +1882,7 @@ def stamp_saa_fail_story(home: str | Path | None = None) -> str:
         bits.append(f"{len(script)} scripts parked — copy old home, not a remake")
     now = ". ".join(bits) or "This desk owns the SAA schedule. Keep transferred crons."
     nxt = "Keep jobs.json. Do not remake crons. Cos owns catch-up. Restore stays Accept."
-    last = "Cos + SAA INDEX agree: keep transferred crons; no remake."
+    last = "Cos + SAA desk status agree: keep transferred crons; no remake."
     if db and db_env:
         blocker = "Alerts: env present, Postgres unreachable from this desk"
     elif db:
@@ -2172,7 +2183,7 @@ def patch_project_tools(project_id: str, patch: dict, create_if_missing: bool = 
 def read_project_index(project_id: str | None) -> str:
     if not project_id:
         return read_index()
-    path = _project_dir(project_id) / "INDEX.md"
+    path = resolve_desk_status(_project_dir(project_id))
     if path.is_file():
         return path.read_text(encoding="utf-8")
     return ""
@@ -2202,10 +2213,10 @@ def patch_file_index(path: Path, label: str, value: str) -> None:
 def patch_scope(project_id: str | None, worker_id: str | None, label: str, value: str) -> None:
     if worker_id and project_id:
         patch_file_index(_worker_dir(project_id, worker_id) / "BRAIN.md", label, value)
-        patch_file_index(_project_dir(project_id) / "INDEX.md", label, value)
+        patch_file_index(migrate_desk_status(_project_dir(project_id)), label, value)
         return
     if project_id:
-        patch_file_index(_project_dir(project_id) / "INDEX.md", label, value)
+        patch_file_index(migrate_desk_status(_project_dir(project_id)), label, value)
         return
     patch_index_line(label, value)
 
@@ -2243,7 +2254,7 @@ def write_project_inbox(project_id: str, message: str) -> Path:
     prev = path.read_text(encoding="utf-8") if path.is_file() else "# Inbox\n\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(prev + block, encoding="utf-8")
-    patch_file_index(_project_dir(project_id) / "INDEX.md", "Next", "Continue the work")
+    patch_file_index(migrate_desk_status(_project_dir(project_id)), "Next", "Continue the work")
     return path
 
 
@@ -2277,7 +2288,7 @@ def set_project_folder(project_id: str, folder: str) -> dict:
         primary = bool(row.get("primary"))
         if not primary:
             row["name"] = path.name
-        patch_file_index(_project_dir(pid) / "INDEX.md", "Folder", resolved)
+        patch_file_index(migrate_desk_status(_project_dir(pid)), "Folder", resolved)
         break
     if not found:
         raise ValueError("project not found")
@@ -2351,7 +2362,7 @@ def rename_worker(project_id: str, worker_id: str, name: str) -> dict:
 
 def write_project_index(project_id: str, text: str, *, notify_horizons: bool = True) -> str:
     pid = _slug(project_id)
-    path = _project_dir(pid) / "INDEX.md"
+    path = resolve_desk_status(_project_dir(pid))
     path.parent.mkdir(parents=True, exist_ok=True)
     old = parse_horizons(path.read_text(encoding="utf-8") if path.is_file() else "")
     path.write_text(clean_memory_text(text), encoding="utf-8")
