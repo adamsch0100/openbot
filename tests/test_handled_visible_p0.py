@@ -126,8 +126,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=180", html)
-        self.assertIn("styles.css?v=180", html)
+        self.assertIn("app.js?v=181", html)
+        self.assertIn("styles.css?v=181", html)
 
 
 
@@ -206,11 +206,11 @@ class HandledVisibleBackendTests(unittest.TestCase):
         )
         self.assertIn("Auto-retry", nxt)
 
-    def test_script_ceo_restore(self):
+    def test_script_parked_for_accept_restore(self):
         from openbot.hermes import cron_outcome
 
         _, nxt = cron_outcome("error", "", "Script-not-found: scripts/citation_submit.py")
-        self.assertIn("Restore script", nxt)
+        self.assertIn("Accept Restore", nxt)
         self.assertNotIn("Fix key", nxt)
         self.assertNotIn("Auto-retry", nxt)
 

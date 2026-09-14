@@ -555,6 +555,56 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertEqual(nxt, "38041c7a6501")
         caught = saa_catchup_next([{"id": "38041c7a6501", "last_status": "ok", "state": "scheduled", "enabled": True}])
         self.assertEqual(caught, "77bfe1c9f7a1")
+        skip_script = saa_catchup_next([
+            {
+                "id": "dadd8574d37f",
+                "last_status": "error",
+                "state": "scheduled",
+                "enabled": True,
+                "fail_kind": "script",
+                "last_error": "Script not found: citation_submit_layer1.py",
+            },
+            {"id": "38041c7a6501", "last_status": "error", "state": "scheduled", "enabled": True},
+        ])
+        self.assertEqual(skip_script, "38041c7a6501")
+
+    def test_local_payload_marks_gateway_live_wait_and_db(self):
+        from openbot.hermes import _cron_row_payload, fail_kind_from_blob, nudge_local_job_due
+
+        row = _cron_row_payload({
+            "id": "38041c7a6501",
+            "name": "geo-citation-audit",
+            "enabled": True,
+            "state": "scheduled",
+            "last_status": "error",
+            "last_error": "Gateway shutdown (final-cleanup) killed the job.",
+        })
+        self.assertEqual(row["fail_kind"], "gateway")
+        self.assertEqual(row["board_status"], "live-wait")
+        blob = (
+            "Script exited with code 1\nstderr:\nalertDigest error: AggregateError [ECONNREFUSED]:\n"
+            "    at /data/workspaces/saa-homes/backend/node_modules/pg-pool/index.js"
+        )
+        self.assertEqual(fail_kind_from_blob(blob), "db")
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            cron = home / "cron"
+            cron.mkdir()
+            (cron / "jobs.json").write_text(json.dumps({
+                "jobs": [{
+                    "id": "38041c7a6501",
+                    "name": "geo-citation-audit",
+                    "enabled": True,
+                    "state": "scheduled",
+                    "last_status": "error",
+                    "prompt": "keep",
+                }]
+            }), encoding="utf-8")
+            out = nudge_local_job_due(home, "38041c7a6501")
+            self.assertTrue(out.get("ok"), out)
+            data = json.loads((cron / "jobs.json").read_text(encoding="utf-8"))
+            self.assertTrue(data["jobs"][0].get("next_run_at"))
+            self.assertEqual(data["jobs"][0]["prompt"], "keep")
 
     def test_overlay_rows_fill_empty_board_copy(self):
         from openbot.hermes import merge_saa_cron_rows, overlay_to_cron_rows, save_saa_overlay_cache, load_saa_overlay_cache

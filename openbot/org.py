@@ -1810,6 +1810,49 @@ def sync_ceo_hermes_scripts(project_id: str, home: str | Path | None = None) -> 
     return written
 
 
+def stamp_saa_fail_story(home: str | Path | None = None) -> str:
+    """Cos + SAA INDEX: what this desk owns vs parked. No operator click-through."""
+    dest = str(home or "").strip()
+    if not dest:
+        from .launch import resolve_ceo_hermes_home
+
+        dest = resolve_ceo_hermes_home("saa-homes", "") or ""
+    if not dest or not Path(dest).is_dir():
+        return ""
+    from .hermes import cron_row_is_noise, read_home_crons
+    rows = read_home_crons(dest, results=False) if dest else []
+    enabled = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("enabled") is not False
+        and not cron_row_is_noise(row)
+        and not re.search(r"paused", str(row.get("state") or ""), re.I)
+    ]
+    gateway = [row for row in enabled if str(row.get("fail_kind") or "") == "gateway"]
+    db = [row for row in enabled if str(row.get("fail_kind") or "") == "db"]
+    script = [row for row in enabled if str(row.get("fail_kind") or "") == "script"]
+    bits: list[str] = []
+    if gateway:
+        bits.append(f"{len(gateway)} gateway scars auto-retry one at a time")
+    if db:
+        bits.append("saved-search needs the live SAA database")
+    if script:
+        bits.append(f"{len(script)} scripts parked for Accept Restore")
+    now = ". ".join(bits) or "This desk owns the SAA schedule."
+    nxt = "Do not mass-retry. Cos owns catch-up. Restore stays Accept."
+    try:
+        patch_scope("saa-homes", None, "Now", now[:160])
+        patch_scope("saa-homes", None, "Next", nxt[:160])
+        patch_index_line("Now", f"SAA: {now}"[:160])
+        patch_index_line("Next", nxt[:160])
+        patch_index_line("Last", "Cos classified SAA fails. Gateway scars auto-retry. Scripts parked.")
+        patch_index_line("Blocker", "—" if not script and not db else "Accept Restore / live DB — not a click-through")
+    except Exception:
+        pass
+    return now
+
+
 def bootstrap_ceo_runtime(project_id: str, title: str | None = None, folder: str | None = None) -> dict:
     """Attach a Hermes home and a Code folder. Keys stay in the vault. Idempotent."""
     pid = _slug(project_id)

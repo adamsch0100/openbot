@@ -1033,6 +1033,7 @@ SAA_BOARD_PAUSE = frozenset({
     "3575dd7f3753",  # grok-heartbeat — board internal, script missing
     "6fd1e3be3cd1",  # grok-finish-notify — board internal, script missing
     "6f8b4dcf42e2",  # grok-build-driver — board internal
+    "313da214bb9f",  # alerts-email-outbox — board internal, script missing
 })
 BOARD_CRON_NOISE = re.compile(
     r"^(grok-heartbeat|grok-build-supervisor|grok-build-driver|grok-finish-notify|alerts-email-outbox)$",
@@ -1861,6 +1862,63 @@ def saa_live_nudge_due(job_id: str) -> dict:
     }
 
 
+CATCHUP_MARK = ".openbot-catchup.json"
+CATCHUP_COOLDOWN_SEC = 20 * 60
+
+
+def nudge_local_job_due(home: str | Path | None, job_id: str) -> dict:
+    """Point one local jobs.json row at now so this desk’s gateway owns it. No stampede."""
+    jid = str(job_id or "").strip()
+    if not home or not is_valid_job_id(jid) or jid in SAA_CRON_SKIP or jid in SAA_BOARD_PAUSE:
+        return {"ok": False, "skipped": True, "id": jid}
+    path = Path(home) / "cron" / "jobs.json"
+    if not path.is_file():
+        return {"ok": False, "error": "jobs.json missing", "id": jid}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        return {"ok": False, "error": str(err)[:200], "id": jid}
+    when = datetime.now(timezone.utc).isoformat()
+    if not nudge_saa_job_due(data if isinstance(data, dict) else {}, jid, when):
+        return {"ok": False, "skipped": True, "id": jid}
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return {"ok": True, "id": jid, "due": when, "engine": "Hermes Agent"}
+
+
+def saa_desk_catchup_once(home: str | Path | None) -> dict:
+    """One leftover gateway-scar job on this desk. Cos owns the queue. Do not mass-fire."""
+    if not home:
+        return {"ok": False, "skipped": True, "reason": "no hermes home"}
+    rows = read_home_crons(home, results=False)
+    if any(_cron_is_running(row) for row in rows):
+        return {"ok": True, "skipped": True, "reason": "already running"}
+    jid = saa_catchup_next(rows)
+    if not jid:
+        return {"ok": True, "skipped": True, "reason": "caught up"}
+    mark = Path(home) / CATCHUP_MARK
+    try:
+        prev = json.loads(mark.read_text(encoding="utf-8"))
+        if str(prev.get("id") or "") == jid:
+            at = _parse_cron_when(str(prev.get("at") or ""))
+            if at and (datetime.now(timezone.utc) - at).total_seconds() < CATCHUP_COOLDOWN_SEC:
+                return {"ok": True, "skipped": True, "reason": "cooldown", "id": jid}
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    out = nudge_local_job_due(home, jid)
+    if out.get("ok"):
+        try:
+            mark.write_text(
+                json.dumps({"id": jid, "at": datetime.now(timezone.utc).isoformat()}) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+        name = next((str(row.get("name") or "") for row in rows if str(row.get("id") or "") == jid), jid)
+        out["title"] = cron_title(name or jid)
+        out["engine"] = "Hermes Agent"
+    return out
+
+
 def saa_catchup_next(overlay: list[dict]) -> str:
     """Next leftover job the live gateway should own. Empty if caught up or a run is in flight."""
     rows = [row for row in overlay if isinstance(row, dict)]
@@ -1875,6 +1933,11 @@ def saa_catchup_next(overlay: list[dict]) -> str:
             continue
         if _claim_is_live(row) and not _claim_is_stale(row):
             return ""
+        kind = str(row.get("fail_kind") or "") or fail_kind_from_blob(
+            f"{row.get('last_error') or ''} {row.get('last_status') or ''}"
+        )
+        if kind in {"script", "db", "key", "wallet"}:
+            continue
         status = str(row.get("last_status") or "").strip().lower()
         if status in {"", "never", "error", "fail", "failed"}:
             return jid
@@ -1935,11 +1998,12 @@ def cron_title(name: str) -> str:
 
 _FAIL_NEXT = "Retry this job, or ask Cos."
 _GATEWAY_FAIL_NEXT = "Auto-retry — gateway will pick this up. Do not mass-fire."
-_SCRIPT_FAIL_NEXT = "Restore script from Hermes bootstrap."
+_SCRIPT_FAIL_NEXT = "Parked for Accept Restore. Cos will not invent the script."
 _KEY_FAIL_NEXT = "Fix key in Settings."
 _WALLET_FAIL_NEXT = "Needs Adam · add credits / fix billing."
 _TRANSIENT_FAIL_NEXT = "Auto-retry — transient. Retry once if it stays red."
 _HERMES_FAIL_NEXT = "Retry — Hermes exited. Not a key."
+_DB_FAIL_NEXT = "Needs the live SAA database. This workspace copy has no Postgres. Do not retry here."
 
 
 def fail_kind_from_blob(blob: str) -> str:
@@ -1947,6 +2011,11 @@ def fail_kind_from_blob(blob: str) -> str:
     low = str(blob or "").lower()
     if re.search(r"gateway shutdown|gateway stopped mid-run", low):
         return "gateway"
+    if re.search(
+        r"econnrefused|pg-pool|could not connect to (?:server|database)|connection refused",
+        low,
+    ):
+        return "db"
     if re.search(
         r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key",
         low,
@@ -1978,6 +2047,8 @@ def human_fail_reason(blob: str) -> str:
     low = text.lower()
     if re.search(r"gateway shutdown|gateway stopped mid-run", low):
         return "Hermes gateway stopped mid-run"
+    if re.search(r"econnrefused|pg-pool|could not connect to (?:server|database)|connection refused", low):
+        return "Live database refused the connection"
     if re.search(r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key", low):
         return "API key rejected (401)"
     if re.search(r"busy.?session|session.?busy|already running|locked by another", low):
@@ -2023,6 +2094,8 @@ def cron_outcome(status: str, result: str, error: str = "") -> tuple[str, str]:
             return f"Failed. {reason}", _GATEWAY_FAIL_NEXT
         if kind == "script":
             return f"Failed. {reason}", _SCRIPT_FAIL_NEXT
+        if kind == "db":
+            return f"Failed. {reason}", _DB_FAIL_NEXT
         if kind == "key":
             return f"Failed. {reason}", _KEY_FAIL_NEXT
         if kind == "wallet":
@@ -2380,6 +2453,13 @@ def _cron_row_payload(row: dict, result: str = "") -> dict:
     schedule = str(row.get("schedule_display") or row.get("schedule") or sched.get("expr") or "")
     if isinstance(row.get("schedule"), dict):
         schedule = str(row.get("schedule_display") or sched.get("display") or sched.get("expr") or "")
+    kind = fail_kind_from_blob(f"{err} {report} {status}")
+    if skip:
+        board = "paused"
+    elif kind == "gateway":
+        board = "live-wait"
+    else:
+        board = str(row.get("board_status") or "")
     return {
         "id": jid,
         "name": name,
@@ -2387,8 +2467,8 @@ def _cron_row_payload(row: dict, result: str = "") -> dict:
         "schedule": schedule,
         "enabled": False if skip else (row.get("enabled") is not False),
         "state": "paused" if skip else str(row.get("state") or ""),
-        "fail_kind": fail_kind_from_blob(f"{err} {report} {status}"),
-        "board_status": "paused" if skip else "",
+        "fail_kind": kind,
+        "board_status": board,
         "claimed": live_now,
         "live": live_now,
         "fire_claim": claim,

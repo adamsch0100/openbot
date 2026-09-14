@@ -1173,6 +1173,30 @@ def _hold_saa_board_jobs(project_id: str, home: str) -> None:
         pass
 
 
+def _heal_saa_desk_fails(project_id: str, home: str) -> None:
+    """Cos + SAA CEO: classify fails, nudge one gateway scar, park the rest."""
+    if str(project_id or "") != "saa-homes" or not home:
+        return
+    if not Path(home).is_dir():
+        return
+    try:
+        from .org import saa_desk_owns, stamp_saa_fail_story
+
+        if not saa_desk_owns():
+            return
+        stamp_saa_fail_story(home)
+    except Exception:
+        pass
+    try:
+        from .hermes import saa_desk_catchup_once
+        from .org import saa_desk_owns
+
+        if saa_desk_owns():
+            saa_desk_catchup_once(home)
+    except Exception:
+        pass
+
+
 def ensure_supervised_gateway(project_id: str) -> dict:
     from .hermes import gateway_start, gateway_status
 
@@ -1202,6 +1226,7 @@ def ensure_supervised_gateway(project_id: str) -> dict:
     status = gateway_status(home, timeout=5)
     if status.get("running"):
         _hold_saa_board_jobs(project_id, home)
+        _heal_saa_desk_fails(project_id, home)
         return {
             "ok": True,
             "running": True,
@@ -1226,6 +1251,7 @@ def ensure_supervised_gateway(project_id: str) -> dict:
     result["project_id"] = project_id
     result["home"] = home
     _hold_saa_board_jobs(project_id, home)
+    _heal_saa_desk_fails(project_id, home)
     return result
 
 

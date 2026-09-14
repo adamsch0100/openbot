@@ -609,6 +609,9 @@ function failBlobOf(row) {
 function failKindFromBlob(blob) {
   const low = String(blob || "").toLowerCase();
   if (/gateway shutdown|gateway stopped mid-run/.test(low)) return "gateway";
+  if (/econnrefused|pg-pool|could not connect to (?:server|database)|connection refused/.test(low)) {
+    return "db";
+  }
   if (/\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key|no usable credentials|missing.?api.?key/.test(low)) {
     return "key";
   }
@@ -688,6 +691,7 @@ function failAskWhy(pid, cronId) {
 
 function failWhyLine(kind, reason) {
   if (kind === "gateway") return "Schedule stalled until the gateway recovers.";
+  if (kind === "db") return "Alerts need the live SAA database — this workspace copy has no Postgres.";
   if (kind === "script") return "Job cannot run without its script on Hermes.";
   if (kind === "hermes") return "Hermes exited — Retry once. This is not a missing API key.";
   if (kind === "key") return "Auth rejected — retries will keep failing until the key is fixed.";
@@ -751,14 +755,27 @@ function failOwnership(row) {
   }
   if (kind === "script") {
     return {
-      owner: "ceo",
-      rank: 1,
-      status: "CEO",
-      resultStatus: "Recovering",
+      owner: "cos",
+      rank: 2,
+      status: "Waiting Cos",
+      resultStatus: "Blocked·Cos",
       kind,
       reason,
       why: failWhyLine(kind, reason),
-      next: "CEO handling · Restore script from bootstrap. Ask Cos if stuck.",
+      next: "Parked for Accept Restore. Cos will not invent the script.",
+      outcome: `Failed · ${reason}`
+    };
+  }
+  if (kind === "db") {
+    return {
+      owner: "cos",
+      rank: 2,
+      status: "Waiting Cos",
+      resultStatus: "Blocked·Cos",
+      kind,
+      reason,
+      why: failWhyLine(kind, reason),
+      next: "Needs the live SAA database. Do not retry this workspace copy.",
       outcome: `Failed · ${reason}`
     };
   }

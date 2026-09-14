@@ -1006,7 +1006,10 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
         lines: list[str] = []
         week_short = week.split("·")[0].strip() if week else ""
         if week_short:
-            lines.append(f"This week: {week_short}")
+            if staff:
+                lines.append(f"This week: {week_short}")
+            else:
+                lines.append(f"{name} — This week: {week_short}")
         else:
             lines.append("No week goal yet.")
         lines.append(now)
@@ -1211,6 +1214,8 @@ def need_choices(row: dict) -> list[dict]:
                 {"id": "restore_script", "label": "Restore", "cron_id": cron_id},
                 {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
             ]
+        if fail_kind in {"gateway", "db"}:
+            return [{"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id}]
         if fail_kind == "wallet":
             return [{"id": "fix_key", "label": "Open Settings", "cron_id": cron_id}]
         if fail_kind == "cancelled":

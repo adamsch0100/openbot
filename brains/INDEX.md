@@ -16,10 +16,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Desk walk polish live. Cos hello is board. Grok internals paused and off Due now. Aimed CEO week is the first clause.
-Last: Grok-simple labels plus calm chrome on production. Cache 180 shipped.
-Next: Hard-refresh Chat. Ask Cos and SAA what’s going on. Do not mass-retry SAA fails.
-Blocker: —
+Now: SAA: Cos owns fail queue. Gateway scars auto-retry one at a time. Scripts parked. Saved-search needs live DB.
+Last: Desk walk polish live (cache 180). Grok internals paused.
+Next: Do not mass-retry. Restore stays Accept. Hard-refresh Chat after 181.
+Blocker: Accept Restore / live SAA database — not a click-through.
 
 ## Vault
 

@@ -147,7 +147,7 @@ class FoundingDetectTests(unittest.TestCase):
         )
         self.assertIn("CHFA", horizon_week(text))
         reply = status_reply(text, "What is going on?", "SAA Homes")
-        self.assertTrue(reply.startswith("This week:"))
+        self.assertTrue(reply.startswith("SAA Homes — This week:"))
         self.assertIn("CHFA", reply)
         self.assertIn("healthy", reply)
         empty = status_reply("Now: ticket 1\nLast: builder\nNext: folder then diff\nBlocker: —", "What is going on?", "openbot")

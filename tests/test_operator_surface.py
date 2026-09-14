@@ -94,8 +94,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=180", html)
-        self.assertIn("styles.css?v=180", html)
+        self.assertIn("app.js?v=181", html)
+        self.assertIn("styles.css?v=181", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -156,6 +156,13 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
             "hermes",
         )
         self.assertEqual(fail_kind_from_blob("opencode run exited 130"), "cancelled")
+        self.assertEqual(
+            fail_kind_from_blob(
+                "Script exited with code 1\nstderr:\nalertDigest error: AggregateError [ECONNREFUSED]:\n"
+                "    at /data/workspaces/saa-homes/backend/node_modules/pg-pool/index.js:45:11"
+            ),
+            "db",
+        )
 
     def test_human_fail_reason_strips_cron_result(self):
         from openbot.hermes import human_fail_reason
