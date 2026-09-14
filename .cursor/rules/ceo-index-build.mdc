@@ -12,6 +12,7 @@ OttoBot feels like a simple always-on chat. Underneath, CEOs and jobs are files.
 - Grok-simple chat: one composer, named bots, cards in the stream.
 - Chat is UI only. Never send the full thread as the model prompt.
 - Status / “what’s going on” reads INDEX (instance + aimed CEO). Tools off for Cos status.
+- User-facing desk status: **What’s going on** (Working on / Just did / Up next / Stuck). Files stay `INDEX.md` with Now / Last / Next / Blocker.
 
 ## CEO from INDEX
 

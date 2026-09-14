@@ -26,7 +26,7 @@ class SaaDeskOwnsTests(unittest.TestCase):
         self.assertIn("must not wipe cutover", org)
         self.assertIn('"telegram": False', org)
         self.assertIn("OttoBot chat is the inbox", js)
-        self.assertIn("This desk owns SAA cron", js)
+        self.assertIn("This desk owns the SAA schedule", js)
         self.assertIn("Do not Restart this imported home", server)
         self.assertIn('["down", "-y"]', hermes)
 

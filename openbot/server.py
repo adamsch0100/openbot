@@ -2171,7 +2171,7 @@ class Handler(SimpleHTTPRequestHandler):
             if saa_desk_owns():
                 return self._json(400, {
                     "ok": False,
-                    "error": "This desk owns SAA cron. Schedule reads local jobs.json. Overlay is off.",
+                    "error": "This desk owns the SAA schedule. Schedule reads local jobs.json. Overlay is off.",
                     "saa_desk_owns": True,
                 })
             tools = project_tools(project_id) if project_id else {}

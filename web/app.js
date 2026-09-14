@@ -76,8 +76,8 @@ function paintBoardMark() {
   const about = $("aboutMark");
   if (about) {
     about.textContent = live
-      ? "ottobot. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
-      : "ottobot · On it. You run the instance. You hold the keys. Work moves as files — INDEX, inbox, bus/handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
+      ? "ottobot. You run the instance. You hold the keys. Work moves as files — desk status, inbox, handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign."
+      : "ottobot · On it. You run the instance. You hold the keys. Work moves as files — desk status, inbox, handoffs. Chat is not memory. Humans approve send, publish, pay, delete, and sign.";
   }
   const sub = document.querySelector(".sub");
   if (sub) sub.hidden = live;
@@ -102,8 +102,7 @@ function paintEnginesChip() {
   if (missing.length) full = `Engines: ${missing.join(" + ")} missing`;
   else if (found.length) full = `Engines: ${found.join(" · ")}`;
   el.title = full;
-  const narrow = window.matchMedia && window.matchMedia("(max-width: 480px)").matches;
-  el.textContent = narrow ? "Engines" : full;
+  el.textContent = missing.length ? full : "Engines";
 }
 
 function sharePerm(name) {
@@ -117,7 +116,7 @@ const SHARE_PERM_LABELS = [
   ["chat_write", "Send chat"],
   ["jobs_view", "View jobs"],
   ["jobs_run", "Trigger jobs"],
-  ["index_edit", "Edit INDEX / inbox"],
+  ["index_edit", "Edit desk status / inbox"],
   ["approve_needs_you", "Approve needs-you cards"],
   ["engines_view", "View OpenCode / Hermes"],
   ["workers_manage", "Manage workers"],
@@ -972,7 +971,7 @@ function primaryJobBody(job) {
   if (opaqueLaneOk(raw, job.preset)) {
     if (job.preset === "ops") return "Ops finished. Nothing public.";
     if (job.preset === "think") return "Think finished.";
-    return "Work finished. The next step is in the brief above.";
+    return "Work finished. The next step is in What’s going on above.";
   }
   return cleanBotText(raw) || raw;
 }
@@ -1177,7 +1176,7 @@ function briefHonestyLine(cleaned) {
   let line = fromNow || fromNext || (rawNow !== "source of truth" ? indexLineUseful(rawNow) : "");
   line = honestWorkLine(line, counts) || line;
   if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
-  else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Next`;
+  else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Due`;
   return line || rawNow || "source of truth";
 }
 
@@ -1192,10 +1191,32 @@ function indexField(text, field) {
   return (match && match[1].trim()) || "—";
 }
 
+function deskFieldLabel(key) {
+  return ({ Now: "Working on", Last: "Just did", Next: "Up next", Blocker: "Stuck" })[key] || key;
+}
+
+function statusFieldsHtml(text) {
+  const cleaned = cleanBotText(text);
+  const keys = ["Now", "Last", "Next", "Blocker"];
+  const rows = keys.map((key) => {
+    const val = indexField(cleaned, key);
+    const empty = !val || val === "—";
+    const stuck = key === "Blocker" && !empty;
+    return `<div class="status-row${stuck ? " stuck" : ""}"><dt>${escapeHtml(deskFieldLabel(key))}</dt><dd class="${empty ? "empty" : ""}">${escapeHtml(empty ? "—" : val)}</dd></div>`;
+  }).join("");
+  return `<dl class="status-fields">${rows}</dl><p class="status-hint">Desk status. Chat is the conversation — not memory.</p>`;
+}
+
+function paintDeskCard(text) {
+  const el = $("indexCard");
+  if (!el) return;
+  el.innerHTML = statusFieldsHtml(text);
+}
+
 function renderIndex(text) {
   const cleaned = cleanBotText(text);
-  if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty brief)";
-  if ($("indexSummary")) $("indexSummary").textContent = `Brief · ${briefHonestyLine(cleaned)}`;
+  paintDeskCard(cleaned);
+  if ($("indexSummary")) $("indexSummary").textContent = `What’s going on · ${briefHonestyLine(cleaned)}`;
   paintWorkStatus();
 }
 
@@ -1216,7 +1237,7 @@ function honestIndexNext(next) {
     return counts.failed === 1 ? "1 failed · open Results" : `${counts.failed} failed · open Results`;
   }
   if ((counts.next || 0) > 0) {
-    return counts.next === 1 ? "1 due · open Next" : `${counts.next} due · open Next`;
+    return counts.next === 1 ? "1 due · open Due" : `${counts.next} due · open Due`;
   }
   return raw;
 }
@@ -1274,7 +1295,7 @@ function handlingAliveLine(counts) {
   }
   const bit = top
     ? (top.kind === "script" ? "restore script" : (top.kind === "gateway" ? "retry gateway" : "retry"))
-    : "Open Next";
+    : "open Due";
   return `Handling · ${title || (fails + " fail" + (fails === 1 ? "" : "s"))} · next: ${bit}`;
 }
 
@@ -1446,7 +1467,7 @@ function sortSeatModels(seat, rows, recommendedId) {
 function modelsForSeat(seat, models) {
   const recommendedId = (cfg.catalog && cfg.catalog.recommended_chat) || "";
   if (seat.locked) {
-    return [{ id: "", label: "Brief", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] }];
+    return [{ id: "", label: "Status", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] }];
   }
   const need = seat.need || [];
   const q = modelQuery.trim().toLowerCase();
@@ -1472,7 +1493,7 @@ function modelsForSeat(seat, models) {
         connected: true,
         caps: ["status"],
       },
-      { id: "INDEX", label: "Board — free brief talk", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] },
+      { id: "INDEX", label: "Board — status (free)", provider: "board", provider_label: "Board", in_usd: 0, out_usd: 0, connected: true, caps: ["status"] },
       ...rows.filter((row) => row.id),
     ];
   } else {
@@ -1634,7 +1655,9 @@ function syncComposerWho() {
   if ($("composerWho")) $("composerWho").textContent = line;
   if ($("msg")) {
     const prefix = pin ? `${jobLabel(preset)} · ` : "";
-    $("msg").placeholder = `${prefix}Message ${who}`;
+    $("msg").placeholder = pin
+      ? `${prefix}Message ${who}`
+      : (project ? `Message ${who}` : "Ask Cos what’s going on…");
   }
 }
 
@@ -2315,7 +2338,7 @@ function applyCeoSeatPresetToForm(name) {
 function addCeoFormHtml() {
   const folderHint = escapeHtml((org && org.folder) || "default OpenCode folder");
   return `
-      <p class="menu-note">Goal is what Think turns into six Horizons. You Accept before they go live. Name unlocks presets (Pmill, Nadia, ListLogic).</p>
+      <p class="menu-note">Goal is what Think turns into six time-boxed goals (1 week through 5 years). You Accept before they go live. Name unlocks presets (Pmill, Nadia, ListLogic).</p>
       <div class="menu-field">
         <label for="menuCeoAddName">Name</label>
         <input id="menuCeoAddName" type="text" placeholder="Pmill" autocomplete="off" />
@@ -2474,16 +2497,16 @@ function showNodeMenu(x, y, kind, pid, wid) {
       <div class="menu-head">Cos</div>
       ${addCeoFormHtml()}
       <div class="menu-field">
-        <label for="menuIndexEdit">Staff brief</label>
+        <label for="menuIndexEdit">Staff status</label>
         <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
-        <button type="button" class="ghost-btn" data-menu="save-index">Save brief</button>
+        <button type="button" class="ghost-btn" data-menu="save-index">Save status</button>
       </div>
       <button type="button" role="menuitem" data-menu="configure">Open settings</button>`
       : `
       <div class="menu-field">
-        <label for="menuIndexEdit">Staff brief</label>
+        <label for="menuIndexEdit">Staff status</label>
         <textarea id="menuIndexEdit" rows="6">${escapeHtml(org.index || "")}</textarea>
-        <button type="button" class="ghost-btn" data-menu="save-index">Save brief</button>
+        <button type="button" class="ghost-btn" data-menu="save-index">Save status</button>
       </div>
       <button type="button" role="menuitem" data-menu="configure">Open settings</button>`;
   } else if (kind === "ceo") {
@@ -2603,7 +2626,7 @@ async function saveStaffIndex(text) {
     if (data.index) renderIndex(data.index);
     fetch("/api/org").then((r) => r.json()).then(applyOrg);
   } else if ($("orgStatus")) {
-    $("orgStatus").textContent = data.error || "brief save failed";
+    $("orgStatus").textContent = data.error || "status save failed";
   }
 }
 
@@ -3445,13 +3468,13 @@ function ceoWire(project) {
   if (week) return clipWire(week, 56);
   const founding = String((project.founding && project.founding.status) || "");
   if (founding === "draft") return "Goals ready to Accept";
-  if (founding === "needed") return "No Horizon-week yet";
+  if (founding === "needed") return "No week goal yet";
   let line = (now && now !== "source of truth" && now !== "—") ? now : ((nxt && nxt !== "—") ? nxt : "");
   line = honestWorkLine(line, counts) || line;
   if (!line && (counts.failed || 0) > 0) line = `${counts.failed} failed — open Results`;
-  else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Next`;
+  else if (!line && (counts.next || 0) > 0) line = `${counts.next} due · open Due`;
   if (line) return clipWire(line, 56);
-  return "No Horizon-week yet";
+  return "No week goal yet";
 }
 
 function ceoInitials(name) {
@@ -3770,7 +3793,7 @@ async function runNeedChoice(btn) {
       if (typeof syncLiveFromAim === "function") syncLiveFromAim();
       focusLane("cos");
       sendMessage(
-        `Ask Cos: this CEO proposed Next: ${nxt || "Next on INDEX"} because ${why || "the open proposal"}. Challenge it: ${ask} Route Code/Think/Research/Ops or escalate to Adam only for keys, money, login, publish, pay, delete, sign.`,
+        `Ask Cos: this CEO proposed Up next: ${nxt || "Up next on this desk"} because ${why || "the open proposal"}. Challenge it: ${ask} Route Code/Think/Research/Ops or escalate to Adam only for keys, money, login, publish, pay, delete, sign.`,
         { preset: "cos", forceNew: true }
       );
       return;
@@ -3779,7 +3802,7 @@ async function runNeedChoice(btn) {
       if (target) await setOrgNode(target, "");
       focusLane("think");
       sendMessage(
-        `Challenge this proposal before labor. Why: ${why || "the open proposal"}. Next: ${nxt || "Next on INDEX"}. ${ask} Keep the open proposal; do not invent a new board.`,
+        `Challenge this proposal before labor. Why: ${why || "the open proposal"}. Up next: ${nxt || "Up next on this desk"}. ${ask} Keep the open proposal; do not invent a new board.`,
         { preset: "think" }
       );
       return;
@@ -3843,7 +3866,7 @@ async function runNeedChoice(btn) {
   }
   if (act === "continue") {
     if (pid) await setOrgNode(pid, "");
-    sendMessage("Continue from Last and Next on the brief.", presetLane && presetLane !== "cos" ? { preset: presetLane } : {});
+    sendMessage("Continue from Just did and Up next on this desk.", presetLane && presetLane !== "cos" ? { preset: presetLane } : {});
     return;
   }
   if (act === "retry" && cronId && pid) {
@@ -4094,9 +4117,9 @@ function operatorMoveRows() {
 
 function moveHeadLabel(rows) {
   const names = [...new Set((rows || []).map((row) => row.name || ceoMoveName(row.project_id)))].filter(Boolean);
-  if (names.length === 1) return `Your move · ${names[0]}`;
-  if (names.length > 1) return `Your move · ${names.length} CEOs`;
-  return "Your move";
+  if (names.length === 1) return `Needs you · ${names[0]}`;
+  if (names.length > 1) return `Needs you · ${names.length} CEOs`;
+  return "Needs you";
 }
 
 function inboxHtml() {
@@ -4110,7 +4133,7 @@ function inboxHtml() {
     ? `<div class="org-inbox-actions need-actions">${choiceButtonsHtml([choice], row)}</div>`
     : "";
   return `<div class="org-inbox adam">
-    <div class="org-inbox-head">Your move</div>
+    <div class="org-inbox-head">Needs you</div>
     <div class="org-inbox-item" data-inbox="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind || "")}" data-project="${escapeHtml(row.project_id || "")}">
       <b>${escapeHtml(who)}</b>
       <span>${escapeHtml(why)}</span>
@@ -4389,13 +4412,13 @@ function whereLabel() {
   const project = currentProject();
   const worker = currentWorker();
   if (worker && project) return `${prettyCeoName(project.id, project.name)} · ${worker.name}`;
-  if (project) return `${prettyCeoName(project.id, project.name)} · CEO`;
+  if (project) return prettyCeoName(project.id, project.name);
   return "Cos";
 }
 
 function chatModelLabel() {
   const id = String((cfg.seats && cfg.seats.chat && cfg.seats.chat.model) || (cfg.catalog && cfg.catalog.recommended_chat) || "").trim();
-  if (!id) return "Board · brief";
+  if (!id) return "Board · status";
   const row = ((cfg.catalog && cfg.catalog.models) || []).find((model) => model.id === id);
   return (row && row.label) || id.split("/").filter(Boolean).slice(-1)[0] || id;
 }
@@ -4411,17 +4434,17 @@ function selectedIndexText() {
 function renderBotMeta(opts) {
   const text = selectedIndexText();
   const cleaned = cleanBotText(text);
-  if ($("indexCard")) $("indexCard").textContent = cleaned || "(empty)";
+  paintDeskCard(cleaned);
   const worker = currentWorker();
   const project = currentProject();
-  const label = worker ? `${worker.name} brief` : project ? `${prettyCeoName(project.id, project.name)} brief` : "Cos brief";
+  const label = worker ? `${worker.name}` : project ? prettyCeoName(project.id, project.name) : "Cos";
   if ($("indexSummary")) {
     $("indexSummary").textContent = `${label} · ${briefHonestyLine(cleaned)}`;
   }
   if ($("chatWhere")) $("chatWhere").textContent = whereLabel();
   if ($("chatFolder")) {
     if (!project) {
-      $("chatFolder").textContent = orgWeekGlance() || "One chat. Cos routes. Open a CEO in the rail for that desk.";
+      $("chatFolder").textContent = orgWeekGlance() || "Board chair. Ask what’s going on, or open a CEO.";
     } else {
       const week = weekGoal(project);
       const nxt = honestIndexNext(String(project.index_next || "").trim());
@@ -4434,9 +4457,9 @@ function renderBotMeta(opts) {
         if (trustAsk && (!ask || isScheduleFluff(ask))) ask = trustAsk;
         if (!ask && trustAsk) ask = trustAsk;
         if (!ask && (counts.failed || 0) > 0) ask = `${counts.failed} failed — open Results`;
-        else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Next`;
+        else if (!ask && (counts.next || 0) > 0) ask = `${counts.next} due · open Due`;
       }
-      $("chatFolder").textContent = ask || "No Horizon-week yet.";
+      $("chatFolder").textContent = ask || "No week goal yet. Open Goals.";
     }
   }
   const folder = currentAim().folder || "";
@@ -4518,10 +4541,10 @@ function activityBody() {
 function paintActivityTitle() {
   const el = $("activityTitle");
   if (!el) return;
-  el.textContent = scheduleView === "next" ? "Next"
+  el.textContent = scheduleView === "next" ? "Due"
     : (scheduleView === "results" ? "Results"
       : (scheduleView === "schedule" ? "Schedule"
-        : (scheduleView === "goals" ? "Goals" : "Doing")));
+        : (scheduleView === "goals" ? "Goals" : "Running")));
 }
 
 function applySavedWork() {
@@ -4868,8 +4891,8 @@ function paintWorkTabs() {
     tabs.querySelectorAll(".work-tab").forEach((btn) => {
       const view = btn.getAttribute("data-work") || "";
       const n = counts[view] || 0;
-      const label = view === "doing" ? "Doing"
-        : (view === "next" ? "Next"
+      const label = view === "doing" ? "Running"
+        : (view === "next" ? "Due"
           : (view === "schedule" ? "Schedule"
             : (view === "goals" ? "Goals" : "Results")));
       btn.classList.toggle("on", scheduleOpen && scheduleView === view);
@@ -4946,7 +4969,7 @@ function isScheduleFluff(line) {
   if (/^Ready when you are/i.test(raw)) return true;
   if (/on this Railway board/i.test(raw)) return true;
   if (/^Idle\b/i.test(raw)) return true;
-  if (/^Your move\b/i.test(raw)) return true;
+  if (/^(Your move|Needs you)\b/i.test(raw)) return true;
   if (/Continue from Last/i.test(raw)) return true;
   if (/Retry or Ask Cos/i.test(raw)) return true;
   return false;
@@ -4957,7 +4980,7 @@ function honestWorkLine(line, counts) {
   const next = (counts && counts.next) || 0;
   const raw = String(line || "").trim();
   const trust = scheduleTrustNowLine(counts, currentProject());
-  if (trust && (!raw || raw === "—" || isScheduleFluff(raw) || /open Results/i.test(raw) || /^Your move\b/i.test(raw) || /Continue from Last/i.test(raw))) {
+  if (trust && (!raw || raw === "—" || isScheduleFluff(raw) || /open Results/i.test(raw) || /^(Your move|Needs you)\b/i.test(raw) || /Continue from Last/i.test(raw))) {
     return trust;
   }
   if (failed > 0 && (!raw || raw === "—" || isScheduleFluff(raw))) {
@@ -4966,7 +4989,7 @@ function honestWorkLine(line, counts) {
       : `${failed} failed — open Results`;
   }
   if (next > 0 && isScheduleFluff(raw)) {
-    return `${next} due · open Next`;
+    return `${next} due · open Due`;
   }
   return raw;
 }
@@ -5161,15 +5184,15 @@ function paintCeoBrief(digest) {
   } else {
     const week = weekGoal(project);
     if (week) bits.push(`This week: ${week}`);
-    else bits.push("No Horizon-week yet.");
+    else bits.push("No week goal yet. Open Goals.");
     const trust = scheduleTrustNowLine(counts, project);
     const now = String(project.index_now || "").trim();
     if (trust) bits.push(trust);
-    else if (now && now !== "—" && !isScheduleFluff(now) && now !== week) bits.push(`Now: ${now}`);
+    else if (now && now !== "—" && !isScheduleFluff(now) && now !== week) bits.push(`Working on: ${now}`);
     if (String(project.id || "") === "saa-homes" && (gatewayLiveOwns || !gatewayRestartOk)) {
-      bits.push("Live Railway Hermes still owns cron. This desk is a copy until cutover. OttoBot chat is the inbox — not Telegram.");
+      bits.push("Live Railway Hermes still owns the schedule. This desk is a copy until cutover. OttoBot chat is the inbox — not Telegram.");
     } else if (String(project.id || "") === "saa-homes" && saaDeskOwns) {
-      bits.push("This desk owns SAA cron. OttoBot chat is the inbox — not Telegram.");
+      bits.push("This desk owns the SAA schedule. OttoBot chat is the inbox — not Telegram.");
     }
   }
   if (!bits.length) {
@@ -5448,7 +5471,7 @@ function goalsBoardHtml() {
   if (!projectId) {
     const projects = ((cfg.org && cfg.org.projects) || []);
     if (!projects.length) return `<p class="cron-empty">${escapeHtml(emptyWorkCopy("goals"))}</p>`;
-    return `<p class="cron-story">Scoreboard per CEO. Open one to edit. Cos: “tell SAA: …” routes to that inbox — Cos does not write their INDEX.</p>` + projects.map((row) => {
+    return `<p class="cron-story">Scoreboard per CEO. Open one to edit. Cos: “tell SAA: …” routes to that inbox — Cos does not write that CEO’s desk status.</p>` + projects.map((row) => {
       const h = row.horizons || {};
       const bits = labels.map(([key, label]) => {
         const val = String(h[key] || "").trim();
@@ -5466,9 +5489,9 @@ function goalsBoardHtml() {
   const who = prettyCeoName(projectId, project.name);
   const founding = project.founding || {};
   const foundingNote = founding.status === "draft"
-    ? `<p class="cron-outcome">Founding RESULT is parked. Accept stamps INDEX. Reject keeps Horizons empty.</p>`
+    ? `<p class="cron-outcome">Founding RESULT is parked. Accept stamps desk status. Reject keeps Goals empty.</p>`
     : (founding.status === "needed"
-      ? `<p class="cron-outcome">Horizons are not live until this CEO proposes and you Accept.</p>`
+      ? `<p class="cron-outcome">Goals are not live until this CEO proposes and you Accept.</p>`
       : "");
   const rows = labels.map(([key, label]) => `<div class="horizon-row">
     <label for="horizon-${escapeHtml(key)}">${escapeHtml(label)}</label>
@@ -5476,7 +5499,7 @@ function goalsBoardHtml() {
   </div>`).join("");
   return `<article class="cron-card">
     <div class="cron-head"><b>${escapeHtml(who)}</b><span>Goals</span></div>
-    <p class="cron-outcome">Each line: money or count · who pays · via how they arrive · proof metric. You, this CEO, or Cos (“tell ${escapeHtml(who)}: …”) can steer. INDEX is memory.</p>
+    <p class="cron-outcome">Each line: money or count · who pays · via how they arrive · proof metric. You, this CEO, or Cos (“tell ${escapeHtml(who)}: …”) can steer. Desk status is memory.</p>
     ${foundingNote}
     <form class="horizon-board" id="horizonForm">${rows}
       <div class="need-actions">
@@ -5591,14 +5614,14 @@ function emptyWorkCopy(view) {
       return `Nothing running on ${who}. ${counts.failed} failed — open Results.`;
     }
     if ((counts.next || 0) > 0) {
-      return `Nothing running on ${who}. ${counts.next} due in Next — open that tab.`;
+      return `Nothing running on ${who}. ${counts.next} due — open Due.`;
     }
     return why
       ? `Idle on ${who}. ${why}`
-      : `Nothing is running on ${who}. Send a message, or open Next for what’s queued.`;
+      : `Nothing is running on ${who}. Send a message, or open Due for what’s queued.`;
   }
   if (view === "next") {
-    return `Nothing queued for ${who}. When this brief has a Next, or a job is due in the next day, it shows up here.${why ? ` ${why}` : ""}`;
+    return `Nothing queued for ${who}. When something is due in the next day, it shows up here.${why ? ` ${why}` : ""}`;
   }
   if (view === "schedule") {
     return `Pick a CEO to see the full enabled schedule roster.`;
@@ -5630,7 +5653,7 @@ function whyIdleLine() {
   if ((counts.next || 0) > 0) {
     const due = (pack.crons || []).find((row) => row.enabled !== false && cronIsDueSoon(row) && !cronIsLive(row));
     const when = due && due.next_run_at ? cronWhenClock(due.next_run_at) : "soon";
-    return `Why idle: ${counts.next} due in Next (${when}).`;
+    return `Why idle: ${counts.next} due (${when}).`;
   }
   const next = (pack.crons || []).find((row) => row.enabled !== false && cronIsDueSoon(row) && !cronIsLive(row));
   if (next && next.next_run_at) return `Why idle: next due ${cronWhenClock(next.next_run_at)}.`;
@@ -6856,20 +6879,20 @@ function renderReportCard(job) {
     const rows = [];
     if (job.index_now) {
       const val = cleanBotText(String(job.index_now)).trim();
-      rows.push(`<div><dt>Now</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
+      rows.push(`<div><dt>${escapeHtml(deskFieldLabel("Now"))}</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
     }
     if (job.index_last) {
       const val = cleanBotText(String(job.index_last)).trim();
-      rows.push(`<div><dt>Last</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
+      rows.push(`<div><dt>${escapeHtml(deskFieldLabel("Last"))}</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
     }
     if (job.next) {
       const val = cleanBotText(String(job.next)).trim();
-      rows.push(`<div><dt>Next</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
+      rows.push(`<div><dt>${escapeHtml(deskFieldLabel("Next"))}</dt><dd class="${val === "—" ? "empty" : ""}">${escapeHtml(val)}</dd></div>`);
     }
     if (job.index_blocker) {
       const val = cleanBotText(String(job.index_blocker)).trim();
       const isBlocked = val && val !== "—";
-      rows.push(`<div><dt>Blocker</dt><dd class="${isBlocked ? "blocker" : "empty"}">${escapeHtml(val)}</dd></div>`);
+      rows.push(`<div><dt>${escapeHtml(deskFieldLabel("Blocker"))}</dt><dd class="${isBlocked ? "blocker" : "empty"}">${escapeHtml(val)}</dd></div>`);
     }
     delta.innerHTML = rows.join("");
     card.appendChild(delta);
@@ -7006,7 +7029,7 @@ function renderJob(job) {
         return;
       }
       const aim = aimKey();
-      const next = job.next && job.next !== "—" ? job.next : "Continue from Last and Next on the brief.";
+      const next = job.next && job.next !== "—" ? job.next : "Continue from Just did and Up next on this desk.";
       const lastResult = (job.text || "").trim();
       const resultSnippet = lastResult.slice(-600);
       const continueMsg = `Continue. Last RESULT:\n${resultSnippet}\n\nNext: ${next}`;
@@ -7186,11 +7209,11 @@ function emptyStreamHtml() {
     showCTA = false;
   } else if (project) {
     const week = weekGoal(project);
-    lead = week ? `This week: ${week}` : "No Horizon-week yet.";
+    lead = week ? `This week: ${week}` : "No week goal yet. Open Goals.";
     showCTA = false;
   } else {
     const glance = orgWeekGlance();
-    lead = glance ? glance : "Ask what’s going on, or open a CEO.";
+    lead = glance ? glance : "Board chair. Ask what’s going on, or open a CEO.";
   }
   const showNow = project && now && now !== "source of truth" && now !== "—" && !isScheduleFluff(now) && now !== weekGoal(project);
   const nowLine = showNow ? `<p class="empty-now">${escapeHtml(now)}</p>` : "";
@@ -7428,12 +7451,12 @@ async function decide(jobId, action, actionsEl, force = false, pushBranch = fals
     const next = indexField(data.index, "Next");
     const blocker = indexField(data.index, "Blocker");
     
-    let briefLines = [`Now: ${now}`];
-    if (last !== "—") briefLines.push(`Last: ${last}`);
-    if (next !== "—") briefLines.push(`Next: ${next}`);
-    if (blocker !== "—") briefLines.push(`Blocker: ${blocker}`);
+    let briefLines = [`Working on: ${now}`];
+    if (last !== "—") briefLines.push(`Just did: ${last}`);
+    if (next !== "—") briefLines.push(`Up next: ${next}`);
+    if (blocker !== "—") briefLines.push(`Stuck: ${blocker}`);
     
-    card("bot brief", briefLines.join("\n"), "Brief updated");
+    card("bot brief", briefLines.join("\n"), "Status updated");
   }
   pollActivity();
 }
@@ -7461,12 +7484,12 @@ async function revertDiff(jobId, actionsEl) {
     const next = indexField(data.index, "Next");
     const blocker = indexField(data.index, "Blocker");
     
-    let briefLines = [`Now: ${now}`];
-    if (last !== "—") briefLines.push(`Last: ${last}`);
-    if (next !== "—") briefLines.push(`Next: ${next}`);
-    if (blocker !== "—") briefLines.push(`Blocker: ${blocker}`);
+    let briefLines = [`Working on: ${now}`];
+    if (last !== "—") briefLines.push(`Just did: ${last}`);
+    if (next !== "—") briefLines.push(`Up next: ${next}`);
+    if (blocker !== "—") briefLines.push(`Stuck: ${blocker}`);
     
-    card("bot brief", briefLines.join("\n"), "Brief updated");
+    card("bot brief", briefLines.join("\n"), "Status updated");
   }
   
   pollActivity();
@@ -9687,17 +9710,17 @@ function renderMemoryCards(fields) {
   const el = $("memoryCards");
   if (!el) return;
   const entries = [
-    ["Now", fields.now || "—"],
-    ["Last", fields.last || "—"],
-    ["Next", fields.next || "—"],
-    ["Blocker", fields.blocker || "—"]
+    ["Now", "Working on", fields.now || "—"],
+    ["Last", "Just did", fields.last || "—"],
+    ["Next", "Up next", fields.next || "—"],
+    ["Blocker", "Stuck", fields.blocker || "—"]
   ];
-  el.innerHTML = entries.map(([label, value]) => {
+  el.innerHTML = entries.map(([label, human, value]) => {
     const isBlocked = label === "Blocker" && value !== "—";
     const className = isBlocked ? "memory-card blocked" : "memory-card";
     const fieldId = `memory${label}`;
     return `<div class="${className}">
-      <label for="${fieldId}">${escapeHtml(label)}</label>
+      <label for="${fieldId}">${escapeHtml(human)}</label>
       <textarea id="${fieldId}" rows="2" data-label="${label}">${escapeHtml(value)}</textarea>
     </div>`;
   }).join("");
@@ -9715,7 +9738,7 @@ function renderMemoryResults(results, query) {
     return;
   }
   el.innerHTML = `<h4>Search results (${results.length})</h4>` + results.map((result) => {
-    const sourceLabel = result.type === "index" ? "INDEX" : result.source;
+    const sourceLabel = result.type === "index" ? "Desk status" : result.source;
     const jobId = result.job_id || "";
     const clickable = result.type === "job" && jobId ? "memory-result-clickable" : "";
     return `<div class="memory-result ${clickable}" data-job-id="${escapeHtml(jobId)}">
@@ -9874,7 +9897,7 @@ if ($("saveMemory")) {
           throw new Error(err.error || "save failed");
         }
       }
-      if (status) status.textContent = "INDEX saved";
+      if (status) status.textContent = "Status saved";
       await loadMemory();
     } catch (err) {
       if (status) status.textContent = String(err);

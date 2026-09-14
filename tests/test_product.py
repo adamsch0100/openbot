@@ -59,7 +59,7 @@ class CheapChatTests(unittest.TestCase):
         index = "Now: ticket 1\nLast: builder\nNext: folder then diff\nBlocker: —\n## Law\nsecret"
         status = status_reply(index, "What is going on?", "openbot")
         self.assertIn("ticket 1", status)
-        self.assertIn("Last: builder", status)
+        self.assertIn("Just did: builder", status)
         self.assertNotIn("secret", status)
         talk = status_reply(index, "what should we do?", "openbot")
         self.assertIn("OttoBot", talk)
@@ -112,7 +112,7 @@ class CheapChatTests(unittest.TestCase):
             text = staff_status_reply()
         self.assertIn("OttoBot — this week:", text)
         self.assertNotIn("openbot:", text)
-        self.assertIn("SAA Homes — now:", text)
+        self.assertIn("SAA Homes — working on:", text)
         self.assertNotIn("saa-homes:", text)
         self.assertNotIn("Goals empty", text)
         self.assertNotIn("due 0 · failed 0", text)
@@ -156,7 +156,7 @@ class CheapChatTests(unittest.TestCase):
         )
         self.assertNotIn("smoke27", text.lower())
         self.assertIn("folder then diff", text)
-        self.assertIn("Last: builder", text)
+        self.assertIn("Just did: builder", text)
 
     def test_quiet_index_strips_duplicate_next_and_public_jobs_say_cos(self):
         from openbot.org import quiet_index_line

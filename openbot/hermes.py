@@ -1890,13 +1890,13 @@ def cron_title(name: str) -> str:
     return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
 
 
-_FAIL_NEXT = "Your move · Retry or Ask Cos."
+_FAIL_NEXT = "Retry this job, or ask Cos."
 _GATEWAY_FAIL_NEXT = "Auto-retry — gateway will pick this up. Do not mass-fire."
-_SCRIPT_FAIL_NEXT = "Your move · Restore script from bootstrap (Hermes scripts/)."
-_KEY_FAIL_NEXT = "Your move · Fix key in Settings."
+_SCRIPT_FAIL_NEXT = "Restore script from Hermes bootstrap."
+_KEY_FAIL_NEXT = "Fix key in Settings."
 _WALLET_FAIL_NEXT = "Needs Adam · add credits / fix billing."
 _TRANSIENT_FAIL_NEXT = "Auto-retry — transient. Retry once if it stays red."
-_HERMES_FAIL_NEXT = "Your move · Retry — Hermes exited. Not a key."
+_HERMES_FAIL_NEXT = "Retry — Hermes exited. Not a key."
 
 
 def fail_kind_from_blob(blob: str) -> str:

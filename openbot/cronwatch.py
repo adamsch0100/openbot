@@ -72,9 +72,9 @@ def honest_next_line(peers: list[dict] | None) -> str:
         due.sort(key=lambda row: str(row.get("next_run_at") or ""))
         title = cron_title(str(due[0].get("name") or due[0].get("title") or "job"))
         if len(due) == 1:
-            return f"Due soon · {title}. Open Next."[:160]
-        return f"{len(due)} due · next {title}. Open Next."[:160]
-    return "On schedule. Open Next for the upcoming job."
+            return f"Due soon · {title}. Open Due."[:160]
+        return f"{len(due)} due · next {title}. Open Due."[:160]
+    return "On schedule. Open Due for the upcoming job."
 
 
 def _load_seen() -> dict:
@@ -280,7 +280,7 @@ def _honest_next_line(project_id: str | None, hermes_home: str | None = None, fi
         return f"Next: {title} {when}{more}."
     if finished:
         return f"{finished} done. Nothing else due in the next day."
-    return "Nothing due in the next day. Open Next for the full queue."
+    return "Nothing due in the next day. Open Due for the full queue."
 
 
 def _post_cron_card(project_id: str | None, row: dict, hermes_home: str | None = None, *, peers: list[dict] | None = None) -> dict:
@@ -316,7 +316,7 @@ def _post_cron_card(project_id: str | None, row: dict, hermes_home: str | None =
         "cron_report": report[:4000] or body[:4000],
         "cron_result": report[:4000] or body[:4000],
         "cron_when": when,
-        # Cron fails belong in Results / YOUR MOVE as failed — not a Continue loop.
+        # Cron fails belong in Results / Needs you as failed — not a Continue loop.
         "keep_going": False,
         "next": nxt,
     }

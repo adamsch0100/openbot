@@ -80,7 +80,7 @@ class HandledVisibleUiTests(unittest.TestCase):
         self.assertIn('id: "restart_gateway"', js)
         self.assertIn('act === "ask_cos"', js)
         self.assertIn('act === "restore_script"', js)
-        self.assertIn("Your move ·", js)
+        self.assertIn("Needs you ·", js)
         self.assertIn("function ceoMoveName", js)
         self.assertIn("function operatorMoveRows", js)
         self.assertIn("function chatLaneNoise", js)
@@ -126,8 +126,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=178", html)
-        self.assertIn("styles.css?v=178", html)
+        self.assertIn("app.js?v=179", html)
+        self.assertIn("styles.css?v=179", html)
 
 
 
@@ -211,7 +211,6 @@ class HandledVisibleBackendTests(unittest.TestCase):
 
         _, nxt = cron_outcome("error", "", "Script-not-found: scripts/citation_submit.py")
         self.assertIn("Restore script", nxt)
-        self.assertIn("Your move ·", nxt)
         self.assertNotIn("Fix key", nxt)
         self.assertNotIn("Auto-retry", nxt)
 

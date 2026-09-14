@@ -46,8 +46,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=178", html)
-        self.assertIn("styles.css?v=178", html)
+        self.assertIn("app.js?v=179", html)
+        self.assertIn("styles.css?v=179", html)
 
     def test_roster_status_priority_in_sort(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -85,7 +85,6 @@ class SaaScheduleTrustBackendTests(unittest.TestCase):
             "error", "", "Script-not-found: scripts/citation_submit.py"
         )
         self.assertIn("Script not found", outcome2)
-        self.assertIn("Your move", nxt2)
         self.assertIn("bootstrap", nxt2)
         self.assertNotIn("Fix key", nxt2)
 

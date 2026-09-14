@@ -220,7 +220,7 @@ def stamp_saa_desk_owns_index() -> None:
         "saa-homes",
         None,
         "Now",
-        "This desk owns SAA cron. OttoBot chat is the inbox. Not Telegram.",
+        "This desk owns the SAA schedule. OttoBot chat is the inbox. Not Telegram.",
     )
     patch_scope(
         "saa-homes",
@@ -236,7 +236,7 @@ def stamp_saa_desk_owns_index() -> None:
     )
     patch_scope("saa-homes", None, "Blocker", "—")
     patch_scope("saa-homes", None, "Telegram", "Off — OttoBot chat is the inbox.")
-    patch_index_line("Now", "Cos names CEOs. This desk owns SAA cron.")
+    patch_index_line("Now", "Cos names CEOs. This desk owns the SAA schedule.")
     patch_index_line("Last", "SAA cut over: live Railway Hermes stopped, this desk owns schedule.")
     patch_index_line("Next", "Cos routes work to CEOs. SAA schedule runs here.")
     patch_index_line("Blocker", "—")
@@ -1138,7 +1138,7 @@ def company_pulse(project_id: str | None) -> str:
     if week:
         lines.append(f"This week: {week[:160]}")
     else:
-        lines.append("This week: no Horizon-week on INDEX yet.")
+        lines.append("This week: no week goal yet.")
     lines.append(f"Now: {now[:140]}")
     digest: dict = {}
     story = ""
@@ -1539,7 +1539,7 @@ def staff_briefing() -> str:
         if week:
             lines.append(f"This week: {week[:160]}")
         else:
-            lines.append("This week: no Horizon-week on INDEX yet.")
+            lines.append("This week: no week goal yet.")
         lines.append(f"Now: {quiet_index_line(index_field(text, 'Now') or '—') or '—'}")
         lines.append(f"Last: {quiet_index_line(index_field(text, 'Last') or '—') or '—'}")
         lines.append(f"Next: {quiet_index_line(index_field(text, 'Next') or '—') or '—'}")
@@ -1654,10 +1654,10 @@ def staff_status_reply() -> str:
         lines.append(now)
     nxt = quiet_index_line(index_field(inst, "Next"))
     if nxt and nxt != "—":
-        lines.append(f"Next: {nxt}")
+        lines.append(f"Up next: {nxt}")
     blocker = quiet_index_line(index_field(inst, "Blocker"))
     if blocker and blocker != "—":
-        lines.append(f"Blocked: {blocker}")
+        lines.append(f"Stuck: {blocker}")
     for row in (_load_saved().get("projects") or []):
         if not isinstance(row, dict) or not row.get("id"):
             continue
@@ -1671,12 +1671,12 @@ def staff_status_reply() -> str:
             or "—"
         )
         if week:
-            bit = f"{name} — this week: {week[:140]} · now: {now_line}"
+            bit = f"{name} — this week: {week[:140]} · working on: {now_line}"
         else:
-            bit = f"{name} — now: {now_line}"
+            bit = f"{name} — working on: {now_line}"
         stuck = quiet_index_line(index_field(text, "Blocker"))
         if stuck and stuck != "—":
-            bit += f" · blocked {stuck}"
+            bit += f" · stuck {stuck}"
         try:
             sched = pulse_headline(pid)
             if sched and sched not in {"none attached", "unavailable"} and not re.match(

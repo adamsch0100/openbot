@@ -71,8 +71,9 @@ Chat dies. Files stay. Engines are upstream.
 
 One composer. Always. Simple surface, rich underneath.
 
-Beginner sees: Home prompt, Cos/Builder/Research, INDEX card, Work in this folder, paste URL, schedule in plain language.
-Chat **Doing / Next / Results** is the live schedule surface (Grok-simple). Tools → OpenCode / Hermes are raw engines; Hermes live line shows schedule health for the aimed CEO.
+Beginner sees: one composer, named bots (Cos / CEOs), What’s going on (desk status), schedule in plain language.
+Chat **Running / Due / Results / Schedule / Goals** is the live work surface (Grok-simple). Desk status on disk is still `INDEX.md` (Now / Last / Next / Blocker) — the UI says Working on / Just did / Up next / Stuck.
+Tools → OpenCode / Hermes are raw engines; Hermes live line shows schedule health for the aimed CEO.
 Advanced opens: job log, tokens, engine used, MCP toggles, raw brains, OpenCode session, Hermes cron, `opencode.json`.
 
 First run:

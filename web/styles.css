@@ -1342,22 +1342,26 @@ details.cron-card[open] > .need-actions { display: flex; }
 }
 .chat-where {
   font-family: var(--display);
-  font-size: 13px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--bronze);
+  font-size: 22px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.15;
 }
 .chat-model {
   font-size: 12px;
   color: var(--muted);
 }
 .chat-folder {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
-  opacity: 0.85;
+  opacity: 0.92;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
+  margin-top: 2px;
 }
 .lanes {
   display: none;
@@ -1505,8 +1509,8 @@ details.cron-card[open] > .need-actions { display: flex; }
 .index summary {
   cursor: pointer;
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  letter-spacing: 0;
   display: block;
   padding: 2px 0 4px;
   overflow: hidden;
@@ -1514,6 +1518,38 @@ details.cron-card[open] > .need-actions { display: flex; }
   white-space: nowrap;
 }
 .index summary::-webkit-details-marker { color: var(--muted); }
+.status-card {
+  margin: 8px 0 4px;
+  min-width: 0;
+}
+.status-fields {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.status-row { display: grid; gap: 2px; min-width: 0; }
+.status-row dt {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.status-row dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.status-row.stuck dd { color: var(--danger); }
+.status-row dd.empty { color: var(--muted); }
+.status-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
 .index pre {
   margin: 10px 0 8px;
   white-space: pre-wrap;
@@ -1543,14 +1579,14 @@ details.cron-card[open] > .need-actions { display: flex; }
 .schedule-row b { color: var(--ink); font-weight: 500; }
 .composer {
   margin: 0;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--line);
-  background: rgba(28, 26, 22, 0.94);
+  background: rgba(28, 26, 22, 0.96);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "autocomplete" "reply" "queue" "attachments" "input" "hint";
   gap: 6px;
-  border-radius: 18px;
+  border-radius: 22px;
   flex-shrink: 0;
   position: sticky;
   bottom: 0;
@@ -1984,9 +2020,9 @@ details.cron-card[open] > .need-actions { display: flex; }
 }
 .empty-stream {
   margin: auto 0;
-  padding: 48px 8px 56px;
+  padding: 56px 8px 72px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   max-width: 28rem;
   min-width: 0;
 }
@@ -2006,9 +2042,9 @@ details.cron-card[open] > .need-actions { display: flex; }
 .empty-stream h1 {
   margin: 0;
   font-family: var(--display);
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 500;
-  line-height: 1.15;
+  line-height: 1.1;
   color: var(--ink);
   overflow-wrap: anywhere;
 }
@@ -3136,8 +3172,9 @@ footer a { color: var(--bronze); }
     gap: 8px;
   }
   .chat-where {
-    font-size: 12px;
-    letter-spacing: 0.14em;
+    font-size: 18px;
+    letter-spacing: 0;
+    text-transform: none;
   }
   .ceo-live {
     margin: 2px 0 0;
@@ -3544,7 +3581,7 @@ footer a { color: var(--bronze); }
   
   .chat-shell { padding: 0 12px 10px; }
   .chat-head { padding: 12px 0 8px; gap: 8px; }
-  .chat-where { font-size: 12px; letter-spacing: 0.14em; }
+  .chat-where { font-size: 18px; letter-spacing: 0; text-transform: none; }
   .work-tab {
     padding: 10px 6px;
     min-height: 44px;
