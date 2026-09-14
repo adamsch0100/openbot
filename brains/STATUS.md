@@ -17,9 +17,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Work is one chip. Chat stays the conversation. Engine: board.
-Last: Keys are APIs OttoBot uses. Auto picks models per Chat, Think, Code, Research, Ops.
-Next: Ship Work collapse to live when you want it.
+Now: Work peek keeps Running / Due / Results / Schedule / Goals in view; the list still folds. Engine: board.
+Last: Work is one chip. Chat stays the conversation.
+Next: Hard-refresh live for the peek counts.
 Blocker: Do not mass-retry. Do not remake SAA crons. Do not Accept parked restore. Do not redeploy ListLogic replica.
 
 ## Vault

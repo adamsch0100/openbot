@@ -8412,7 +8412,9 @@ document.querySelectorAll(".work-tabs").forEach((tabs) => {
   tabs.addEventListener("click", (event) => {
     const btn = event.target.closest(".work-tab");
     if (!btn) return;
-    openWork(btn.getAttribute("data-work") || "doing");
+    const view = btn.getAttribute("data-work") || "doing";
+    if (scheduleOpen && scheduleView === view) closeSchedule();
+    else openWork(view);
   });
 });
 if ($("workToggle") && !$("workToggle").dataset.workBound) {

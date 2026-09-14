@@ -979,6 +979,16 @@ details.cron-card.compact[open] > .cron-glance {
   flex-shrink: 0;
   justify-content: flex-end;
 }
+.work-peek {
+  justify-content: flex-start;
+  width: 100%;
+  gap: 0 2px;
+  padding: 2px 0 0;
+}
+.work-peek .work-tab {
+  padding: 4px 8px;
+  font-size: 11px;
+}
 .work-tab {
   appearance: none;
   -webkit-appearance: none;
@@ -1052,6 +1062,7 @@ details.cron-card.compact[open] > .cron-glance {
   justify-content: flex-start;
   min-width: 0;
 }
+.work-peek[hidden] { display: none !important; }
 .horizon-board { display: grid; gap: 10px; }
 .horizon-row label {
   display: block;
@@ -3391,7 +3402,7 @@ footer a { color: var(--bronze); }
   .work-status-index dd {
     -webkit-line-clamp: 1;
   }
-  /* calm phone: CEO name + one Work chip, not a 5-tab scroll */
+  /* calm phone: CEO name + Work chip + peek counts, not a 5-tab scroll */
   .chat-head-row {
     flex-direction: row;
     align-items: center;
@@ -3404,7 +3415,7 @@ footer a { color: var(--bronze); }
     letter-spacing: var(--track-title);
     text-transform: none;
   }
-  .work-tabs,
+  .work-tabs:not(.work-peek),
   .embed-head .work-tabs {
     display: flex;
     flex-wrap: nowrap;
@@ -3421,6 +3432,15 @@ footer a { color: var(--bronze); }
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     overscroll-behavior-x: contain;
+  }
+  .work-peek {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
   }
   .activity-bar .work-tabs {
     order: 3;
@@ -3448,6 +3468,11 @@ footer a { color: var(--bronze); }
     font-size: 13px;
     border-radius: 999px;
     white-space: nowrap;
+  }
+  .work-peek .work-tab {
+    padding: 4px 8px;
+    min-height: 0;
+    font-size: 12px;
   }
   .work-tab.on {
     background: var(--bronze-soft);
