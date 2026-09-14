@@ -4954,6 +4954,17 @@ function workCounts(forProjectId) {
   };
 }
 
+function pickDefaultWorkView() {
+  const counts = workCounts();
+  if ((counts.doing || 0) > 0 || (counts.handling || 0) > 0 || (counts.waitingCos || 0) > 0) return "doing";
+  if (prefersScheduleTrust(counts)) return "schedule";
+  if ((counts.failed || 0) > 0) return "results";
+  if ((counts.next || 0) > 0) return "next";
+  if ((counts.results || 0) > 0) return "results";
+  if ((counts.goals || 0) > 0) return "goals";
+  return scheduleView || "doing";
+}
+
 function paintWorkTabs() {
   const counts = workCounts();
   document.querySelectorAll(".work-tabs").forEach((tabs) => {
@@ -4972,13 +4983,27 @@ function paintWorkTabs() {
         || (view === "next" && (counts.failed || 0) > 0)
         || (view === "doing" && ((counts.handling || 0) > 0 || (counts.waitingCos || 0) > 0))
         || (view === "schedule" && scheduleNeed));
-      // Never flash a hollow "0" as if work is counted — blank until known, digit only when > 0.
       const badge = n > 0
         ? `<span class="n">${n}</span>`
         : (counts.ready ? "" : `<span class="n muted" title="Checking…">·</span>`);
       btn.innerHTML = `${label}${badge}`;
     });
   });
+  const toggle = $("workToggle");
+  if (toggle) {
+    const doing = counts.doing || 0;
+    const failed = counts.failed || 0;
+    const next = counts.next || 0;
+    const n = doing || failed || next || (counts.schedule || 0);
+    const badge = n > 0
+      ? `<span class="n">${n}</span>`
+      : (counts.ready ? "" : `<span class="n muted" title="Checking…">·</span>`);
+    toggle.innerHTML = `Work${badge}`;
+    toggle.setAttribute("aria-expanded", scheduleOpen ? "true" : "false");
+    toggle.classList.toggle("on", Boolean(scheduleOpen));
+    toggle.classList.toggle("hot", doing > 0);
+    toggle.classList.toggle("need", failed > 0 || (counts.handling || 0) > 0 || prefersScheduleTrust(counts));
+  }
   paintEmbedLive();
   paintWorkStatus();
 }
@@ -8390,6 +8415,13 @@ document.querySelectorAll(".work-tabs").forEach((tabs) => {
     openWork(btn.getAttribute("data-work") || "doing");
   });
 });
+if ($("workToggle") && !$("workToggle").dataset.workBound) {
+  $("workToggle").dataset.workBound = "1";
+  $("workToggle").addEventListener("click", () => {
+    if (scheduleOpen) closeSchedule();
+    else openWork(pickDefaultWorkView());
+  });
+}
 if ($("ceoLive") && !$("ceoLive").dataset.workBound) {
   $("ceoLive").dataset.workBound = "1";
   $("ceoLive").addEventListener("click", () => {

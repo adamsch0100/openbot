@@ -1014,6 +1014,44 @@ details.cron-card.compact[open] > .cron-glance {
   opacity: 0.35;
   font-weight: 400;
 }
+.work-toggle-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.work-toggle-btn:hover { color: var(--bronze); }
+.work-toggle-btn.on {
+  background: var(--bronze-soft);
+  color: var(--bronze);
+}
+.work-toggle-btn.hot { color: var(--ink); }
+.work-toggle-btn.need .n { color: var(--danger); opacity: 1; }
+.work-toggle-btn .n {
+  margin-left: 4px;
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.8;
+}
+.work-toggle-btn .n.muted {
+  opacity: 0.35;
+  font-weight: 400;
+}
+.activity-bar .work-tabs {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  min-width: 0;
+}
 .horizon-board { display: grid; gap: 10px; }
 .horizon-row label {
   display: block;
@@ -1265,8 +1303,9 @@ details.cron-card.compact[open] > .cron-glance {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
   min-height: 44px;
   padding: 2px 2px 8px;
   border-bottom: 1px solid var(--track);
@@ -3352,10 +3391,10 @@ footer a { color: var(--bronze); }
   .work-status-index dd {
     -webkit-line-clamp: 1;
   }
-  /* calm phone work lane: one scroll row (5 tabs — never a 4-col grid) */
+  /* calm phone: CEO name + one Work chip, not a 5-tab scroll */
   .chat-head-row {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
     gap: 8px;
   }
   .chat-folder { display: none; }
@@ -3382,6 +3421,15 @@ footer a { color: var(--bronze); }
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     overscroll-behavior-x: contain;
+  }
+  .activity-bar .work-tabs {
+    order: 3;
+    flex: 1 1 100%;
+  }
+  .work-toggle-btn {
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: 13px;
   }
   .work-tabs::-webkit-scrollbar { display: none; }
   .work-tab,

@@ -47,8 +47,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=190", html)
-        self.assertIn("styles.css?v=190", html)
+        self.assertIn("app.js?v=191", html)
+        self.assertIn("styles.css?v=191", html)
 
     def test_roster_status_priority_in_sort(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
