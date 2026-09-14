@@ -75,6 +75,16 @@ RETIRED_CEO_IDS = frozenset({
 })
 # Eligible via Add CEO / add_project. Auto-reattach only when INDEX is not archived.
 MANUAL_SEAT_CEO_IDS = frozenset({"nadia", "listlogic"})
+# Operator asked these companies to keep weekday Think + auto Code/research.
+# Support is tickets, not a P&L company. Detach still wins per CEO.
+HANDS_OFF_CEO_IDS = frozenset({
+    "saa-homes",
+    "listlogic",
+    "nadia",
+    "pmill-ai",
+    "pmill",
+    "openbot",
+})
 ARCHIVED_INDEX_MARK = "Retired from this OpenBot board"
 HOSTED_FOLDER_SLUGS = frozenset({"app", "data", "workspace"})
 SUPPORT_CEO_ID = "support"
@@ -866,6 +876,27 @@ def list_projects() -> list[dict]:
                 "name": str(row.get("name") or pid),
             })
     return projects
+
+
+def folder_can_code(project_id: str | None) -> bool:
+    """Code labor needs a git repo or a GitHub remote. Stub work folders do not count."""
+    pid = _slug(project_id)
+    if not pid:
+        return False
+    data = _load_saved() or {}
+    for row in data.get("projects") or []:
+        if not isinstance(row, dict):
+            continue
+        rid = str(row.get("id") or "")
+        if rid != pid and _slug(rid) != pid:
+            continue
+        if str(row.get("github_repo") or "").strip():
+            return True
+        folder = str(row.get("folder") or "").strip()
+        if folder and (Path(folder) / ".git").is_dir():
+            return True
+        return False
+    return False
 
 
 def public_org(data: dict | None = None) -> dict:

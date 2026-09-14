@@ -2,17 +2,18 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Desk in use — CEO English on the live board. Engine: board.
-Last: Cos names CEOs. Think ready. Packet dumps stripped; stuck runs named stuck.
-Next: After deploy — refresh SAA live copy; Stop Citation audit if still running with no finish. Then Accept citation-hub.
-Blocker: Do not Accept parked restore cards. Do not mass-retry.
-Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
+Now: Shipping founding glue to live Railway. Engine: board.
+Last: Accept Goals asks Attach weekday Think. New CEOs never auto-cron. Ghost Running is Stuck.
+Next: Prove Add CEO with a throwaway on live. Watch seated desks on the UI.
+Blocker: Do not mass-retry. Do not remake SAA crons. Do not Accept parked restore or citation-hub. Do not redeploy ListLogic replica.
+
+Goals: Prove CEOs run, then a delightful board, then multi-tenant seats.
 
 ## Horizons
-Horizon-week: 1 paying tenant on a live CEO desk · operators who will pay · via hosted OttoBot wrapping Hermes + OpenCode · proof tenant login + isolated desk status
-Horizon-month: Paid board seats (engines billed to the tenant) · companies who want CEOs without running glue · via signup · proof paid seats vs churn
-Horizon-quarter: Multi-tenant isolation — desk status, Hermes home, OpenCode folder per company · tenants · via product · proof tenant A cannot see tenant B
-Horizon-half: Seat MRR covers OttoBot's own Hermes + OpenCode · tenants · via subscriptions · proof revenue vs token spend
+Horizon-week: Every seated CEO Thinks toward Horizons with honest Running/Results · Adam · via Hermes weekday Think + OpenCode · proof no 5-day ghost jobs, Next is a Horizon move
+Horizon-month: Operator can leave CEOs unattended except Accept gates · Adam · via Think → labor → desk status · proof SAA+ListLogic+Nadia+Pmill Results serve Horizons
+Horizon-quarter: Board is delightful enough to clone: folder → diff → desk status · operators · via Grok-simple chat · proof a stranger can run one CEO
+Horizon-half: Hosted multi-tenant seats after this instance is proven · companies · via isolated desks · proof tenant A cannot see tenant B
 Horizon-year: OttoBot is the paid board companies run from · tenants · via CEOs + engines that stay theirs · proof paying tenants with live Horizons
 Horizon-five: The wrapper that gets paid for Hermes Agent + OpenCode · via multi-tenant seats · proof P&L
 

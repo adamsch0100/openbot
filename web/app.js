@@ -5024,6 +5024,7 @@ function cronClaimFresh(row) {
 function cronStartedAt(row) {
   const claimAt = cronClaimAt(row);
   const last = Date.parse(String((row && row.last_run_at) || ""));
+  if (Number.isFinite(last) && (Date.now() - last) >= STUCK_MS) return last;
   if (claimAt && (!Number.isFinite(last) || claimAt > last)) return claimAt;
   return Number.isFinite(last) ? last : 0;
 }
@@ -5654,19 +5655,19 @@ function goalsBoardHtml() {
   const h = project.horizons || {};
   const who = prettyCeoName(projectId, project.name);
   const founding = project.founding || {};
-  const foundingNote = founding.status === "draft"
-    ? `<p class="cron-outcome">Founding RESULT is parked. Accept stamps desk status. Reject keeps Goals empty.</p>`
-    : (founding.status === "needed"
-      ? `<p class="cron-outcome">Goals are not live until this CEO proposes and you Accept.</p>`
-      : "");
+  const foundingStatus = String(founding.status || "");
+  const foundingLead = foundingStatus === "draft"
+    ? "Goals ready to Accept. Accept stamps desk status. Reject keeps Goals empty."
+    : (foundingStatus === "needed"
+      ? "No week goal yet. Ask this CEO to propose, then Accept."
+      : "Each line: money or count · who pays · via how they arrive · proof metric. You, this CEO, or Cos (“tell " + escapeHtml(who) + ": …”) can steer. Desk status is memory.");
   const rows = labels.map(([key, label]) => `<div class="horizon-row">
     <label for="horizon-${escapeHtml(key)}">${escapeHtml(label)}</label>
     <textarea id="horizon-${escapeHtml(key)}" data-horizon="${escapeHtml(key)}" rows="2">${escapeHtml(h[key] && h[key] !== "—" ? h[key] : "")}</textarea>
   </div>`).join("");
   return `<article class="cron-card">
     <div class="cron-head"><b>${escapeHtml(who)}</b><span>Goals</span></div>
-    <p class="cron-outcome">Each line: money or count · who pays · via how they arrive · proof metric. You, this CEO, or Cos (“tell ${escapeHtml(who)}: …”) can steer. Desk status is memory.</p>
-    ${foundingNote}
+    <p class="cron-outcome">${foundingLead}</p>
     <form class="horizon-board" id="horizonForm">${rows}
       <div class="need-actions">
         <button type="submit" class="send">Save Goals</button>

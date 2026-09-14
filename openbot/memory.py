@@ -32,7 +32,15 @@ SEED_DECISIONS = {
         "Do not Restart imported SAA Hermes. Do not kill or redeploy live SAA Hermes · why: live Railway owns the scheduler until pause",
     ),
     "listlogic": (
-        "ListLogic live box is Offline — ask before redeploy · why: Adam gate; do not invent a replica",
+        "ListLogic live box is Offline — ask before redeploy · why: Adam gate; this desk's Hermes/OpenCode runs growth",
+        "Never auto-post · why: drafts park Needs-you",
+    ),
+    "nadia": (
+        "Flask owns SMS. OttoBot never sends SMS or FUB texts · why: Nadia server is the send path; this desk runs the company",
+        "Voice calling stays off until Adam says · why: operator gate",
+    ),
+    "pmill-ai": (
+        "Labor serves paid users · why: operator north star for Pmill",
     ),
 }
 

@@ -97,6 +97,7 @@ class DecideIsolationTests(unittest.TestCase):
                             "name": "SAA Homes",
                             "role": "ceo",
                             "folder": str(self.home / "work"),
+                            "github_repo": "adamsch0100/saahomes",
                             "workers": [],
                             "auto_labor": False,
                         }
@@ -396,6 +397,58 @@ class DecideIsolationTests(unittest.TestCase):
         self.assertEqual(classify_proposal({"lane": "ops", "next": "Pay the Stripe invoice", "why": "wallet"}), "financial")
         self.assertEqual(classify_proposal({"lane": "code", "next": "Change the listing price", "why": "too low"}), "financial")
         self.assertEqual(classify_proposal({"lane": "code", "next": "Publish the CHFA page live", "why": "go live"}), "code")
+
+    def test_sms_next_is_accept_gate(self):
+        from openbot.decide import auto_labor_allowed, write_proposal
+        from openbot.org import patch_project_tools
+
+        write_proposal(
+            "saa-homes",
+            {
+                "lane": "ops",
+                "next": "SMS the lead from this desk",
+                "why": "speed to lead",
+                "auto": "yes",
+                "evidence": "verified",
+                "review": "none",
+            },
+        )
+        patch_project_tools(
+            "saa-homes",
+            {"auto_policy": {"code": "auto", "research": "auto", "ops": "auto", "financial": "notify"}},
+        )
+        ok, reason = auto_labor_allowed("saa-homes")
+        self.assertFalse(ok)
+        self.assertIn("Accept", reason)
+
+    def test_code_lane_needs_git_or_github(self):
+        from openbot.decide import auto_labor_allowed, write_proposal
+        from openbot.org import folder_can_code, patch_project_tools
+
+        data = json.loads(org_mod.PROFILE_PATH.read_text(encoding="utf-8"))
+        data["projects"][0]["github_repo"] = ""
+        org_mod.PROFILE_PATH.write_text(json.dumps(data), encoding="utf-8")
+        self.assertFalse(folder_can_code("saa-homes"))
+        write_proposal(
+            "saa-homes",
+            {
+                "lane": "code",
+                "next": "Restore the CHFA contact form HTTP 200",
+                "why": "form 404",
+                "auto": "yes",
+                "evidence": "verified",
+                "review": "none",
+            },
+        )
+        patch_project_tools(
+            "saa-homes",
+            {"auto_policy": {"code": "auto", "research": "auto", "ops": "notify", "financial": "notify"}},
+        )
+        ok, reason = auto_labor_allowed("saa-homes")
+        self.assertFalse(ok)
+        self.assertIn("no code folder", reason)
+        patch_project_tools("saa-homes", {"github_repo": "adamsch0100/saahomes"})
+        self.assertTrue(folder_can_code("saa-homes"))
 
 
 class EnsureCeoHeartbeatTests(unittest.TestCase):

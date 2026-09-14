@@ -1540,6 +1540,27 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 primary = (founding["choices"] or [{}])[0]
                 founding["primary_action"] = str(primary.get("label") or "Accept Goals")
                 out.insert(0, founding)
+            elif status == "needed":
+                if horizon_week(read_project_index(pid)):
+                    continue
+                founding = {
+                    "id": f"founding-{pid}",
+                    "kind": "founding",
+                    "status": "needed",
+                    "name": who,
+                    "label": f"{who}: no week goal yet. Ask this CEO to propose.",
+                    "subject": f"{who} · founding",
+                    "why": "One Goal line becomes six Horizons. You Accept before they go live.",
+                    "project_id": pid,
+                    "engine": "Hermes Agent",
+                    "preset": "think",
+                    "url": "",
+                    "at": str(draft.get("at") or ""),
+                }
+                founding["choices"] = need_choices(founding)
+                primary = (founding["choices"] or [{}])[0]
+                founding["primary_action"] = str(primary.get("label") or "Ask CEO to propose")
+                out.insert(0, founding)
     except Exception:
         pass
     try:
@@ -1565,17 +1586,24 @@ def pending_approvals(limit: int = 12) -> list[dict]:
                 label = f"{who}: proposed Next" + (f" — {nxt}" if nxt else " with Why")
                 if times >= 2:
                     label = f"{who}: {times}nd time — {nxt}" if times == 2 else f"{who}: {times}x — {nxt}"
+                why = (
+                    f"{times}x still held. " + str(prop.get("why") or "Read Why before labor")
+                    if times >= 2
+                    else str(prop.get("why") or "Read Why before labor")
+                )
+                if kind_n == "code":
+                    from .org import folder_can_code
+
+                    if not folder_can_code(pid):
+                        label = f"{who}: Code needs a GitHub repo or folder"
+                        why = "No git repo on this CEO. Paste GitHub in Settings, or Skip Code."
                 waiting = {
                     "id": f"proposal-{pid}",
                     "kind": "proposal",
                     "name": who,
                     "label": label,
                     "subject": f"{who} · proposal",
-                    "why": (
-                        f"{times}x still held. " + str(prop.get("why") or "Read Why before labor")
-                        if times >= 2
-                        else str(prop.get("why") or "Read Why before labor")
-                    ),
+                    "why": why,
                     "next": str(prop.get("next") or ""),
                     "discuss": str(prop.get("discuss") or ""),
                     "lane": str(prop.get("lane") or ""),

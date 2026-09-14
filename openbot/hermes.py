@@ -1108,6 +1108,45 @@ SAA_SHOP_RESUME_IDS = (
     "1ee83ff221a4",  # competitor-content-watch
 )
 SHOP_RESUME_MARK = ".openbot-shop-resume.json"
+IMPORTED_PAUSE_MARK = ".openbot-hands-off-pause.json"
+
+
+def pause_imported_crons_once(project_id: str, home: str | Path | None = None) -> list[str]:
+    """Pause leftover imported shop crons once so weekday Think is the CEO, not a stampede."""
+    pid = str(project_id or "").strip()
+    if not home or pid in {"saa-homes", "openbot", "support"}:
+        return []
+    root = Path(home)
+    mark = root / IMPORTED_PAUSE_MARK
+    if mark.is_file():
+        return []
+    try:
+        rows = read_home_crons(home, results=False)
+    except Exception:
+        rows = []
+    paused: list[str] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "")
+        if "routine-heartbeat" in name.lower():
+            continue
+        jid = str(row.get("id") or "").strip()
+        if not jid:
+            continue
+        if row.get("enabled") is False or re.search(r"paused", str(row.get("state") or ""), re.I):
+            continue
+        out = cron_pause(jid, home=home)
+        if out.get("ok"):
+            paused.append(jid)
+    try:
+        mark.write_text(
+            json.dumps({"paused": paused, "project_id": pid}) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+    return paused
 SAA_BOARD_PAUSE = frozenset({
     "77ba37670bae",  # grok-build-supervisor — script is not on this desk
     "3575dd7f3753",  # grok-heartbeat — board internal, script missing
@@ -2296,6 +2335,9 @@ def format_elapsed(seconds: float | int | None) -> str:
 def _cron_started_at(row: dict) -> datetime | None:
     claim_at = _claim_at(row)
     last = _parse_cron_when(str(row.get("last_run_at") or ""))
+    now = datetime.now(timezone.utc)
+    if last is not None and (now - last).total_seconds() >= CRON_STUCK_SECONDS:
+        return last
     if claim_at and (last is None or claim_at > last):
         return claim_at
     return last

@@ -271,6 +271,7 @@ def seed_desk(home: Path, policy: dict | None = None) -> str:
                         "name": "Month desk",
                         "role": "ceo",
                         "folder": str(home / "work"),
+                        "github_repo": "adamsch0100/saahomes",
                         "workers": [],
                     }
                 ]

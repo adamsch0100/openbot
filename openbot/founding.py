@@ -66,10 +66,10 @@ KNOWN_HORIZONS = {
         "five": "Schwartz and Associates is the name NoCO already trusts to buy or sell · via compounding local search · proof branded queries + inbound",
     },
     "openbot": {
-        "week": "1 paying tenant on a live CEO desk · operators who will pay · via hosted OttoBot wrapping Hermes + OpenCode · proof tenant login + isolated desk status",
-        "month": "Paid board seats (engines billed to the tenant) · companies who want CEOs without running glue · via signup · proof paid seats vs churn",
-        "quarter": "Multi-tenant isolation — desk status, Hermes home, OpenCode folder per company · tenants · via product · proof tenant A cannot see tenant B",
-        "half": "Seat MRR covers OttoBot's own Hermes + OpenCode · tenants · via subscriptions · proof revenue vs token spend",
+        "week": "Every seated CEO Thinks toward Horizons with honest Running/Results · Adam · via Hermes weekday Think + OpenCode · proof no 5-day ghost jobs, Next is a Horizon move",
+        "month": "Operator can leave CEOs unattended except Accept gates · Adam · via Think → labor → desk status · proof SAA+ListLogic+Nadia+Pmill Results serve Horizons",
+        "quarter": "Board is delightful enough to clone: folder → diff → desk status · operators · via Grok-simple chat · proof a stranger can run one CEO",
+        "half": "Hosted multi-tenant seats after this instance is proven · companies · via isolated desks · proof tenant A cannot see tenant B",
         "year": "OttoBot is the paid board companies run from · tenants · via CEOs + engines that stay theirs · proof paying tenants with live Horizons",
         "five": "The wrapper that gets paid for Hermes Agent + OpenCode · via multi-tenant seats · proof P&L",
     },
@@ -82,7 +82,7 @@ KNOWN_HORIZONS = {
         "five": "Transparent help · people who clone · via Working-on + Accept · proof Support never ships live",
     },
     "listlogic": {
-        "week": "Live ListLogic Hermes replica Online (today: deploys removed — Adam gate) · listing agents · via product not city SEO · proof Railway replica before labor",
+        "week": "A trial or checkout started from this OttoBot desk · listing agents · via ListLogic.homes + FUB-group drafts (never auto-post) · proof trial/checkout event on this desk",
         "month": "Paid activations (trial → $39/mo) covering Hermes/OpenCode · listing agents · via FUB-group help then one plug · proof activations vs spend",
         "quarter": "A conversion path that covers the seat · agents who price listings · via ListLogic.homes · proof paid activations",
         "half": "ListLogic is the pricing story agents use with sellers · via product + drafts (never auto-post) · proof parked Needs-you not browser posts",
@@ -90,14 +90,23 @@ KNOWN_HORIZONS = {
         "five": "The listing-price company that pays for itself · via one CEO not a C-suite · proof P&L on desk status",
     },
     "nadia": {
-        "week": "Conversion Hermes stays Online; SMS never claims Adam · ISA tenants · via follow-up that books · proof no impersonation",
+        "week": "OttoBot CEO runs Nadia P&L; Flask still sends SMS · brokerages · via seats + SAA dogfood · proof Think never sends SMS",
         "month": "Paid seats ($79/1, $149/5, $279/6+) covering spend · brokerages · via ISA outcomes, SAA as dogfood · proof seats vs token spend",
         "quarter": "ISA that books without sounding like a landing page · FUB users · via Adam-voice drafts in groups, Nadia-voice to leads · proof parked Needs-you",
         "half": "Nadia is the ISA layer brokerages pay for · via seats not ads · proof paid seats",
         "year": "Seats cover Hermes/OpenCode; voice calling still off until Adam says · via product · proof spend vs seats",
         "five": "The ISA company that pays for itself · via one CEO · proof P&L on desk status",
     },
+    "pmill-ai": {
+        "week": "A paid-user path exists on pmill.ai · bettors or cappers who will pay · via the live free product that converts · proof checkout or paid-signup URL",
+        "month": "First paying users covering Hermes/OpenCode · sports bettors/cappers · via product not ads · proof paid vs token spend",
+        "quarter": "Paid users who come back · via stats/picks/community worth paying for · proof repeat paid",
+        "half": "Pmill pays for this seat · via subscriptions or creator/contest revenue · proof revenue vs spend",
+        "year": "Pmill is the free-core sports intel people pay to go deeper · via product · proof P&L",
+        "five": "The sports intel company that pays for itself · via one CEO · proof P&L on desk status",
+    },
 }
+KNOWN_HORIZONS["pmill"] = KNOWN_HORIZONS["pmill-ai"]
 
 
 def is_founding_message(message: str) -> bool:
@@ -342,6 +351,14 @@ def accept_founding(project_id: str) -> dict:
     if nxt:
         patch_file_index(path, "Next", nxt)
     mark_founding_accepted(pid)
+    try:
+        from .org import patch_project_tools, project_tools
+
+        offer = str((project_tools(pid) or {}).get("heartbeat_offer") or "")
+        if offer != "on":
+            patch_project_tools(pid, {"heartbeat_offer": "ask"})
+    except Exception:
+        pass
     written["founding"] = load_founding(pid)
     written["index"] = read_project_index(pid)
     return written
@@ -395,6 +412,19 @@ def apply_known_horizons(project_id: str, *, notify: bool = False) -> dict | Non
     result = write_project_horizons(pid, blob, notify=notify)
     mark_founding_accepted(pid)
     return result
+
+
+def seed_horizons_if_empty(project_id: str) -> dict | None:
+    """Refill a known desk that lost Horizons. Never invent Goals for a new CEO slug."""
+    from .org import read_project_index
+
+    pid = _slug(project_id)
+    if pid not in KNOWN_HORIZONS:
+        return None
+    current = parse_horizons(read_project_index(pid))
+    if any(horizon_filled(current.get(key)) for key, _label in HORIZON_KEYS):
+        return None
+    return apply_known_horizons(pid)
 
 
 def seed_seated_horizons(*, notify: bool = False) -> list[str]:

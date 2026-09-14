@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,13 +61,32 @@ class FoundingDetectTests(unittest.TestCase):
         self.assertTrue(is_founding_message(prompt))
         self.assertFalse(is_steer_message(prompt))
 
-    def test_openbot_horizons_are_paid_tenants(self):
+    def test_openbot_horizons_prove_then_tenants(self):
         blob = KNOWN_HORIZONS["openbot"]
         week = blob["week"].casefold()
-        self.assertIn("tenant", week)
-        self.assertIn("pay", week)
+        self.assertIn("ceo", week)
+        self.assertIn("think", week)
         self.assertNotIn("$7", blob["half"])
-        self.assertIn("multi-tenant", blob["five"].casefold() + blob["quarter"].casefold())
+        self.assertIn("multi-tenant", blob["five"].casefold() + blob["year"].casefold())
+        self.assertIn("paid", KNOWN_HORIZONS["pmill-ai"]["week"].casefold())
+        self.assertIn("flask", KNOWN_HORIZONS["nadia"]["week"].casefold())
+        self.assertNotIn("replica", KNOWN_HORIZONS["listlogic"]["week"].casefold())
+
+    def test_seed_horizons_if_empty_skips_filled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp)
+            project = dest / "projects" / "pmill-ai"
+            project.mkdir(parents=True)
+            (project / "STATUS.md").write_text(
+                "# Pmill\nNow: seated\nHorizon-week: keep my custom week · proof x\n",
+                encoding="utf-8",
+            )
+            with patch("openbot.org.ORG", dest):
+                from openbot.founding import seed_horizons_if_empty
+                from openbot.org import parse_horizons, read_project_index
+
+                self.assertIsNone(seed_horizons_if_empty("pmill-ai"))
+                self.assertIn("custom week", parse_horizons(read_project_index("pmill-ai"))["week"])
 
     def test_extract_horizon_aliases(self):
         messy = (
@@ -173,6 +193,29 @@ class FoundingParkTests(unittest.TestCase):
                 self.assertIn("CHFA", parse_horizons(index.read_text(encoding="utf-8"))["week"])
                 rejected = reject_founding("acme")
                 self.assertEqual(rejected.get("status"), "needed")
+
+    def test_accept_founding_asks_weekday_think(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp)
+            project = dest / "projects" / "acme"
+            project.mkdir(parents=True)
+            (project / "STATUS.md").write_text("# Acme\n\nNow: Ready.\nGoals: —\n\nHorizon-week: —\n", encoding="utf-8")
+            profile = dest / "profile.json"
+            profile.write_text(
+                json.dumps({"projects": [{"id": "acme", "name": "Acme", "folder": str(dest)}]}),
+                encoding="utf-8",
+            )
+            with patch("openbot.org.ORG", dest), patch("openbot.org.PROFILE_PATH", profile):
+                ingest_ceo_result("acme", f"{FOUNDING_MARK}\nfound this company", FOUNDING_RESULT)
+                accept_founding("acme")
+                from openbot.org import project_tools
+
+                self.assertEqual(project_tools("acme").get("heartbeat_offer"), "ask")
+
+    def test_seed_horizons_skips_unknown_slug(self):
+        from openbot.founding import seed_horizons_if_empty
+
+        self.assertIsNone(seed_horizons_if_empty("scratch"))
 
     def test_steer_merges_into_index(self):
         with tempfile.TemporaryDirectory() as tmp:

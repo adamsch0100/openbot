@@ -1140,16 +1140,24 @@ def supervise_gateways_enabled() -> bool:
 
 
 def supervised_project_ids() -> list[str]:
-    """Hosted board keeps OttoBot's own gateway up after deploy. SAA only when this desk owns cron."""
+    """Hosted board keeps Hermes gateways up for hands-off CEOs after deploy."""
     raw = os.environ.get("OPENBOT_SUPERVISE_HOMES")
     if raw is not None:
         return [part.strip() for part in raw.split(",") if part.strip()]
     ids: list[str] = []
     try:
-        from .org import saa_desk_owns
+        from .org import HANDS_OFF_CEO_IDS, list_projects, saa_desk_owns
 
-        if saa_desk_owns():
+        live = {
+            str(row.get("id") or "")
+            for row in (list_projects() or [])
+            if isinstance(row, dict)
+        }
+        if saa_desk_owns() and "saa-homes" in live:
             ids.append("saa-homes")
+        for pid in ("openbot", "listlogic", "nadia", "pmill-ai", "pmill"):
+            if pid in HANDS_OFF_CEO_IDS and pid in live and pid not in ids:
+                ids.append(pid)
     except Exception:
         pass
     if not ids and os.environ.get("OPENBOT_DATA_DIR", "").strip():
@@ -1177,7 +1185,70 @@ def _hold_saa_board_jobs(project_id: str, home: str) -> None:
         from .org import saa_desk_owns
 
         if saa_desk_owns():
-            ensure_ceo_heartbeat("saa-homes")
+            try:
+                from .founding import seed_horizons_if_empty
+
+                seed_horizons_if_empty("saa-homes")
+            except Exception:
+                pass
+            if _heartbeat_already_on("saa-homes"):
+                ensure_ceo_heartbeat("saa-homes")
+    except Exception:
+        pass
+
+
+def _heartbeat_already_on(project_id: str) -> bool:
+    """Keep weekday Think only when the operator already Attached it on the board."""
+    pid = str(project_id or "")
+    if not pid:
+        return False
+    try:
+        from .heartbeat import heartbeat_enabled
+
+        if heartbeat_enabled(pid):
+            return True
+    except Exception:
+        pass
+    try:
+        from .org import project_tools
+
+        return str((project_tools(pid) or {}).get("heartbeat_offer") or "") == "on"
+    except Exception:
+        return False
+
+
+def _ensure_hands_off(project_id: str, home: str) -> None:
+    """Keep seated product CEOs that already Attached Think. Never auto-attach a new Add CEO."""
+    pid = str(project_id or "")
+    if not pid or not home:
+        return
+    try:
+        from .org import HANDS_OFF_CEO_IDS
+
+        if pid not in HANDS_OFF_CEO_IDS:
+            return
+    except Exception:
+        return
+    if pid == "saa-homes":
+        return
+    try:
+        from .founding import seed_horizons_if_empty
+
+        seed_horizons_if_empty(pid)
+    except Exception:
+        pass
+    try:
+        from .hermes import pause_imported_crons_once
+
+        pause_imported_crons_once(pid, home)
+    except Exception:
+        pass
+    if not _heartbeat_already_on(pid):
+        return
+    try:
+        from .heartbeat import ensure_ceo_heartbeat
+
+        ensure_ceo_heartbeat(pid)
     except Exception:
         pass
 
@@ -1247,6 +1318,7 @@ def ensure_supervised_gateway(project_id: str) -> dict:
     if status.get("running"):
         _hold_saa_board_jobs(project_id, home)
         _heal_saa_desk_fails(project_id, home)
+        _ensure_hands_off(project_id, home)
         return {
             "ok": True,
             "running": True,
@@ -1272,6 +1344,7 @@ def ensure_supervised_gateway(project_id: str) -> dict:
     result["home"] = home
     _hold_saa_board_jobs(project_id, home)
     _heal_saa_desk_fails(project_id, home)
+    _ensure_hands_off(project_id, home)
     return result
 
 

@@ -33,7 +33,7 @@ FINANCIAL = re.compile(
 )
 # Not money. Never auto even if every toggle is on.
 ACCEPT_ONLY = re.compile(
-    r"\b(publish|post|tweet|email|delete|sign\b|accept terms|"
+    r"\b(publish|post|tweet|email|sms|twilio|text message|delete|sign\b|accept terms|"
     r"push(?:ed|ing)?(?:\s+to)?\s+(?:origin|remote|prod)|production|deploy)\b",
     re.I,
 )
@@ -614,6 +614,11 @@ def auto_labor_allowed(project_id: str | None, proposal: dict | None = None) -> 
     if not goal:
         goal = horizon_week(index)
     kind = classify_proposal(prop)
+    if kind == "code":
+        from .org import folder_can_code
+
+        if not folder_can_code(project_id):
+            return False, "no code folder"
     if kind in {"code", "research"} and off_horizon(nxt, goal):
         return False, "off_horizon"
     if proposal_conflict(prop):

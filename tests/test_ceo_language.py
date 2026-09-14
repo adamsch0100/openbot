@@ -95,6 +95,28 @@ class StuckRunTests(unittest.TestCase):
         self.assertEqual(pack["running"][0]["name"], "geo-citation-audit")
         self.assertIn("Now running", pack["live_story"])
 
+    def test_five_day_live_claim_is_stuck_not_running(self):
+        from openbot.hermes import cron_digest
+
+        now = datetime.now(timezone.utc)
+        pack = cron_digest(
+            [
+                {
+                    "id": "linkbuild1",
+                    "name": "link-building-free-methods",
+                    "enabled": True,
+                    "state": "running",
+                    "last_status": "running",
+                    "last_run_at": (now - timedelta(days=5)).isoformat(),
+                    "live": True,
+                    "fire_claim": {"at": now.isoformat()},
+                }
+            ]
+        )
+        self.assertEqual(pack["running"], [])
+        self.assertEqual(pack["stuck"][0]["name"], "link-building-free-methods")
+        self.assertIn("looks stuck", pack["live_story"])
+
 
 class StatusEnglishTests(unittest.TestCase):
     def test_status_filters_doctrine_next(self):
@@ -158,6 +180,8 @@ class BoardUiTests(unittest.TestCase):
         self.assertIn("function cronIsStuck", js)
         self.assertIn("looks stuck", js)
         self.assertIn("stop_stuck", js)
+        self.assertIn("Goals ready to Accept", js)
+        self.assertIn("No week goal yet. Ask this CEO to propose", js)
         self.assertIn("This week:", js)
         self.assertIn("This month:", js)
         self.assertIn("Goals tab is the 1 week", js)
@@ -166,7 +190,7 @@ class BoardUiTests(unittest.TestCase):
         self.assertIn("The model key was rejected. Open Settings.", js)
         self.assertIn("PROCESS LAW", js)
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=186", html)
+        self.assertIn("app.js?v=188", html)
 
 
 if __name__ == "__main__":
