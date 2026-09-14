@@ -76,14 +76,14 @@ class DecideIsolationTests(unittest.TestCase):
         routines_mod.ORG = self.home / "org"
         org_mod.ORG.mkdir(parents=True)
         store_mod.BRAINS = self.home / "brains"
-        store_mod.INDEX = store_mod.BRAINS / "INDEX.md"
+        store_mod.INDEX = store_mod.BRAINS / "STATUS.md"
         store_mod.JOBS = self.home / "jobs"
         store_mod.BRAINS.mkdir()
         store_mod.JOBS.mkdir()
         store_mod.INDEX.write_text("Now: test\nLast: —\nNext: —\nBlocker: —\n", encoding="utf-8")
         dest = org_mod.ORG / "projects" / "saa-homes"
         dest.mkdir(parents=True)
-        (dest / "INDEX.md").write_text(
+        (dest / "STATUS.md").write_text(
             "# SAA Homes\n\nNow: desk\nLast: —\nNext: —\nBlocker: —\n"
             "Horizon-week: 1 live CHFA page · NoCO · via organic · proof form 200\n",
             encoding="utf-8",
@@ -250,7 +250,7 @@ class DecideIsolationTests(unittest.TestCase):
 
     def test_pending_shows_heartbeat_when_goals_live(self):
         with patch("openbot.router.list_projects", return_value=[
-            {"id": "saa-homes", "name": "SAA Homes", "index": (org_mod.ORG / "projects" / "saa-homes" / "INDEX.md").read_text(encoding="utf-8")}
+            {"id": "saa-homes", "name": "SAA Homes", "index": (org_mod.ORG / "projects" / "saa-homes" / "STATUS.md").read_text(encoding="utf-8")}
         ]), patch("openbot.heartbeat.heartbeat_enabled", return_value=False), patch(
             "openbot.org.project_tools", return_value={"heartbeat_offer": ""}
         ):
@@ -261,7 +261,7 @@ class DecideIsolationTests(unittest.TestCase):
     def test_pending_shows_open_proposal(self):
         write_proposal("saa-homes", parse_proposal_from_text(PROPOSAL_TEXT))
         with patch("openbot.router.list_projects", return_value=[
-            {"id": "saa-homes", "name": "SAA Homes", "index": (org_mod.ORG / "projects" / "saa-homes" / "INDEX.md").read_text(encoding="utf-8")}
+            {"id": "saa-homes", "name": "SAA Homes", "index": (org_mod.ORG / "projects" / "saa-homes" / "STATUS.md").read_text(encoding="utf-8")}
         ]), patch("openbot.heartbeat.heartbeat_enabled", return_value=True), patch(
             "openbot.org.project_tools", return_value={"heartbeat_offer": "on"}
         ):

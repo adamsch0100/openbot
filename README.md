@@ -53,9 +53,9 @@ Law files:
 - `AGENTS.md` — coding-agent law
 - `ARCHITECTURE.md` — cheap context + routing
 - `BRAND.md` — OttoBot credit lockup
-- `.cursor/rules/ceo-index-build.mdc` — CEO INDEX build law
+- `.cursor/rules/ceo-index-build.mdc` — CEO desk status build law
 - `BROWSER.md` — snapshot browser, not a warm desktop
-- `brains/INDEX.md` — live source of truth
+- `brains/STATUS.md` — live source of truth
 
 ## Layout
 
@@ -65,7 +65,7 @@ AGENTS.md           agent law
 bin/openbot         start the board
 openbot/            thin Python glue
 web/                board UI (Otto mark)
-brains/             INDEX + per-bot brains
+brains/             desk status + per-bot brains
 inbox/              four-line tickets
 jobs/               receipts (not prompts)
 ```

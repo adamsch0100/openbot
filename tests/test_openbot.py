@@ -105,7 +105,7 @@ Next: More"""
 
     def test_patch_index_line_updates_field(self):
         with tempfile.TemporaryDirectory() as tmp:
-            index_path = Path(tmp) / "INDEX.md"
+            index_path = Path(tmp) / "STATUS.md"
             index_path.write_text("Now: Old value\nLast: Done\n", encoding="utf-8")
             with unittest.mock.patch("openbot.store.INDEX", index_path):
                 patch_index_line("Now", "New value")
@@ -1702,7 +1702,7 @@ class ReattachCeoTests(unittest.TestCase):
                     (org_mod.HERMES_HOMES / pid).mkdir(parents=True)
                     dest = org_mod.ORG / "projects" / pid
                     dest.mkdir(parents=True)
-                    (dest / "INDEX.md").write_text(body, encoding="utf-8")
+                    (dest / "STATUS.md").write_text(body, encoding="utf-8")
                 saved = {"projects": [{"id": "openbot", "name": "openbot", "primary": True}]}
                 out = org_mod.reattach_imported_ceos(saved)
                 ids = {str(row.get("id")) for row in out.get("projects") or []}
@@ -2188,7 +2188,7 @@ class HermesGlueTests(unittest.TestCase):
         self.assertEqual(split_model("local-model"), (None, "local-model"))
         self.assertEqual(split_model("unknown-lab/gpt-5"), (None, None))
         packet = job_packet("research", "Now: ok", "Last: none", "Look at https://example.com", "URL: https://example.com")
-        self.assertIn("INDEX:", packet)
+        self.assertIn("DESK STATUS:", packet)
         self.assertIn("engine on this CEO", packet)
         self.assertIn("Look at https://example.com", packet)
         self.assertIn("HANDOFF", packet)
@@ -2201,6 +2201,7 @@ class HermesGlueTests(unittest.TestCase):
         self.assertIn("report to Cos", talk)
         self.assertIn("STAFF", talk)
         self.assertIn("Now: ok", talk)
+        self.assertNotIn("DESK STATUS:", talk)
         self.assertNotIn("INDEX:", talk)
         self.assertNotIn("Write a short RESULT", talk)
         from openbot.hermes import clean_hermes_text
@@ -2668,7 +2669,7 @@ class HandoffBusTests(unittest.TestCase):
                     result="Diff created, waiting for Accept",
                     project_id="test-project",
                     status="partial",
-                    sources="org/projects/test-project/INDEX.md",
+                    sources="org/projects/test-project/STATUS.md",
                     next_owner="operator (Accept / Reject)",
                     from_seat="think",
                     to_seat="builder",

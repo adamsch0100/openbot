@@ -50,7 +50,7 @@ class FoundingDetectTests(unittest.TestCase):
     def test_founding_prompt_marks_task(self):
         prompt = founding_prompt(name="Acme", idea="paid tenants wrapping Hermes + OpenCode", site="https://acme.example")
         self.assertIn(FOUNDING_MARK, prompt)
-        self.assertIn("Do not write INDEX.md", prompt)
+        self.assertIn("Do not write STATUS.md", prompt)
         self.assertIn(HORIZON_SHAPE, prompt)
         self.assertIn("paid tenants wrapping Hermes + OpenCode", prompt)
         self.assertIn("https://acme.example", prompt)
@@ -87,7 +87,7 @@ class FoundingDetectTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "acme"
             project.mkdir(parents=True)
-            (project / "INDEX.md").write_text("# Acme\n\nGoals: —\nHorizon-week: —\n", encoding="utf-8")
+            (project / "STATUS.md").write_text("# Acme\n\nGoals: —\nHorizon-week: —\n", encoding="utf-8")
             with patch("openbot.org.ORG", dest), patch("openbot.founding.list_projects", return_value=[{"id": "acme", "name": "Acme"}]):
                 mark_founding_needed("acme", idea="paid tenants wrapping Hermes", site="https://acme.example")
                 prompt = founding_prompt_for("acme")
@@ -102,7 +102,7 @@ class FoundingDetectTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "saa-homes"
             project.mkdir(parents=True)
-            (project / "INDEX.md").write_text(
+            (project / "STATUS.md").write_text(
                 "# SAA Homes\n\nGoals: —\n"
                 "Horizon-week: 1 live CHFA page · NoCO · via organic · proof 200\n",
                 encoding="utf-8",
@@ -162,7 +162,7 @@ class FoundingParkTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "acme"
             project.mkdir(parents=True)
-            index = project / "INDEX.md"
+            index = project / "STATUS.md"
             index.write_text("# Acme\n\nNow: Ready.\nGoals: —\n\nHorizon-week: —\n", encoding="utf-8")
             with patch("openbot.org.ORG", dest):
                 parked = ingest_ceo_result("acme", f"{FOUNDING_MARK}\nfound this company", FOUNDING_RESULT)
@@ -179,7 +179,7 @@ class FoundingParkTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "saa-homes"
             project.mkdir(parents=True)
-            index = project / "INDEX.md"
+            index = project / "STATUS.md"
             index.write_text(
                 "# SAA Homes\n\nNow: Ready.\nGoals: —\n\n"
                 "Horizon-week: keep me\nHorizon-month: keep month\n"
@@ -203,7 +203,7 @@ class FoundingParkTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "saa-homes"
             project.mkdir(parents=True)
-            index = project / "INDEX.md"
+            index = project / "STATUS.md"
             index.write_text("# SAA Homes\n\nNow: keep me\nNext: original next\n", encoding="utf-8")
             with patch("openbot.founding.list_projects", return_value=[{"id": "saa-homes"}]):
                 with patch("openbot.founding._project_dir", lambda pid: dest / "projects" / pid):

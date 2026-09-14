@@ -131,7 +131,7 @@ PACKET_LINE = re.compile(
     r"You own the outcome|Chat is not memory|"
     r"Report a short RESULT|Name the engine that ran|"
     r"Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|"
-    r"Write a short RESULT|STAFF \(files|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
+    r"Write a short RESULT|STAFF \(files|DESK STATUS:\s*$|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
     r"OPEN HANDOFFS:|VAULT LOGINS|OPERATOR:|DECISIONS:|HORIZONS |The operator is talking|"
     r"The operator is in (OpenBot|OttoBot) Chat|The operator can also open|"
     r"Specialist lanes execute|Code: OpenCode in |Hermes: |"
@@ -336,7 +336,7 @@ def _index_block(index: str) -> str:
             return packed
     except Exception:
         pass
-    return (index or "(empty INDEX)")[:8000] or "(empty INDEX)"
+    return (index or "(empty desk status)")[:8000] or "(empty desk status)"
 
 
 def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") -> str:
@@ -352,7 +352,7 @@ def job_packet(preset: str, index: str, brain: str, task: str, extra: str = "") 
         "",
         process_law_block(),
         "",
-        "INDEX:",
+        "DESK STATUS:",
         _index_block(index),
         "",
         "BRAIN:",

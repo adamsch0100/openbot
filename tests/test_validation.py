@@ -100,7 +100,7 @@ deleted file mode 100644
                 tmp_path = Path(tmp)
                 store_mod.JOBS = tmp_path
                 store_mod.BRAINS = tmp_path
-                (tmp_path / "INDEX.md").write_text("Now: test\n", encoding="utf-8")
+                (tmp_path / "STATUS.md").write_text("Now: test\n", encoding="utf-8")
                 
                 root = tmp_path / "work"
                 root.mkdir()
@@ -159,7 +159,7 @@ deleted file mode 100644
                 tmp_path = Path(tmp)
                 store_mod.JOBS = tmp_path
                 store_mod.BRAINS = tmp_path
-                (tmp_path / "INDEX.md").write_text("Now: test\n", encoding="utf-8")
+                (tmp_path / "STATUS.md").write_text("Now: test\n", encoding="utf-8")
                 
                 root = tmp_path / "work"
                 root.mkdir()
@@ -218,7 +218,7 @@ deleted file mode 100644
                 tmp_path = Path(tmp)
                 store_mod.JOBS = tmp_path
                 store_mod.BRAINS = tmp_path
-                (tmp_path / "INDEX.md").write_text("Now: test\n", encoding="utf-8")
+                (tmp_path / "STATUS.md").write_text("Now: test\n", encoding="utf-8")
                 
                 root = tmp_path / "work"
                 root.mkdir()

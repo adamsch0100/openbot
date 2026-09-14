@@ -1,9 +1,9 @@
 ---
-description: CEO INDEX build law — Grok-simple chat, INDEX memory, engine routing, Accept gates.
+description: CEO desk status build law — Grok-simple chat, desk status memory, engine routing, Accept gates.
 alwaysApply: true
 ---
 
-# CEO INDEX build law
+# CEO desk status build law
 
 OttoBot feels like a simple always-on chat. Underneath, CEOs and jobs are files.
 
@@ -11,12 +11,12 @@ OttoBot feels like a simple always-on chat. Underneath, CEOs and jobs are files.
 
 - Grok-simple chat: one composer, named bots, cards in the stream.
 - Chat is UI only. Never send the full thread as the model prompt.
-- Status / “what’s going on” reads INDEX (instance + aimed CEO). Tools off for Cos status.
-- User-facing desk status: **What’s going on** (Working on / Just did / Up next / Stuck). Files stay `INDEX.md` with Now / Last / Next / Blocker.
+- Status / “what’s going on” reads desk status (instance + aimed CEO). Tools off for Cos status.
+- User-facing desk status: **What’s going on** (Working on / Just did / Up next / Stuck). Files stay `STATUS.md` with Now / Last / Next / Blocker.
 
-## CEO from INDEX
+## CEO from desk status
 
-- Each CEO owns `org/projects/<ceo>/INDEX.md` (Now / Last / Next / Blocker + law).
+- Each CEO owns `org/projects/<ceo>/STATUS.md` (Now / Last / Next / Blocker + law).
 - Aiming a CEO loads that CEO’s INDEX / BRAIN / inbox — not another CEO’s.
 - Host product CEO may still use id `openbot` on disk; user-facing name is OttoBot.
 - A CEO is an actual CEO: runs the company, owns P&L, pays for the seat first, spins Code/Think/Research/Ops or named workers. No default CFO/COO bots. Cos is board chair, not a second CEO.
@@ -24,7 +24,7 @@ OttoBot feels like a simple always-on chat. Underneath, CEOs and jobs are files.
 
 ## Job packets
 
-- Doing work builds a **job packet**: agent law + INDEX + BRAIN + ticket + this message + short RESULT hints.
+- Doing work builds a **job packet**: agent law + desk status + BRAIN + ticket + this message + short RESULT hints.
 - Thread JSON stays on disk for the human. Models get packets, not archives.
 
 ## Engines
@@ -52,4 +52,4 @@ OttoBot feels like a simple always-on chat. Underneath, CEOs and jobs are files.
 
 ## Done
 
-End jobs by updating the relevant INDEX (or BRAIN): Now / Last / Next / Blocker. Name the engine on the job card.
+End jobs by updating the relevant desk status (or BRAIN): Now / Last / Next / Blocker. Name the engine on the job card.

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .store import ROOT, list_jobs, now_iso
+from .store import ROOT, list_jobs, now_iso, migrate_desk_status
 
 ORG = ROOT / "org"
 ACTION_LOG = ORG / "ACTION_LOG.md"
@@ -62,21 +62,21 @@ BUS_LANES = (
 CONTRACTS = {
     "cos": {
         "job": "Triage, delegate, watch handoffs, collect, escalate. Do not do the work.",
-        "sources": "Staff INDEX four-liners, each CEO INDEX, inbox tails. Never the vault.",
+        "sources": "Staff desk status four-liners, each CEO desk status, inbox tails. Never the vault.",
         "judgment": "Done means the right specialist owns it and a file exists. Escalate only for judgment, permission, or missing facts.",
         "output": "A route (Code / Think / Research / Ops) or a status from files. No diffs. No fetches.",
         "forbidden": "No MCP, bash, browser, publish, pay, or inventing a third engine. No app-bots (Gmail/Chrome/Slack).",
     },
     "think": {
         "job": "Hard reasoning and plans. Tools off.",
-        "sources": "This CEO INDEX, BRAIN, tickets, prior HANDOFF files.",
+        "sources": "This CEO desk status, BRAIN, tickets, prior HANDOFF files.",
         "judgment": "A plan is complete when Code could execute it without guessing.",
         "output": "HANDOFF with TASK, STATUS, OUTPUT, UNCERTAINTIES, NEXT OWNER.",
         "forbidden": "Do not edit the repo, browse, cron, publish, or pay.",
     },
     "builder": {
         "job": "Change code in this CEO's folder via OpenCode.",
-        "sources": "The Code folder, git, INDEX, the ticket, HANDOFF from Think/Research.",
+        "sources": "The Code folder, git, desk status, the ticket, HANDOFF from Think/Research.",
         "judgment": "Done means a local diff the operator can Accept or Reject.",
         "output": "Local edits plus a HANDOFF. Diff card is the action gate.",
         "forbidden": "No git push, publish, pay, delete remotes, or production changes. Wait for Accept.",
@@ -90,28 +90,28 @@ CONTRACTS = {
     },
     "ops": {
         "job": "Schedule work in Hermes cron. Tickets live in inbox/ops.md.",
-        "sources": "The operator request, INDEX, existing crons.",
+        "sources": "The operator request, desk status, existing crons.",
         "judgment": "A routine is good when it is silent on success and idempotent on retry. Routines load a Skill (HOW); cron is only WHEN.",
         "output": "A cron job id and schedule. Notify only on exception or approval.",
         "forbidden": "No browser, no send/publish/pay/delete/sign. Never bypass source or evidence gates.",
     },
     "support": {
         "job": "Own tickets and suggestions. Triage, schedule, tell the status story, draft replies.",
-        "sources": "Support INDEX, ticket files, OpenBot docs, bus/handoffs.",
+        "sources": "Support desk status, ticket files, OpenBot docs, bus/handoffs.",
         "judgment": "FAQ drafts stay in bus/drafts. Bugs/features hand off to Cos → openbot Builder.",
         "output": "Ticket phase updates, HANDOFF files, draft replies. Diffs wait for Accept/Reject.",
         "forbidden": "No Accept, no push, no live X post, no CRM/FUB, no unsupervised send.",
     },
     "ceo": {
         "job": "Run this company. Own P&L. Pay for this seat first, then profit. Spin Code/Think/Research/Ops or a named worker when a bottleneck repeats. No CFO/COO bots — you are the C-suite.",
-        "sources": "Operator profile, this INDEX (doctrine + Horizons), DECISIONS, the Code folder, inbox, bus/handoffs, live site/metrics.",
-        "judgment": "Done means INDEX Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.",
+        "sources": "Operator profile, this desk status (doctrine + Horizons), DECISIONS, the Code folder, inbox, bus/handoffs, live site/metrics.",
+        "judgment": "Done means desk status Next is a next-best-action tied to revenue. Ask Cos if stuck. Ping Adam only for keys, money, login, publish, pay, delete, sign.",
         "output": "Short RESULT plus a bus file. Name the engine. Diffs and public posts wait for Accept/Reject.",
         "forbidden": "Do not publish, pay, delete, or push without the operator. Do not auto-post to Facebook/X. Chat is not memory. No extra C-suite bots.",
     },
     "worker": {
         "job": "Help this CEO using the lane the board routed.",
-        "sources": "CEO INDEX, this BRAIN, the ticket, bus/handoffs.",
+        "sources": "CEO desk status, this BRAIN, the ticket, bus/handoffs.",
         "judgment": "Hand off through a file, not a giant chat blob.",
         "output": "HANDOFF.md fields filled. Next owner named.",
         "forbidden": "Do not skip gates. Do not use the CEO's personal master accounts.",
@@ -121,7 +121,7 @@ CONTRACTS = {
 MEMORY_POLICY = (
     "MEMORY POLICY: remember preferences, style, format, relationships, and durable rules. "
     "OPERATOR.md is who the human is. DECISIONS.md is settled calls — do not reopen without flagging. "
-    "Horizons on this CEO INDEX are the Goals; labor serves them. "
+    "Horizons on this CEO desk status are the Goals; labor serves them. "
     "Do not treat memory as truth for prices, balances, dates, inventory, campaign stats, "
     "customer/employee state, contracts, or live docs. Re-open the source. "
     "If the source is down, say SOURCE UNAVAILABLE. Never silently substitute."
@@ -195,7 +195,7 @@ def gates_block(preset: str) -> str:
         action = "Route. Do not act externally."
     return (
         "THREE GATES — a job may not skip these.\n"
-        "GATE 1 SOURCE: facts from an approved source (INDEX, repo, pasted primary URL) or STOP.\n"
+        "GATE 1 SOURCE: facts from an approved source (desk status, repo, pasted primary URL) or STOP.\n"
         "GATE 2 EVIDENCE: mark important claims VERIFIED / INFERRED / UNKNOWN. Stop if evidence is thin.\n"
         f"GATE 3 ACTION: {action} "
         "Park send, publish, post, spend, delete, sign, and anything a stranger sees."
@@ -323,7 +323,7 @@ def write_handoff(
         f"FROM: {from_seat or who}\n"
         f"TO: {to_seat or (next_owner if next_owner not in {'operator', 'operator or Chief of Staff', 'operator or Cos'} else '—')}\n"
         f"NEXT OWNER: {next_owner or 'operator or Cos'}\n"
-        f"SOURCES: {redact(sources)[:800] or 'this job packet / INDEX'}\n"
+        f"SOURCES: {redact(sources)[:800] or 'this job packet / desk status'}\n"
         f"DECISIONS: parked irreversible actions; specialist {preset} via {engine}\n"
         f"UNCERTAINTIES: {redact(blocker or '—')}\n"
         f"DO NOT ASSUME: live prices, balances, logins, or anything not in SOURCES\n"
@@ -751,7 +751,7 @@ def seed_org_contracts(project_ids: list[str] | None = None) -> None:
             continue
         if wanted and folder.name not in wanted:
             continue
-        seed_file_contract(folder / "INDEX.md", "support" if folder.name == "support" else "ceo")
+        seed_file_contract(migrate_desk_status(folder), "support" if folder.name == "support" else "ceo")
         ensure_bus(folder.name)
         workers = folder / "workers"
         if not workers.is_dir():

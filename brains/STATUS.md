@@ -1,4 +1,4 @@
-# INDEX
+# Desk status
 
 
 ## Engine changelog (Steward propose)
@@ -16,10 +16,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: SAA: keep transferred crons. Citation audit is current labor. Alerts need old-home DATABASE_URL — not a remake.
-Last: Process law live — verifier, retry≠round, store split, single INDEX writer, effect keys (board).
-Next: Keep jobs.json. Do not remake crons. Cos owns catch-up. Dogfood VERIFY/PROOF. Restore stays Accept.
-Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
+Now: Desk status rename — UI says desk status; on disk STATUS.md (old filename still reads).
+Last: User asked to drop INDEX lingo; STATUS.md + frontend scrub shipped.
+Next: Dogfood the board copy; migrate live volumes on write.
+Blocker: —
 
 ## Vault
 
@@ -27,7 +27,7 @@ Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
 - Site logins live in that same vault. You → Keys → Site logins, or approve them on a login card when a job hits a wall.
 - Unlock PIN in You → Settings gates the board. Do not paste keys or passwords into chat.
 - OpenCode (three Go wallets, same catalog): shared pool first, then SAA Homes / Conversion, then ListLogic wallet if still in the keyring. OpenRouter PAYG last.
-- Seats are Auto unless you pin: Auto stays on OpenCode Go (flash). Muse Spark on an OpenRouter id is not Auto. OpenRouter PAYG is last after the three Go wallets. Empty Chat can still be Board (INDEX) for free status.
+- Seats are Auto unless you pin: Auto stays on OpenCode Go (flash). Muse Spark on an OpenRouter id is not Auto. OpenRouter PAYG is last after the three Go wallets. Empty Chat can still be Board (desk status) for free status.
 - CEO pins: openbot + Support → shared pool. SAA Homes → SAA Go. Nadia + ListLogic eligible again (not in RETIRED_CEO_IDS); seat via Add CEO after unlock — do not auto-wire here.
 - Hermes native: Nous Portal subscription. Subscribe at portal.nousresearch.com/r/adam-schwartz. Connect with `hermes portal` or paste `NOUS_API_KEY`. Not in this vault yet, so Auto is Go then OpenRouter.
 - PAYG: OpenRouter after the three Go wallets are empty, plus OpenCode Zen after Go quota
@@ -46,9 +46,9 @@ Blocker: Alerts: DATABASE_URL from old SAA Hermes .env — not a remake
 - Phase: operator-only (local org)
 - Work dir: this checkout
 - Default: Auto on OpenCode Go, then the other Go wallets, OpenRouter last.
-- Plan: org/projects/openbot/INDEX.md
+- Plan: org/projects/openbot/STATUS.md
 - Tickets: org/projects/support/tickets (file via You → Help; Support is a CEO)
-- Support files: org/projects/support/INDEX.md
+- Support files: org/projects/support/STATUS.md
 
 ## Engines
 

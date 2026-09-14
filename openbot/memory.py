@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .store import clean_memory_text, now_iso
+from .store import clean_memory_text, now_iso, resolve_desk_status
 
 INDEX_PRUNE_CHARS = 10000
 OPERATOR_BODY = (
@@ -16,7 +16,7 @@ OPERATOR_BODY = (
     "Who: Adam. Operator of this OttoBot instance. Cos chairs. CEOs run companies. "
     "No extra C-suite bots.\n"
     "Tone: Direct. Files stay. Chat dies. Name the engine.\n"
-    "Standards: Folder → change → diff card → INDEX. Labor serves Horizons, not chat.\n"
+    "Standards: Folder → change → diff card → desk status. Labor serves Horizons, not chat.\n"
     "Hard nos: Never publish, pay, delete, sign, or push without Accept. "
     "Never treat chat as memory. Never invent Horizons — operator Accepts founding or Save Goals. "
     "Never mass-retry.\n"
@@ -91,7 +91,7 @@ def _seed_decisions(project_id: str | None) -> None:
     lines = [
         "# Decisions\n",
         "Settled calls. Read before acting. Do not reopen without flagging the operator.\n",
-        "Labor serves Horizons on this CEO INDEX. A decision that fights a Horizon needs the operator.\n",
+        "Labor serves Horizons on this CEO desk status. A decision that fights a Horizon needs the operator.\n",
     ]
     seeds = SEED_DECISIONS.get(who if project_id else "", ())
     if not seeds and project_id:
@@ -265,7 +265,7 @@ def apply_safe_prune(project_id: str | None) -> bool:
     pid = _slug(project_id)
     if not pid:
         return False
-    path = _org() / "projects" / pid / "INDEX.md"
+    path = resolve_desk_status(_org() / "projects" / pid)
     if not path.is_file():
         return False
     try:
@@ -304,13 +304,13 @@ def _flags_for(pid: str, name: str, text: str) -> list[str]:
     label = f"{pid} ({name})"
     blob = text or ""
     if len(blob) > INDEX_PRUNE_CHARS:
-        flags.append(f"{label}: INDEX {len(blob)} chars — prune stale dump, keep Horizons + Law")
+        flags.append(f"{label}: desk status {len(blob)} chars — prune stale dump, keep Horizons + Law")
     if len(re.findall(r"^Blocker:", blob, re.M)) > 1:
         flags.append(f"{label}: more than one Blocker line")
     if not horizon_week(text):
         flags.append(f"{label}: Goals empty — operator Accepts founding or Save Goals")
     if re.search(r"^## From Hermes", blob, re.M):
-        flags.append(f"{label}: imported Hermes dump still in INDEX — promote doctrine, drop the rest")
+        flags.append(f"{label}: imported Hermes dump still in desk status — promote doctrine, drop the rest")
     decided = decisions_excerpt(pid, limit=4000)
     for match in re.finditer(r"^Blocker:\s*(.+)$", blob, re.M):
         val = match.group(1).strip()
@@ -318,7 +318,7 @@ def _flags_for(pid: str, name: str, text: str) -> list[str]:
             continue
         if "do not" in val.lower() or "never" in val.lower():
             if val[:40].lower() not in decided.lower():
-                flags.append(f"{label}: Blocker looks settled — promote to DECISIONS so INDEX can forget it")
+                flags.append(f"{label}: Blocker looks settled — promote to DECISIONS so desk status can forget it")
     return flags
 
 
@@ -342,12 +342,12 @@ def memory_audit_text(project_id: str | None = None) -> str:
         week = horizon_week(text) or "Goals empty"
         size = len(text or "")
         decided = len([line for line in (decisions_path(pid).read_text(encoding="utf-8").splitlines() if decisions_path(pid).is_file() else []) if line.startswith("- ")])
-        lines.append(f"- {pid}: {name} · this week: {week[:120]} · INDEX {size} chars · {decided} decisions")
+        lines.append(f"- {pid}: {name} · this week: {week[:120]} · desk status {size} chars · {decided} decisions")
         for flag in _flags_for(pid, name, text):
             lines.append(f"  flag: {flag}")
     rest = prune_candidates(project_id)
     if not any("flag:" in line for line in lines) and not rest:
-        lines.append("No prune flags. Small current INDEX beats a giant stale one.")
+        lines.append("No prune flags. Small current desk status beats a giant stale one.")
     else:
         lines.append("Say prune memory to collapse duplicate Blockers. Dumps wait for a yes.")
     return "\n".join(lines)

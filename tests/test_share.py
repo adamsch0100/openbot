@@ -42,7 +42,7 @@ class ShareStoreTests(unittest.TestCase):
         store_mod.ROOT = self.home
         store_mod.BRAINS = self.home / "brains"
         store_mod.JOBS = self.home / "jobs"
-        store_mod.INDEX = self.home / "brains" / "INDEX.md"
+        store_mod.INDEX = self.home / "brains" / "STATUS.md"
         store_mod.BRAINS.mkdir(parents=True, exist_ok=True)
         store_mod.JOBS.mkdir(parents=True, exist_ok=True)
         store_mod.INDEX.write_text("Now: test\nLast: —\nNext: —\nBlocker: —\n", encoding="utf-8")

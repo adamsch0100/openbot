@@ -71,7 +71,7 @@ class LaborLoopIsolation(unittest.TestCase):
         store_mod.ROOT = self.home
         store_mod.BRAINS = self.home / "brains"
         store_mod.JOBS = self.home / "jobs"
-        store_mod.INDEX = self.home / "brains" / "INDEX.md"
+        store_mod.INDEX = self.home / "brains" / "STATUS.md"
         store_mod.BRAINS.mkdir(parents=True, exist_ok=True)
         store_mod.JOBS.mkdir(parents=True, exist_ok=True)
         store_mod.INDEX.write_text("Now: test\nLast: —\nNext: —\nBlocker: —\n", encoding="utf-8")
@@ -88,7 +88,7 @@ class LaborLoopIsolation(unittest.TestCase):
         skills_mod.ORG = org_mod.ORG
         skills_mod.SKILLS_ROOT = org_mod.ORG / "skills"
         (org_mod.ORG / "projects" / "support").mkdir(parents=True, exist_ok=True)
-        (org_mod.ORG / "projects" / "support" / "INDEX.md").write_text(
+        (org_mod.ORG / "projects" / "support" / "STATUS.md").write_text(
             "# Support\n\nNow: Ready.\nLast: —\nNext: —\nBlocker: —\n",
             encoding="utf-8",
         )
@@ -143,7 +143,7 @@ class RetiredOrgTests(LaborLoopIsolation):
         saved = {
             "projects": [
                 {"id": "app", "name": "app", "primary": True, "folder": "/app"},
-                {"id": "openbot", "name": "INDEX", "primary": False},
+                {"id": "openbot", "name": "STATUS", "primary": False},
                 {"id": "nadia-marketing", "name": "Nadia Marketing"},
                 {"id": "saa-homes", "name": "SAA Homes"},
                 {"id": "support", "name": "Support"},
@@ -166,7 +166,7 @@ class RetiredOrgTests(LaborLoopIsolation):
         out = ensure_support_project(saved, str(self.home))
         ids = {str(row.get("id")) for row in out.get("projects") or []}
         self.assertIn(SUPPORT_CEO_ID, ids)
-        index = org_mod.ORG / "projects" / "support" / "INDEX.md"
+        index = org_mod.ORG / "projects" / "support" / "STATUS.md"
         text = index.read_text(encoding="utf-8")
         self.assertIn("Stopline", text)
         self.assertIn("Never Accept", text)
@@ -233,7 +233,7 @@ class RetiredOrgTests(LaborLoopIsolation):
     def test_add_project_unarchives_index(self):
         dest = org_mod._project_dir("nadia")
         dest.mkdir(parents=True)
-        (dest / "INDEX.md").write_text(
+        (dest / "STATUS.md").write_text(
             "# nadia (archived)\n\n"
             "Now: Retired from this OpenBot board. Folder kept on disk.\n"
             "Last: Removed from routing.\n"
@@ -244,7 +244,7 @@ class RetiredOrgTests(LaborLoopIsolation):
             encoding="utf-8",
         )
         org_mod.add_project(str(self.home), "Nadia")
-        text = (dest / "INDEX.md").read_text(encoding="utf-8")
+        text = (dest / "STATUS.md").read_text(encoding="utf-8")
         self.assertNotIn("Retired from this OpenBot board", text)
         self.assertIn("# Nadia", text)
 

@@ -1,4 +1,4 @@
-"""INDEX and brains are files. Chat is not the database."""
+"""Desk status (STATUS.md) and brains are files. Chat is not the database."""
 
 from __future__ import annotations
 
@@ -18,11 +18,63 @@ ROOT = Path(_data_dir).resolve() if _data_dir else CODE_ROOT
 
 BRAINS = ROOT / "brains"
 JOBS = ROOT / "jobs"
-INDEX = BRAINS / "INDEX.md"
+# Canonical on-disk name. Legacy INDEX.md still reads until migrated.
+DESK_STATUS_NAME = "STATUS.md"
+LEGACY_INDEX_NAME = "INDEX.md"
+INDEX = BRAINS / DESK_STATUS_NAME
 JOB_ID_RE = re.compile(r"^[a-f0-9]{6,32}$")
 BRAIN_NAMES = {"cos", "builder", "research", "ops", "think"}
 INDEX_LABELS = ("Now", "Last", "Next", "Blocker")
 MAX_FILE_CHARS = 100_000
+
+
+def resolve_desk_status(folder: Path) -> Path:
+    """Prefer STATUS.md; fall back to legacy INDEX.md; else STATUS.md for create."""
+    status = folder / DESK_STATUS_NAME
+    legacy = folder / LEGACY_INDEX_NAME
+    if status.is_file():
+        return status
+    if legacy.is_file():
+        return legacy
+    return status
+
+
+def desk_status_exists(folder: Path) -> bool:
+    return (folder / DESK_STATUS_NAME).is_file() or (folder / LEGACY_INDEX_NAME).is_file()
+
+
+def migrate_desk_status(folder: Path) -> Path:
+    """Rename legacy INDEX.md → STATUS.md when only the legacy file exists."""
+    folder.mkdir(parents=True, exist_ok=True)
+    status = folder / DESK_STATUS_NAME
+    legacy = folder / LEGACY_INDEX_NAME
+    if status.is_file():
+        return status
+    if legacy.is_file():
+        legacy.rename(status)
+        return status
+    return status
+
+
+def _read_desk_status_path(path: Path) -> Path:
+    """Resolve a possibly-monkeypatched INDEX Path to an existing desk status file."""
+    if path.is_file():
+        return path
+    if path.name == DESK_STATUS_NAME:
+        legacy = path.with_name(LEGACY_INDEX_NAME)
+        if legacy.is_file():
+            return legacy
+    return path
+
+
+def _write_desk_status_path(path: Path) -> Path:
+    """Path to write. Migrates legacy INDEX.md beside a STATUS.md target."""
+    if path.name == DESK_STATUS_NAME:
+        return migrate_desk_status(path.parent)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 CONTRIBUTOR_BANNER = re.compile(
     r"!!!?\s*CONTRIBUTOR\s+TIER[\s\S]*?(?=\n(?:Now|Last|Next|Blocker):|\n\n|$)",
     re.I,
@@ -43,7 +95,7 @@ ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def clean_memory_text(text: str) -> str:
-    """Strip Meta contributor banners so they never become INDEX memory."""
+    """Strip Meta contributor banners so they never become desk status memory."""
     cleaned = ANSI_ESCAPE.sub("", text or "")
     cleaned = CONTRIBUTOR_BANNER.sub("", cleaned)
     cleaned = META_TIER_BANNER.sub("", cleaned)
@@ -55,11 +107,12 @@ def clean_memory_text(text: str) -> str:
 
 
 def read_index() -> str:
-    return INDEX.read_text(encoding="utf-8") if INDEX.exists() else ""
+    path = _read_desk_status_path(INDEX)
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
 
 
 def index_four_lines(text: str | None = None) -> dict[str, str]:
-    """Staff INDEX four-liners. Companion and status read this, not the vault."""
+    """Staff desk status four-liners. Companion and status read this, not the vault."""
     blob = text if text is not None else read_index()
     out = {label: "" for label in INDEX_LABELS}
     for label in INDEX_LABELS:
@@ -78,8 +131,9 @@ def read_brain(name: str) -> str:
 
 def write_index(text: str) -> str:
     if len(text) > MAX_FILE_CHARS:
-        raise ValueError("INDEX too large")
-    INDEX.write_text(clean_memory_text(text), encoding="utf-8")
+        raise ValueError("desk status too large")
+    path = _write_desk_status_path(INDEX)
+    path.write_text(clean_memory_text(text), encoding="utf-8")
     return read_index()
 
 
@@ -105,7 +159,8 @@ def patch_index_line(label: str, value: str) -> None:
         text = re.sub(pattern, lambda _match: repl, text, count=1, flags=re.M)
     else:
         text = text.rstrip() + f"\n{repl}\n"
-    INDEX.write_text(text, encoding="utf-8")
+    path = _write_desk_status_path(INDEX)
+    path.write_text(text, encoding="utf-8")
 
 
 def write_job(receipt: dict) -> Path:

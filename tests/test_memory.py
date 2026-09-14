@@ -46,7 +46,7 @@ class MemoryFilesTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "alpha"
             project.mkdir(parents=True)
-            (project / "INDEX.md").write_text(
+            (project / "STATUS.md").write_text(
                 "# Alpha\n\nHorizon-week: Ship desk honesty · operators · via INDEX · proof Goals tab\n",
                 encoding="utf-8",
             )
@@ -77,7 +77,7 @@ class MemoryFilesTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "openbot"
             project.mkdir(parents=True)
-            (project / "INDEX.md").write_text(
+            (project / "STATUS.md").write_text(
                 "# OttoBot\n\nHorizon-week: Honest CEO desks · Adam · via board · proof Goals\n",
                 encoding="utf-8",
             )
@@ -116,7 +116,7 @@ class MemoryFilesTests(unittest.TestCase):
             dest = Path(tmp)
             project = dest / "projects" / "saa-homes"
             project.mkdir(parents=True)
-            (project / "INDEX.md").write_text(
+            (project / "STATUS.md").write_text(
                 "# SAA Homes\n\nNow: Ready.\nBlocker: —\nBlocker: —\nHorizon-week: 1 live city · NoCO · via URL · proof form 200\n",
                 encoding="utf-8",
             )
@@ -128,7 +128,7 @@ class MemoryFilesTests(unittest.TestCase):
             with patch.object(org_mod, "ORG", dest), patch.object(org_mod, "PROFILE_PATH", profile):
                 reply = prune_reply("saa-homes")
                 self.assertIn("collapsed duplicate Blocker", reply)
-                text = (project / "INDEX.md").read_text(encoding="utf-8")
+                text = (project / "STATUS.md").read_text(encoding="utf-8")
                 self.assertEqual(text.count("Blocker:"), 1)
 
     def test_cos_prune_and_audit_phrases(self):
@@ -157,7 +157,7 @@ class DecideRejectTeachesTests(unittest.TestCase):
                 store_mod.BRAINS = dest / "brains"
                 store_mod.JOBS.mkdir()
                 store_mod.BRAINS.mkdir()
-                (store_mod.BRAINS / "INDEX.md").write_text("Now: test\n", encoding="utf-8")
+                (store_mod.BRAINS / "STATUS.md").write_text("Now: test\n", encoding="utf-8")
                 org_mod.ORG = dest
                 org_mod.PROFILE_PATH = dest / "profile.json"
                 org_mod.PROFILE_PATH.write_text(
@@ -165,7 +165,7 @@ class DecideRejectTeachesTests(unittest.TestCase):
                     encoding="utf-8",
                 )
                 (dest / "projects" / "openbot").mkdir(parents=True)
-                (dest / "projects" / "openbot" / "INDEX.md").write_text("# OttoBot\nNow: Ready.\n", encoding="utf-8")
+                (dest / "projects" / "openbot" / "STATUS.md").write_text("# OttoBot\nNow: Ready.\n", encoding="utf-8")
                 bus_mod.ORG = dest
                 bus_mod.RULES = dest / "RULES.md"
                 work = dest / "work"

@@ -420,7 +420,7 @@ _CRON_COOLDOWN_SEC = 60.0
 
 
 def _parse_index_fields(text: str) -> dict:
-    """Parse Now/Last/Next/Blocker from INDEX markdown."""
+    """Parse Now/Last/Next/Blocker from desk status markdown."""
     fields = {}
     for label in ("Now", "Last", "Next", "Blocker"):
         match = re.search(rf"^{label}:\s*(.*)$", text or "", re.M)
@@ -429,8 +429,8 @@ def _parse_index_fields(text: str) -> dict:
 
 
 def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -> dict:
-    """Search across INDEX text and recent job RESULT snippets."""
-    # Always parse INDEX fields, even for empty query
+    """Search across desk status text and recent job RESULT snippets."""
+    # Always parse desk status fields, even for empty query
     if project_id:
         from .org import read_project_index
         index_text = read_project_index(project_id)
@@ -445,11 +445,11 @@ def _search_memory(query: str, project_id: str | None = None, limit: int = 50) -
     
     results = []
     
-    # Search INDEX
+    # Search desk status
     if query_lower in index_text.lower():
         results.append({
             "type": "index",
-            "source": "INDEX",
+            "source": "Desk status",
             "snippet": index_text[:500],
             "match": True
         })
