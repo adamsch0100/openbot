@@ -211,6 +211,15 @@ def skill_packet(project_id: str | None, preset: str) -> str:
         names.append("ceo-heartbeat")
     if pid in {"openbot", ""} and preset == "builder":
         names.append("openbot-builder-delight")
+    # SAA Homes — passive link assets (national magnets + local clusters)
+    if pid == "saa-homes" and preset in {"think", "research", "ops", "builder"}:
+        names.extend(
+            [
+                "citation-hub-builder",
+                "citation-hub-monitor",
+                "topical-authority-glossary",
+            ]
+        )
     bits = []
     seen = set()
     for name in names:

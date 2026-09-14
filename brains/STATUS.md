@@ -17,9 +17,9 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Mobile feel pass on the board (scroll work tabs, quieter top bar, thumb composer).
-Last: Desk status rename — UI says desk status; on disk STATUS.md.
-Next: Hard-refresh Chat on phone and dogfood the copy.
+Now: SAA citation-hub skills on live board; plan ready for Accept via Chat → SAA Homes.
+Last: Mobile feel pass + desk STATUS rename; citation-hub dual-layer skills/plan drafted.
+Next: On live — Chat → SAA Homes → Accept citation-hub PLAN; Research gates N01–N10; seats stay on Settings models.
 Blocker: —
 
 ## Vault
