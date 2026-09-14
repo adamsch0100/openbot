@@ -16,7 +16,7 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: Desk status rename — UI says desk status; on disk STATUS.md (legacy INDEX.md still reads).
+Now: Desk status rename — UI says desk status; on disk STATUS.md (old filename still reads).
 Last: User asked to drop INDEX lingo; STATUS.md + frontend scrub shipped.
 Next: Dogfood the board copy; migrate live volumes on write.
 Blocker: —
