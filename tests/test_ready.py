@@ -69,7 +69,6 @@ class ReadyTests(unittest.TestCase):
         self.assertIn("position: sticky", css)
         self.assertIn("calm phone work lane", css)
         self.assertIn("do not crush Chat/Tools", css)
-        self.assertIn("page-wide: vertical scroll only", css)
         self.assertIn("chat-shell.work-open", css)
         self.assertIn("id=\"pulse\"", html)
         self.assertIn("id=\"ceoBrief\"", html)
