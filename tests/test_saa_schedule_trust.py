@@ -26,8 +26,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
         self.assertIn("function cronFailNext", js)
         self.assertIn("Open Schedule", js)
         self.assertIn("Auto-retry — gateway will pick this up", js)
-        self.assertIn("Parked for Accept Restore. Cos will not invent the script.", js)
-        self.assertIn("Script not found", js)
+        self.assertIn("Parked until you say restore", js)
+        self.assertIn("This job's script never arrived", js)
         self.assertIn("trustFailed", js)
         self.assertIn("Refresh live copy", js)
         self.assertIn("Cutover is an Accept", js)
@@ -46,8 +46,8 @@ class SaaScheduleTrustUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=182", html)
-        self.assertIn("styles.css?v=182", html)
+        self.assertIn("app.js?v=183", html)
+        self.assertIn("styles.css?v=183", html)
 
     def test_roster_status_priority_in_sort(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -70,22 +70,22 @@ class SaaScheduleTrustBackendTests(unittest.TestCase):
         reason = human_fail_reason(
             "Gateway shutdown (final-cleanup) killed the job's tool subprocess before the run finished."
         )
-        self.assertEqual(reason, "Hermes gateway stopped mid-run")
+        self.assertEqual(reason, "The schedule stalled mid-run")
         outcome, nxt = cron_outcome(
             "error",
             "",
             "Gateway shutdown (final-cleanup) killed the job's tool subprocess before the run finished.",
         )
-        self.assertIn("Hermes gateway stopped mid-run", outcome)
-        self.assertIn("Auto-retry", nxt)
+        self.assertIn("The schedule stalled mid-run", outcome)
+        self.assertIn("retry on its own", nxt)
 
         reason2 = human_fail_reason("RuntimeError: Script-not-found: scripts/alert-digest.sh")
-        self.assertEqual(reason2, "Script not found")
+        self.assertEqual(reason2, "This job's script never arrived")
         outcome2, nxt2 = cron_outcome(
             "error", "", "Script-not-found: scripts/citation_submit.py"
         )
-        self.assertIn("Script not found", outcome2)
-        self.assertIn("Accept Restore", nxt2)
+        self.assertIn("This job's script never arrived", outcome2)
+        self.assertIn("Parked until you say restore", nxt2)
         self.assertNotIn("Fix key", nxt2)
 
     def test_cronwatch_open_schedule(self):

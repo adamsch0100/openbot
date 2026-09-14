@@ -1029,6 +1029,24 @@ def _live_status_line(project_id: str | None) -> str:
 STAFF_WHO = frozenset({"OpenBot", "Chief of Staff", "Cos", "Staff"})
 
 
+_INDEX_FLUFF = re.compile(
+    r"keep jobs\.json|do not remake|cos owns catch-up|ask code to execute|"
+    r"gateway scars|ask chief of staff for status|restore stays accept|"
+    r"keep transferred|transferred crons|"
+    r"^think finished$|^on schedule\b|^ready\b|^idle\b",
+    re.I,
+)
+
+
+def _useful_index_line(value: str) -> str:
+    raw = re.sub(r"\s+", " ", str(value or "")).strip()
+    if raw in {"", "—"}:
+        return ""
+    if _INDEX_FLUFF.search(raw):
+        return ""
+    return raw
+
+
 def status_reply(index_text: str, message: str = "", who: str = "", wiring: str = "", live: str = "") -> str:
     name = (who or "Cos").strip() or "Cos"
     if name.casefold() in {"openbot", "ottobot", "otto-bot"}:
@@ -1060,15 +1078,21 @@ def status_reply(index_text: str, message: str = "", who: str = "", wiring: str 
                 lines.append(f"{name} — This week: {week_short}")
         else:
             lines.append("No week goal yet.")
-        lines.append(now)
-        if live:
-            lines.append(live)
-        if nxt and nxt != "—":
-            lines.append(f"Up next: {nxt}")
-        if last and last != "—":
-            lines.append(f"Just did: {last}")
-        if blocker and blocker != "—":
-            lines.append(f"Stuck: {blocker}")
+        live_line = (live or "").strip()
+        now_line = _useful_index_line(now)
+        if live_line:
+            lines.append(live_line)
+        elif now_line:
+            lines.append(now_line)
+        nxt_line = _useful_index_line(nxt)
+        if nxt_line:
+            lines.append(f"Up next: {nxt_line}")
+        last_line = _useful_index_line(last)
+        if last_line:
+            lines.append(f"Just did: {last_line}")
+        block_line = _useful_index_line(blocker)
+        if block_line:
+            lines.append(f"Needs you: {block_line}")
         return "\n".join(lines).strip() or now
     if staff:
         return "Cos. Ask what's going on across the org, or open a CEO and talk to them directly."
@@ -1261,8 +1285,15 @@ def need_choices(row: dict) -> list[dict]:
                 {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
             ]
         if fail_kind == "script":
+            from .hermes import script_restore_ok
+
+            can_restore = bool(cron_id) and script_restore_ok(blob, row.get("project_id"))
+            if can_restore:
+                return [
+                    {"id": "restore_script", "label": "Restore", "cron_id": cron_id},
+                    {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
+                ]
             return [
-                {"id": "restore_script", "label": "Restore", "cron_id": cron_id},
                 {"id": "ask_cos", "label": "Ask Cos", "cron_id": cron_id},
             ]
         if fail_kind in {"gateway", "db"}:
@@ -2238,8 +2269,7 @@ def _handle_preset(
                     # Only persist session on success
                     _persist_hermes_session(project_id, worker_id, str(ran.get("session_id") or "").strip())
                     patch_index_line("Last", _index_last(text))
-                    patch_index_line("Now", "Think finished")
-                    patch_index_line("Next", "Ask Code to execute, or Cos for status")
+                    patch_index_line("Last", _index_last(text))
                     patch_index_line("Blocker", "—")
                     try:
                         from .founding import ingest_ceo_result

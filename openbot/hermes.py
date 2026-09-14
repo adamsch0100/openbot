@@ -131,13 +131,21 @@ PACKET_LINE = re.compile(
     r"You own the outcome|Chat is not memory|"
     r"Report a short RESULT|Name the engine that ran|"
     r"Never print passwords|Park send, publish|If TOTP|If VAULT LOGINS|"
-    r"Write a short RESULT|STAFF \(files|DESK STATUS:\s*$|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|"
+    r"Write a short RESULT|STAFF \(files|DESK STATUS:\s*$|INDEX:\s*$|BRAIN:\s*$|TASK:\s*$|TASK$|"
+    r"STATUS$|OUTPUT:|GATE NOTE\b|"
     r"OPEN HANDOFFS:|VAULT LOGINS|OPERATOR:|DECISIONS:|HORIZONS |The operator is talking|"
     r"The operator is in (OpenBot|OttoBot) Chat|The operator can also open|"
     r"Specialist lanes execute|Code: OpenCode in |Hermes: |"
     r"Bus: org/projects/|Telegram: |OttoBot chat is the inbox|"
+    r"PROCESS LAW\b|Cap 3 rounds|STORES stay split|RETRY ≠ ROUND|SINGLE WRITER|"
+    r"EFFECT KEYS|NESTED HARNESS|START THIN|"
+    r"This is parked until you say yes|"
     r".+ CEO — reports to (Chief of Staff|Cos))",
     re.I,
+)
+LAW_DUMP = re.compile(
+    r"^PROCESS LAW\b[\s\S]*?(?=^(?:TASK|STATUS|OUTPUT|Now:|Last:|Next:|RESULT)\b|\Z)",
+    re.I | re.M,
 )
 META_JUNK = re.compile(
     r"(?:!!!?\s*CONTRIBUTOR\s+TIER|This\s+is\s+Meta'?s?\s+contributor\s+tier|"
@@ -253,7 +261,10 @@ def _status_only(text: str) -> bool:
 def _human_hermes_text(text: str) -> str:
     cleaned = META_JUNK.sub("", text or "").strip()
     cleaned = re.sub(r"https?://dev\.meta\.ai/\S+", "", cleaned)
+    cleaned = LAW_DUMP.sub("", cleaned).strip()
     cleaned = CRON_PROMPT_DUMP.sub("", cleaned).strip()
+    if re.match(r"^(CHAT_OK|ping(?:\.?\s*(?:solid\.?)?)?|ping\s+[—-]\s+SAA_OK)\s*$", cleaned, re.I):
+        return ""
     response = re.search(r"^##\s*Response\s*$", cleaned, re.I | re.M)
     if response:
         body = cleaned[response.end() :].strip()
@@ -274,7 +285,12 @@ def _human_hermes_text(text: str) -> str:
     for line in cleaned.splitlines():
         stripped = line.strip()
         if PACKET_LINE.match(stripped):
-            skipping = bool(re.match(r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS|OPERATOR|DECISIONS|HORIZONS|LAW|CHIEF OF STAFF):", stripped, re.I))
+            skipping = bool(re.match(
+                r"^(INDEX|BRAIN|TASK|STAFF|OPEN HANDOFFS|VAULT LOGINS|OPERATOR|"
+                r"DECISIONS|HORIZONS|LAW|PROCESS LAW|CHIEF OF STAFF):",
+                stripped,
+                re.I,
+            ))
             continue
         if skipping:
             if not stripped:
@@ -2022,13 +2038,13 @@ def cron_title(name: str) -> str:
     return re.sub(r"[-_]+", " ", raw).strip().capitalize() or "Scheduled check"
 
 
-_FAIL_NEXT = "Retry this job, or ask Cos."
-_GATEWAY_FAIL_NEXT = "Auto-retry — gateway will pick this up. Do not mass-fire."
-_SCRIPT_FAIL_NEXT = "Parked for Accept Restore. Cos will not invent the script."
-_KEY_FAIL_NEXT = "Fix key in Settings."
-_WALLET_FAIL_NEXT = "Needs Adam · add credits / fix billing."
-_TRANSIENT_FAIL_NEXT = "Auto-retry — transient. Retry once if it stays red."
-_HERMES_FAIL_NEXT = "Retry — Hermes exited. Not a key."
+_FAIL_NEXT = "Retry once, or ask Cos if it happens again."
+_GATEWAY_FAIL_NEXT = "It will retry on its own. Do not fire the whole set."
+_SCRIPT_FAIL_NEXT = "Parked until you say restore."
+_KEY_FAIL_NEXT = "Open Settings and fix the model key. Retrying will fail the same way."
+_WALLET_FAIL_NEXT = "Add credits in Settings. Only you can top that up."
+_TRANSIENT_FAIL_NEXT = "A short stall — retry once if it stays red."
+_HERMES_FAIL_NEXT = "Retry once. This is not a missing key."
 _DB_FAIL_NEXT = "Alerts cron kept. Same job as the old Hermes. Needs reachable Postgres (DATABASE_URL). Do not remake."
 
 
@@ -2072,15 +2088,15 @@ def human_fail_reason(blob: str) -> str:
     text = re.sub(r"\b(?:THINK_OK|OPS_OK)\b", "", text).strip()
     low = text.lower()
     if re.search(r"gateway shutdown|gateway stopped mid-run", low):
-        return "Hermes gateway stopped mid-run"
+        return "The schedule stalled mid-run"
     if re.search(r"econnrefused|pg-pool|could not connect to (?:server|database)|connection refused", low):
         return "Live database refused the connection"
     if re.search(r"\b401\b|unauthorized|authentication failed|invalid.?api.?key|x-api-key", low):
-        return "API key rejected (401)"
+        return "The model key was rejected"
     if re.search(r"busy.?session|session.?busy|already running|locked by another", low):
         return "Session busy"
     if re.search(r"script[- ]?not[- ]?found|no such file.*(script|\.sh|\.py|\.js)|enoent.*scripts/", low):
-        return "Script not found"
+        return "This job's script never arrived"
     if re.search(r"insufficient balance|wallet.?empty|out of (?:quota|credit)|billing", low):
         return "Wallet empty"
     if re.search(r"timed? ?out|timeout", low):
@@ -2089,8 +2105,7 @@ def human_fail_reason(blob: str) -> str:
         return "Cancelled"
     exit_m = re.search(r"(?:hermes\s+)?(?:chat\s+|think\s+)?exit(?:ed)?\s*(\d+)", low)
     if exit_m or re.search(r"hermes.*(exit|fail)|exit code", low):
-        code = exit_m.group(1) if exit_m else ""
-        return f"Hermes exited{(' ' + code) if code else ''}".strip()
+        return "The worker stopped"
     cron_m = re.search(r"Cron Job:\s*([a-z0-9._-]+)", str(blob or ""), re.I)
     if cron_m and re.search(r"fail", low):
         return f"{cron_title(cron_m.group(1))} failed"
@@ -2189,8 +2204,92 @@ def _claim_is_stale(row: dict, max_age: float = 20 * 60) -> bool:
     return (datetime.now(timezone.utc) - claim_at).total_seconds() > max_age
 
 
+CRON_STUCK_SECONDS = 2 * 3600
+
+
+def format_elapsed(seconds: float | int | None) -> str:
+    if seconds is None:
+        return ""
+    secs = max(0, int(seconds))
+    if secs < 60:
+        return f"{secs}s"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins}m"
+    hours = mins // 60
+    if hours < 48:
+        return f"{hours}h"
+    return f"{hours // 24}d"
+
+
+def _cron_started_at(row: dict) -> datetime | None:
+    claim_at = _claim_at(row)
+    last = _parse_cron_when(str(row.get("last_run_at") or ""))
+    if claim_at and (last is None or claim_at > last):
+        return claim_at
+    return last
+
+
+def _cron_elapsed_seconds(row: dict) -> float | None:
+    started = _cron_started_at(row)
+    if not started:
+        return None
+    return max(0.0, (datetime.now(timezone.utc) - started).total_seconds())
+
+
+def _cron_would_be_running(row: dict) -> bool:
+    if row.get("enabled") is False:
+        return False
+    if row.get("live") is True:
+        return True
+    state = str(row.get("state") or "")
+    if _CRON_PAUSED.search(state):
+        return False
+    if _claim_is_live(row):
+        return True
+    status = str(row.get("last_status") or "").strip()
+    if _CRON_DONE.match(status):
+        return False
+    if _CRON_RUNNING.search(state) or _CRON_RUNNING.search(status):
+        return True
+    return bool(row.get("claimed"))
+
+
+def _cron_is_stuck(row: dict) -> bool:
+    if not _cron_would_be_running(row):
+        return False
+    elapsed = _cron_elapsed_seconds(row)
+    if elapsed is None:
+        return False
+    return elapsed >= CRON_STUCK_SECONDS
+
+
+def _cron_is_running(row: dict) -> bool:
+    if _cron_is_stuck(row):
+        return False
+    return _cron_would_be_running(row)
+
+
+def script_restore_ok(blob: str, project_id: str | None = None) -> bool:
+    """Restore only copies files that exist in bootstrap/<ceo>/scripts."""
+    names = re.findall(r"([\w.-]+\.(?:sh|py|js))", str(blob or ""), re.I)
+    if not names:
+        return True
+    from .store import ROOT
+
+    pid = str(project_id or "").strip() or "saa-homes"
+    folder = ROOT / "bootstrap" / pid / "scripts"
+    if not folder.is_dir():
+        return False
+    have = {path.name.lower() for path in folder.iterdir() if path.is_file()}
+    return any(name.lower() in have for name in names)
+
+
 def _cron_digest_item(row: dict, enabled: bool) -> dict:
     report = re.sub(r"\s+", " ", str(row.get("last_result") or "")).strip()
+    elapsed = _cron_elapsed_seconds(row)
+    stuck = _cron_is_stuck(row)
+    started = _cron_started_at(row)
     return {
         "id": str(row.get("id") or ""),
         "name": str(row.get("name") or row.get("id") or "cron"),
@@ -2208,6 +2307,9 @@ def _cron_digest_item(row: dict, enabled: bool) -> dict:
         "provider": str(row.get("provider") or ""),
         "enabled": enabled,
         "live": _cron_is_running(row),
+        "stuck": stuck,
+        "elapsed_seconds": elapsed,
+        "started_at": started.isoformat() if started else "",
         "fire_claim": row.get("fire_claim") if isinstance(row.get("fire_claim"), dict) else None,
     }
 
@@ -2233,24 +2335,6 @@ def parse_hermes_running_job_ids(text: str) -> list[str]:
     return ids
 
 
-def _cron_is_running(row: dict) -> bool:
-    if row.get("enabled") is False:
-        return False
-    if row.get("live") is True:
-        return True
-    state = str(row.get("state") or "")
-    if _CRON_PAUSED.search(state):
-        return False
-    if _claim_is_live(row):
-        return True
-    status = str(row.get("last_status") or "").strip()
-    if _CRON_DONE.match(status):
-        return False
-    if _CRON_RUNNING.search(state) or _CRON_RUNNING.search(status):
-        return True
-    return bool(row.get("claimed"))
-
-
 def cron_digest(
     rows: list[dict],
     *,
@@ -2267,6 +2351,7 @@ def cron_digest(
     healthy: list[dict] = []
     stale: list[dict] = []
     running: list[dict] = []
+    stuck: list[dict] = []
     due: list[dict] = []
     just_finished: list[dict] = []
     next_up: dict | None = None
@@ -2291,7 +2376,9 @@ def cron_digest(
         fresh = bool(when and now - when <= window)
         item = _cron_digest_item(row, on)
         live = _cron_is_running(row)
-        if live:
+        if item.get("stuck"):
+            stuck.append(item)
+        elif live:
             running.append(item)
         elif when and now - when <= timedelta(minutes=15) and not _CRON_RUNNING.search(status):
             just_finished.append(item)
@@ -2366,13 +2453,24 @@ def cron_digest(
         bits.append("No operator step from the schedule.")
     chat_live = [row for row in (live_runs or []) if isinstance(row, dict)]
     live_bits = []
+    if stuck:
+        top = stuck[0]
+        elapsed = format_elapsed(top.get("elapsed_seconds"))
+        if elapsed:
+            live_bits.append(f"{top['title']} — running {elapsed} — looks stuck.")
+        else:
+            live_bits.append(f"{top['title']} — looks stuck.")
     if running:
-        live_bits.append("Now running: " + ", ".join(row["title"] for row in running[:3]) + ".")
+        titles = []
+        for row in running[:3]:
+            elapsed = format_elapsed(row.get("elapsed_seconds"))
+            titles.append(f"{row['title']} ({elapsed})" if elapsed else row["title"])
+        live_bits.append("Now running: " + ", ".join(titles) + ".")
     if chat_live:
         live_bits.append("This chat is answering now.")
-    if due and not running:
+    if due and not running and not stuck:
         live_bits.append("Due now: " + ", ".join(row["title"] for row in due[:3]) + ".")
-    if just_finished and not running:
+    if just_finished and not running and not stuck:
         live_bits.append("Just finished: " + ", ".join(row["title"] for row in just_finished[:3]) + ".")
     if not live_bits:
         if next_up:
@@ -2396,6 +2494,7 @@ def cron_digest(
         "recent": (healthy + recent)[:12],
         "stale": stale[:6],
         "running": running,
+        "stuck": stuck,
         "due": due[:8],
         "just_finished": just_finished[:8],
         "next_up": next_up,
@@ -2403,7 +2502,7 @@ def cron_digest(
         "latest": latest,
         "result": result_row,
         "results": results[:8],
-        "copy_stale": not (healthy or recent or running or just_finished),
+        "copy_stale": not (healthy or recent or running or just_finished or stuck),
         "enabled": enabled,
         "failed_count": len(failed),
         "recent_count": len(healthy) + len(recent),
@@ -2497,6 +2596,8 @@ def _cron_row_payload(row: dict, result: str = "") -> dict:
         "board_status": board,
         "claimed": live_now,
         "live": live_now,
+        "stuck": _cron_is_stuck(row),
+        "elapsed_seconds": _cron_elapsed_seconds(row),
         "fire_claim": claim,
         "last_run_at": str(row.get("last_run_at") or ""),
         "next_run_at": str(row.get("next_run_at") or ""),

@@ -176,8 +176,8 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertFalse(is_valid_job_id("form-pipeline-health"))  # Name, not ID
 
     def test_human_fail_reason_strips_gore(self):
-        self.assertEqual(human_fail_reason("Anthropic API 401 Unauthorized"), "API key rejected (401)")
-        self.assertEqual(human_fail_reason("hermes think exited 1"), "Hermes exited 1")
+        self.assertEqual(human_fail_reason("Anthropic API 401 Unauthorized"), "The model key was rejected")
+        self.assertEqual(human_fail_reason("hermes think exited 1"), "The worker stopped")
         self.assertEqual(human_fail_reason("session busy — try again"), "Session busy")
         self.assertNotIn("OPS_OK", human_fail_reason("OPS_OK"))
 
@@ -187,11 +187,11 @@ class TestJobIdValidation(unittest.TestCase):
         self.assertIn("No action", nxt)
         failed, fix = cron_outcome("error", "## Response\nGateway shutdown")
         self.assertTrue(failed.startswith("Failed"))
-        self.assertIn("Auto-retry", fix)
+        self.assertIn("retry on its own", fix)
         gated, cred = cron_outcome("error", "", "cron endpoint returned 401")
-        self.assertIn("401", gated)
-        self.assertIn("Fix key", cred)
-        self.assertNotIn("Auto-retry", cred)
+        self.assertIn("model key was rejected", gated)
+        self.assertIn("Open Settings", cred)
+        self.assertNotIn("retry on its own", cred)
         ok_copy, nxt2 = cron_outcome("ok", "")
         self.assertIn("Healthy on the live box", ok_copy)
 
@@ -321,7 +321,7 @@ class TestJobIdValidation(unittest.TestCase):
             )
             failed = read_home_crons(home, results=True)
             self.assertEqual(failed[0]["last_result"], "")
-            self.assertIn("gateway", failed[0]["outcome"].lower())
+            self.assertIn("stalled", failed[0]["outcome"].lower())
 
     def test_cron_digest_now_running_and_due(self):
         now = datetime.now(timezone.utc)

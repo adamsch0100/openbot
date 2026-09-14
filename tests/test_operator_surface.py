@@ -13,7 +13,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
         self.assertIn("function weekGoal", js)
         self.assertIn("function orgWeekGlance", js)
-        self.assertIn("live && !live.hidden", js)
+        self.assertIn("function paintCeoBrief", js)
+        self.assertIn("This week:", js)
         self.assertIn("propose_founding", js)
         self.assertIn("opts.display", js)
         self.assertIn("What you want this CEO to do", js)
@@ -94,8 +95,8 @@ class OperatorSurfaceUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=182", html)
-        self.assertIn("styles.css?v=182", html)
+        self.assertIn("app.js?v=183", html)
+        self.assertIn("styles.css?v=183", html)
 
     def test_never_run_once_and_one_cta(self):
         js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
@@ -178,7 +179,7 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
             human_fail_reason(
                 "Gateway shutdown (final-cleanup) killed the job. headers={\"X-API-KEY\": key}"
             ),
-            "Hermes gateway stopped mid-run",
+            "The schedule stalled mid-run",
         )
 
     def test_pending_approvals_fail_beats_continue(self):
@@ -265,10 +266,28 @@ class OperatorSurfaceBackendTests(unittest.TestCase):
     def test_need_choices_failed_no_fix_model_dump(self):
         from openbot.router import need_choices
 
-        script = need_choices({"kind": "failed", "why": "Script-not-found: scripts/foo.sh"})
+        script = need_choices({
+            "kind": "failed",
+            "cron_id": "abc123",
+            "project_id": "saa-homes",
+            "why": "Script-not-found: scripts/alert-digest.sh",
+        })
         self.assertEqual(script[0]["id"], "restore_script")
         self.assertNotIn("fix_model", [c["id"] for c in script])
         self.assertNotIn("fix_key", [c["id"] for c in script])
+
+        missing = need_choices({
+            "kind": "failed",
+            "cron_id": "abc123",
+            "project_id": "saa-homes",
+            "why": "Script-not-found: scripts/mention-scan.py",
+        })
+        self.assertEqual(missing[0]["id"], "ask_cos")
+        self.assertNotIn("restore_script", [c["id"] for c in missing])
+
+        chat_script = need_choices({"kind": "failed", "why": "Script-not-found: scripts/foo.sh"})
+        self.assertEqual(chat_script[0]["id"], "ask_cos")
+        self.assertNotIn("restore_script", [c["id"] for c in chat_script])
 
         crash = need_choices({"kind": "failed", "why": "Hermes chat exited 1"})
         self.assertEqual(crash[0]["id"], "retry")

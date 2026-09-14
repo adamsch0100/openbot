@@ -2,10 +2,10 @@
 
 CEO brief. Status on this project reads this file only.
 
-Now: Desk in use — Horizons on this CEO.
-Last: Cos names CEOs. Think ready. Builder probe rejected.
-Next: Builder for code. Cos for status.
-Blocker: —
+Now: Desk in use — CEO English on the live board. Engine: board.
+Last: Cos names CEOs. Think ready. Packet dumps stripped; stuck runs named stuck.
+Next: After deploy — refresh SAA live copy; Stop Citation audit if still running with no finish. Then Accept citation-hub.
+Blocker: Do not Accept parked restore cards. Do not mass-retry.
 Goals: Paid multi-tenant board. Wrap Hermes Agent + OpenCode. Tenants pay for the seat.
 
 ## Horizons

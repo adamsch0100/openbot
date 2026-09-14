@@ -1321,10 +1321,11 @@ details.cron-card.compact[open] > .cron-glance {
   padding-left: 10px;
 }
 .cron-card.live .cron-head span { color: var(--bronze); }
-.cron-card.failed {
+.cron-card.stuck {
   border-left: 2px solid var(--danger);
   padding-left: 10px;
 }
+.cron-card.stuck .cron-head span { color: var(--danger); }
 .cron-card.failed .cron-head span { color: var(--danger); }
 .cron-snip {
   margin: 4px 0 0;

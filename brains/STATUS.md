@@ -17,10 +17,10 @@
 - 2026-09-10: Propose pin Dockerfile Hermes→v2026.9.7 (v0.21.1) + OpenCode→1.18.30. Accept-gated deploy only — never silent upgrade.
 Source of truth for this OttoBot instance. Status questions read this file only.
 
-Now: SAA citation-hub skills on live board; plan ready for Accept via Chat → SAA Homes.
-Last: Mobile feel pass + desk STATUS rename; citation-hub dual-layer skills/plan drafted.
-Next: On live — Chat → SAA Homes → Accept citation-hub PLAN; Research gates N01–N10; seats stay on Settings models.
-Blocker: —
+Now: Shipping CEO English to the live board — week goal, running or stuck, needs you, one next move. Engine: board.
+Last: Citation-hub skills on board; plan ready for Accept. Packet dumps stripped; a run past 2h is stuck + Stop.
+Next: After this deploy — refresh SAA live copy. If Citation audit is still running with no finish, Stop. Then Accept the citation-hub plan. Do not mass-retry.
+Blocker: Do not Accept parked restore cards. Do not mass-retry.
 
 ## Vault
 

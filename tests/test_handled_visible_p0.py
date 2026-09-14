@@ -27,8 +27,8 @@ class HandledVisibleUiTests(unittest.TestCase):
         # key branch must not return Auto-retry
         key_block = own[key_i : key_i + 550]
         self.assertIn('status: "Needs Adam"', key_block)
-        self.assertIn("Fix key in Settings", key_block)
-        self.assertIn("CEO cannot retry this", key_block)
+        self.assertIn("Open Settings", key_block)
+        self.assertIn("fix the model key", key_block)
         self.assertNotIn('status: "Auto-retry"', key_block)
         self.assertIn("Never Auto-retry on 401", own)
         self.assertIn("gatewayScar", own)
@@ -117,7 +117,7 @@ class HandledVisibleUiTests(unittest.TestCase):
         gw_i = own.index("if (gatewayScar)")
         self.assertLess(key_i, gw_i)
         key_block = own[key_i:gw_i]
-        self.assertIn("Fix key in Settings", key_block)
+        self.assertIn("Open Settings", key_block)
         self.assertIn('status: "Needs Adam"', key_block)
         self.assertNotIn("Restart gateway", key_block)
         # failChoices still offers Fix key for kind=key
@@ -127,8 +127,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=182", html)
-        self.assertIn("styles.css?v=182", html)
+        self.assertIn("app.js?v=183", html)
+        self.assertIn("styles.css?v=183", html)
 
 
 
@@ -191,11 +191,11 @@ class HandledVisibleBackendTests(unittest.TestCase):
         from openbot.hermes import cron_outcome, human_fail_reason
 
         reason = human_fail_reason("HTTP 401 unauthorized invalid api key")
-        self.assertEqual(reason, "API key rejected (401)")
+        self.assertEqual(reason, "The model key was rejected")
         outcome, nxt = cron_outcome("error", "", "401 unauthorized x-api-key")
-        self.assertIn("API key rejected (401)", outcome)
-        self.assertIn("Fix key", nxt)
-        self.assertNotIn("Auto-retry", nxt)
+        self.assertIn("The model key was rejected", outcome)
+        self.assertIn("Open Settings", nxt)
+        self.assertNotIn("retry on its own", nxt)
 
     def test_gateway_still_auto_retry(self):
         from openbot.hermes import cron_outcome
@@ -205,15 +205,15 @@ class HandledVisibleBackendTests(unittest.TestCase):
             "",
             "Gateway shutdown (final-cleanup) killed the job's tool subprocess before the run finished.",
         )
-        self.assertIn("Auto-retry", nxt)
+        self.assertIn("retry on its own", nxt)
 
     def test_script_parked_for_accept_restore(self):
         from openbot.hermes import cron_outcome
 
         _, nxt = cron_outcome("error", "", "Script-not-found: scripts/citation_submit.py")
-        self.assertIn("Accept Restore", nxt)
+        self.assertIn("Parked until you say restore", nxt)
         self.assertNotIn("Fix key", nxt)
-        self.assertNotIn("Auto-retry", nxt)
+        self.assertNotIn("retry on its own", nxt)
 
     def test_db_fail_keeps_cron_no_remake(self):
         from openbot.hermes import cron_outcome

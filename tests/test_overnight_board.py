@@ -77,8 +77,8 @@ class OvernightBoardUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=182", html)
-        self.assertIn("styles.css?v=182", html)
+        self.assertIn("app.js?v=183", html)
+        self.assertIn("styles.css?v=183", html)
 
     def test_pulse_failed_zero_is_not_a_failed_job(self):
         import re
@@ -107,7 +107,7 @@ class OvernightBoardUiTests(unittest.TestCase):
 
         self.assertEqual(quiet_index_line("keep going from Chief of Staff"), "keep going from Cos")
         router = (ROOT / "openbot" / "router.py").read_text(encoding="utf-8")
-        self.assertIn("or Cos for status", router)
+        self.assertNotIn("or Cos for status", router)
         self.assertNotIn("or Chief of Staff for status", router)
 
     def test_job_card_names_the_engine(self):

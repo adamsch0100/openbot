@@ -17,6 +17,7 @@ class NeedsYouCopyTests(unittest.TestCase):
         self.assertIn("Open Schedule", js)
         self.assertIn("failed in Results — clear those to move", js)
         self.assertIn('row.why || row.kind || "Decide"', js)
+        self.assertIn("Needs you:", js)
         self.assertNotIn("need a look", js)
         self.assertIn("/^(Your move|Needs you)\\b/i.test(raw)", js)
 

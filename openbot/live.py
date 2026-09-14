@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import subprocess
 import threading
 
@@ -11,7 +12,7 @@ _runs: dict[str, dict] = {}
 
 def start(run_id: str, meta: dict | None = None) -> threading.Event:
     cancel = threading.Event()
-    row = {"cancel": cancel, "proc": None}
+    row = {"cancel": cancel, "proc": None, "started_at": datetime.now(timezone.utc).isoformat()}
     if isinstance(meta, dict):
         for key in ("project_id", "worker_id", "preset", "title"):
             value = meta.get(key)
@@ -37,6 +38,7 @@ def snapshot() -> list[dict]:
                     "worker_id": str(row.get("worker_id") or ""),
                     "preset": str(row.get("preset") or "cos"),
                     "title": str(row.get("title") or "This chat"),
+                    "started_at": str(row.get("started_at") or ""),
                 }
             )
         return out
