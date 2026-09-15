@@ -1679,6 +1679,10 @@ def board_copy(text: str) -> str:
     s = re.sub(r"\bOpenBot Builder\b", "OttoBot Builder", s)
     s = re.sub(r"\bOpenBot board\b", "OttoBot board", s)
     s = re.sub(r"\bOpenBot docs\b", "OttoBot docs", s)
+    s = re.sub(r"\bOpenBot\b", "OttoBot", s)
+    s = re.sub(r"(?m)^openbot:\s*", "OttoBot: ", s, flags=re.I)
+    s = re.sub(r"(?m)^OPENBOT:\s*", "OttoBot: ", s)
+    s = re.sub(r"\bopenbot\s*\(ottobot\)", "OttoBot", s, flags=re.I)
     return s
 
 

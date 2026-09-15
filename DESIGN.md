@@ -2,6 +2,10 @@
 
 World-class here means the Chat CEO loop, not a new palette. No Muse/Kimi Auto pin.
 
+## Phase 1 (Muse implements + Cursor reviews, 2026-09-15)
+
+Fused **chat-dock**: inset pill work ribbon + composer card; activity sheet as drawer overlay (stream scroll preserved). Muse `opencode/muse-spark-1.3-contributor-free` implements per `MUSE-DIRECTIVE.md`; Cursor runs tests and browser QA. Cache `v=194`.
+
 ## P0 / P1 fixed
 
 | Screen | Width | Problem | Fix |

@@ -127,8 +127,8 @@ class HandledVisibleUiTests(unittest.TestCase):
 
     def test_cache_bust(self):
         html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("app.js?v=192", html)
-        self.assertIn("styles.css?v=192", html)
+        self.assertIn("app.js?v=197", html)
+        self.assertIn("styles.css?v=197", html)
 
 
 

@@ -9,6 +9,8 @@ const PRESET_ENGINE = {
 };
 let preset = "cos";
 let projectId = "";
+let lastAimKey = "";
+let settingsAdvancedOpen = false;
 let workerId = "";
 let expanded = new Set();
 let inboxSeen = new Set();
@@ -1262,6 +1264,7 @@ function renderIndex(text) {
   paintDeskCard(cleaned);
   if ($("indexSummary")) $("indexSummary").textContent = `What’s going on · ${briefHonestyLine(cleaned)}`;
   paintWorkStatus();
+  mountTodayBrief();
 }
 
 function indexLineUseful(value) {
@@ -1369,9 +1372,26 @@ function paintWorkStatus() {
   el.hidden = !show;
   if (!liveEl) return;
   liveEl.hidden = !show;
+  el.classList.toggle("live-now-strip", show && alive.on);
   liveEl.classList.toggle("on", Boolean(show && alive.on));
   liveEl.classList.toggle("warn", Boolean(show && alive.warn));
-  liveEl.textContent = show ? line : "";
+  if (!show) {
+    liveEl.textContent = "";
+    return;
+  }
+  if (alive.on) {
+    liveEl.innerHTML = `<span class="live-now-text">${escapeHtml(line)}</span><button type="button" class="ghost-btn live-watch-btn" id="liveWatchBtn">Watch</button>`;
+    const watch = $("liveWatchBtn");
+    if (watch && !watch.dataset.bound) {
+      watch.dataset.bound = "1";
+      watch.addEventListener("click", () => {
+        const useCode = /code|builder|opencode/i.test(line) || preset === "builder";
+        openWorkspace(useCode ? "opencode" : "hermes");
+      });
+    }
+  } else {
+    liveEl.textContent = line;
+  }
 }
 
 function moneyPair(input, output) {
@@ -4553,6 +4573,7 @@ function renderSchedules(project) {
 }
 
 let scheduleOpen = false;
+let streamScrollSaved = null;
 let scheduleFocusId = "";
 let scheduleView = "doing";
 let lastSchedulePid = "";
@@ -4611,10 +4632,167 @@ function activityBody() {
 function paintActivityTitle() {
   const el = $("activityTitle");
   if (!el) return;
-  el.textContent = scheduleView === "next" ? "Due"
-    : (scheduleView === "results" ? "Results"
-      : (scheduleView === "schedule" ? "Schedule"
-        : (scheduleView === "goals" ? "Goals" : "Running")));
+  el.textContent = scheduleView === "failed" ? "Failed"
+    : (scheduleView === "next" ? "Due"
+      : (scheduleView === "results" ? "Results"
+        : (scheduleView === "schedule" ? "Schedule"
+          : (scheduleView === "goals" ? "Goals" : "Running"))));
+}
+
+function workResultRowHtml(row) {
+  const title = row.title || jobLabel(row.preset) || "Job";
+  const engine = jobEngineLabel(row) || "Board";
+  const ceo = row.project_id ? prettyCeoName(row.project_id, row.project_name || row.project_id) : "";
+  const outcome = clipWire(cleanBotText(row.text || row.summary || row.outcome || ""), 160) || "Done.";
+  return `<details class="cron-card work-row" data-fold="job-${escapeHtml(row.id || title)}">
+    <summary class="cron-head work-row-head">
+      <b>${escapeHtml(title)}</b>
+      <span class="engine-pill">${escapeHtml(engine)}</span>
+      <span class="work-row-state">Resolved</span>
+    </summary>
+    ${ceo ? `<p class="work-row-ceo">${escapeHtml(ceo)}</p>` : ""}
+    <p class="cron-outcome">${escapeHtml(outcome)}</p>
+    ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
+  </details>`;
+}
+
+function jobEngineLabel(row) {
+  if (!row) return "Board";
+  const preset = String(row.preset || "").toLowerCase();
+  if (preset === "builder" || preset === "supportbuilder" || preset === "code") return "OpenCode";
+  if (preset === "think" || preset === "research" || preset === "ops") return "Hermes Agent";
+  const eng = String(row.engine || "").trim();
+  if (/opencode/i.test(eng)) return "OpenCode";
+  if (/hermes/i.test(eng)) return "Hermes Agent";
+  return "Board";
+}
+
+function jobIsChangelogJob(row) {
+  const title = String((row && (row.title || row.summary || row.text)) || "").trim();
+  if (!title) return false;
+  if (/^operator surface v\d+/i.test(title)) return true;
+  if (/^v\d{3}\s*[—–-]/i.test(title)) return true;
+  if (/OpenBot cache-only SAA overlay/i.test(title)) return true;
+  if (/OttoBot rename PR/i.test(title) && /v\d+/i.test(title)) return true;
+  if (/Mobile v1 verified end-to-end/i.test(title)) return true;
+  if (/Nadia just reported/i.test(title) && title.length < 80) return true;
+  return false;
+}
+
+function isStatusDumpText(text) {
+  const raw = String(text || "");
+  if (!raw.trim()) return false;
+  if (/^OPENBOT:/im.test(raw) && /(Now:|Last:|Next:|Blocker:|Working on)/i.test(raw)) return true;
+  if (/^v\d{3}\s*[—–-]/m.test(raw)) return true;
+  if (/operator surface v\d+/i.test(raw)) return true;
+  if (/BLOCKED:/m.test(raw) && /Do not Accept parked/i.test(raw)) return true;
+  if (raw.length > 400 && /DESK-THROWAWAY:|SAA HOMES:|LISTLOGIC:/i.test(raw)) return true;
+  return false;
+}
+
+function todayBriefCounts() {
+  const counts = workCounts();
+  const adamPack = digestCache.get(projectId) || {};
+  const adamFails = (adamPack.crons || []).filter((row) => !cronIsNoise(row) && cronIsFailed(row) && failOwnership(row).owner === "adam").length;
+  const orgCounts = !projectId ? counts : workCounts(projectId);
+  return {
+    needsYou: projectId ? adamFails : (counts.failed || 0),
+    inMotion: orgCounts.doing || 0,
+    failed: counts.failed || 0,
+    due: counts.next || 0,
+    ready: counts.ready
+  };
+}
+
+function todayBriefHtml() {
+  const project = currentProject();
+  const who = project ? prettyCeoName(projectId, project.name) : STAFF_NAME;
+  const c = todayBriefCounts();
+  const lines = [];
+  if (c.needsYou > 0) {
+    lines.push(`<li class="today-needs"><button type="button" class="today-link" data-today-open="failed">Needs you · ${c.needsYou}</button></li>`);
+  }
+  if (c.inMotion > 0) {
+    lines.push(`<li><button type="button" class="today-link" data-today-open="doing">In motion · ${c.inMotion}</button></li>`);
+  } else if (c.ready) {
+    lines.push(`<li class="today-quiet">Quiet · nothing running right now</li>`);
+  }
+  if (c.due > 0 && c.failed === 0) {
+    lines.push(`<li><button type="button" class="today-link" data-today-open="next">Due · ${c.due}</button></li>`);
+  } else if (c.failed > 0) {
+    lines.push(`<li><button type="button" class="today-link" data-today-open="failed">Failed · ${c.failed}</button></li>`);
+  }
+  const text = cleanBotText(selectedIndexText());
+  const now = indexLineUseful(indexField(text, "Now"));
+  const next = indexLineUseful(honestIndexNext(indexField(text, "Next")));
+  const desk = [];
+  if (now) desk.push(`<p class="today-desk"><span>Working on</span> ${escapeHtml(clipWire(now, 120))}</p>`);
+  if (next && !isScheduleFluff(next)) desk.push(`<p class="today-desk"><span>Up next</span> ${escapeHtml(clipWire(next, 120))}</p>`);
+  return `<article class="today-brief" id="todayBrief" aria-label="Today">
+    <header class="today-brief-head"><span class="today-kicker">Today</span><b class="today-who">${escapeHtml(who)}</b></header>
+    <ul class="today-stats">${lines.join("") || `<li class="today-quiet">Ask what’s going on — or open a CEO.</li>`}</ul>
+    ${desk.join("")}
+  </article>`;
+}
+
+function mountTodayBrief() {
+  if (!stream) return;
+  let el = $("todayBrief");
+  const html = todayBriefHtml();
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "todayBriefMount";
+    el.innerHTML = html;
+    stream.insertBefore(el.firstElementChild || el, stream.firstChild);
+  } else {
+    el.outerHTML = html;
+  }
+  stream.querySelectorAll("[data-today-open]").forEach((btn) => {
+    if (btn.dataset.todayBound) return;
+    btn.dataset.todayBound = "1";
+    btn.addEventListener("click", () => openWork(btn.getAttribute("data-today-open") || "doing"));
+  });
+}
+
+function streamStarterChipsHtml() {
+  const openCeo = projectId
+    ? `<button type="button" class="starter-chip" data-starter="ceo" data-project="${escapeHtml(projectId)}">Open ${escapeHtml(prettyCeoName(projectId, (currentProject() || {}).name))}</button>`
+    : `<button type="button" class="starter-chip" data-starter="pick-ceo">Open a CEO</button>`;
+  return `<div class="starter-chips" role="group" aria-label="Suggestions">
+    <button type="button" class="starter-chip" data-starter="status">What’s going on?</button>
+    <button type="button" class="starter-chip" data-starter="needs">What needs me?</button>
+    ${openCeo}
+  </div>`;
+}
+
+function bindStarterChips(root) {
+  if (!root) return;
+  root.querySelectorAll(".starter-chip").forEach((btn) => {
+    if (btn.dataset.starterBound) return;
+    btn.dataset.starterBound = "1";
+    btn.addEventListener("click", () => {
+      const kind = btn.getAttribute("data-starter") || "";
+      if (kind === "status") {
+        if ($("msg")) $("msg").value = "What’s going on?";
+        $("form").requestSubmit();
+        return;
+      }
+      if (kind === "needs") {
+        const c = workCounts();
+        if ((c.failed || 0) > 0) openWork("failed");
+        else if ((c.next || 0) > 0) openWork("next");
+        else openWork("doing");
+        return;
+      }
+      if (kind === "pick-ceo") {
+        openOrgRail();
+        return;
+      }
+      if (kind === "ceo" && btn.dataset.project) {
+        setOrgNode(btn.dataset.project, "");
+      }
+    });
+  });
 }
 
 function applySavedWork() {
@@ -4957,8 +5135,8 @@ function workCounts(forProjectId) {
 function pickDefaultWorkView() {
   const counts = workCounts();
   if ((counts.doing || 0) > 0 || (counts.handling || 0) > 0 || (counts.waitingCos || 0) > 0) return "doing";
+  if ((counts.failed || 0) > 0) return "failed";
   if (prefersScheduleTrust(counts)) return "schedule";
-  if ((counts.failed || 0) > 0) return "results";
   if ((counts.next || 0) > 0) return "next";
   if ((counts.results || 0) > 0) return "results";
   if ((counts.goals || 0) > 0) return "goals";
@@ -4967,10 +5145,22 @@ function pickDefaultWorkView() {
 
 function paintWorkTabs() {
   const counts = workCounts();
+  const failN = counts.failed || 0;
+  const failBtn = $("workFailed");
+  if (failBtn) {
+    failBtn.hidden = failN <= 0;
+    if (failN > 0) {
+      failBtn.classList.toggle("on", scheduleOpen && scheduleView === "failed");
+      failBtn.classList.toggle("need", true);
+      failBtn.classList.toggle("is-fail", true);
+      failBtn.innerHTML = `Failed<span class="n">${failN}</span>`;
+    }
+  }
   document.querySelectorAll(".work-tabs").forEach((tabs) => {
     tabs.hidden = false;
     tabs.querySelectorAll(".work-tab").forEach((btn) => {
       const view = btn.getAttribute("data-work") || "";
+      if (view === "failed") return;
       const n = counts[view] || 0;
       const label = view === "doing" ? "Running"
         : (view === "next" ? "Due"
@@ -4978,6 +5168,7 @@ function paintWorkTabs() {
             : (view === "goals" ? "Goals" : "Results")));
       btn.classList.toggle("on", scheduleOpen && scheduleView === view);
       btn.classList.toggle("hot", view === "doing" && n > 0);
+      btn.classList.toggle("is-fail", view === "results");
       const scheduleNeed = prefersScheduleTrust(counts);
       btn.classList.toggle("need", (view === "results" && (counts.failed || 0) > 0)
         || (view === "next" && (counts.failed || 0) > 0)
@@ -5006,6 +5197,7 @@ function paintWorkTabs() {
   }
   paintEmbedLive();
   paintWorkStatus();
+  mountTodayBrief();
 }
 
 function cronClaimAt(row) {
@@ -5904,6 +6096,10 @@ function closeSchedule() {
   if (panel) panel.hidden = true;
   paintWorkSurface();
   paintWorkTabs();
+  if (stream && streamScrollSaved !== null) {
+    stream.scrollTop = streamScrollSaved;
+    streamScrollSaved = null;
+  }
 }
 
 function renderChatSchedule(rows, digest, focusId, forPid) {
@@ -5967,12 +6163,26 @@ function renderChatSchedule(rows, digest, focusId, forPid) {
         </details>`).join(""));
       }
       if (!failJobs.length && !next.length) bits.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("next"))}</p>`);
+    } else if (view === "failed") {
+      const failJobs = allJobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
+      if (failJobs.length) {
+        const clustered = clusterFailRows(failJobs);
+        bits.push(`<h3 class="cron-section">Failed · ${failJobs.length}</h3>`);
+        bits.push(clustered.map(({ row, extra }) => failChromeHtml({
+          ...row,
+          title: row.title || jobLabel(row.preset) || jobStoryTitle(row) || "Job",
+          last_status: row.status || row.last_status || "error",
+          last_error: row.last_error || row.error || row.blocker || row.text || row.summary || "",
+          cron_id: row.cron_id || row.id || ""
+        }, false, "next", extra)).join(""));
+      } else bits.push(`<p class="cron-empty">Nothing failed right now.</p>`);
     } else if (view === "schedule") {
       bits.push(`<p class="cron-empty">Pick a CEO to see the full enabled schedule roster.</p>`);
     } else {
       const failJobs = jobs.filter((row) => jobIsFailed(row)).slice().sort(ownershipSort);
       const clustered = clusterFailRows(failJobs);
-      const okJobs = jobs.filter((row) => !jobIsFailed(row));
+      const okJobs = jobs.filter((row) => !jobIsFailed(row) && !jobIsChangelogJob(row));
+      const changelog = jobs.filter((row) => jobIsChangelogJob(row));
       if (clustered.length) {
         bits.push(`<h3 class="cron-section">Recovering · ${failJobs.length}</h3>`);
         bits.push(clustered.map(({ row, extra }) => failChromeHtml({
@@ -5983,13 +6193,16 @@ function renderChatSchedule(rows, digest, focusId, forPid) {
         }, false, "result", extra)).join(""));
       }
       if (okJobs.length) {
+        const show = okJobs.slice(0, 5);
+        const older = okJobs.length - show.length;
         bits.push(`<h3 class="cron-section">Resolved · ${okJobs.length}</h3>`);
-        bits.push(okJobs.map((row) => `<details class="cron-card" data-fold="job-${escapeHtml(row.id || row.title || "job")}">
-          <summary class="cron-head"><b>${escapeHtml(row.title || jobLabel(row.preset) || "Job")}</b><span>Resolved</span></summary>
-          <p class="cron-outcome"><span class="cron-k">Outcome</span> ${escapeHtml(clipWire(cleanBotText(row.text || row.summary || row.outcome || ""), 180) || "Done.")}</p>
-          <p class="cron-status"><span class="cron-k">Status</span> Resolved</p>
-          ${jobChoices(row).length ? `<div class="need-actions">${choiceButtonsHtml(jobChoices(row), row)}</div>` : ""}
-        </details>`).join(""));
+        bits.push(show.map((row) => workResultRowHtml(row)).join(""));
+        if (older > 0) bits.push(`<p class="cron-empty">Older · ${older} more in the job log.</p>`);
+      }
+      if (changelog.length) {
+        bits.push(`<details class="cron-system-notes"><summary>System notes · ${changelog.length}</summary>
+          ${changelog.slice(0, 8).map((row) => `<p class="cron-outcome muted">${escapeHtml(clipWire(cleanBotText(row.title || row.text || ""), 120))}</p>`).join("")}
+        </details>`);
       }
       if (!jobs.length) bits.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("results"))}</p>`);
     }
@@ -6045,6 +6258,14 @@ function renderChatSchedule(rows, digest, focusId, forPid) {
     sections.push(running.length ? running.map((row) => cronCardHtml(row, row.id === want, "live")).join("") : "");
     if (!boardRuns.length && !running.length && !stuckRows.length) {
       sections.push(`<p class="cron-empty">${escapeHtml(emptyWorkCopy("doing"))}</p>`);
+    }
+  } else if (view === "failed") {
+    const actionFails = dedupeFailRows(failed.slice().sort(ownershipSort));
+    if (actionFails.length) {
+      sections.push(`<h3 class="cron-section">Failed · ${actionFails.length}</h3>`);
+      sections.push(clusterFailRows(actionFails).map(({ row, extra }) => failChromeHtml(row, row.id === want, "next", extra)).join(""));
+    } else {
+      sections.push(`<p class="cron-empty">Nothing failed on this CEO.</p>`);
     }
   } else if (view === "next") {
     const story = ceoHandlingStoryHtml();
@@ -6169,6 +6390,7 @@ async function openWork(view, focusId) {
 
 async function openSchedule(focusId) {
   const pid = String(projectId || "");
+  if (stream && streamScrollSaved === null) streamScrollSaved = stream.scrollTop;
   scheduleOpen = true;
   scheduleFocusId = focusId || "";
   lastSchedulePid = pid;
@@ -6559,6 +6781,7 @@ function setSettings(open, panel) {
   else if (open) setSettingsPanel("you");
   $("settings").classList.toggle("hidden", !open);
   if (open) {
+    paintSettingsNav();
     loadJobs();
     refreshProviders();
     loadGit();
@@ -6656,6 +6879,32 @@ async function setOrgNode(project, worker) {
   if (applySavedWork()) openSchedule("");
   else closeSchedule();
   if (!liveRunId) await drainQueue();
+  mountTodayBrief();
+  const key = aimKey();
+  if (lastAimKey && lastAimKey !== key && stream) {
+    const div = document.createElement("p");
+    div.className = "ceo-switch-divider";
+    div.textContent = projectId
+      ? `Now with ${prettyCeoName(projectId, (currentProject() || {}).name)}`
+      : `Back to ${STAFF_NAME}`;
+    const anchor = $("todayBrief");
+    if (anchor && anchor.parentNode === stream) stream.insertBefore(div, anchor.nextSibling);
+    else stream.prepend(div);
+  }
+  lastAimKey = key;
+  if (window.innerWidth <= 860) closeOrgRail();
+}
+
+const SETTINGS_ADVANCED_PANELS = new Set(["folder", "import", "channels", "connectors", "routines", "git", "memory", "advanced"]);
+
+function paintSettingsNav() {
+  document.querySelectorAll(".drawer-tab").forEach((btn) => {
+    const panel = btn.dataset.panel || "";
+    const adv = SETTINGS_ADVANCED_PANELS.has(panel);
+    btn.classList.toggle("hidden", adv && !settingsAdvancedOpen);
+  });
+  const toggle = $("toggleSettingsAdvanced");
+  if (toggle) toggle.textContent = settingsAdvancedOpen ? "Hide advanced" : "Advanced";
 }
 
 function guessLane(text) {
@@ -6884,13 +7133,25 @@ function isTalk(job) {
 }
 
 function renderTalk(job) {
-  const el = bubble("bot", job.text || "");
+  let body = job.text || "";
+  let kind = "answer";
+  const choices = jobChoices(job);
+  if (choices.some((c) => /accept|approve|needs you/i.test(String(c.label || c.id || "")))) kind = "needs-you";
+  else if (isStatusDumpText(body)) {
+    kind = "briefing";
+    body = projectId ? statusFieldsHtml(selectedIndexText()) : `<p class="brief-lead">${escapeHtml(STAFF_NAME)} — open a CEO for desk detail, or use Today above.</p>`;
+  }
+  const el = bubble("bot", kind === "briefing" ? "" : body);
+  el.classList.add(`msg-${kind}`);
+  if (kind === "briefing") {
+    const text = el.querySelector(".bubble-text");
+    if (text) text.innerHTML = body;
+  }
   if (job.id) {
     el.setAttribute("data-job-id", job.id);
   }
   stampLane(el, job);
   appendWorkDetails(el, job);
-  const choices = jobChoices(job);
   if (choices.length && !el.querySelector(".need-actions")) {
     const actions = document.createElement("div");
     actions.className = "job-actions need-actions";
@@ -7386,6 +7647,10 @@ function isNoiseText(text) {
   if (/Nadia Marketing/i.test(raw) && /SEO pulse/i.test(raw)) return true;
   if (/need your google.{0,40}password/i.test(raw)) return true;
   if (/share your GBP login credentials/i.test(raw)) return true;
+  if (/^operator surface v\d+/i.test(raw)) return true;
+  if (/^v\d{3}\s*[—–-]/m.test(raw)) return true;
+  if (/OpenBot cache-only SAA overlay/i.test(raw)) return true;
+  if (isStatusDumpText(raw)) return true;
   const cleaned = cleanBotText(raw);
   if (!cleaned) return true;
   if (cleaned.length < 80 && PACKET_LINE.test(cleaned)) return true;
@@ -7400,6 +7665,7 @@ function isNoiseTurn(turn) {
   if (isE2ePing(text) || isE2ePing(message)) return true;
   if (turn.role === "user") return !String(turn.text || "").trim();
   if (job.cron || cronJobIsNoise(job) || chatLaneNoise(job)) return true;
+  if (isTalk(job) && isStatusDumpText(text)) return true;
   if (projectId && job.project_id && String(job.project_id) !== String(projectId)) return true;
   return isNoiseText(text) || isNoiseText(message);
 }
@@ -7426,7 +7692,7 @@ function emptyStreamHtml() {
     showCTA = false;
   } else {
     // Keep the empty chair calm — long org glances feel like a wall on phones.
-    lead = "Board chair. Ask what’s going on, or open a CEO.";
+    lead = "Your businesses live here. Ask what’s going on, or open a CEO.";
   }
   const showNow = project && now && now !== "source of truth" && now !== "—" && !isScheduleFluff(now) && now !== weekGoal(project);
   const nowLine = showNow ? `<p class="empty-now">${escapeHtml(now)}</p>` : "";
@@ -7443,6 +7709,7 @@ function emptyStreamHtml() {
       ${stuckLine}
       <p>${escapeHtml(lead)}</p>
       ${showCTA ? '<button type="button" class="mobile-cta" id="mobileCeoPickerCTA">Open a CEO</button>' : ""}
+      ${streamStarterChipsHtml()}
     </div>`;
 }
 
@@ -7458,16 +7725,11 @@ function renderTurns(turns, extras) {
     stream.innerHTML = emptyStreamHtml();
     hydratingHistory = false;
     paintLanes();
-    // Wire mobile CTA to open drawer
+    mountTodayBrief();
+    bindStarterChips(stream);
     const cta = document.getElementById("mobileCeoPickerCTA");
     if (cta) {
-      cta.addEventListener("click", () => {
-        const rail = $("rail");
-        const scrim = $("railScrim");
-        if (rail && scrim) {
-          openOrgRail();
-        }
-      });
+      cta.addEventListener("click", () => openOrgRail());
     }
     return;
   }
@@ -7510,6 +7772,8 @@ function renderTurns(turns, extras) {
   });
   hydratingHistory = false;
   paintLanes();
+  mountTodayBrief();
+  bindStarterChips(stream);
   scrollChatBottom();
 }
 
@@ -7983,7 +8247,8 @@ async function startOpenCode() {
   const url = data.url || "/engine/opencode/";
   const aimed = data.folder || folder || "";
   const sid = data.session_id || "";
-  paintEmbedAim("ocStatus", aimed ? calmAimLine(aim.name, aimed) : "OpenCode is up.");
+  const aimLine = aimed ? calmAimLine(aim.name, aimed) : "OpenCode is up.";
+  paintEmbedAim("ocStatus", aimed ? `You're watching ${aimLine}` : aimLine);
   setEmbedOpen("ocOpen", url);
   reloadEngineFrame("ocFrame", url, `${aimed}|${sid}`);
   lastOcFolder = aimed;
@@ -8032,7 +8297,8 @@ async function startHermes() {
   if ($("hermesStatus")) $("hermesStatus").textContent = "";
   const count = Number(data.session_count || 0);
   const title = String(data.session_title || "").trim();
-  const bits = [aimed ? calmAimLine(aim.name, aimed) : (aim.name || "Home attached")];
+  const who = aimed ? calmAimLine(aim.name, aimed) : (aim.name || "Home attached");
+  const bits = [projectId ? `You're watching ${who}` : who];
   if (count) bits.push(`${count.toLocaleString()} sessions`);
   if (title) bits.push(`Telegram · ${title}`);
   paintEmbedAim("hermesAim", bits.join(" · "));
@@ -8534,6 +8800,13 @@ if ($("suggestForm")) {
 }
 $("closeSettings").addEventListener("click", () => setSettings(false));
 $("settingsScrim").addEventListener("click", () => setSettings(false));
+if ($("toggleSettingsAdvanced")) {
+  $("toggleSettingsAdvanced").addEventListener("click", () => {
+    settingsAdvancedOpen = !settingsAdvancedOpen;
+    paintSettingsNav();
+  });
+}
+paintSettingsNav();
 $("gotoOpenCode").addEventListener("click", () => openWorkspace("opencode"));
 $("gotoHermes").addEventListener("click", () => openWorkspace("hermes"));
 if ($("aboutOpenCode")) {
