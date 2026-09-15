@@ -116,6 +116,119 @@ Do not edit the repo. Do not browse unless Evidence needs a source and Research 
 A stranger can read Why and know why this move serves this week's Horizon. Proof is checkable from files, not a receipt.
 """,
     },
+    "engine-hermes": {
+        "description": "How OttoBot seats use Hermes Agent — menu, home isolation, cron, MCP locks",
+        "whenToUse": "Every Think, Ops, or Research job on a seated CEO. Cos never loads this.",
+        "body": """# Engine — Hermes Agent
+
+## Owns
+The Hermes menu for this CEO seat: what is unlocked, what stays off, and how RESULT lands back on the board.
+
+## Stopline
+- Status / “what’s going on” / pulse → **tools off**. Desk status (STATUS / INDEX) only. Never start a gateway to answer a status question.
+- Use **this CEO’s** `hermes_home` only. Do not touch another CEO’s home, cron table, MEMORY.md, or skills.
+- Do not invent tools Hermes does not expose on this home.
+- No Telegram / Discord / Slack mesh from the board. No SMS. No CRM send. No spend, publish, pay, delete, or sign.
+- Chat is not memory. MEMORY.md / USER.md on this home are durable; thread JSON is for humans.
+
+## Menu (know it; do not turn everything on)
+
+| Capability | When unlocked on this seat |
+|---|---|
+| Desk status read/write | Always for status path (tools off) |
+| Skills (`--skills` / skill_view) | After board sync into this home |
+| Cron / schedule | Ops lane; create with deliver that posts RESULT to **this** CEO thread |
+| Snapshot browser | Research only; a11y snapshot + refs; screenshots opt-in |
+| MCP tools | Only servers this CEO toggled — never “all catalog” |
+| Memory | This home’s MEMORY.md / USER.md |
+| Delegation / long jobs | Think / Ops when the ticket says so |
+
+Full picture ≠ all tools on. Name the unlocked item you will use.
+
+## Steps
+1. Confirm lane: Think (decide) · Ops (schedule / watch) · Research (look). Wrong lane → stop and reclassify.
+2. Load the matching domain skill before improvising. Prefer board SKILL.md already in the packet.
+3. Stay inside this CEO folder + hermes_home. Cross-CEO work is a Cos handoff, not a side quest.
+4. Cron jobs: silent on success; failures and artifacts return as RESULT (≤ 20 lines). Raw log stays in `jobs/`.
+5. MCP: if a needed server is off, write Blocker and stop — do not install or enable MCP yourself.
+6. End by patching this CEO’s desk status: Now / Last / Next / Blocker. Name the engine **Hermes Agent** on the job card.
+
+## What good looks like
+A stranger can read RESULT and know which Hermes capability ran, on which CEO home, and what file or schedule proves it. No other CEO’s cron or memory was touched.
+""",
+    },
+    "engine-opencode": {
+        "description": "How OttoBot seats use OpenCode — folder, diff card, Accept gate, MCP locks",
+        "whenToUse": "Every Builder / Code job on a seated CEO. Cos never loads this.",
+        "body": """# Engine — OpenCode
+
+## Owns
+Local code change in the aimed CEO’s work folder via OpenCode. Diff card waits for the human. Push/merge/deploy stay operator.
+
+## Stopline
+- Path is `opencode run` → **diff card** → Accept / Reject. Never silent-apply to production.
+- No git push, merge, force-push, or production deploy from this seat.
+- No secrets in the repo, brains, or RESULT. Keys stay in vault / env, never in diffs.
+- Do not reimplement Hermes cron, gateway, or browser inside OpenCode.
+- Cos never sees GitHub / git MCP schemas. MCP only when this CEO toggled it onto Code.
+- No “while I’m here” refactors. Ticket scope only.
+
+## Menu (know it; do not turn everything on)
+
+| Capability | When unlocked on this seat |
+|---|---|
+| Edit files in CEO work folder | Builder / Code jobs |
+| LSP / diagnostics | Via OpenCode in that folder |
+| GitHub / git MCP | Only if this CEO authorized MCP for Code |
+| Diff card + Accept/Reject | Always — human gate |
+| Push / merge / publish | Operator only, never auto |
+
+## Steps
+1. Read the ticket / HANDOFF. Confirm the aimed CEO folder (not another CEO’s tree).
+2. Change glue, board, docs, presets, or that CEO’s product code — wire `hermes` / `opencode` binaries; do not vendor those engines.
+3. Produce a local diff. Name the engine **OpenCode** on the job card.
+4. RESULT ≤ 20 lines + VERIFY (what to check). Raw log stays in `jobs/`.
+5. Patch this CEO’s desk status: Now / Last / Next / Blocker. Diff parks on Needs-you until Accept.
+6. Reject restores. Accept is human-only for merge/push when policy says so.
+
+## What good looks like
+Folder → change → diff card → desk status. A stranger can Accept or Reject without reading chat. Scope matches the ticket; no engine reimplementation, no secrets in the tree.
+""",
+    },
+    "hermes-tool-discipline": {
+        "description": "Default craft for multi-step Hermes work — narrow tools, verify writes, draft outbound",
+        "whenToUse": "Any Think, Ops, or Research job that will call more than one tool, write externally, send a message, or spawn a subagent",
+        "body": """# Hermes tool discipline
+
+## Owns
+How Hermes tools are used on this board. Tools are capabilities; skills are procedures. Expertise lives in skills, not in dumping manuals into the prompt.
+
+## Stopline
+- Do not paste the full Hermes tool catalog into replies or RESULT.
+- Do not enable or install MCP mid-job. Off stays off; write Blocker.
+- Outbound messages (email, SMS, social, CRM notes that notify) are **drafts** unless the domain skill explicitly says send — then park Needs-you when board law requires Accept.
+- Never invent CRM / ledger field values. Read the record first.
+- On permission / 403 / lockdown / auth errors: **stop and report**. Do not retry with a different field guess.
+- Do not give a specialist terminal + unrestricted filesystem unless the skill forbids the dangerous paths and you enforce that brief.
+
+## Steps
+1. Open with a short plan: job, allowed tools, forbidden tools, done-check.
+2. Prefer the narrowest tool. File over browser. API/MCP over clicking UI. Extract over dumping a whole page. Snapshot + refs over screenshots.
+3. Load a domain skill (`skill_view` / board SKILL in the packet) before improvising. If none exists, finish the job then offer to save one.
+4. After any external write, read it back. The artifact is proof — not the model’s claim.
+5. Delegate only with a written brief: goal, tools allowed, tools forbidden, return artifact. Check that artifact before marking done.
+6. Failures: log the exact tool error in RESULT / Blocker. No paraphrase that hides the code or message.
+
+## Done means
+- Plan items checked or explicitly dropped with reason
+- External system matches the claimed change (or draft is parked)
+- Desk status Now / Last / Next / Blocker updated
+- Engine named **Hermes Agent** on the job card
+
+## What good looks like
+A junior with 80 tools never happens. One job, few tools, one proof. A stranger can verify the write without trusting the narrative.
+""",
+    },
 }
 
 
@@ -203,6 +316,11 @@ def skill_packet(project_id: str | None, preset: str) -> str:
     seed_dogfood_skills()
     names: list[str] = []
     pid = str(project_id or "")
+    # Engine menu + craft first (Cos stays blind — no engine skills).
+    if preset in {"think", "ops", "research"}:
+        names.extend(["engine-hermes", "hermes-tool-discipline"])
+    if preset == "builder":
+        names.append("engine-opencode")
     if pid == "support" or preset in {"ops", "think"}:
         names.extend(["support-triage", "support-status-update"])
         if preset == "ops":
